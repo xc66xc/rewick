@@ -1,0 +1,66 @@
+server:
+  port: ${PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+  tomcat:
+    max-http-form-post-size: 1MB
+    max-swallow-size: 1MB
+spring:
+  application:
+    name: interview-copilot-backend
+  main:
+    web-application-type: servlet
+  datasource:
+    url: ${COPILOT_DATABASE_URL:jdbc:postgresql://localhost:5432/interview_copilot}
+    username: ${COPILOT_DATABASE_USERNAME:}
+    password: ${COPILOT_DATABASE_PASSWORD:}
+    hikari:
+      maximum-pool-size: 10
+  flyway:
+    enabled: true
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+  servlet:
+    multipart:
+      max-file-size: 1MB
+      max-request-size: 1MB
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+copilot:
+  auth:
+    token-hours: ${COPILOT_TOKEN_HOURS:24}
+    login-burst: ${COPILOT_LOGIN_BURST:10}
+    login-window-seconds: ${COPILOT_LOGIN_WINDOW_SECONDS:60}
+    bootstrap-username: ${COPILOT_BOOTSTRAP_USERNAME:}
+    bootstrap-password: ${COPILOT_BOOTSTRAP_PASSWORD:}
+  limits:
+    daily-answers: ${COPILOT_DAILY_ANSWERS:100}
+    daily-knowledge-queries: ${COPILOT_DAILY_KNOWLEDGE_QUERIES:300}
+    max-asr-session-seconds: ${COPILOT_MAX_ASR_SESSION_SECONDS:3600}
+  providers:
+    llm:
+      url: ${COPILOT_PROVIDERS_LLM_URL:}
+      api-key: ${COPILOT_PROVIDERS_LLM_APIKEY:}
+      model: ${COPILOT_PROVIDERS_LLM_MODEL:}
+      allowed-models: ${COPILOT_PROVIDERS_LLM_ALLOWEDMODELS:}
+    knowledge:
+      url: ${COPILOT_PROVIDERS_KNOWLEDGE_URL:}
+      api-key: ${COPILOT_PROVIDERS_KNOWLEDGE_APIKEY:}
+      agent-id: ${COPILOT_PROVIDERS_KNOWLEDGE_AGENTID:}
+    asr:
+      url: ${COPILOT_PROVIDERS_ASR_URL:}
+      api-key: ${COPILOT_PROVIDERS_ASR_APIKEY:}
+      model: ${COPILOT_PROVIDERS_ASR_MODEL:fun-asr-realtime}
