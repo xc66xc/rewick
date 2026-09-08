@@ -1,0 +1,43 @@
+name: interview-copilot
+services:
+  database:
+    image: postgres:17.11
+    environment:
+      POSTGRES_DB: interview_copilot
+      POSTGRES_USER: copilot
+      POSTGRES_PASSWORD: ${COPILOT_DATABASE_PASSWORD:?Set COPILOT_DATABASE_PASSWORD in .env}
+    volumes:
+      - database-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U copilot -d interview_copilot']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  backend:
+    build:
+      context: ./backend
+    depends_on:
+      database:
+        condition: service_healthy
+    ports:
+      - '127.0.0.1:${COPILOT_HTTP_PORT:-8080}:8080'
+    environment:
+      COPILOT_DATABASE_URL: jdbc:postgresql://database:5432/interview_copilot
+      COPILOT_DATABASE_USERNAME: copilot
+      COPILOT_DATABASE_PASSWORD: ${COPILOT_DATABASE_PASSWORD:?Set COPILOT_DATABASE_PASSWORD in .env}
+      COPILOT_BOOTSTRAP_USERNAME: ${COPILOT_BOOTSTRAP_USERNAME:-}
+      COPILOT_BOOTSTRAP_PASSWORD: ${COPILOT_BOOTSTRAP_PASSWORD:-}
+      COPILOT_PROVIDERS_LLM_URL: ${COPILOT_PROVIDERS_LLM_URL:-}
+      COPILOT_PROVIDERS_LLM_APIKEY: ${COPILOT_PROVIDERS_LLM_APIKEY:-}
+      COPILOT_PROVIDERS_LLM_MODEL: ${COPILOT_PROVIDERS_LLM_MODEL:-}
+      COPILOT_PROVIDERS_ASR_URL: ${COPILOT_PROVIDERS_ASR_URL:-}
+      COPILOT_PROVIDERS_ASR_APIKEY: ${COPILOT_PROVIDERS_ASR_APIKEY:-}
+      COPILOT_PROVIDERS_ASR_MODEL: ${COPILOT_PROVIDERS_ASR_MODEL:-fun-asr-realtime}
+      COPILOT_PROVIDERS_KNOWLEDGE_URL: ${COPILOT_PROVIDERS_KNOWLEDGE_URL:-}
+      COPILOT_PROVIDERS_KNOWLEDGE_APIKEY: ${COPILOT_PROVIDERS_KNOWLEDGE_APIKEY:-}
+      COPILOT_PROVIDERS_KNOWLEDGE_AGENTID: ${COPILOT_PROVIDERS_KNOWLEDGE_AGENTID:-}
+      COPILOT_DAILY_ANSWERS: ${COPILOT_DAILY_ANSWERS:-100}
+      COPILOT_DAILY_KNOWLEDGE_QUERIES: ${COPILOT_DAILY_KNOWLEDGE_QUERIES:-300}
+      COPILOT_MAX_ASR_SESSION_SECONDS: ${COPILOT_MAX_ASR_SESSION_SECONDS:-3600}
+volumes:
+  database-data:

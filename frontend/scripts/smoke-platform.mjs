@@ -1,0 +1,274 @@
+import assert from 'node:assert/strict'
+import { randomBytes } from 'node:crypto'
+import { spawn, execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { mkdtemp, mkdir, readFile, writeFile, readdir, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import net from 'node:net'
+import electronPath from 'electron'
+import { _electron } from 'playwright'
+import { expect } from '@playwright/test'
+import { startMockServices } from './mock-services.mjs'
+import { startRemoteKnowledgeMock, remoteMarker, remoteMetadataMarkers } from './mock-remote-knowledge.mjs'
+
+const execute = promisify(execFile)
+const frontend = dirname(dirname(fileURLToPath(import.meta.url)))
+const repository = dirname(frontend)
+const output = join(frontend, 'test-results')
+const userData = await mkdtemp(join(tmpdir(), 'copilot-platform-e2e-'))
+const suffix = randomBytes(6).toString('hex')
+const container = `copilot-platform-e2e-${suffix}`
+const password = randomBytes(20).toString('hex')
+const keys = { llm: `test-platform-llm-${suffix}`, asr: `test-platform-asr-${suffix}`, knowledge: `test-platform-knowledge-${suffix}` }
+const report = { realProviderTested: false, realAudioTested: false, checks: [], screenshots: [] }
+const mock = await startMockServices()
+const knowledge = await startRemoteKnowledgeMock()
+let application
+let backend
+let page
+let logs = ''
+let databaseStarted = false
+
+const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
+async function until(predicate, message, timeout = 30000) {
+  const deadline = Date.now() + timeout
+  while (Date.now() < deadline) {
+    if (await predicate()) return
+    await pause(100)
+  }
+  throw new Error(message)
+}
+async function port() {
+  const server = net.createServer()
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  const value = server.address().port
+  await new Promise(resolve => server.close(resolve))
+  return value
+}
+async function check(name, operation) {
+  await operation()
+  report.checks.push(name)
+  process.stdout.write(`PASS ${name}\n`)
+}
+function noSecrets(value) {
+  const serialized = typeof value === 'string' ? value : JSON.stringify(value)
+  for (const key of Object.values(keys)) assert.equal(serialized.includes(key), false)
+}
+async function request(baseUrl, path, body, token) {
+  return fetch(`${baseUrl}${path}`, { method: body === undefined ? 'GET' : 'POST',
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(15000) })
+}
+async function answer(question) {
+  const requestId = `answer-${randomBytes(8).toString('hex')}`
+  await page.evaluate(async ({ requestId, question }) => {
+    await window.copilot.generateAnswer({ requestId, question, transcript: question })
+  }, { requestId, question })
+  await page.waitForFunction(id => window.__platformEvents.some(event => event.requestId === id
+    && ['answer-done', 'answer-error'].includes(event.kind)), requestId, { timeout: 20000 })
+  const events = await page.evaluate(id => window.__platformEvents.filter(event => event.requestId === id), requestId)
+  const error = events.find(event => event.kind === 'answer-error')
+  assert.equal(error, undefined, JSON.stringify(error))
+  return events
+}
+
+try {
+  await mkdir(output, { recursive: true })
+  const artifacts = (await readdir(join(repository, 'backend/target'))).filter(name => name.endsWith('.jar'))
+  assert.equal(artifacts.length, 1, 'Build backend with npm run backend:build before the smoke test')
+  await execute('docker', ['run', '--rm', '-d', '--name', container, '-p', '127.0.0.1::5432',
+    '-e', 'POSTGRES_USER=copilot_test', '-e', 'POSTGRES_DB=copilot_test', '-e', 'POSTGRES_PASSWORD', 'postgres:17.11'],
+  { env: { ...process.env, POSTGRES_PASSWORD: password }, timeout: 180000 })
+  databaseStarted = true
+  await until(async () => {
+    try { await execute('docker', ['exec', container, 'pg_isready', '-U', 'copilot_test']); return true }
+    catch { return false }
+  }, 'Test database did not become ready')
+  const mapping = (await execute('docker', ['port', container, '5432/tcp'])).stdout.trim()
+  const databasePort = mapping.slice(mapping.lastIndexOf(':') + 1)
+  const backendPort = await port()
+  const baseUrl = `http://127.0.0.1:${backendPort}`
+  backend = spawn('java', ['-jar', join(repository, 'backend/target', artifacts[0])], { cwd: repository,
+    env: { ...process.env, PORT: String(backendPort), COPILOT_DATABASE_URL: `jdbc:postgresql://127.0.0.1:${databasePort}/copilot_test`,
+      COPILOT_DATABASE_USERNAME: 'copilot_test', COPILOT_DATABASE_PASSWORD: password,
+      COPILOT_BOOTSTRAP_USERNAME: 'platform-test', COPILOT_BOOTSTRAP_PASSWORD: password,
+      COPILOT_PROVIDERS_LLM_URL: `${mock.llmBaseUrl}/chat/completions`, COPILOT_PROVIDERS_LLM_APIKEY: keys.llm,
+      COPILOT_PROVIDERS_LLM_MODEL: 'mock-fast', COPILOT_PROVIDERS_LLM_ALLOWEDMODELS: 'mock-fast,mock-held',
+      COPILOT_PROVIDERS_ASR_URL: `${mock.asrUrl}?mode=manual`,
+      COPILOT_PROVIDERS_ASR_APIKEY: keys.asr, COPILOT_PROVIDERS_KNOWLEDGE_URL: knowledge.url,
+      COPILOT_PROVIDERS_KNOWLEDGE_APIKEY: keys.knowledge, COPILOT_PROVIDERS_KNOWLEDGE_AGENTID: 'aid-server-only',
+    }, stdio: ['ignore', 'pipe', 'pipe'] })
+  backend.stdout.on('data', value => { logs = `${logs}${value}`.slice(-300000) })
+  backend.stderr.on('data', value => { logs = `${logs}${value}`.slice(-300000) })
+  await until(async () => {
+    if (backend.exitCode !== null) throw new Error('Backend exited; inspect the sanitized platform-smoke-backend.log')
+    try { return (await fetch(`${baseUrl}/actuator/health`)).ok } catch { return false }
+  }, 'Backend did not become healthy', 60000)
+
+  await check('platform requires business authentication and rejects invalid login', async () => {
+    assert.equal((await request(baseUrl, '/api/v1/platform')).status, 401)
+    assert.equal((await request(baseUrl, '/api/v1/auth/login', { username: 'platform-test', password: 'wrong-password' })).status, 401)
+  })
+  const loginResponse = await request(baseUrl, '/api/v1/auth/login', { username: 'platform-test', password })
+  assert.equal(loginResponse.status, 200)
+  const { accessToken } = await loginResponse.json()
+  await check('metadata contains public capabilities without platform secrets', async () => {
+    const response = await request(baseUrl, '/api/v1/platform', undefined, accessToken)
+    assert.equal(response.status, 200)
+    const info = await response.json()
+    assert.deepEqual(info.capabilities, { llm: true, asr: true, knowledge: true })
+    assert.equal(info.models.llm, 'mock-fast')
+    noSecrets(info)
+  })
+  await check('server rejects caller-controlled upstream URLs and models', async () => {
+    for (const extra of [{ url: mock.llmBaseUrl }, { model: 'unapproved-model' }]) {
+      const response = await request(baseUrl, '/api/v1/llm/chat/completions', {
+        model: 'mock-fast', messages: [{ role: 'user', content: 'hello' }], stream: false, ...extra,
+      }, accessToken)
+      assert.equal(response.status, 400)
+      noSecrets(await response.text())
+    }
+    assert.equal(mock.requests.length, 0)
+  })
+  await check('cancelling SSE closes the upstream and a repeated request ID is rejected', async () => {
+    const requestId = `cancel-${suffix}`
+    const body = { model: 'mock-held', messages: [{ role: 'user', content: 'cancel test' }], stream: true }
+    const controller = new AbortController()
+    const response = await fetch(`${baseUrl}/api/v1/llm/chat/completions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}`, 'X-Request-Id': requestId },
+      body: JSON.stringify(body), signal: controller.signal,
+    })
+    assert.equal(response.status, 200)
+    const reader = response.body.getReader()
+    assert.equal((await reader.read()).done, false)
+    controller.abort()
+    await reader.cancel().catch(() => undefined)
+    await until(() => mock.requests.at(-1).cancelled, 'Cancelled SSE kept its upstream running', 15000)
+    const repeated = await fetch(`${baseUrl}/api/v1/llm/chat/completions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}`, 'X-Request-Id': requestId },
+      body: JSON.stringify(body), signal: AbortSignal.timeout(15000),
+    })
+    assert.equal(repeated.status, 409)
+  })
+
+  const environment = { ...process.env, COPILOT_USER_DATA: userData }
+  delete environment.ELECTRON_RUN_AS_NODE
+  application = await _electron.launch({ executablePath: electronPath, args: ['.'], cwd: frontend, env: environment, timeout: 45000 })
+  page = await application.firstWindow()
+  page.setDefaultTimeout(10000)
+  await page.waitForFunction(() => Boolean(window.copilot))
+  await page.evaluate(async baseUrl => {
+    const settings = await window.copilot.getSettings()
+    await window.copilot.saveSettings({ ...settings, platform: { enabled: true, baseUrl } })
+    window.__platformEvents = []
+    window.copilot.onEvent(event => window.__platformEvents.push(event))
+  }, baseUrl)
+
+  await check('Electron settings logs in and never exposes the business token to renderer', async () => {
+    await page.getByRole('button', { name: '打开设置', exact: true }).click()
+    await page.getByLabel('平台账号', { exact: true }).fill('platform-test')
+    await page.getByLabel('平台密码', { exact: true }).fill(password)
+    await page.getByRole('button', { name: '连接并登录平台' }).click()
+    await expect(page.getByText(/已登录：platform-test/)).toBeVisible()
+    const settings = await page.evaluate(() => window.copilot.getSettings())
+    assert.equal(settings.platform.authenticated, true)
+    assert.equal(JSON.stringify(settings).includes(accessToken), false)
+    assert.equal(JSON.stringify(settings).includes(password), false)
+    noSecrets(settings)
+    await page.screenshot({ path: join(output, 'platform-settings.png') })
+    report.screenshots.push('platform-settings.png')
+    await page.getByRole('button', { name: '关闭设置' }).click()
+  })
+
+  await check('Electron question produces streamed answer through Java with server-owned Key', async () => {
+    await page.getByRole('textbox', { name: '当前问题' }).fill('请介绍一下数据库索引。')
+    await page.getByRole('button', { name: '生成回答', exact: true }).click()
+    await expect(page.getByText('已完成', { exact: true }).last()).toBeVisible({ timeout: 20000 })
+    await expect(page.getByRole('textbox', { name: '当前问题' })).toHaveValue('')
+    assert.equal(mock.requests.at(-1).authorization, `Bearer ${keys.llm}`)
+    const events = await page.evaluate(() => window.__platformEvents)
+    assert.ok(events.filter(event => event.kind === 'answer-delta').length > 1)
+    assert.equal(events.find(event => event.kind === 'answer-request').modelInput.model, 'mock-fast')
+    noSecrets(events)
+    await page.screenshot({ path: join(output, 'platform-answer.png') })
+    report.screenshots.push('platform-answer.png')
+  })
+
+  await check('platform RAG sends only text to model and uses server Agent ID', async () => {
+    await page.evaluate(async () => {
+      const settings = await window.copilot.getSettings()
+      await window.copilot.saveSettings({ ...settings, remoteKnowledge: { enabled: true, url: '', agentId: '' } })
+    })
+    const events = await answer('Redis 缓存一致性怎么保证？')
+    assert.equal(knowledge.requests.at(-1).body.agent_id, 'aid-server-only')
+    assert.equal(knowledge.requests.at(-1).authorization, `Bearer ${keys.knowledge}`)
+    const sent = JSON.stringify(mock.requests.at(-1).body)
+    assert.ok(sent.includes(remoteMarker))
+    for (const marker of Object.values(remoteMetadataMarkers)) assert.equal(sent.includes(String(marker)), false)
+    noSecrets(events)
+  })
+
+  await check('remote failure continues model answer with degraded retrieval', async () => {
+    knowledge.setMode('http-error')
+    const events = await answer('远程检索失败时继续回答。')
+    assert.equal(events.find(event => event.kind === 'answer-context').retrieval.status, 'degraded')
+    assert.ok(events.some(event => event.kind === 'answer-done'))
+    knowledge.setMode('ready')
+  })
+
+  await check('PCM and final transcript cross the authenticated Java WebSocket relay', async () => {
+    const { sessionId } = await page.evaluate(() => window.copilot.startAsr())
+    await page.evaluate(id => window.copilot.sendAudio(id, new Uint8Array([1, 0, 2, 0]).buffer), sessionId)
+    await until(() => mock.asrConnections.length > 0 && mock.asrConnections.at(-1).audioBytes === 4, 'Audio did not reach fake supplier')
+    mock.sendFunAsrSentence(mock.asrConnections.length - 1, { sentenceId: 0, text: '说说你对 Java 的理解。', endMs: 1200 })
+    await page.waitForFunction(id => window.__platformEvents.some(event => event.kind === 'transcript'
+      && event.sessionId === id && event.segment.isFinal), sessionId)
+    assert.equal(mock.asrConnections.at(-1).authorization, `Bearer ${keys.asr}`)
+    await page.evaluate(() => window.copilot.stopAsr())
+    await until(() => mock.asrConnections.at(-1).closed, 'Upstream ASR connection did not close')
+  })
+
+  await check('personal credentials take precedence without sending a platform Key to their endpoint', async () => {
+    await page.evaluate(async baseUrl => {
+      const settings = await window.copilot.getSettings()
+      await window.copilot.saveSettings({ ...settings, llm: { ...settings.llm, baseUrl, model: 'mock-fast', apiKey: 'personal-test-key' } })
+    }, mock.llmBaseUrl)
+    await answer('用自带模型回答。')
+    assert.equal(mock.requests.at(-1).authorization, 'Bearer personal-test-key')
+    await page.evaluate(async () => {
+      const settings = await window.copilot.getSettings()
+      await window.copilot.saveSettings({ ...settings, llm: { ...settings.llm, model: 'mock-error' } })
+    })
+    const before = mock.requests.length
+    await assert.rejects(page.evaluate(() => window.copilot.testModel()))
+    assert.equal(mock.requests.length, before + 1)
+    assert.equal(mock.requests.at(-1).authorization, 'Bearer personal-test-key')
+  })
+
+  await check('logout revokes the business token', async () => {
+    await page.evaluate(() => window.copilot.startAsr())
+    const active = mock.asrConnections.at(-1)
+    await page.evaluate(() => window.copilot.platformLogout())
+    await until(() => active.closed, 'Logout did not close the active platform ASR connection')
+    const current = await page.evaluate(() => window.copilot.getSettings())
+    assert.equal(current.platform.authenticated, false)
+    assert.equal((await request(baseUrl, '/api/v1/auth/logout', {}, accessToken)).status, 204)
+    assert.equal((await request(baseUrl, '/api/v1/platform', undefined, accessToken)).status, 401)
+  })
+  noSecrets(await page.evaluate(() => window.__platformEvents))
+} finally {
+  await application?.close().catch(() => undefined)
+  if (backend && backend.exitCode === null) {
+    backend.kill('SIGTERM')
+    await until(() => backend.exitCode !== null, 'Backend stop timeout', 10000).catch(() => backend.kill('SIGKILL'))
+  }
+  if (databaseStarted) await execute('docker', ['rm', '-f', container]).catch(() => undefined)
+  await mock.close()
+  await knowledge.close()
+  for (const secret of [...Object.values(keys), password]) logs = logs.replaceAll(secret, '[redacted]')
+  await writeFile(join(output, 'platform-smoke-backend.log'), logs)
+  await writeFile(join(output, 'platform-smoke-report.json'), JSON.stringify(report, null, 2))
+  await rm(userData, { recursive: true, force: true })
+}

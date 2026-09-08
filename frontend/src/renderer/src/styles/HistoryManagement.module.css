@@ -1,0 +1,10 @@
+.openButton { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-4); padding: 0; border: 0; text-align: left; color: inherit; background: transparent; }
+.identity { min-width: 0; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-3); }
+.deleteButton { flex-shrink: 0; display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--space-8); padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-error); background: var(--color-surface); font-size: var(--text-xs); }
+.deleteButton:hover { background: var(--color-error-bg); }
+.dialog { width: min(480px, calc(100vw - var(--space-8))); }
+.recordTitle { color: var(--color-primary); font-weight: 600; margin-bottom: var(--space-3); overflow-wrap: anywhere; }
+.currentWarning { margin-top: var(--space-3); color: var(--color-text-secondary); }
+.confirmButton { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-error); border-radius: var(--radius-sm); color: var(--color-surface); background: var(--color-error); font-size: var(--text-sm); font-weight: 500; }
+.notice { margin-bottom: var(--space-4); color: var(--color-success); font-size: var(--text-sm); overflow-wrap: anywhere; }

@@ -1,0 +1,68 @@
+# Node.js 依赖与工具缓存
+node_modules/
+.npm/
+.pnpm-store/
+.vite/
+.cache/
+*.tsbuildinfo
+
+# Electron / Maven 构建与安装产物
+# frontend/build/ 中的应用图标属于源码资源，不能整体忽略 build/
+out/
+dist/
+dist-update/
+target/
+*.class
+
+# 测试报告与覆盖率
+test-results/
+playwright-report/
+blob-report/
+coverage/
+
+# 本地环境配置；示例配置需要提交
+.env*
+!.env.example
+!.env.*.example
+/backend/src/main/resources/application-local.yml
+/backend/src/main/resources/application-local.yaml
+/backend/src/main/resources/application-local.properties
+
+# 私钥、签名证书及本地密钥库
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# 日志与 JVM 崩溃/内存转储
+logs/
+*.log
+*.hprof
+hs_err_pid*
+replay_pid*
+
+# IDE 的本机项目配置
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+
+# macOS / Windows 系统文件与编辑器临时文件
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+
+# 本机工具、运行数据与已有项目工作记录
+.tools/
+.local/
+/workspace/

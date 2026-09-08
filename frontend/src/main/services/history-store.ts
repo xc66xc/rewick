@@ -1,0 +1,82 @@
+import { join } from 'node:path'
+import { z } from 'zod'
+import type { SessionRecord } from '../../shared/types'
+import { parseInput, sessionRecordSchema } from './validation'
+import { readJson, SerialQueue, writeJsonAtomic } from './storage'
+
+export class HistoryStore {
+  private readonly path: string
+  private readonly queue = new SerialQueue()
+  private readonly removedIds = new Set<string>()
+  constructor(rootDir: string) { this.path = join(rootDir, 'history.json') }
+
+  list(): Promise<SessionRecord[]> { return this.queue.run(() => this.read()) }
+
+  save(record: SessionRecord): Promise<void> {
+    return this.queue.run(async () => {
+      const parsed = parseInput(sessionRecordSchema, record)
+      if (this.removedIds.has(parsed.id)) return
+      if (Buffer.byteLength(JSON.stringify(parsed, null, 2)) > 4 * 1_048_576) throw new Error('单次会话超过 4 MB，请新建会话后继续。')
+      const previous = await this.read()
+      const records = [parsed, ...previous.filter((item) => item.id !== parsed.id)]
+        .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt)).slice(0, 50)
+      await writeJsonAtomic(this.path, records)
+    })
+  }
+
+  remove(id: unknown): Promise<void> {
+    return this.queue.run(async () => {
+      const parsed = parseInput(sessionRecordSchema.shape.id, id)
+      const previous = await this.read()
+      const remaining = previous.filter(record => record.id !== parsed)
+      if (remaining.length !== previous.length) await writeJsonAtomic(this.path, remaining)
+      // Reject late autosaves from this process without changing the on-disk history format.
+      this.removedIds.add(parsed)
+    })
+  }
+
+  private async read(): Promise<SessionRecord[]> {
+    const raw = await readJson(this.path, 220 * 1_048_576)
+    if (raw === undefined) return []
+    const parsed = z.array(sessionRecordSchema).max(50).safeParse(raw)
+    if (!parsed.success) throw new Error('本地会话文件格式无效，请先备份后检查 history.json。')
+    return parsed.data
+  }
+}
+
+function timecode(milliseconds: number): string {
+  const seconds = Math.floor(milliseconds / 1000)
+  return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`
+}
+
+export function sessionToMarkdown(record: SessionRecord): string {
+  const session = parseInput(sessionRecordSchema, record)
+  const lines = [`# ${session.title.replace(/[\r\n]/g, ' ')}`, '', `开始时间：${session.createdAt}`, '', '## 转写', '']
+  if (session.interviewEnvironment) lines.splice(4, 0, `面试环境：${session.interviewEnvironment.name}`, `简历：${session.interviewEnvironment.resumeName || '未选择'}`, '')
+  for (const segment of session.segments) {
+    lines.push(`**[${timecode(segment.startMs)}]${segment.isFinal ? '' : '（未定稿）'}** ${segment.text}`, '')
+  }
+  lines.push('## 回答', '')
+  for (const answer of session.answers) {
+    lines.push(`### ${answer.question.replace(/[\r\n]/g, ' ')}`, '', answer.text || '（尚无回答）', '')
+    if (answer.status !== 'complete') lines.push(`状态：${{ streaming: '生成中', cancelled: '已停止', error: '出错' }[answer.status]}`, '')
+    if (answer.error) lines.push(`错误：${answer.error}`, '')
+    if (answer.interviewEnvironment) lines.push(`本次环境：${answer.interviewEnvironment.name} · 简历：${answer.interviewEnvironment.resumeName || '未选择'}`, '')
+    const target = answer.interviewTarget
+    if (target && (target.companyName || target.roleName || target.jobDescription)) {
+      lines.push('#### 本次目标岗位', '', `公司：${target.companyName || '未填写'}`, `岗位：${target.roleName || '未填写'}`, '')
+      if (target.jobDescription) lines.push('岗位 JD：', '', target.jobDescription, '')
+    }
+    if (answer.retrieval && answer.retrieval.status !== 'disabled') {
+      lines.push('#### 本次检索资料', '', '以下为当时提供给模型的资料片段，不代表模型逐句引用。', '')
+      if (answer.retrieval.message) lines.push(answer.retrieval.message, '')
+      if (answer.retrieval.remote) lines.push(`百炼远程知识库 · Agent ID：${answer.retrieval.remote.agentId}`, '')
+      for (const excerpt of answer.retrieval.excerpts) {
+        const pages = excerpt.pageStart ? ` · 第 ${excerpt.pageStart}${excerpt.pageEnd && excerpt.pageEnd !== excerpt.pageStart ? `–${excerpt.pageEnd}` : ''} 页` : ''
+        const source = excerpt.source === 'bailian' ? '百炼远程知识库' : `版本 ${excerpt.revision}`
+        lines.push(`${excerpt.name} · ${source}${pages} · ${excerpt.kind === 'personal' ? '我的项目经历' : '技术参考'}`, '', excerpt.text, '')
+      }
+    }
+  }
+  return `${lines.join('\n').trimEnd()}\n`
+}

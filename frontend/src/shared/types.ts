@@ -1,0 +1,175 @@
+export interface PlatformInfo {
+  user: { id: string; username: string }
+  capabilities: { llm: boolean; asr: boolean; knowledge: boolean }
+  models: { llm: string; asr: string }
+  limits: { dailyAnswers: number; dailyKnowledgeQueries: number; maxAsrSessionSeconds: number }
+}
+export interface PlatformSettings {
+  enabled: boolean
+  baseUrl: string
+  authenticated: boolean
+  user?: PlatformInfo['user']
+  expiresAt?: string
+  capabilities: PlatformInfo['capabilities']
+  models: PlatformInfo['models']
+  limits?: PlatformInfo['limits']
+}
+export interface Settings {
+  platform?: PlatformSettings
+  asr: { url: string; model: string; hasApiKey: boolean; silenceMs: number }
+  llm: { baseUrl: string; model: string; hasApiKey: boolean; temperature: number }
+  context: { name: string; text: string }
+  interviewTarget: InterviewTarget
+  interviewEnvironment?: InterviewEnvironmentSnapshot
+  embedding: { baseUrl: string; model: string; dimensions: number; hasApiKey: boolean }
+  retrieval: { enabled: boolean }
+  remoteKnowledge: { enabled: boolean; url: string; agentId: string; hasApiKey: boolean }
+  answerStyle: 'concise' | 'detailed'
+  autoAnswer: { enabled: boolean; pauseMs: number }
+}
+export interface SettingsInput {
+  platform?: Pick<PlatformSettings, 'enabled' | 'baseUrl'>
+  asr: Omit<Settings['asr'], 'hasApiKey'> & { apiKey?: string }
+  llm: Omit<Settings['llm'], 'hasApiKey'> & { apiKey?: string }
+  context: Settings['context']
+  interviewTarget: InterviewTarget
+  embedding: Omit<Settings['embedding'], 'hasApiKey'> & { apiKey?: string }
+  retrieval: Settings['retrieval']
+  remoteKnowledge: Omit<Settings['remoteKnowledge'], 'hasApiKey'> & { apiKey?: string }
+  answerStyle: Settings['answerStyle']
+  autoAnswer: Settings['autoAnswer']
+}
+export interface InterviewTarget { companyName: string; roleName: string; jobDescription: string }
+export interface ResumeProfile { id: string; name: string; text: string; createdAt: string; updatedAt: string }
+export interface TargetProfile extends InterviewTarget { id: string; name: string; createdAt: string; updatedAt: string }
+export interface InterviewEnvironment {
+  id: string; name: string; resumeId: string | null; targetId: string | null; referenceIds: string[]; createdAt: string; updatedAt: string
+}
+export interface InterviewLibrary {
+  resumes: ResumeProfile[]; targets: TargetProfile[]; environments: InterviewEnvironment[]; activeEnvironmentId: string
+}
+export interface InterviewEnvironmentSnapshot {
+  id: string; name: string; resumeId: string | null; resumeName: string; targetId: string | null; targetName: string; referenceIds: string[]
+}
+export interface ResumeInput { id?: string; name: string; text: string }
+export interface TargetInput extends InterviewTarget { id?: string; name: string }
+export interface EnvironmentInput { id?: string; name: string; resumeId: string | null; targetId: string | null; referenceIds: string[] }
+export type ReferenceKind = 'technical' | 'personal'
+export interface ReferenceDocument {
+  id: string
+  name: string
+  kind: ReferenceKind
+  enabled: boolean
+  status: 'parsing' | 'pending' | 'indexing' | 'ready' | 'error'
+  pageCount: number
+  contentHash: string
+  revision: number
+  createdAt: string
+  updatedAt: string
+  error?: string
+  chunkCount: number
+}
+export interface ReferenceExcerpt {
+  source?: 'local' | 'bailian'
+  documentId: string
+  revision: number
+  name: string
+  kind: ReferenceKind
+  chunkId: string
+  text: string
+  pageStart?: number
+  pageEnd?: number
+}
+export interface RetrievalContext {
+  status: 'disabled' | 'ready' | 'degraded' | 'empty'
+  message?: string
+  excerpts: ReferenceExcerpt[]
+  remote?: { agentId: string; status: 'ready' | 'degraded' | 'empty'; message?: string }
+}
+export interface TranscriptSegment {
+  id: string
+  text: string
+  startMs: number
+  endMs?: number
+  isFinal: boolean
+  isEdited?: boolean
+}
+export interface ModelInputSnapshot {
+  model: string
+  messages: { role: 'system' | 'user'; content: string }[]
+}
+export interface Answer {
+  id: string
+  question: string
+  text: string
+  createdAt: string
+  status: 'streaming' | 'complete' | 'cancelled' | 'error'
+  error?: string
+  interviewTarget?: InterviewTarget
+  retrieval?: RetrievalContext
+  modelInput?: ModelInputSnapshot
+  interviewEnvironment?: InterviewEnvironmentSnapshot
+}
+export interface SessionRecord {
+  id: string
+  createdAt: string
+  title: string
+  segments: TranscriptSegment[]
+  answers: Answer[]
+  interviewEnvironment?: InterviewEnvironmentSnapshot
+}
+export interface AnswerRequest { requestId: string; question: string; transcript: string; environmentId?: string }
+export type AsrStatus = 'connecting' | 'listening' | 'stopping' | 'idle' | 'error'
+export type AppEvent =
+  | { kind: 'asr-status'; sessionId: string; status: AsrStatus; message?: string }
+  | { kind: 'transcript'; sessionId: string; segment: TranscriptSegment }
+  | { kind: 'documents-changed' }
+  | { kind: 'documents-error'; message: string }
+  | { kind: 'interviews-changed' }
+  | { kind: 'settings-changed' }
+  | { kind: 'answer-context'; requestId: string; interviewTarget: InterviewTarget; retrieval: RetrievalContext; interviewEnvironment?: InterviewEnvironmentSnapshot }
+  | { kind: 'answer-request'; requestId: string; modelInput: ModelInputSnapshot }
+  | { kind: 'answer-delta'; requestId: string; delta: string }
+  | { kind: 'answer-done'; requestId: string; cancelled: boolean }
+  | { kind: 'answer-error'; requestId: string; message: string }
+  | { kind: 'shortcut'; action: 'answer' }
+export interface DesktopBridge {
+  getCaptureError(): Promise<string | null>
+  getSettings(): Promise<Settings>
+  platformLogin(input: { username: string; password: string }): Promise<Settings>
+  platformLogout(): Promise<Settings>
+  refreshPlatform(): Promise<Settings>
+  saveSettings(input: SettingsInput): Promise<Settings>
+  testModel(): Promise<{ latencyMs: number; message: string }>
+  importContext(): Promise<{ name: string; text: string } | null>
+  importTarget(): Promise<{ name: string; text: string } | null>
+  getInterviewLibrary(): Promise<InterviewLibrary>
+  saveResume(input: ResumeInput): Promise<InterviewLibrary>
+  removeResume(id: string): Promise<InterviewLibrary>
+  saveTarget(input: TargetInput): Promise<InterviewLibrary>
+  removeTarget(id: string): Promise<InterviewLibrary>
+  saveEnvironment(input: EnvironmentInput): Promise<InterviewLibrary>
+  removeEnvironment(id: string): Promise<InterviewLibrary>
+  activateEnvironment(id: string): Promise<Settings>
+  testEmbedding(): Promise<{ latencyMs: number; message: string }>
+  testRemoteKnowledge(): Promise<{ latencyMs: number; message: string }>
+  listReferences(): Promise<ReferenceDocument[]>
+  importReferences(): Promise<ReferenceDocument[]>
+  previewReference(id: string): Promise<{ document: ReferenceDocument; text: string }>
+  updateReference(id: string, patch: { enabled?: boolean; kind?: ReferenceKind }): Promise<void>
+  removeReference(id: string): Promise<void>
+  reindexReference(id: string): Promise<void>
+  startAsr(): Promise<{ sessionId: string }>
+  sendAudio(sessionId: string, audio: ArrayBuffer): void
+  stopAsr(): Promise<void>
+  generateAnswer(request: AnswerRequest): Promise<void>
+  cancelAnswer(): Promise<void>
+  setAlwaysOnTop(value: boolean): Promise<boolean>
+  setCompact(value: boolean): Promise<void>
+  getHistory(): Promise<SessionRecord[]>
+  saveSession(record: SessionRecord): Promise<void>
+  removeSession(id: string): Promise<void>
+  exportSession(record: SessionRecord): Promise<boolean>
+  onEvent(callback: (event: AppEvent) => void): () => void
+}
+declare global { interface Window { copilot?: DesktopBridge } }

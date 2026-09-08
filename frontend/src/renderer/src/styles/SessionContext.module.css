@@ -1,0 +1,13 @@
+.context { flex-shrink: 0; min-width: 0; border-bottom: 1px solid var(--color-border); background: var(--color-surface-muted); font-size: var(--text-xs); color: var(--color-text-secondary); }
+.summary { padding: var(--space-3) var(--space-5); cursor: pointer; overflow-wrap: anywhere; }
+.label { color: var(--color-primary); margin-left: var(--space-2); }
+.body { display: flex; flex-direction: column; gap: var(--space-4); max-height: min(280px, 28vh); overflow-y: auto; padding: 0 var(--space-5) var(--space-4); }
+.description { color: var(--color-text-muted); }
+.group { min-width: 0; }
+.questions { margin-bottom: var(--space-2); font-family: var(--font-mono); color: var(--color-success); overflow-wrap: anywhere; }
+.fields { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: 0; }
+.fields dt { color: var(--color-text-muted); }
+.fields dd { margin: 0; color: var(--color-text-primary); overflow-wrap: anywhere; }
+.job { margin-top: var(--space-3); }
+.jobTitle { font-weight: 500; color: var(--color-text-primary); }
+.jobText { margin-top: var(--space-1); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.85; }

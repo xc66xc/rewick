@@ -1,0 +1,17 @@
+{
+  "name": "interview-copilot-repository",
+  "private": true,
+  "description": "Interview Copilot：独立桌面客户端与 Java 后端",
+  "scripts": {
+    "install:frontend": "npm --prefix frontend ci",
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "test": "npm --prefix frontend test",
+    "test:e2e": "npm --prefix frontend run test:e2e",
+    "pack": "npm --prefix frontend run pack",
+    "dist": "npm --prefix frontend run dist",
+    "backend:dev": "node scripts/backend.mjs spring-boot:run",
+    "backend:test": "node scripts/backend.mjs verify",
+    "backend:build": "node scripts/backend.mjs package -DskipTests"
+  }
+}

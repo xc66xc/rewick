@@ -1,0 +1,28 @@
+import type { Settings } from '../../shared/types'
+import type { ServiceSecrets } from './settings-store'
+import { isLoopback } from './validation'
+
+export type PlatformCapability = 'llm' | 'asr' | 'knowledge'
+export function needsPlatform(settings: Settings, secrets: ServiceSecrets, capability: PlatformCapability): boolean {
+  const ownKey = capability === 'llm' ? secrets.llmApiKey : capability === 'asr' ? secrets.asrApiKey : secrets.remoteKnowledgeApiKey
+  if (ownKey.trim() || !settings.platform?.enabled) return false
+  if (capability === 'llm' && isLoopback(new URL(settings.llm.baseUrl).hostname)) return false
+  return true
+}
+export function routeService(settings: Settings, secrets: ServiceSecrets, capability: PlatformCapability): { settings: Settings; apiKey: string; platform?: true } {
+  const apiKey = capability === 'llm' ? secrets.llmApiKey : capability === 'asr' ? secrets.asrApiKey : secrets.remoteKnowledgeApiKey
+  if (!needsPlatform(settings, secrets, capability)) return { settings, apiKey }
+  const platform = settings.platform
+  if (!platform?.authenticated || !secrets.platformAccessToken || !platform.expiresAt || Date.parse(platform.expiresAt) <= Date.now()) throw new Error('请先登录平台账号后再使用平台服务。')
+  const names = { llm: '回答模型', asr: '实时转写', knowledge: '远程知识库' }
+  if (!platform.capabilities[capability]) throw new Error(`平台尚未启用${names[capability]}，请联系管理员或填写自己的 API Key。`)
+  if (capability === 'llm') return {
+    platform: true, settings: { ...settings, llm: { ...settings.llm, baseUrl: `${platform.baseUrl}/api/v1/llm`, model: platform.models.llm, hasApiKey: true } }, apiKey: secrets.platformAccessToken,
+  }
+  if (capability === 'asr') {
+    const url = new URL(`${platform.baseUrl}/api/v1/asr`)
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+    return { platform: true, settings: { ...settings, asr: { ...settings.asr, url: url.toString(), model: platform.models.asr, hasApiKey: true } }, apiKey: secrets.platformAccessToken }
+  }
+  return { platform: true, settings: { ...settings, remoteKnowledge: { enabled: settings.remoteKnowledge.enabled, url: `${platform.baseUrl}/api/v1/knowledge/search`, agentId: 'platform', hasApiKey: true } }, apiKey: secrets.platformAccessToken }
+}

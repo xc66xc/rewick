@@ -1,0 +1,109 @@
+import type { PlatformInfo, Settings } from '../../shared/types'
+import { platformInfoSchema, platformLoginInputSchema, platformLoginResponseSchema } from './platform-schema'
+import { parseInput, platformSettingsSchema } from './validation'
+import type { ServiceSecrets, SettingsStore } from './settings-store'
+
+class PlatformRequestError extends Error { constructor(message: string, readonly status?: number) { super(message) } }
+const MAX_BYTES = 65_536
+export class PlatformClient {
+  readonly baseUrl: string
+  constructor(baseUrl: string, private readonly timeoutMs = 8000) {
+    this.baseUrl = parseInput(platformSettingsSchema, { enabled: true, baseUrl }).baseUrl
+  }
+  async login(input: unknown) {
+    const credentials = parseInput(platformLoginInputSchema, input)
+    const raw = await this.request('/api/v1/auth/login', undefined, credentials)
+    const parsed = platformLoginResponseSchema.safeParse(raw)
+    if (!parsed.success) throw new Error('平台登录响应格式无效。')
+    if (Date.parse(parsed.data.expiresAt) <= Date.now()) throw new Error('平台登录已过期，请重新登录。')
+    return parsed.data
+  }
+  async info(token: string, signal?: AbortSignal): Promise<PlatformInfo> {
+    const parsed = platformInfoSchema.safeParse(await this.request('/api/v1/platform', token, undefined, signal))
+    if (!parsed.success) throw new Error('平台能力响应格式无效，请联系平台管理员。')
+    return parsed.data
+  }
+  async logout(token: string): Promise<void> { await this.request('/api/v1/auth/logout', token, {}) }
+  private async request(path: string, token?: string, body?: unknown, signal?: AbortSignal): Promise<unknown> {
+    const controller = new AbortController()
+    const abort = () => controller.abort(signal?.reason)
+    signal?.addEventListener('abort', abort, { once: true })
+    if (signal?.aborted) abort()
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs)
+    try {
+      const response = await fetch(`${this.baseUrl}${path}`, {
+        method: body === undefined ? 'GET' : 'POST', redirect: 'error', signal: controller.signal,
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      })
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => undefined)
+        const message = response.status === 401 ? (path.endsWith('/login') ? '平台用户名或密码错误。' : '平台登录已失效，请重新登录。')
+          : response.status === 403 ? '平台账号没有此服务权限，请联系管理员。'
+          : response.status === 429 ? '平台额度已用完或请求过于频繁，请稍后重试。' : `平台请求失败（HTTP ${response.status}），请稍后重试。`
+        throw new PlatformRequestError(message, response.status)
+      }
+      if (response.status === 204) return undefined
+      if (!response.body) return undefined
+      const reader = response.body.getReader()
+      let size = 0
+      const chunks: Uint8Array[] = []
+      try {
+        while (true) {
+          const chunk = await reader.read()
+          if (chunk.done) break
+          size += chunk.value.byteLength
+          if (size > MAX_BYTES) throw new PlatformRequestError('平台响应超过容量限制。')
+          chunks.push(chunk.value)
+        }
+      } finally { await reader.cancel().catch(() => undefined); reader.releaseLock() }
+      if (size === 0) return undefined
+      try { return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown }
+      catch { throw new PlatformRequestError('平台响应格式无效。') }
+    } catch (error) {
+      if (signal?.aborted) throw signal.reason
+      if (controller.signal.aborted) throw new Error('平台连接超时，请检查平台地址和网络。')
+      if (error instanceof TypeError) throw new Error('无法连接平台服务，请检查平台地址和网络。')
+      throw error
+    } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort) }
+  }
+}
+
+export class PlatformService {
+  constructor(private readonly store: SettingsStore) {}
+  async login(input: unknown): Promise<Settings> {
+    const { settings } = await this.store.getConnectionSnapshot()
+    if (!settings.platform?.enabled) throw new Error('请先启用平台服务。')
+    const client = new PlatformClient(settings.platform.baseUrl)
+    const result = await client.login(input)
+    const info = await client.info(result.accessToken)
+    if (info.user.id !== result.user.id) throw new Error('平台账号信息不一致，请重新登录。')
+    return this.store.savePlatformSession(client.baseUrl, result.accessToken, result.expiresAt, info)
+  }
+  async logout(): Promise<Settings> {
+    const snapshot = await this.store.getConnectionSnapshot()
+    // Clear locally first, even when an unreachable backend cannot revoke the remote token.
+    const saved = await this.store.clearPlatformSession(snapshot.secrets.platformAccessToken)
+    if (snapshot.secrets.platformAccessToken && snapshot.settings.platform) {
+      try { await new PlatformClient(snapshot.settings.platform.baseUrl).logout(snapshot.secrets.platformAccessToken) }
+      catch { /* Local logout is complete; the short-lived server credential expires independently. */ }
+    }
+    return saved
+  }
+  async refresh(signal?: AbortSignal): Promise<Settings> {
+    const snapshot = await this.store.getConnectionSnapshot()
+    return this.refreshSnapshot(snapshot, signal)
+  }
+  async refreshSnapshot(snapshot: { settings: Settings; secrets: ServiceSecrets }, signal?: AbortSignal): Promise<Settings> {
+    const { platform } = snapshot.settings
+    if (!platform?.enabled) throw new Error('请先启用平台服务。')
+    if (!platform.authenticated || !snapshot.secrets.platformAccessToken || !platform.expiresAt) throw new Error('请先登录平台账号。')
+    try {
+      const info = await new PlatformClient(platform.baseUrl).info(snapshot.secrets.platformAccessToken, signal)
+      return await this.store.savePlatformSession(platform.baseUrl, snapshot.secrets.platformAccessToken, platform.expiresAt, info, snapshot.secrets.platformAccessToken)
+    } catch (error) {
+      if (error instanceof PlatformRequestError && error.status === 401) await this.store.clearPlatformSession(snapshot.secrets.platformAccessToken)
+      throw error
+    }
+  }
+}
