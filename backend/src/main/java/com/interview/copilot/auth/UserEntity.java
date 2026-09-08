@@ -11,6 +11,9 @@ public class UserEntity {
     private Long id;
     private String username;
     private String passwordHash;
+    private String role = "USER";
+    private Integer dailyAnswers;
+    private Integer dailyKnowledgeQueries;
     @TableField("is_enabled")
     private boolean enabled;
 
@@ -20,6 +23,12 @@ public class UserEntity {
     public void setUsername(String username) { this.username = username; }
     public String getPasswordHash() { return passwordHash; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
+    public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
+    public Integer getDailyAnswers() { return dailyAnswers; }
+    public void setDailyAnswers(Integer dailyAnswers) { this.dailyAnswers = dailyAnswers; }
+    public Integer getDailyKnowledgeQueries() { return dailyKnowledgeQueries; }
+    public void setDailyKnowledgeQueries(Integer dailyKnowledgeQueries) { this.dailyKnowledgeQueries = dailyKnowledgeQueries; }
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
 }

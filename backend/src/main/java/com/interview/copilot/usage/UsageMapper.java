@@ -10,6 +10,11 @@ import org.apache.ibatis.annotations.Update;
 
 @Mapper
 public interface UsageMapper {
+    @Select("SELECT id, daily_answers, daily_knowledge_queries FROM app_users WHERE id = #{userId} AND is_enabled = TRUE")
+    QuotaOverride findLimits(long userId);
+
+    record QuotaOverride(long id, Integer dailyAnswers, Integer dailyKnowledgeQueries) {}
+
     @Select("SELECT id FROM app_users WHERE id = #{userId} AND is_enabled = TRUE FOR UPDATE")
     Long lockUser(long userId);
 
@@ -51,4 +56,12 @@ public interface UsageMapper {
             """)
     void finish(@Param("userId") long userId, @Param("requestId") String requestId,
             @Param("capability") String capability, @Param("status") String status, @Param("now") Instant now);
+
+    @Update("""
+            UPDATE usage_events SET model = #{model}, updated_at = CURRENT_TIMESTAMP
+            WHERE app_users_id = #{userId} AND request_id = #{requestId} AND capability = #{capability}
+                AND status = 'started' AND model = ''
+            """)
+    int describeModel(@Param("userId") long userId, @Param("requestId") String requestId,
+            @Param("capability") String capability, @Param("model") String model);
 }

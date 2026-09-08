@@ -1,12 +1,13 @@
 export interface PlatformInfo {
   user: { id: string; username: string }
   capabilities: { llm: boolean; asr: boolean; knowledge: boolean }
-  models: { llm: string; asr: string }
+  models: { llm: string; asr: string; available?: { id: string; name: string }[] }
   limits: { dailyAnswers: number; dailyKnowledgeQueries: number; maxAsrSessionSeconds: number }
 }
 export interface PlatformSettings {
   enabled: boolean
   baseUrl: string
+  selectedModelId?: string
   authenticated: boolean
   user?: PlatformInfo['user']
   expiresAt?: string
@@ -28,7 +29,7 @@ export interface Settings {
   autoAnswer: { enabled: boolean; pauseMs: number }
 }
 export interface SettingsInput {
-  platform?: Pick<PlatformSettings, 'enabled' | 'baseUrl'>
+  platform?: Pick<PlatformSettings, 'enabled' | 'baseUrl' | 'selectedModelId'>
   asr: Omit<Settings['asr'], 'hasApiKey'> & { apiKey?: string }
   llm: Omit<Settings['llm'], 'hasApiKey'> & { apiKey?: string }
   context: Settings['context']

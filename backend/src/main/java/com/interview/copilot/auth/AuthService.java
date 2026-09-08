@@ -9,6 +9,7 @@ import java.util.Optional;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthService {
@@ -29,16 +30,17 @@ public class AuthService {
         this.absentPassword = passwords.encode(TokenSecrets.create());
     }
 
+    @Transactional
     public LoginResult login(String username, String password) {
         if (password.getBytes(StandardCharsets.UTF_8).length > 72) throw invalidCredentials();
-        UserEntity user = users.findByUsername(username);
+        UserEntity user = users.findForLogin(username);
         String hash = user == null ? absentPassword : user.getPasswordHash();
         boolean matches = passwords.matches(password, hash);
         if (!matches || user == null || !user.isEnabled()) throw invalidCredentials();
         String token = TokenSecrets.create();
         Instant expiresAt = clock.instant().plus(properties.tokenHours(), ChronoUnit.HOURS);
         tokens.create(user.getId(), TokenSecrets.hash(token), expiresAt);
-        return new LoginResult(token, expiresAt, new PublicUser(user.getId().toString(), user.getUsername()));
+        return new LoginResult(token, expiresAt, new PublicUser(user.getId().toString(), user.getUsername(), user.getRole()));
     }
 
     public Optional<UserPrincipal> authenticate(String token) {
@@ -52,7 +54,9 @@ public class AuthService {
         return new ApiException(HttpStatus.UNAUTHORIZED, "invalid_credentials", "用户名或密码不正确。");
     }
 
-    public record PublicUser(String id, String username) {}
+    public record PublicUser(String id, String username, String role) {
+        public PublicUser(String id, String username) { this(id, username, "USER"); }
+    }
     public record LoginResult(String accessToken, Instant expiresAt, PublicUser user) {
         @Override
         public String toString() { return "LoginResult[accessToken=redacted]"; }

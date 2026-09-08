@@ -1,4 +1,5 @@
 import type { Settings } from '../../shared/types'
+import { selectedPlatformModel } from '../../shared/platform-models'
 import type { ServiceSecrets } from './settings-store'
 import { isLoopback } from './validation'
 
@@ -16,8 +17,10 @@ export function routeService(settings: Settings, secrets: ServiceSecrets, capabi
   if (!platform?.authenticated || !secrets.platformAccessToken || !platform.expiresAt || Date.parse(platform.expiresAt) <= Date.now()) throw new Error('请先登录平台账号后再使用平台服务。')
   const names = { llm: '回答模型', asr: '实时转写', knowledge: '远程知识库' }
   if (!platform.capabilities[capability]) throw new Error(`平台尚未启用${names[capability]}，请联系管理员或填写自己的 API Key。`)
-  if (capability === 'llm') return {
-    platform: true, settings: { ...settings, llm: { ...settings.llm, baseUrl: `${platform.baseUrl}/api/v1/llm`, model: platform.models.llm, hasApiKey: true } }, apiKey: secrets.platformAccessToken,
+  if (capability === 'llm') {
+    const model = selectedPlatformModel(platform)
+    if (!model) throw new Error('所选平台模型已下架或不可用，请在模型与设置中刷新列表并重新选择。')
+    return { platform: true, settings: { ...settings, llm: { ...settings.llm, baseUrl: `${platform.baseUrl}/api/v1/llm`, model: model.id, hasApiKey: true } }, apiKey: secrets.platformAccessToken }
   }
   if (capability === 'asr') {
     const url = new URL(`${platform.baseUrl}/api/v1/asr`)

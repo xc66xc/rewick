@@ -54,6 +54,7 @@ export const retrievalContextSchema = z.object({
 export const platformSettingsSchema = z.object({
   enabled: z.boolean(),
   baseUrl: endpoint('http').refine(value => !new URL(value).search, '平台地址不能包含查询参数。').transform(value => value.replace(/\/$/, '')),
+  selectedModelId: z.string().trim().max(200).optional(),
 })
 export const settingsInputSchema = z.object({
   platform: platformSettingsSchema.default({ enabled: false, baseUrl: 'http://127.0.0.1:8080' }),

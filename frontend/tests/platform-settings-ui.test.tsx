@@ -34,6 +34,26 @@ function setup(settings = structuredClone(defaultSettings)) {
 }
 
 describe('platform settings', () => {
+  it('offers published model names and saves the selected ID while retaining personal model settings', async () => {
+    const settings = platformSettings()
+    settings.platform.models.available = [{ id: 'platform-answer', name: '快速回答' }, { id: 'careful', name: '深度回答' }]
+    const { user, saved } = setup(settings)
+    await user.selectOptions(screen.getByRole('combobox', { name: '平台回答模型' }), 'careful')
+    await user.click(screen.getByRole('button', { name: '保存设置' }))
+    await waitFor(() => expect(saved[0].platform?.selectedModelId).toBe('careful'))
+    expect(saved[0].llm.model).toBe(defaultSettings.llm.model)
+  })
+  it('shows an unavailable saved model and lets the user explicitly switch back to the default', async () => {
+    const settings = platformSettings()
+    settings.platform.selectedModelId = 'retired'
+    settings.platform.models.available = [{ id: 'platform-answer', name: '快速回答' }]
+    const { user, saved } = setup(settings)
+    expect(screen.getByRole('alert').textContent).toContain('所选平台模型已不可用')
+    expect(isAnswerModelReady(settings)).toBe(false)
+    await user.selectOptions(screen.getByRole('combobox', { name: '平台回答模型' }), '')
+    await user.click(screen.getByRole('button', { name: '保存设置' }))
+    await waitFor(() => expect(saved[0].platform?.selectedModelId).toBe(''))
+  })
   it('logs in without storing the password and retains unfinished model edits', async () => {
     const { user, saved, platformLogin } = setup()
     await user.click(screen.getByRole('checkbox', { name: '启用平台服务' }))

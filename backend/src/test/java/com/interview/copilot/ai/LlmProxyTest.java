@@ -153,6 +153,30 @@ class LlmProxyTest {
         verify(lease).fail();
     }
 
+    @Test
+    void execute_configurationChangesDuringReservation_usesOriginalEndpointKeyAndModel() {
+        AtomicReference<String> authorization = new AtomicReference<>();
+        AtomicReference<String> body = new AtomicReference<>();
+        server = HttpServer.create().port(0).handle((request, response) -> {
+            authorization.set(request.requestHeaders().get("Authorization"));
+            return response.header("Content-Type", "application/json").sendString(request.receive().aggregate().asString()
+                    .map(input -> { body.set(input); return "{\"choices\":[{\"message\":{\"content\":\"original\"}}]}"; }));
+        }).bindNow();
+        endpoint();
+        when(usage.start(anyLong(), anyString(), anyString())).thenAnswer(call -> {
+            settings.getLlm().setUrl("http://127.0.0.1:1/replacement");
+            settings.getLlm().setApiKey("replacement-secret");
+            settings.getLlm().setModel("replacement-model");
+            return lease;
+        });
+
+        Object result = proxy.execute(1, "snapshot", input(false));
+
+        assertThat(result.toString()).contains("original");
+        assertThat(authorization.get()).isEqualTo("Bearer server-only-secret");
+        assertThat(body.get()).contains("\"model\":\"approved\"").doesNotContain("replacement");
+    }
+
     private void endpoint() { settings.getLlm().setUrl("http://127.0.0.1:" + server.port() + "/completions"); }
 
     private com.fasterxml.jackson.databind.JsonNode input(boolean stream) {

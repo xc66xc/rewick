@@ -4,7 +4,7 @@ import type { DesktopBridge, Settings, SettingsInput } from '../../../shared/typ
 
 export function settingsInput(settings: Settings): SettingsInput {
   return {
-    platform: { enabled: settings.platform?.enabled ?? false, baseUrl: settings.platform?.baseUrl ?? 'http://127.0.0.1:8080' },
+    platform: { enabled: settings.platform?.enabled ?? false, baseUrl: settings.platform?.baseUrl ?? 'http://127.0.0.1:8080', selectedModelId: settings.platform?.selectedModelId },
     asr: { url: settings.asr.url, model: settings.asr.model, silenceMs: settings.asr.silenceMs },
     llm: { baseUrl: settings.llm.baseUrl, model: settings.llm.model, temperature: settings.llm.temperature },
     context: settings.context,

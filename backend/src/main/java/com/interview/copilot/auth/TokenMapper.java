@@ -13,11 +13,14 @@ public interface TokenMapper {
     void create(@Param("userId") long userId, @Param("hash") String hash, @Param("expiresAt") Instant expiresAt);
 
     @Select("""
-            SELECT u.id, u.username FROM auth_tokens t JOIN app_users u ON u.id = t.app_users_id
+            SELECT u.id, u.username, u.role FROM auth_tokens t JOIN app_users u ON u.id = t.app_users_id
             WHERE t.token_hash = #{hash} AND t.is_revoked = FALSE AND t.expires_at > #{now} AND u.is_enabled = TRUE
             """)
     UserPrincipal authenticate(@Param("hash") String hash, @Param("now") Instant now);
 
     @Update("UPDATE auth_tokens SET is_revoked = TRUE, updated_at = CURRENT_TIMESTAMP WHERE token_hash = #{hash}")
     void revoke(String hash);
+
+    @Update("UPDATE auth_tokens SET is_revoked = TRUE, updated_at = CURRENT_TIMESTAMP WHERE app_users_id = #{userId} AND is_revoked = FALSE")
+    void revokeAll(long userId);
 }

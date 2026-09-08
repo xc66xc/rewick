@@ -1,6 +1,9 @@
 package com.interview.copilot.ai;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.interview.copilot.platform.EnvironmentPlatformResolver;
+import com.interview.copilot.platform.PlatformRuntimeResolver;
 import com.interview.copilot.usage.UsageLease;
 import com.interview.copilot.usage.UsageService;
 import java.time.Duration;
@@ -8,37 +11,54 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Service
 public class LlmProxy {
-    private final ProviderProperties properties;
+    private final PlatformRuntimeResolver providers;
     private final ProviderHttpClient http;
     private final ProviderJson json;
     private final UsageService usage;
     private final LlmConcurrency concurrency = new LlmConcurrency();
 
     public LlmProxy(ProviderProperties properties, ProviderHttpClient http, ProviderJson json, UsageService usage) {
-        this.properties = properties;
+        this(new EnvironmentPlatformResolver(properties), http, json, usage);
+    }
+
+    @Autowired
+    public LlmProxy(PlatformRuntimeResolver providers, ProviderHttpClient http, ProviderJson json, UsageService usage) {
+        this.providers = providers;
         this.http = http;
         this.json = json;
         this.usage = usage;
     }
 
     public Object execute(long userId, String requestId, JsonNode input) {
-        ProviderProperties.Llm config = properties.getLlm();
-        if (!config.isEnabled()) { throw ProviderErrors.unavailable(); }
-        Map<String, Object> body = LlmRequestPolicy.request(input, config);
+        if (!input.isObject() || (input.has("model") && !input.get("model").isTextual())) { throw ProviderErrors.invalid(); }
+        var selected = providers.snapshot().llm(input.has("model") ? input.get("model").asText() : null);
+        ProviderProperties.Llm config = selected.config();
+        ObjectNode routed = input.deepCopy();
+        routed.put("model", config.getModel());
+        Map<String, Object> body = LlmRequestPolicy.request(routed, config);
         LlmConcurrency.Permit permit = concurrency.acquire(userId, config.getMaxConcurrent());
         UsageLease lease;
-        try { lease = usage.start(userId, LlmRequestPolicy.requestId(requestId), "llm"); }
+        try { lease = reserve(userId, LlmRequestPolicy.requestId(requestId), config.getModel()); }
         catch (RuntimeException exception) { permit.close(); throw exception; }
         if (Boolean.TRUE.equals(body.get("stream"))) {
             return new LlmStreamSession(lease, permit, config.getTotalTimeoutSeconds() * 1000L)
                     .start(stream(config, body));
         }
         return single(config, body, lease, permit);
+    }
+
+    private UsageLease reserve(long userId, String requestId, String model) {
+        UsageLease lease = usage.start(userId, requestId, "llm");
+        try {
+            usage.describeModel(userId, requestId, "llm", model);
+            return lease;
+        } catch (RuntimeException error) { lease.fail(); throw error; }
     }
 
     private Map<String, Object> single(ProviderProperties.Llm config, Map<String, Object> body,

@@ -5,6 +5,8 @@ import com.interview.copilot.ai.LlmRequestPolicy;
 import com.interview.copilot.ai.ProviderErrors;
 import com.interview.copilot.ai.ProviderHttpClient;
 import com.interview.copilot.ai.ProviderProperties;
+import com.interview.copilot.platform.EnvironmentPlatformResolver;
+import com.interview.copilot.platform.PlatformRuntimeResolver;
 import com.interview.copilot.usage.UsageLease;
 import com.interview.copilot.usage.UsageService;
 import java.time.Duration;
@@ -14,23 +16,29 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class KnowledgeProxy {
-    private final ProviderProperties properties;
+    private final PlatformRuntimeResolver providers;
     private final ProviderHttpClient http;
     private final UsageService usage;
     private final Semaphore capacity = new Semaphore(16);
 
     public KnowledgeProxy(ProviderProperties properties, ProviderHttpClient http, UsageService usage) {
-        this.properties = properties;
+        this(new EnvironmentPlatformResolver(properties), http, usage);
+    }
+
+    @Autowired
+    public KnowledgeProxy(PlatformRuntimeResolver providers, ProviderHttpClient http, UsageService usage) {
+        this.providers = providers;
         this.http = http;
         this.usage = usage;
     }
 
     public Map<String, Object> search(long userId, String requestId, JsonNode input) {
         validate(input);
-        ProviderProperties.Knowledge config = properties.getKnowledge();
+        ProviderProperties.Knowledge config = providers.snapshot().knowledge();
         if (!config.isEnabled()) { throw ProviderErrors.unavailable(); }
         if (!capacity.tryAcquire()) { throw ProviderErrors.busy(); }
         try { return reservedSearch(userId, requestId, input, config); }
@@ -40,8 +48,10 @@ public class KnowledgeProxy {
     private Map<String, Object> reservedSearch(long userId, String requestId, JsonNode input,
                                                 ProviderProperties.Knowledge config) {
         // Reservation deliberately sits outside the provider-failure downgrade boundary.
-        UsageLease lease = usage.start(userId, LlmRequestPolicy.requestId(requestId), "knowledge");
+        String identifier = LlmRequestPolicy.requestId(requestId);
+        UsageLease lease = usage.start(userId, identifier, "knowledge");
         try (lease) {
+            usage.describeModel(userId, identifier, "knowledge", config.getAgentId());
             try {
                 Map<String, Object> body = Map.of("query", input.get("query").asText(),
                         "agent_id", config.getAgentId(), "images", List.of());

@@ -2,6 +2,7 @@ package com.interview.copilot.asr;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.interview.copilot.ai.ProviderErrors;
+import com.interview.copilot.ai.ProviderProperties;
 import com.interview.copilot.auth.UserPrincipal;
 import com.interview.copilot.usage.UsageLease;
 import java.io.IOException;
@@ -66,18 +67,22 @@ final class AsrBridge {
     }
 
     private void run(JsonNode frame, String taskId) {
-        Map<String, Object> request = AsrProtocol.run(frame, upstreamId, resources.config().getModel());
+        ProviderProperties.Asr config = resources.config();
+        if (!config.isEnabled()) { throw ProviderErrors.unavailable(); }
+        Map<String, Object> request = AsrProtocol.run(frame, upstreamId, config.getModel());
         clientId = taskId;
-        lease = resources.usage().start(user.id(), requestId(), "asr");
+        String requestId = requestId();
+        lease = resources.usage().start(user.id(), requestId, "asr");
+        resources.usage().describeModel(user.id(), requestId, "asr", config.getModel());
         if (ended.get()) { lease.cancel(); return; }
         phase = "connecting";
         phaseDeadline.cancel(false);
         phaseDeadline = resources.timers().schedule(this::fail, 15, TimeUnit.SECONDS);
-        deadline = resources.timers().schedule(this::fail, resources.maximumSeconds(), TimeUnit.SECONDS);
+        deadline = resources.timers().schedule(this::fail, resources.maximumSeconds(config), TimeUnit.SECONDS);
         String payload = resources.json().encode(request);
         connecting = resources.client().newWebSocketBuilder().connectTimeout(Duration.ofSeconds(10))
-                .header("Authorization", "Bearer " + resources.config().getApiKey())
-                .buildAsync(URI.create(resources.config().getUrl()), new AsrUpstreamListener(this, payload));
+                .header("Authorization", "Bearer " + config.getApiKey())
+                .buildAsync(URI.create(config.getUrl()), new AsrUpstreamListener(this, payload));
         connecting.whenComplete((socket, error) -> {
             if (error != null) { fail(); }
             else if (ended.get()) { socket.abort(); }
@@ -152,37 +157,51 @@ final class AsrBridge {
                 phaseDeadline.cancel(false);
             }
             if ("task-finished".equals(event) && !"stopping".equals(phase)) { fail(); return; }
-            downstream.sendMessage(new TextMessage(resources.json().encode(AsrProtocol.event(frame, clientId))));
-            if ("task-finished".equals(event)) { close("complete"); }
+            String message = resources.json().encode(AsrProtocol.event(frame, clientId));
+            if ("task-finished".equals(event)) { terminate("complete", message); return; }
+            downstream.sendMessage(new TextMessage(message));
         } catch (IOException | RuntimeException exception) { fail(); }
     }
 
     void fail() {
-        if (ended.get()) { return; }
-        try {
-            if (downstream.isOpen()) {
-                downstream.sendMessage(new TextMessage(resources.json().encode(AsrProtocol.failure(clientId))));
-            }
-        } catch (IOException | IllegalStateException exception) {
-            close("cancel");
-            return;
-        }
-        close("fail");
+        terminate("fail", resources.json().encode(AsrProtocol.failure(clientId)));
     }
 
-    void close(String outcome) {
+    void close(String outcome) { terminate(outcome, null); }
+
+    private void terminate(String outcome, String message) {
         if (!ended.compareAndSet(false, true)) { return; }
+        stopUpstream();
+        String terminalMessage = finalizeUsage(outcome, message);
+        release.run();
+        try { sendTerminal(terminalMessage); }
+        finally { closeDownstream(); }
+    }
+
+    private void stopUpstream() {
         if (deadline != null) { deadline.cancel(false); }
         if (phaseDeadline != null) { phaseDeadline.cancel(false); }
         if (connecting != null && !connecting.isDone()) { connecting.cancel(true); }
         if (upstream != null) { upstream.abort(); }
-        release.run();
+    }
+
+    private String finalizeUsage(String outcome, String message) {
         try {
             endUsage(outcome);
+            return message;
         } catch (RuntimeException exception) {
             org.slf4j.LoggerFactory.getLogger(AsrBridge.class)
                     .error("ASR usage finalization failed for user {}", user.id());
-        } finally { closeDownstream(); }
+            return resources.json().encode(AsrProtocol.failure(clientId));
+        }
+    }
+
+    private void sendTerminal(String message) {
+        if (message == null || !downstream.isOpen()) { return; }
+        try { downstream.sendMessage(new TextMessage(message)); }
+        catch (IOException | IllegalStateException exception) {
+            org.slf4j.LoggerFactory.getLogger(AsrBridge.class).debug("ASR terminal transport unavailable for user {}", user.id());
+        }
     }
 
     private void closeDownstream() {

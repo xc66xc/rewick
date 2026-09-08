@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Settings, SettingsInput } from '../../../shared/types'
+import { platformModels } from '../../../shared/platform-models'
 import styles from '../styles/App.module.css'
 
 interface Credentials { username: string; password: string }
@@ -19,6 +20,9 @@ export default function PlatformSettingsFields({ draft, saved, onChange, actions
   const account = saved.platform
   const sameServer = platform.baseUrl.replace(/\/+$/, '') === account?.baseUrl.replace(/\/+$/, '')
   const authenticated = sameServer && account?.authenticated
+  const models = platformModels(account)
+  const selectedModelId = platform.selectedModelId ?? ''
+  const unavailableSelection = Boolean(selectedModelId && !models.some(model => model.id === selectedModelId))
 
   async function handleLogin() {
     try { await actions.login({ username: username.trim(), password }) }
@@ -32,9 +36,20 @@ export default function PlatformSettingsFields({ draft, saved, onChange, actions
     <p className={styles.formNote}>未填写自带 Key 的转写、回答和远程知识库使用平台服务。已保存的自带 Key 继续优先使用，本地模型保持本机连接。</p>
     <fieldset className={styles.settingsFields} disabled={!platform.enabled}>
       <label className={styles.field}>平台服务地址<input type="url" value={platform.baseUrl} required={platform.enabled}
-        placeholder="https://你的服务域名" onChange={event => onChange({ ...draft, platform: { ...platform, baseUrl: event.target.value } })} /></label>
+        placeholder="https://你的服务域名" onChange={event => onChange({ ...draft, platform: { ...platform, baseUrl: event.target.value, selectedModelId: '' } })} /></label>
       {authenticated ? <>
         <p className={styles.formNote} role="status">已登录：{account.user?.username}。回答{account.capabilities.llm ? `可用（${account.models.llm}）` : '未开通'}；转写{account.capabilities.asr ? '可用' : '未开通'}；知识库{account.capabilities.knowledge ? '可用' : '未开通'}。</p>
+        <label className={styles.field}>平台回答模型
+          <select value={selectedModelId} disabled={!account.capabilities.llm} aria-describedby="platform-model-note"
+            onChange={event => onChange({ ...draft, platform: { ...platform, selectedModelId: event.target.value } })}>
+            <option value="">使用平台默认模型{account.models.llm ? `（${models.find(model => model.id === account.models.llm)?.name ?? account.models.llm}）` : ''}</option>
+            {unavailableSelection && <option value={selectedModelId} disabled>已下架：{selectedModelId}，请重新选择</option>}
+            {models.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
+          </select>
+        </label>
+        <p id="platform-model-note" className={unavailableSelection ? styles.inlineError : styles.formNote} role={unavailableSelection ? 'alert' : undefined}>
+          {unavailableSelection ? '所选平台模型已不可用，请重新选择后保存。' : '未填写自带回答 Key 时使用所选平台模型。选择后点击保存设置；列表由管理员维护。'}
+        </p>
         <div className={styles.platformActions}>
           <button className={styles.secondaryButton} type="button" onClick={() => void actions.refresh()}>刷新服务状态</button>
           <button className={styles.secondaryButton} type="button" onClick={() => void actions.logout()}>退出平台账号</button>

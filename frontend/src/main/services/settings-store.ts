@@ -42,6 +42,7 @@ export class SettingsStore {
     return this.queue.run(async () => {
       const parsed = parseInput(settingsInputSchema, input)
       const previous = await this.read()
+      if (parsed.platform.baseUrl !== previous.settings.platform.baseUrl) delete parsed.platform.selectedModelId
       const { apiKey: asrKey, ...asr } = parsed.asr
       const { apiKey: llmKey, ...llm } = parsed.llm
       const { apiKey: embeddingKey, ...embedding } = parsed.embedding

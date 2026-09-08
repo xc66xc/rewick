@@ -8,9 +8,15 @@ import org.apache.ibatis.annotations.Select;
 
 @Mapper
 public interface UserMapper extends BaseMapper<UserEntity> {
-    @Select("SELECT id, username, password_hash, is_enabled AS enabled FROM app_users WHERE username = #{username}")
+    @Select("SELECT id, username, password_hash, role, is_enabled AS enabled FROM app_users WHERE username = #{username}")
     UserEntity findByUsername(String username);
+
+    @Select("SELECT id, username, password_hash, role, is_enabled AS enabled FROM app_users WHERE username = #{username} FOR UPDATE")
+    UserEntity findForLogin(String username);
 
     @Insert("INSERT INTO app_users(username, password_hash) VALUES(#{username}, #{passwordHash}) ON CONFLICT(username) DO NOTHING")
     int createBootstrap(@Param("username") String username, @Param("passwordHash") String passwordHash);
+
+    @Insert("INSERT INTO app_users(username, password_hash, role) VALUES(#{username}, #{passwordHash}, 'ADMIN') ON CONFLICT(username) DO NOTHING")
+    int createAdminBootstrap(@Param("username") String username, @Param("passwordHash") String passwordHash);
 }

@@ -24,6 +24,30 @@ beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'copilot-platf
 afterEach(async () => { vi.unstubAllGlobals(); vi.restoreAllMocks(); await rm(directory, { recursive: true, force: true }) })
 
 describe('platform credentials and sessions', () => {
+  it('persists the selected platform model across restart and capability refresh, clearing it on server change', async () => {
+    const platform = { enabled: true, baseUrl: 'http://127.0.0.1:8080', selectedModelId: 'careful' }
+    await store.saveSettings({ ...enabledInput(), platform })
+    await store.savePlatformSession(platform.baseUrl, 'business-token', expiresAt(), {
+      ...info, models: { ...info.models, available: [{ id: 'server-model', name: '快速回答' }, { id: 'careful', name: '深度回答' }] },
+    })
+    const restarted = new SettingsStore(directory, crypto)
+    expect((await restarted.getSettings()).platform?.selectedModelId).toBe('careful')
+    await restarted.savePlatformSession(platform.baseUrl, 'business-token', expiresAt(), info, 'business-token')
+    expect((await restarted.getSettings()).platform?.selectedModelId).toBe('careful')
+    await restarted.saveSettings({ ...enabledInput(), platform: { ...platform, baseUrl: 'https://new.example' } })
+    expect((await restarted.getSettings()).platform?.selectedModelId).toBeUndefined()
+  })
+  it('validates the published catalog and strips provider fields from its entries', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(Response.json({ ...info,
+      models: { ...info.models, available: [{ id: 'server-model', name: '快速回答', apiKey: 'must-not-persist', url: 'https://provider.example' }] },
+    })).mockResolvedValueOnce(Response.json({ ...info,
+      models: { ...info.models, available: [{ id: 'duplicate', name: 'A' }, { id: 'duplicate', name: 'B' }] },
+    })).mockResolvedValueOnce(Response.json({ ...info, models: { ...info.models, available: [] } })))
+    const client = new PlatformClient('https://platform.example')
+    expect((await client.info('business-token')).models.available).toEqual([{ id: 'server-model', name: '快速回答' }])
+    await expect(client.info('business-token')).rejects.toThrow('能力响应格式无效')
+    await expect(client.info('business-token')).rejects.toThrow('能力响应格式无效')
+  })
   it('migrates old settings read-only with platform disabled', async () => {
     const { platform: _platform, ...legacy } = structuredClone(defaultSettings)
     const raw = JSON.stringify({ version: 1, settings: legacy, secrets: { asr: '', llm: '', embedding: '', remoteKnowledge: '' } })
@@ -117,6 +141,18 @@ describe('platform credentials and sessions', () => {
 })
 
 describe('capability routing', () => {
+  it('routes the user-selected catalog ID and rejects a removed selection without changing models', () => {
+    const settings = authenticatedSettings()
+    if (!settings.platform) throw new Error('fixture')
+    settings.platform.models.available = [{ id: 'server-model', name: '快速回答' }, { id: 'careful', name: '深度回答' }]
+    settings.platform.selectedModelId = 'careful'
+    expect(routeService(settings, secrets, 'llm').settings.llm.model).toBe('careful')
+    settings.platform.models.available = [{ id: 'server-model', name: '快速回答' }]
+    expect(() => routeService(settings, secrets, 'llm')).toThrow('重新选择')
+    expect(routeService(settings, { ...secrets, llmApiKey: 'own-key' }, 'llm').settings.llm.model).toBe(settings.llm.model)
+    settings.platform.selectedModelId = ''
+    expect(routeService(settings, secrets, 'llm').settings.llm.model).toBe('server-model')
+  })
   it.each(['llm', 'asr', 'knowledge'] as const)('routes %s with own key directly and never substitutes the business token', capability => {
     const settings = authenticatedSettings()
     const supplied = { ...secrets, llmApiKey: 'invalid-own-llm', asrApiKey: 'invalid-own-asr', remoteKnowledgeApiKey: 'invalid-own-knowledge' }

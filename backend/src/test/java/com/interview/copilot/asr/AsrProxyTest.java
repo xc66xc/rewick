@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -143,6 +144,78 @@ class AsrProxyTest {
 
         assertThat(next()).contains("task-failed");
         verify(lease).fail();
+    }
+
+    @Test
+    void session_configurationChangesDuringReservation_preservesCapturedRouteAndCredentials() throws Exception {
+        when(usage.start(anyLong(), anyString(), anyString())).thenAnswer(call -> {
+            settings.getAsr().setUrl("ws://127.0.0.1:1/replacement");
+            settings.getAsr().setApiKey("replacement-secret");
+            settings.getAsr().setModel("replacement-model");
+            return lease;
+        });
+
+        proxy.handleTextMessage(session, new TextMessage(run(16000)));
+        assertThat(next()).contains("task-started");
+        assertThat(next()).contains("caption");
+        proxy.handleTextMessage(session, new TextMessage(finish()));
+
+        assertThat(next()).contains("task-finished");
+        assertThat(authorization.get()).isEqualTo("Bearer server-secret");
+        assertThat(upstreamRequest.get().path("payload").path("model").asText()).isEqualTo("server-asr-model");
+        assertThat(disconnected.await(3, TimeUnit.SECONDS)).isTrue();
+        verify(lease).complete();
+    }
+
+    @Test
+    void session_slowFinalization_acknowledgesOnlyAfterReservationReleaseAndCanRestartImmediately() throws Exception {
+        CountDownLatch finalizing = new CountDownLatch(1);
+        CountDownLatch continueFinalization = new CountDownLatch(1);
+        AtomicBoolean reserved = new AtomicBoolean();
+        AtomicInteger reservations = new AtomicInteger();
+        UsageLease restartedLease = mock(UsageLease.class);
+        when(usage.start(anyLong(), anyString(), anyString())).thenAnswer(call -> {
+            if (!reserved.compareAndSet(false, true)) { throw new IllegalStateException("Previous reservation remains active"); }
+            return reservations.getAndIncrement() == 0 ? lease : restartedLease;
+        });
+        doAnswer(call -> {
+            finalizing.countDown();
+            if (!continueFinalization.await(5, TimeUnit.SECONDS)) { throw new IllegalStateException("Finalization gate timed out"); }
+            reserved.set(false);
+            return null;
+        }).when(lease).complete();
+        try {
+            proxy.handleTextMessage(session, new TextMessage(run(16000)));
+            assertThat(next()).contains("task-started");
+            assertThat(next()).contains("caption");
+            proxy.handleTextMessage(session, new TextMessage(finish()));
+            assertThat(finalizing.await(3, TimeUnit.SECONDS)).isTrue();
+            assertThat(events).isEmpty();
+            continueFinalization.countDown();
+            assertThat(next()).contains("task-finished");
+            WebSocketSession restarted = session("restarted");
+            proxy.afterConnectionEstablished(restarted);
+            proxy.handleTextMessage(restarted, new TextMessage(run(16000)));
+            assertThat(next()).contains("task-started");
+            assertThat(next()).contains("caption");
+            proxy.handleTextMessage(restarted, new TextMessage(finish()));
+            assertThat(next()).contains("task-finished");
+            assertThat(reservations).hasValue(2);
+            verify(restartedLease).complete();
+        } finally { continueFinalization.countDown(); }
+    }
+
+    @Test
+    void session_finalizationFailure_reportsFailureInsteadOfSuccessfulCompletion() throws Exception {
+        doThrow(new IllegalStateException("private database detail")).when(lease).complete();
+        proxy.handleTextMessage(session, new TextMessage(run(16000)));
+        assertThat(next()).contains("task-started");
+        assertThat(next()).contains("caption");
+
+        proxy.handleTextMessage(session, new TextMessage(finish()));
+
+        assertThat(next()).contains("task-failed", "PLATFORM_ASR_ERROR").doesNotContain("task-finished", "private database detail");
+        verify(lease).complete();
     }
 
     private WebSocketSession session(String id) throws Exception {

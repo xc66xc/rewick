@@ -17,8 +17,9 @@ spring:
     password: ${COPILOT_DATABASE_PASSWORD:}
     hikari:
       maximum-pool-size: 10
-  flyway:
-    enabled: true
+  sql:
+    init:
+      mode: never
   jackson:
     deserialization:
       fail-on-unknown-properties: true
@@ -40,7 +41,12 @@ mybatis-plus:
   global-config:
     banner: false
 copilot:
+  platform:
+    master-key: ${COPILOT_PLATFORM_MASTER_KEY:}
   auth:
+    admin:
+      bootstrap-username: ${COPILOT_ADMIN_BOOTSTRAP_USERNAME:}
+      bootstrap-password: ${COPILOT_ADMIN_BOOTSTRAP_PASSWORD:}
     token-hours: ${COPILOT_TOKEN_HOURS:24}
     login-burst: ${COPILOT_LOGIN_BURST:10}
     login-window-seconds: ${COPILOT_LOGIN_WINDOW_SECONDS:60}

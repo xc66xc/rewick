@@ -1,15 +1,23 @@
 name: interview-copilot
 services:
   database:
-    image: postgres:17.11
+    image: interview-copilot-postgres:15.19-pgvector0.5.1
+    build:
+      context: ./deploy/postgres
     environment:
       POSTGRES_DB: interview_copilot
       POSTGRES_USER: copilot
       POSTGRES_PASSWORD: ${COPILOT_DATABASE_PASSWORD:?Set COPILOT_DATABASE_PASSWORD in .env}
     volumes:
-      - database-data:/var/lib/postgresql/data
+      - database-pg15-data:/var/lib/postgresql/data
+      - type: bind
+        source: ./backend/sql
+        target: /opt/copilot/sql
+        read_only: true
+        bind:
+          create_host_path: false
     healthcheck:
-      test: [CMD-SHELL, 'pg_isready -U copilot -d interview_copilot']
+      test: [CMD, pg_isready, -h, 127.0.0.1, -U, copilot, -d, interview_copilot]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -27,6 +35,9 @@ services:
       COPILOT_DATABASE_PASSWORD: ${COPILOT_DATABASE_PASSWORD:?Set COPILOT_DATABASE_PASSWORD in .env}
       COPILOT_BOOTSTRAP_USERNAME: ${COPILOT_BOOTSTRAP_USERNAME:-}
       COPILOT_BOOTSTRAP_PASSWORD: ${COPILOT_BOOTSTRAP_PASSWORD:-}
+      COPILOT_ADMIN_BOOTSTRAP_USERNAME: ${COPILOT_ADMIN_BOOTSTRAP_USERNAME:-}
+      COPILOT_ADMIN_BOOTSTRAP_PASSWORD: ${COPILOT_ADMIN_BOOTSTRAP_PASSWORD:-}
+      COPILOT_PLATFORM_MASTER_KEY: ${COPILOT_PLATFORM_MASTER_KEY:-}
       COPILOT_PROVIDERS_LLM_URL: ${COPILOT_PROVIDERS_LLM_URL:-}
       COPILOT_PROVIDERS_LLM_APIKEY: ${COPILOT_PROVIDERS_LLM_APIKEY:-}
       COPILOT_PROVIDERS_LLM_MODEL: ${COPILOT_PROVIDERS_LLM_MODEL:-}
@@ -39,5 +50,12 @@ services:
       COPILOT_DAILY_ANSWERS: ${COPILOT_DAILY_ANSWERS:-100}
       COPILOT_DAILY_KNOWLEDGE_QUERIES: ${COPILOT_DAILY_KNOWLEDGE_QUERIES:-300}
       COPILOT_MAX_ASR_SESSION_SECONDS: ${COPILOT_MAX_ASR_SESSION_SECONDS:-3600}
+  admin:
+    build:
+      context: ./admin
+    depends_on:
+      - backend
+    ports:
+      - '127.0.0.1:${COPILOT_ADMIN_PORT:-5174}:80'
 volumes:
-  database-data:
+  database-pg15-data:

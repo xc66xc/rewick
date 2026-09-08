@@ -1,9 +1,13 @@
 {
   "name": "interview-copilot-repository",
   "private": true,
-  "description": "Interview Copilot：独立桌面客户端与 Java 后端",
+  "description": "Interview Copilot：桌面客户端、Web 管理端与 Java 后端",
   "scripts": {
     "install:frontend": "npm --prefix frontend ci",
+    "install:admin": "npm --prefix admin ci",
+    "admin:dev": "npm --prefix admin run dev",
+    "admin:build": "npm --prefix admin run build",
+    "admin:test": "npm --prefix admin test",
     "dev": "npm --prefix frontend run dev",
     "build": "npm --prefix frontend run build",
     "test": "npm --prefix frontend test",

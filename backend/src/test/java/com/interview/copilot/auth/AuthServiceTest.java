@@ -34,7 +34,7 @@ class AuthServiceTest {
 
     @Test
     void login_validCredentials_storesOnlyHashWithExpiry() {
-        when(users.findByUsername("alice")).thenReturn(user("alice", true));
+        when(users.findForLogin("alice")).thenReturn(user("alice", true));
 
         var result = service.login("alice", "a-test-password");
 
@@ -48,7 +48,7 @@ class AuthServiceTest {
 
     @Test
     void login_wrongPassword_doesNotIssueToken() {
-        when(users.findByUsername("alice")).thenReturn(user("alice", true));
+        when(users.findForLogin("alice")).thenReturn(user("alice", true));
 
         assertThatThrownBy(() -> service.login("alice", "wrong-password"))
                 .isInstanceOf(ApiException.class).hasMessage("用户名或密码不正确。");
@@ -57,7 +57,7 @@ class AuthServiceTest {
 
     @Test
     void login_disabledUser_rejectsCorrectPassword() {
-        when(users.findByUsername("alice")).thenReturn(user("alice", false));
+        when(users.findForLogin("alice")).thenReturn(user("alice", false));
 
         assertThatThrownBy(() -> service.login("alice", "a-test-password")).isInstanceOf(ApiException.class);
         verify(tokens, never()).create(anyLong(), anyString(), any());

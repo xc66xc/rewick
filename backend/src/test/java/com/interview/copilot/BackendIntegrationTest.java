@@ -1,11 +1,14 @@
 package com.interview.copilot;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.github.dockerjava.api.command.InspectContainerResponse;
 import com.interview.copilot.auth.UserEntity;
 import com.interview.copilot.auth.UserMapper;
 import com.interview.copilot.common.ApiException;
 import com.interview.copilot.usage.UsageLease;
 import com.interview.copilot.usage.UsageService;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -26,9 +29,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
+import org.testcontainers.utility.MountableFile;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -39,7 +47,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         "copilot.limits.daily-answers=2", "copilot.limits.daily-knowledge-queries=3"})
 class BackendIntegrationTest {
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17.11");
+    static final PostgreSQLContainer<?> POSTGRES = new SqlInitializedPostgres();
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry properties) {
@@ -53,6 +61,7 @@ class BackendIntegrationTest {
     @Autowired UsageService usage;
     @Autowired JdbcTemplate jdbc;
     @Autowired PasswordEncoder passwords;
+    @Autowired PlatformTransactionManager transactionManager;
     private long alice;
     private long bob;
 
@@ -61,6 +70,62 @@ class BackendIntegrationTest {
         jdbc.execute("TRUNCATE auth_tokens, usage_daily, usage_events, app_users RESTART IDENTITY CASCADE");
         alice = createUser("alice");
         bob = createUser("bob");
+    }
+
+    @Test
+    void database_runningServer_matchesPostgresql1519() {
+        assertThat(jdbc.queryForObject("SHOW server_version_num", String.class)).isEqualTo("150019");
+    }
+
+    @Test
+    void database_initializedExtension_matchesPgvector051() {
+        assertThat(jdbc.queryForObject("SELECT extversion FROM pg_extension WHERE extname = 'vector'", String.class))
+                .isEqualTo("0.5.1");
+    }
+
+    @Test
+    void database_explicitSqlInitialization_doesNotCreateFlywayHistory() {
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM pg_catalog.pg_class
+                WHERE relname = 'flyway_schema_history' AND relkind IN ('r', 'p')
+                """, Integer.class)).isZero();
+    }
+
+    @Test
+    void vector_knownCoordinates_returnsEuclideanDistancesInOrder() {
+        inIsolatedTransaction(() -> {
+            jdbc.execute("CREATE TEMP TABLE vector_distance_probe (embedding vector(3)) ON COMMIT DROP");
+            jdbc.execute("INSERT INTO vector_distance_probe VALUES ('[1,2,15]'), ('[4,6,3]'), ('[1,2,3]')");
+
+            List<Double> distances = jdbc.queryForList("""
+                    SELECT embedding <-> '[1,2,3]'::vector AS distance
+                    FROM vector_distance_probe ORDER BY distance
+                    """, Double.class);
+
+            assertThat(distances).containsExactly(0.0, 5.0, 12.0);
+        });
+    }
+
+    @Test
+    void vector_hnswIndex_returnsNearestNeighborsUsingIndex() {
+        inIsolatedTransaction(() -> {
+            jdbc.execute("CREATE TEMP TABLE vector_hnsw_probe (id integer, embedding vector(3)) ON COMMIT DROP");
+            jdbc.execute("""
+                    INSERT INTO vector_hnsw_probe
+                    SELECT id, ('[' || id || ',0,0]')::vector FROM generate_series(1, 32) AS id
+                    """);
+            jdbc.execute("CREATE INDEX vector_hnsw_probe_idx ON vector_hnsw_probe USING hnsw (embedding vector_l2_ops)");
+            jdbc.execute("ANALYZE vector_hnsw_probe");
+            jdbc.execute("SET LOCAL enable_seqscan = off");
+            jdbc.execute("SET LOCAL hnsw.ef_search = 64");
+            String nearest = "SELECT id FROM vector_hnsw_probe ORDER BY embedding <-> '[0,0,0]'::vector LIMIT 3";
+
+            String plan = String.join("\n", jdbc.queryForList("EXPLAIN " + nearest, String.class));
+            List<Integer> neighbors = jdbc.queryForList(nearest, Integer.class);
+
+            assertThat(plan).contains("Index Scan using vector_hnsw_probe_idx");
+            assertThat(neighbors).containsExactly(1, 2, 3);
+        });
     }
 
     @Test
@@ -156,6 +221,15 @@ class BackendIntegrationTest {
                 .containsExactly("expired", "complete");
     }
 
+    private void inIsolatedTransaction(Runnable assertions) {
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        transaction.executeWithoutResult(status -> {
+            assertions.run();
+            status.setRollbackOnly();
+        });
+    }
+
     private boolean reserveAfter(CountDownLatch start, String request) throws InterruptedException {
         start.await();
         try (UsageLease reservation = usage.start(alice, request, "llm")) {
@@ -187,5 +261,39 @@ class BackendIntegrationTest {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token);
         return new HttpEntity<>(headers);
+    }
+
+    private static final class SqlInitializedPostgres extends PostgreSQLContainer<SqlInitializedPostgres> {
+        private SqlInitializedPostgres() {
+            super(DockerImageName.parse("interview-copilot-postgres:15.19-pgvector0.5.1")
+                    .asCompatibleSubstituteFor("postgres"));
+            withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "01_schema.sql")), "/tmp/01_schema.sql");
+            withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "02_pgvector.sql")), "/tmp/02_pgvector.sql");
+            withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "03_admin_users.sql")), "/tmp/03_admin_users.sql");
+            withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "04_platform_config.sql")), "/tmp/04_platform_config.sql");
+        }
+
+        @Override
+        protected void containerIsStarted(InspectContainerResponse containerInfo) {
+            super.containerIsStarted(containerInfo);
+            initializeDatabase();
+        }
+
+        private void initializeDatabase() {
+            try {
+                var result = execInContainer("psql", "-X", "-v", "ON_ERROR_STOP=1", "--single-transaction",
+                        "--username", getUsername(), "--dbname", getDatabaseName(),
+                        "-f", "/tmp/01_schema.sql", "-f", "/tmp/02_pgvector.sql",
+                        "-f", "/tmp/03_admin_users.sql", "-f", "/tmp/04_platform_config.sql");
+                if (result.getExitCode() != 0) {
+                    throw new IllegalStateException("Database SQL initialization failed: " + result.getStderr());
+                }
+            } catch (IOException error) {
+                throw new IllegalStateException("Could not execute database initialization SQL", error);
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Database SQL initialization was interrupted", error);
+            }
+        }
     }
 }

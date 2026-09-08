@@ -5,6 +5,8 @@ import com.interview.copilot.ai.ProviderJson;
 import com.interview.copilot.ai.ProviderProperties;
 import com.interview.copilot.auth.UserPrincipal;
 import com.interview.copilot.config.PlatformLimitsProperties;
+import com.interview.copilot.platform.EnvironmentPlatformResolver;
+import com.interview.copilot.platform.PlatformRuntimeResolver;
 import com.interview.copilot.usage.UsageService;
 import jakarta.annotation.PreDestroy;
 import java.net.http.HttpClient;
@@ -14,6 +16,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.socket.BinaryMessage;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -22,7 +25,7 @@ import org.springframework.web.socket.handler.AbstractWebSocketHandler;
 
 @Component
 public class AsrProxy extends AbstractWebSocketHandler {
-    private final ProviderProperties properties;
+    private final PlatformRuntimeResolver providers;
     private final ProviderJson json;
     private final UsageService usage;
     private final PlatformLimitsProperties limits;
@@ -34,7 +37,12 @@ public class AsrProxy extends AbstractWebSocketHandler {
             Thread.ofPlatform().daemon().name("asr-deadline-", 0).factory());
 
     public AsrProxy(ProviderProperties properties, ProviderJson json, UsageService usage, PlatformLimitsProperties limits) {
-        this.properties = properties;
+        this(new EnvironmentPlatformResolver(properties), json, usage, limits);
+    }
+
+    @Autowired
+    public AsrProxy(PlatformRuntimeResolver providers, ProviderJson json, UsageService usage, PlatformLimitsProperties limits) {
+        this.providers = providers;
         this.json = json;
         this.usage = usage;
         this.limits = limits;
@@ -81,12 +89,12 @@ public class AsrProxy extends AbstractWebSocketHandler {
     }
 
     public void checkAvailable() { if (!config().isEnabled()) { throw ProviderErrors.unavailable(); } }
-    ProviderProperties.Asr config() { return properties.getAsr(); }
+    ProviderProperties.Asr config() { return providers.snapshot().asr(); }
     ProviderJson json() { return json; }
     UsageService usage() { return usage; }
     HttpClient client() { return client; }
     ScheduledExecutorService timers() { return timers; }
-    int maximumSeconds() { return Math.min(config().getMaxDurationSeconds(), limits.maxAsrSessionSeconds()); }
+    int maximumSeconds(ProviderProperties.Asr config) { return Math.min(config.getMaxDurationSeconds(), limits.maxAsrSessionSeconds()); }
 
     @PreDestroy public void shutdown() {
         sessions.values().forEach(bridge -> bridge.close("cancel"));

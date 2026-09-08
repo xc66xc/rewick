@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import type { AsrStatus, Settings, SettingsInput } from '../../../shared/types'
+import { selectedPlatformModel } from '../../../shared/platform-models'
 import { AutoAnswerCoordinator, type AutoAnswerSnapshot, type AutoAnswerState } from './autoAnswerCoordinator'
 import { settingsInput } from './useSettings'
 
@@ -23,7 +24,8 @@ export function usesPlatformAnswer(settings: Settings): boolean {
 }
 
 export function isAnswerModelReady(settings: Settings): boolean {
-  return settings.llm.hasApiKey || isLocalModel(settings.llm.baseUrl) || usesPlatformAnswer(settings)
+  return settings.llm.hasApiKey || isLocalModel(settings.llm.baseUrl)
+    || (usesPlatformAnswer(settings) && Boolean(selectedPlatformModel(settings.platform)))
 }
 
 export function isAsrReady(settings: Settings): boolean {

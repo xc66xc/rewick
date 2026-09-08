@@ -12,6 +12,7 @@ import { _electron } from 'playwright'
 import { expect } from '@playwright/test'
 import { startMockServices } from './mock-services.mjs'
 import { startRemoteKnowledgeMock, remoteMarker, remoteMetadataMarkers } from './mock-remote-knowledge.mjs'
+import { runAdminPlatformChecks } from '../tests/e2e/admin-platform.mjs'
 
 const execute = promisify(execFile)
 const frontend = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -20,6 +21,7 @@ const output = join(frontend, 'test-results')
 const userData = await mkdtemp(join(tmpdir(), 'copilot-platform-e2e-'))
 const suffix = randomBytes(6).toString('hex')
 const container = `copilot-platform-e2e-${suffix}`
+const databaseImage = 'interview-copilot-postgres:15.19-pgvector0.5.1'
 const password = randomBytes(20).toString('hex')
 const keys = { llm: `test-platform-llm-${suffix}`, asr: `test-platform-asr-${suffix}`, knowledge: `test-platform-knowledge-${suffix}` }
 const report = { realProviderTested: false, realAudioTested: false, checks: [], screenshots: [] }
@@ -27,6 +29,7 @@ const mock = await startMockServices()
 const knowledge = await startRemoteKnowledgeMock()
 let application
 let backend
+let adminServer
 let page
 let logs = ''
 let databaseStarted = false
@@ -78,14 +81,22 @@ try {
   await mkdir(output, { recursive: true })
   const artifacts = (await readdir(join(repository, 'backend/target'))).filter(name => name.endsWith('.jar'))
   assert.equal(artifacts.length, 1, 'Build backend with npm run backend:build before the smoke test')
+  await execute('docker', ['image', 'inspect', databaseImage]).catch(() => {
+    throw new Error('Build the database image first: docker build -t interview-copilot-postgres:15.19-pgvector0.5.1 deploy/postgres')
+  })
   await execute('docker', ['run', '--rm', '-d', '--name', container, '-p', '127.0.0.1::5432',
-    '-e', 'POSTGRES_USER=copilot_test', '-e', 'POSTGRES_DB=copilot_test', '-e', 'POSTGRES_PASSWORD', 'postgres:17.11'],
+    '-e', 'POSTGRES_USER=copilot_test', '-e', 'POSTGRES_DB=copilot_test', '-e', 'POSTGRES_PASSWORD', databaseImage],
   { env: { ...process.env, POSTGRES_PASSWORD: password }, timeout: 180000 })
   databaseStarted = true
   await until(async () => {
-    try { await execute('docker', ['exec', container, 'pg_isready', '-U', 'copilot_test']); return true }
+    try { await execute('docker', ['exec', container, 'pg_isready', '-h', '127.0.0.1', '-U', 'copilot_test', '-d', 'copilot_test']); return true }
     catch { return false }
   }, 'Test database did not become ready')
+  await execute('docker', ['cp', join(repository, 'backend/sql'), `${container}:/tmp/copilot-sql`])
+  await execute('docker', ['exec', container, 'psql', '-X', '-U', 'copilot_test', '-d', 'copilot_test',
+    '-v', 'ON_ERROR_STOP=1', '--single-transaction',
+    '-f', '/tmp/copilot-sql/01_schema.sql', '-f', '/tmp/copilot-sql/02_pgvector.sql',
+    '-f', '/tmp/copilot-sql/03_admin_users.sql', '-f', '/tmp/copilot-sql/04_platform_config.sql'])
   const mapping = (await execute('docker', ['port', container, '5432/tcp'])).stdout.trim()
   const databasePort = mapping.slice(mapping.lastIndexOf(':') + 1)
   const backendPort = await port()
@@ -94,6 +105,8 @@ try {
     env: { ...process.env, PORT: String(backendPort), COPILOT_DATABASE_URL: `jdbc:postgresql://127.0.0.1:${databasePort}/copilot_test`,
       COPILOT_DATABASE_USERNAME: 'copilot_test', COPILOT_DATABASE_PASSWORD: password,
       COPILOT_BOOTSTRAP_USERNAME: 'platform-test', COPILOT_BOOTSTRAP_PASSWORD: password,
+      COPILOT_ADMIN_BOOTSTRAP_USERNAME: 'admin-test', COPILOT_ADMIN_BOOTSTRAP_PASSWORD: password,
+      COPILOT_PLATFORM_MASTER_KEY: randomBytes(32).toString('base64'),
       COPILOT_PROVIDERS_LLM_URL: `${mock.llmBaseUrl}/chat/completions`, COPILOT_PROVIDERS_LLM_APIKEY: keys.llm,
       COPILOT_PROVIDERS_LLM_MODEL: 'mock-fast', COPILOT_PROVIDERS_LLM_ALLOWEDMODELS: 'mock-fast,mock-held',
       COPILOT_PROVIDERS_ASR_URL: `${mock.asrUrl}?mode=manual`,
@@ -106,6 +119,23 @@ try {
     if (backend.exitCode !== null) throw new Error('Backend exited; inspect the sanitized platform-smoke-backend.log')
     try { return (await fetch(`${baseUrl}/actuator/health`)).ok } catch { return false }
   }, 'Backend did not become healthy', 60000)
+  // Health can turn UP before the bootstrap ApplicationRunners finish creating both accounts.
+  await until(async () => {
+    if (backend.exitCode !== null) throw new Error('Backend exited before test accounts were initialized')
+    const initialized = await execute('docker', ['exec', container, 'psql', '-X', '-U', 'copilot_test', '-d', 'copilot_test', '-At',
+      '-c', "SELECT count(*) FROM app_users WHERE is_enabled AND ((username = 'platform-test' AND role = 'USER') OR (username = 'admin-test' AND role = 'ADMIN'))"])
+    return initialized.stdout.trim() === '2'
+  }, 'Backend bootstrap did not initialize both test accounts')
+
+  await check('explicit SQL initializes PostgreSQL 15.19 and pgvector 0.5.1 before backend startup', async () => {
+    const result = await execute('docker', ['exec', container, 'psql', '-U', 'copilot_test', '-d', 'copilot_test', '-At',
+      '-c', "SELECT current_setting('server_version_num'), extversion FROM pg_extension WHERE extname = 'vector'"])
+    assert.equal(result.stdout.trim(), '150019|0.5.1')
+    const history = await execute('docker', ['exec', container, 'psql', '-U', 'copilot_test', '-d', 'copilot_test', '-At',
+      '-c', "SELECT to_regclass('public.flyway_schema_history') IS NULL"])
+    assert.equal(history.stdout.trim(), 't')
+    report.database = { postgres: '15.19', pgvector: '0.5.1' }
+  })
 
   await check('platform requires business authentication and rejects invalid login', async () => {
     assert.equal((await request(baseUrl, '/api/v1/platform')).status, 401)
@@ -230,6 +260,8 @@ try {
     await until(() => mock.asrConnections.at(-1).closed, 'Upstream ASR connection did not close')
   })
 
+  await runAdminPlatformChecks({ baseUrl, password, keys, page, mock, knowledge, answer, until, check, noSecrets })
+
   await check('personal credentials take precedence without sending a platform Key to their endpoint', async () => {
     await page.evaluate(async baseUrl => {
       const settings = await window.copilot.getSettings()
@@ -257,9 +289,33 @@ try {
     assert.equal((await request(baseUrl, '/api/v1/auth/logout', {}, accessToken)).status, 204)
     assert.equal((await request(baseUrl, '/api/v1/platform', undefined, accessToken)).status, 401)
   })
+  await check('Web admin manages real users and configuration through its same-origin API proxy', async () => {
+    const adminPort = await port()
+    const adminUrl = `http://127.0.0.1:${adminPort}`
+    adminServer = spawn(process.execPath, [join(repository, 'admin/node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', String(adminPort), '--strictPort'], {
+      cwd: join(repository, 'admin'), env: { ...process.env, COPILOT_ADMIN_PROXY_TARGET: baseUrl }, stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    adminServer.stdout.on('data', value => { logs = `${logs}${value}`.slice(-300000) })
+    adminServer.stderr.on('data', value => { logs = `${logs}${value}`.slice(-300000) })
+    await until(async () => {
+      if (adminServer.exitCode !== null) throw new Error('Admin dev server exited')
+      try { return (await fetch(adminUrl)).ok } catch { return false }
+    }, 'Admin dev server did not become ready')
+    // Each package owns its Playwright installation; a separate process avoids loading two test runtimes.
+    const result = await execute(process.execPath, [join(repository, 'admin/scripts/smoke.mjs')], {
+      cwd: join(repository, 'admin'), timeout: 180000,
+      env: { ...process.env, COPILOT_ADMIN_URL: adminUrl, COPILOT_ADMIN_USERNAME: 'admin-test',
+        COPILOT_ADMIN_PASSWORD: password, COPILOT_ADMIN_SMOKE_OUTPUT: join(repository, 'admin/test-results') },
+    })
+    process.stdout.write(result.stdout)
+  })
   noSecrets(await page.evaluate(() => window.__platformEvents))
 } finally {
   await application?.close().catch(() => undefined)
+  if (adminServer && adminServer.exitCode === null) {
+    adminServer.kill('SIGTERM')
+    await until(() => adminServer.exitCode !== null, 'Admin stop timeout', 5000).catch(() => adminServer.kill('SIGKILL'))
+  }
   if (backend && backend.exitCode === null) {
     backend.kill('SIGTERM')
     await until(() => backend.exitCode !== null, 'Backend stop timeout', 10000).catch(() => backend.kill('SIGKILL'))
