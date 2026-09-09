@@ -61,7 +61,7 @@ export default function SettingsDialog({ settings, bridge, onSave, onApply, onLo
       <header className={styles.dialogHeader}><div><span className={styles.eyebrow}>按你的习惯连接</span><h2 id="settings-title">模型与设置</h2></div><IconButton label="关闭设置" onClick={onClose} disabled={busy}><X size={20} weight="bold" /></IconButton></header>
       <form ref={form} onSubmit={event => { event.preventDefault(); void perform('save') }}>
         <div className={styles.dialogBody}><fieldset className={styles.settingsFields} disabled={busy || !bridge}>
-          <section className={styles.settingsGroup} aria-label="当前账号"><h3 className={styles.accountHeading}>当前账号</h3><p className={styles.formNote}>{catalog.platform?.user?.email || catalog.platform?.user?.username || '尚未登录'}</p>
+          <section className={styles.settingsGroup} aria-label="当前账号"><h3 className={styles.accountHeading}>当前账号</h3><p className={styles.formNote}>{catalog.platform?.user?.displayName || '尚未登录'}</p>
             <div className={styles.platformActions}><button className={styles.secondaryButton} type="button" onClick={() => void perform('refresh')}>刷新平台服务</button><button className={styles.textButton} type="button" onClick={() => void perform('logout')}>退出登录</button></div></section>
           {kinds.map(kind => <fieldset className={styles.settingsGroup} key={kind}><legend>{serviceLabels[kind]}</legend>
             <ServiceSelector kind={kind} settings={catalog} selection={draft.serviceSelections?.[kind]}

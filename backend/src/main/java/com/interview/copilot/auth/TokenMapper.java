@@ -13,7 +13,7 @@ public interface TokenMapper {
     void create(@Param("userId") long userId, @Param("hash") String hash, @Param("expiresAt") Instant expiresAt);
 
     @Select("""
-            SELECT u.id, u.username, u.role,
+            SELECT u.id, u.display_name, u.role,
                 (SELECT identifier FROM auth_identities WHERE app_users_id = u.id AND identity_type = 'email') AS email
             FROM auth_tokens t JOIN app_users u ON u.id = t.app_users_id
             WHERE t.token_hash = #{hash} AND t.is_revoked = FALSE AND t.expires_at > #{now} AND u.is_enabled = TRUE

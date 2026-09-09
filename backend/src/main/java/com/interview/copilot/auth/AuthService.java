@@ -33,26 +33,26 @@ public class AuthService {
     }
 
     @Transactional
-    public LoginResult login(String username, String password) {
+    public LoginResult login(String identifier, String password) {
         if (password.getBytes(StandardCharsets.UTF_8).length > 72) throw invalidCredentials();
-        UserEntity user = findLoginUser(username);
+        UserEntity user = findLoginUser(identifier);
         String hash = user == null ? absentPassword : user.getPasswordHash();
         boolean matches = passwords.matches(password, hash);
         if (!matches || user == null || !user.isEnabled()) throw invalidCredentials();
         return issueToken(user);
     }
 
-    private UserEntity findLoginUser(String username) {
-        if (username.contains("@")) {
+    private UserEntity findLoginUser(String identifier) {
+        if (identifier.contains("@")) {
             try {
-                UserEntity emailUser = users.findForEmailLogin(EmailAddress.normalize(username));
+                UserEntity emailUser = users.findForEmailLogin(EmailAddress.normalize(identifier));
                 if (emailUser != null) return emailUser;
             } catch (ApiException error) {
-                // Existing username accounts may include @ without being an email address.
+                // Existing identifier accounts may include @ without being an email address.
                 if (!"invalid_email".equals(error.code())) throw error;
             }
         }
-        return users.findForLogin(username);
+        return users.findForLogin(identifier);
     }
 
     @Transactional
@@ -60,7 +60,7 @@ public class AuthService {
         String token = TokenSecrets.create();
         Instant expiresAt = clock.instant().plus(properties.tokenHours(), ChronoUnit.HOURS);
         tokens.create(user.getId(), TokenSecrets.hash(token), expiresAt);
-        return new LoginResult(token, expiresAt, new PublicUser(user.getId().toString(), user.getUsername(), user.getRole(), user.getEmail()));
+        return new LoginResult(token, expiresAt, new PublicUser(user.getId().toString(), user.getDisplayName(), user.getRole(), user.getEmail()));
     }
 
     public Optional<UserPrincipal> authenticate(String token) {
@@ -71,12 +71,12 @@ public class AuthService {
     public void logout(String token) { tokens.revoke(TokenSecrets.hash(token)); }
 
     private ApiException invalidCredentials() {
-        return new ApiException(HttpStatus.UNAUTHORIZED, "invalid_credentials", "用户名或密码不正确。");
+        return new ApiException(HttpStatus.UNAUTHORIZED, "invalid_credentials", "登录账号或密码不正确。");
     }
 
-    public record PublicUser(String id, String username, String role, @JsonInclude(JsonInclude.Include.NON_NULL) String email) {
-        public PublicUser(String id, String username, String role) { this(id, username, role, null); }
-        public PublicUser(String id, String username) { this(id, username, "USER"); }
+    public record PublicUser(String id, String displayName, String role, @JsonInclude(JsonInclude.Include.NON_NULL) String email) {
+        public PublicUser(String id, String displayName, String role) { this(id, displayName, role, null); }
+        public PublicUser(String id, String displayName) { this(id, displayName, "USER"); }
     }
     public record LoginResult(String accessToken, Instant expiresAt, PublicUser user) {
         @Override

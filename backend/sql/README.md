@@ -1,5 +1,8 @@
 # 数据库 SQL
 
+> **当前安装必须执行 01–06。06 会删除 app_users.username，必须停止旧后端、事务执行 SQL、再发布新版前后端。回滚旧程序需先从备份恢复数据库，不能只替换旧 JAR。**
+
+
 PostgreSQL 15.19 / pgvector 0.5.1。SQL 由开发或部署人员显式执行，后端启动不会自动建表或修改结构。
 
 | 文件 | 用途 |
@@ -57,3 +60,7 @@ docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ER
 新增脚本不删除既有用户或会话数据，既有普通用户不会自动获得管理员权限。升级前的应用可以读取原业务字段；回滚应用时保留新增表/字段，不执行删表回滚。平台和邮件服务地址、模型/Agent 绑定均存数据库，Key 与 SMTP 密码保存为密文；恢复数据库时也需要原部署加密主密钥。后端不读取供应商或 SMTP 环境配置作为回退。
 
 移除迁移工具不删除已有业务数据或历史表。已存在的 `flyway_schema_history` 可以保留，应用不再使用它。后续结构变更在此目录新增独立 SQL 文件，并记录适用版本、执行顺序及操作结果，由部署人员执行。
+
+## 显示名称迁移（06）
+
+完成 01–05 后，停止旧版后端，备份数据库，再使用 `psql -v ON_ERROR_STOP=1 --single-transaction -f backend/sql/06_display_name.sql` 执行。脚本为一次性升级，不可重复运行。它先复制邮箱或账号到非唯一 `display_name`，为非邮箱账号建立 `account` 登录身份，再删除 `app_users.username`；用户 ID、密码和令牌不变。随后必须启动使用 `identifier` 登录字段的新版后端和客户端。新空库也需要按顺序执行至 06。SMTP 的 username 是邮件服务器认证账号，不在本次迁移范围。

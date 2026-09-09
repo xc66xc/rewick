@@ -19,18 +19,20 @@ public class BootstrapUser implements ApplicationRunner {
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional
     public void run(ApplicationArguments arguments) {
-        String username = properties.bootstrapUsername();
+        String identifier = properties.bootstrapUsername();
         String password = properties.bootstrapPassword();
-        if (username.isBlank() && password.isBlank()) return;
-        validate(username, password);
-        if (users.findByUsername(username) != null) return;
-        users.createBootstrap(username, passwords.encode(password));
+        if (identifier.isBlank() && password.isBlank()) return;
+        validate(identifier, password);
+        users.lockIdentityChanges();
+        if (users.findByIdentifier(identifier) != null) return;
+        users.createBootstrap(identifier, passwords.encode(password));
     }
 
-    private void validate(String username, String password) {
-        if (!username.matches("[A-Za-z0-9_.@-]{3,64}")) {
-            throw new IllegalStateException("Bootstrap username must contain 3–64 permitted characters");
+    private void validate(String identifier, String password) {
+        if (!identifier.matches("[A-Za-z0-9_.@-]{3,64}")) {
+            throw new IllegalStateException("Bootstrap identifier must contain 3–64 permitted characters");
         }
         int bytes = password.getBytes(StandardCharsets.UTF_8).length;
         if (password.length() < 12 || bytes > 72) {

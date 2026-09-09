@@ -7,7 +7,7 @@ async function login() { const actor = userEvent.setup(); await actor.type(scree
 describe('administrator authentication', () => {
   it('rejects non-admin credentials and clears the submitted password', async () => {
     const requests: string[] = []
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => { requests.push(url); if (url.endsWith('/auth/login')) return response({ accessToken: 'user-token', expiresAt: '2099-01-01T00:00:00Z', user: { id: '2', username: 'candidate' } }); if (url.endsWith('/admin/me')) return response({ message: '需要管理员权限。' }, 403); return new Response(null, { status: 204 }) }))
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => { requests.push(url); if (url.endsWith('/auth/login')) return response({ accessToken: 'user-token', expiresAt: '2099-01-01T00:00:00Z', user: { id: '2', displayName: 'candidate' } }); if (url.endsWith('/admin/me')) return response({ message: '需要管理员权限。' }, 403); return new Response(null, { status: 204 }) }))
     render(<App />); await login()
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', '需要管理员权限。')
     expect(screen.getByLabelText('登录密码')).toHaveProperty('value', '')
@@ -16,9 +16,9 @@ describe('administrator authentication', () => {
   it('restores tab credentials and clears them on 401', async () => {
     const expired = { value: false }
     vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
-      if (url.endsWith('/auth/login')) return response({ accessToken: 'private-memory-token', expiresAt: '2099-01-01T00:00:00Z', user: { id: '1', username: 'admin' } })
+      if (url.endsWith('/auth/login')) { expect(JSON.parse(String(options.body))).toEqual({ identifier: 'admin', password: 'long-password' }); return response({ accessToken: 'private-memory-token', expiresAt: '2099-01-01T00:00:00Z', user: { id: '1', displayName: 'admin' } }) }
       expect((options.headers as Record<string, string>).Authorization).toBe('Bearer private-memory-token')
-      if (url.endsWith('/admin/me')) return response({ id: '1', username: 'admin', role: 'ADMIN' })
+      if (url.endsWith('/admin/me')) return response({ id: '1', displayName: 'admin', role: 'ADMIN' })
       if (expired.value) return response({ message: 'expired' }, 401)
       return response(page([user]))
     }))
@@ -36,8 +36,8 @@ describe('administrator authentication', () => {
     const calls: string[] = []
     vi.stubGlobal('fetch', vi.fn(async (url: string) => {
       calls.push(url)
-      if (url.endsWith('/auth/login')) return response({ accessToken: 'tab-token', expiresAt: '2099-01-01T00:00:00Z', user: { id: '1', username: 'admin' } })
-      if (url.endsWith('/admin/me')) return response({ id: '1', username: 'admin', role: 'ADMIN' })
+      if (url.endsWith('/auth/login')) return response({ accessToken: 'tab-token', expiresAt: '2099-01-01T00:00:00Z', user: { id: '1', displayName: 'admin' } })
+      if (url.endsWith('/admin/me')) return response({ id: '1', displayName: 'admin', role: 'ADMIN' })
       return response(page([user]))
     }))
     const first = render(<App />); await login()
@@ -63,6 +63,6 @@ describe('administrator authentication', () => {
   it('reports a wrong password as a credential error', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => response({ message: 'bad credentials' }, 401)))
     render(<App />); await login()
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('用户名或密码错误。'))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('账号或密码错误。'))
   })
 })

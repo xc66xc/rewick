@@ -51,7 +51,7 @@ class AuthServiceTest {
         when(users.findForLogin("alice")).thenReturn(user("alice", true));
 
         assertThatThrownBy(() -> service.login("alice", "wrong-password"))
-                .isInstanceOf(ApiException.class).hasMessage("用户名或密码不正确。");
+                .isInstanceOf(ApiException.class).hasMessage("登录账号或密码不正确。");
         verify(tokens, never()).create(anyLong(), anyString(), any());
     }
 
@@ -66,7 +66,7 @@ class AuthServiceTest {
     @Test
     void login_missingUser_usesSameSafeError() {
         assertThatThrownBy(() -> service.login("missing", "a-test-password"))
-                .isInstanceOf(ApiException.class).hasMessage("用户名或密码不正确。");
+                .isInstanceOf(ApiException.class).hasMessage("登录账号或密码不正确。");
     }
 
     @Test
@@ -84,10 +84,10 @@ class AuthServiceTest {
         verify(tokens).revoke(TokenSecrets.hash(token));
     }
 
-    private UserEntity user(String username, boolean enabled) {
+    private UserEntity user(String displayName, boolean enabled) {
         UserEntity user = new UserEntity();
         user.setId(7L);
-        user.setUsername(username);
+        user.setDisplayName(displayName);
         user.setPasswordHash(passwords.encode("a-test-password"));
         user.setEnabled(enabled);
         return user;

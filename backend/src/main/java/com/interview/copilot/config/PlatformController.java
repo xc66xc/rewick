@@ -25,7 +25,7 @@ public class PlatformController {
     @GetMapping
     public PlatformResponse platform(@AuthenticationPrincipal UserPrincipal user) {
         var snapshot = providers.snapshot();
-        return new PlatformResponse(new AuthService.PublicUser(Long.toString(user.id()), user.username(), user.role(), user.email()),
+        return new PlatformResponse(new AuthService.PublicUser(Long.toString(user.id()), user.displayName(), user.role(), user.email()),
                 new Capabilities(!snapshot.availableModels().isEmpty(), !snapshot.availableAsrServices().isEmpty(), !snapshot.availableKnowledgeServices().isEmpty(), !snapshot.availableEmbeddingServices().isEmpty()),
                 new Models(snapshot.defaultModelId(), snapshot.asr().getModel(), snapshot.availableModels()), limits.effective(user.id()),
                 new Services(snapshot.availableAsrServices(), snapshot.availableKnowledgeServices(), snapshot.availableEmbeddingServices()));

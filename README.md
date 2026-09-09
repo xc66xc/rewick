@@ -140,3 +140,9 @@ npm --prefix frontend run test:platform
 开发阶段不兼容旧公共数据：不再读取或迁移原根目录中的设置、环境、资料库和历史记录，首次使用新版需重新登录并录入资料。旧文件不会自动删除。
 
 验证：先运行 `npm --prefix frontend run build`，再运行 `npm --prefix frontend run test:accounts`；使用临时用户目录、两个测试账户和本机假后端，覆盖账户切换、重新登录、同一用户更换平台地址后资料保持不变及过期请求隔离。
+
+### 用户展示名称与登录身份
+
+`app_users.display_name` 用于展示，不唯一、不参与登录；邮箱注册时复制规范化邮箱。登录标识独立保存在 `auth_identities`，当前支持邮箱身份和管理员/后台创建账号的 `account` 身份，尚未实现手机号注册登录。接口使用 `displayName`，登录请求使用 `identifier`。
+
+已有数据库按 `backend/sql/06_display_name.sql` 升级：停止旧后端，在事务中执行脚本，然后启动新后端和管理端。脚本保留用户 ID，把已有邮箱复制到显示名称，将原账号登录标识移入身份表，最后删除 `username`。桌面端更新后需要重新登录，按用户 ID 保存的资料和面试环境不变。

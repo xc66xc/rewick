@@ -80,6 +80,8 @@ class EmailAuthIntegrationTest {
         assertThat(registered.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         JsonNode body = registered.getBody();
         assertThat(body.path("user").path("email").asText()).isEqualTo(EMAIL);
+        assertThat(body.path("user").path("displayName").asText()).isEqualTo(EMAIL);
+        assertThat(body.path("user").has("username")).isFalse();
         assertThat(body.path("user").path("role").asText()).isEqualTo("USER");
         assertThat(body.path("user").path("id").isTextual()).isTrue();
         assertThat(body.toString()).doesNotContain("passwordHash", "codeDigest", code);
@@ -178,13 +180,14 @@ class EmailAuthIntegrationTest {
         assertThat(register(EMAIL, PASSWORD, code).getStatusCode()).isEqualTo(HttpStatus.CREATED);
     }
 
-    @Test void login_existingEmailShapedAdminUsername_remainsUnboundAndCannotBeRegistered() {
-        jdbc.update("INSERT INTO app_users(username,password_hash,role) VALUES(?,?,'ADMIN')", EMAIL, passwords.encode(PASSWORD));
+    @Test void login_existingEmailShapedAccountIdentity_remainsUnboundAndCannotBeRegistered() {
+        long id = jdbc.queryForObject("INSERT INTO app_users(display_name,password_hash,role) VALUES(?,?,'ADMIN') RETURNING id", Long.class, EMAIL, passwords.encode(PASSWORD));
+        jdbc.update("INSERT INTO auth_identities(app_users_id,identity_type,identifier,verified_at) VALUES(?,'account',?,CURRENT_TIMESTAMP)", id, EMAIL);
         assertThat(login(EMAIL, PASSWORD).getBody().path("user").path("role").asText()).isEqualTo("ADMIN");
         assertThat(login(EMAIL, PASSWORD).getBody().path("user").has("email")).isFalse();
         assertThat(send(EMAIL).getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(mailbox).isEmpty();
-        assertThat(count("auth_identities")).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM auth_identities WHERE identity_type='email'", Integer.class)).isZero();
     }
 
     @Test void register_invalidEmailPasswordOrUnexpectedRole_neverCreatesAnAccount() {
@@ -202,7 +205,7 @@ class EmailAuthIntegrationTest {
     private ResponseEntity<JsonNode> register(String email, String password, String code) {
         return call(HttpMethod.POST, "/api/v1/auth/register", null, Map.of("email", email, "password", password, "code", code));
     }
-    private ResponseEntity<JsonNode> login(String username, String password) { return call(HttpMethod.POST, "/api/v1/auth/login", null, Map.of("username", username, "password", password)); }
+    private ResponseEntity<JsonNode> login(String displayName, String password) { return call(HttpMethod.POST, "/api/v1/auth/login", null, Map.of("identifier", displayName, "password", password)); }
     private ResponseEntity<JsonNode> call(HttpMethod method, String path, String token, Object body) {
         HttpHeaders headers = new HttpHeaders();
         if (token != null) headers.setBearerAuth(token);

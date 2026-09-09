@@ -14,8 +14,8 @@ async function server() {
     const reply = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(value ? JSON.stringify(value) : undefined) }
     if (req.url === '/api/v1/auth/login') {
       let raw = ''; for await (const chunk of req) raw += chunk
-      const email = JSON.parse(raw).username
-      const user = { id: email.split('@')[0], username: email, email }
+      const email = JSON.parse(raw).identifier
+      const user = { id: email.split('@')[0], displayName: email, email }
       const accessToken = randomUUID(); tokens.set(accessToken, user)
       return reply(200, { accessToken, expiresAt: new Date(Date.now() + 3600000).toISOString(), user })
     }
@@ -42,7 +42,7 @@ try {
     await page.evaluate(async ({ email, url }) => {
       const config = await window.copilot.getSettings()
       await window.copilot.saveSettings({ ...config, platform: { enabled: true, baseUrl: url } })
-      await window.copilot.platformLogin({ username: email, password: 'synthetic-password-123' })
+      await window.copilot.platformLogin({ identifier: email, password: 'synthetic-password-123' })
     }, { email, url })
     await page.getByRole('button', { name: '打开设置', exact: true }).waitFor()
   }

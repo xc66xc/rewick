@@ -8,19 +8,19 @@ describe('user management', () => {
   it('retains non-secret create fields after failure and retries with a new password', async () => {
     let failed = false
     const created: Record<string, unknown>[] = []
-    vi.stubGlobal('fetch', vi.fn(async (_url: string, options: RequestInit) => { if (options.method === 'POST') { created.push(data(options)); if (!failed) { failed = true; return response({ message: '用户名暂不可用' }, 409) } return response({ ...user, username: 'new-user' }) } return response(page([user])) }))
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, options: RequestInit) => { if (options.method === 'POST') { created.push(data(options)); if (!failed) { failed = true; return response({ message: '登录账号暂不可用' }, 409) } return response({ ...user, displayName: 'new-user' }) } return response(page([user])) }))
     const actor = userEvent.setup(); render(<UsersPage api={new ApiClient('token')} />)
     await screen.findByText('candidate'); await actor.click(screen.getByRole('button', { name: '创建用户' }))
     const dialog = screen.getByRole('dialog', { name: '创建用户' })
-    await actor.type(within(dialog).getByLabelText('用户名'), 'new-user'); await actor.type(within(dialog).getByLabelText('初始密码'), 'first-password-123')
+    await actor.type(within(dialog).getByLabelText('登录账号'), 'new-user'); await actor.type(within(dialog).getByLabelText('初始密码'), 'first-password-123')
     await actor.clear(within(dialog).getByLabelText('每日回答次数')); await actor.type(within(dialog).getByLabelText('每日回答次数'), '0')
     await actor.click(within(dialog).getByRole('button', { name: '创建用户' }))
     await within(dialog).findByRole('alert')
-    expect(within(dialog).getByLabelText('用户名')).toHaveProperty('value', 'new-user')
+    expect(within(dialog).getByLabelText('登录账号')).toHaveProperty('value', 'new-user')
     expect(within(dialog).getByLabelText('初始密码')).toHaveProperty('value', '')
     await actor.type(within(dialog).getByLabelText('初始密码'), 'second-password-123'); await actor.click(within(dialog).getByRole('button', { name: '创建用户' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(created).toHaveLength(2); expect(created[1]).toMatchObject({ username: 'new-user', password: 'second-password-123', dailyAnswers: 0 })
+    expect(created).toHaveLength(2); expect(created[1]).toMatchObject({ identifier: 'new-user', password: 'second-password-123', dailyAnswers: 0 })
   })
   it('requires explicit confirmation to disable a user and supports zero quotas', async () => {
     const updates: Record<string, unknown>[] = []
@@ -42,7 +42,7 @@ describe('user management', () => {
     const actor = userEvent.setup(); render(<UsersPage api={new ApiClient('token')} />)
     await screen.findByText('candidate'); await actor.click(screen.getByRole('button', { name: '下一页' }))
     await waitFor(() => expect(calls.some(value => value.includes('page=2'))).toBe(true))
-    await actor.type(screen.getByLabelText('搜索用户名'), 'candidate'); await actor.click(screen.getByRole('button', { name: '搜索' }))
+    await actor.type(screen.getByLabelText('邮箱或显示名称'), 'candidate'); await actor.click(screen.getByRole('button', { name: '搜索' }))
     await screen.findByRole('button', { name: '撤销登录 candidate' }); await actor.click(screen.getByRole('button', { name: '撤销登录 candidate' }))
     await actor.click(within(screen.getByRole('dialog')).getByRole('button', { name: '取消' }))
     expect(calls.some(value => value.startsWith('POST'))).toBe(false)

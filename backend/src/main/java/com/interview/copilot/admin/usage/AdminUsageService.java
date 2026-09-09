@@ -13,10 +13,10 @@ public class AdminUsageService {
 
     public AdminUsageService(AdminUsageMapper mapper) { this.mapper = mapper; }
 
-    public Page<UsageView> list(String userId, String capability, String status, String model, AdminInput.Paging paging) {
+    public Page<UsageView> list(String userId, String query, String capability, String status, String model, AdminInput.Paging paging) {
         if (!CAPABILITIES.contains(capability) || !STATUSES.contains(status)) throw AdminInput.invalid();
         Long id = userId.isEmpty() ? null : AdminInput.id(userId);
-        var filter = new AdminUsageMapper.Filter(id, capability, status, AdminInput.bounded(model, 256));
+        var filter = new AdminUsageMapper.Filter(id, capability, status, AdminInput.bounded(model, 256), AdminInput.bounded(query, 254));
         return new Page<>(mapper.page(filter, paging.size(), paging.offset()), mapper.count(filter), paging.page(), paging.size());
     }
 }

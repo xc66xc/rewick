@@ -22,13 +22,13 @@ public class LoginRateLimiter {
         this.clock = clock;
     }
 
-    public void acquire(String address, String username) {
+    public void acquire(String address, String identifier) {
         lock.lock();
         try {
             long now = clock.millis();
             buckets.entrySet().removeIf(entry -> entry.getValue().expiresAt <= now);
             consume("ip:" + address, properties.loginBurst() * 10, now);
-            consume("user:" + username.strip().toLowerCase(Locale.ROOT), properties.loginBurst(), now);
+            consume("user:" + identifier.strip().toLowerCase(Locale.ROOT), properties.loginBurst(), now);
         } finally {
             lock.unlock();
         }

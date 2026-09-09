@@ -59,7 +59,7 @@ const secretStorage = {
   decryptString: (value: Buffer) => safeStorage.decryptString(value),
   isEncryptionAvailable: () => safeStorage.isEncryptionAvailable()
 }
-const authSettings = new SettingsStore(join(app.getPath('userData'), 'authentication-v2'), secretStorage)
+const authSettings = new SettingsStore(join(app.getPath('userData'), 'authentication-v3'), secretStorage)
 const platform = new PlatformService(authSettings)
 const accounts = new AccountWorkspaces(app.getPath('userData'), secretStorage, () => emit({ kind: 'documents-changed' }), () => authSettings.getConnectionSnapshot())
 async function syncAccount() {

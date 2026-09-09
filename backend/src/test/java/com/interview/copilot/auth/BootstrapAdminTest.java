@@ -32,7 +32,7 @@ class BootstrapAdminTest {
 
     @Test
     void run_existingOrdinaryAccount_doesNotPromoteOrChangePassword() {
-        when(users.findByUsername("admin")).thenReturn(account("USER"));
+        when(users.findByIdentifier("admin")).thenReturn(account("USER"));
 
         assertThatThrownBy(() -> bootstrap("admin", "test-only-password").run(new DefaultApplicationArguments()))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("cannot promote");
@@ -41,7 +41,7 @@ class BootstrapAdminTest {
 
     @Test
     void run_existingAdministrator_doesNotOverwriteCredentials() {
-        when(users.findByUsername("admin")).thenReturn(account("ADMIN"));
+        when(users.findByIdentifier("admin")).thenReturn(account("ADMIN"));
 
         bootstrap("admin", "test-only-password").run(new DefaultApplicationArguments());
 
@@ -61,19 +61,19 @@ class BootstrapAdminTest {
 
     @Test
     void run_concurrentOrdinaryAccountCreation_doesNotPromoteIt() {
-        when(users.findByUsername("admin")).thenReturn(null, account("USER"));
+        when(users.findByIdentifier("admin")).thenReturn(null, account("USER"));
 
         assertThatThrownBy(() -> bootstrap("admin", "test-only-password").run(new DefaultApplicationArguments()))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("cannot promote");
     }
 
-    private BootstrapAdmin bootstrap(String username, String password) {
-        return new BootstrapAdmin(new AdminBootstrapProperties(username, password), users, passwords);
+    private BootstrapAdmin bootstrap(String displayName, String password) {
+        return new BootstrapAdmin(new AdminBootstrapProperties(displayName, password), users, passwords);
     }
 
     private UserEntity account(String role) {
         UserEntity user = new UserEntity();
-        user.setUsername("admin");
+        user.setDisplayName("admin");
         user.setRole(role);
         return user;
     }

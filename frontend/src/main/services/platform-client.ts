@@ -46,7 +46,7 @@ export class PlatformClient {
       })
       if (!response.ok) {
         await response.body?.cancel().catch(() => undefined)
-        const message = response.status === 401 ? (path.endsWith('/login') ? '平台用户名或密码错误。' : '平台登录已失效，请重新登录。')
+        const message = response.status === 401 ? (path.endsWith('/login') ? '平台登录账号或密码错误。' : '平台登录已失效，请重新登录。')
           : response.status === 403 ? '平台账号没有此服务权限，请联系管理员。'
           : response.status === 429 && path.endsWith('/email-code') ? '验证码发送过于频繁，请稍后再试；如果已收到验证码，请直接填写并注册。'
           : response.status === 429 && path.endsWith('/register') ? '注册尝试过于频繁，请稍后重试。'

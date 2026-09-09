@@ -32,26 +32,27 @@ public class AdminUserService {
     }
 
     public Page<UserView> list(String query, AdminInput.Paging paging) {
-        AdminInput.bounded(query, 64);
+        AdminInput.bounded(query, 254);
         return new Page<>(mapper.page(query, paging.size(), paging.offset(), defaults.dailyAnswers(),
                 defaults.dailyKnowledgeQueries()), mapper.count(query), paging.page(), paging.size());
     }
 
     @Transactional
-    public UserView create(long actorId, String username, String password, int answers, int knowledge) {
+    public UserView create(long actorId, String identifier, String password, int answers, int knowledge) {
         validateQuotas(answers, knowledge);
-        if (username == null || !username.matches("[A-Za-z0-9_.@-]{3,64}")) throw AdminInput.invalid();
+        if (identifier == null || !identifier.matches("[A-Za-z0-9_.@-]{3,64}")) throw AdminInput.invalid();
         String hash = encode(password);
         authorize(actorId);
         UserEntity user = new UserEntity();
-        user.setUsername(username);
+        user.setDisplayName(identifier);
         user.setPasswordHash(hash);
         user.setDailyAnswers(answers);
         user.setDailyKnowledgeQueries(knowledge);
         try {
             mapper.create(user);
+            mapper.createAccountIdentity(user.getId(), identifier);
         } catch (DuplicateKeyException error) {
-            throw new ApiException(HttpStatus.CONFLICT, "username_exists", "用户名已存在。");
+            throw new ApiException(HttpStatus.CONFLICT, "identifier_exists", "登录账号已存在。");
         }
         audit.record(actorId, "user.create", target(user.getId()));
         return view(user.getId());

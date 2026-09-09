@@ -9,13 +9,13 @@ export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mo
       ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(20000) })
   }
   let adminToken
-  const login = await request('auth/login', 'POST', { username: 'admin-test', password })
+  const login = await request('auth/login', 'POST', { identifier: 'admin-test', password })
   assert.equal(login.status, 200)
   adminToken = (await login.json()).accessToken
   let config = await (await request('admin/config')).json()
 
   await check('admin APIs require administrator authority and configuration never returns a supplier secret', async () => {
-    const ordinary = await request('auth/login', 'POST', { username: 'platform-test', password })
+    const ordinary = await request('auth/login', 'POST', { identifier: 'platform-test', password })
     const token = (await ordinary.json()).accessToken
     for (const path of ['admin/me', 'admin/users', 'admin/config', 'admin/usage', 'admin/audit']) {
       assert.equal((await request(path, 'GET', undefined, token)).status, 403, path)
@@ -167,11 +167,11 @@ export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mo
   })
 
   await check('user creation, quota edits, password reset and disabling take effect through server authorization', async () => {
-    const created = await request('admin/users', 'POST', { username: 'managed-test', password, dailyAnswers: 0, dailyKnowledgeQueries: 2 })
+    const created = await request('admin/users', 'POST', { identifier: 'managed-test', password, dailyAnswers: 0, dailyKnowledgeQueries: 2 })
     assert.equal(created.status, 201)
     const user = await created.json()
     assert.equal(user.role, 'USER')
-    const loginUser = await request('auth/login', 'POST', { username: 'managed-test', password })
+    const loginUser = await request('auth/login', 'POST', { identifier: 'managed-test', password })
     const token = (await loginUser.json()).accessToken
     const completion = { model: 'answer-fast', messages: [{ role: 'user', content: 'zero quota' }], stream: false }
     assert.equal((await request('llm/chat/completions', 'POST', completion, token)).status, 429)
@@ -180,7 +180,7 @@ export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mo
     assert.equal((await request('llm/chat/completions', 'POST', completion, token)).status, 200)
     assert.equal((await request(`admin/users/${user.id}/password`, 'POST', { password: `${password.slice(0, 30)}changed` })).status, 204)
     assert.equal((await request('platform', 'GET', undefined, token)).status, 401)
-    const newLogin = await request('auth/login', 'POST', { username: 'managed-test', password: `${password.slice(0, 30)}changed` })
+    const newLogin = await request('auth/login', 'POST', { identifier: 'managed-test', password: `${password.slice(0, 30)}changed` })
     const newToken = (await newLogin.json()).accessToken
     assert.equal((await request(`admin/users/${user.id}`, 'PUT', { enabled: false, dailyAnswers: 2, dailyKnowledgeQueries: 2 })).status, 200)
     assert.equal((await request('platform', 'GET', undefined, newToken)).status, 401)

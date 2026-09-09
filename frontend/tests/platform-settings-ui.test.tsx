@@ -15,7 +15,7 @@ afterEach(() => cleanup())
 function platformSettings(): Settings & { platform: NonNullable<Settings['platform']> } {
   return { ...structuredClone(defaultSettings), platform: {
     enabled: true, baseUrl: 'http://127.0.0.1:8080', authenticated: true,
-    user: { id: '1', username: 'tester', email: 'tester@example.test' },
+    user: { id: '1', displayName: 'tester', email: 'tester@example.test' },
     capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'fast', asr: 'platform-asr', available: [{ id: 'fast', name: '快速回答' }, { id: 'careful', name: '深度回答' }] },
     services: { asr: [{ id: 'speech', name: '平台转写' }], knowledge: [{ id: 'rag', name: '平台知识库' }], embedding: [] },
   } }
@@ -108,7 +108,7 @@ describe('grouped service settings', () => {
     await waitFor(() => expect(onSave).toHaveBeenCalled())
     expect(onSave.mock.calls[0][0].serviceSelections?.knowledge).toEqual({ source: 'platform', id: 'rag' })
     expect(onSave.mock.calls[0][0].remoteKnowledge).toMatchObject({ enabled: true, url: '', agentId: '' })
-    expect(screen.getByText('tester@example.test')).toBeTruthy()
+    expect(screen.getByText('tester')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: '退出登录' }))
     expect(onLogout).toHaveBeenCalledOnce()
   })

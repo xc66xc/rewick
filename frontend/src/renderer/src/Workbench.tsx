@@ -57,7 +57,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
   const environment = config.settings.interviewEnvironment
   const environmentSummary = environment ? `${environment.resumeName || '未选简历'} · ${environment.targetName || '未选岗位'} · ${environment.referenceIds.length} 份参考资料` : ''
   return <ErrorBoundary><div className={`${styles.app} ${compact ? styles.appCompact : ''}`}>
-    <Topbar compact={compact} pinned={pinned} onCompact={() => void handleCompact()} onPin={() => void handlePin()} onSettings={handleSettings} desktop={Boolean(bridge)} account={config.settings.platform?.user?.email || config.settings.platform?.user?.username} onLogout={() => void handleLogout()} loggingOut={leaving} />
+    <Topbar compact={compact} pinned={pinned} onCompact={() => void handleCompact()} onPin={() => void handlePin()} onSettings={handleSettings} desktop={Boolean(bridge)} account={config.settings.platform?.user?.displayName} onLogout={() => void handleLogout()} loggingOut={leaving} />
     <div className={styles.appBody} inert={leaving}>{!compact && <Sidebar page={page} onChange={setPage} onNew={() => { void session.reset(); setPage('workspace') }} canReset={!session.busy && ['idle', 'error'].includes(session.status)} />}
       <main className={styles.main} ref={main}>
         {error && <div className={styles.errorBanner} role="alert"><WarningCircle size={19} weight="fill" /><span>{error}</span><IconButton label="关闭提示" onClick={() => { session.clearError(); setWindowError('') }}><X size={17} /></IconButton></div>}

@@ -15,10 +15,10 @@ public class AdminUsageController {
     public AdminUsageController(AdminUsageService usage) { this.usage = usage; }
 
     @GetMapping
-    public Page<UsageView> list(@RequestParam(defaultValue = "") String userId,
+    public Page<UsageView> list(@RequestParam(defaultValue = "") String userId, @RequestParam(defaultValue = "") String query,
             @RequestParam(defaultValue = "") String capability, @RequestParam(defaultValue = "") String status,
             @RequestParam(defaultValue = "") String model, @RequestParam(defaultValue = "1") String page,
             @RequestParam(defaultValue = "20") String size) {
-        return usage.list(userId, capability, status, model, AdminInput.paging(page, size));
+        return usage.list(userId, query, capability, status, model, AdminInput.paging(page, size));
     }
 }

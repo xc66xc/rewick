@@ -40,7 +40,7 @@ export default function LoginScreen({ settings, bridge, checking, error: externa
         setRetryAt(Date.now() + result.retryAfterSeconds * 1000)
         setNotice(`验证码已发送，${Math.ceil(result.expiresInSeconds / 60)} 分钟内有效。`)
       } else {
-        const value = mode === 'login' ? await bridge.platformLogin({ username: email.trim(), password })
+        const value = mode === 'login' ? await bridge.platformLogin({ identifier: email.trim(), password })
           : await bridge.platformRegister({ email: email.trim(), password, code: code.trim() })
         setPassword(''); setCode(''); onAuthenticated(value)
       }

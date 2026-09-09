@@ -18,20 +18,22 @@ public class BootstrapAdmin implements ApplicationRunner {
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional
     public void run(ApplicationArguments arguments) {
-        String username = properties.bootstrapUsername();
+        String identifier = properties.bootstrapUsername();
         String password = properties.bootstrapPassword();
-        if (username.isBlank() && password.isBlank()) return;
-        if (!username.matches("[A-Za-z0-9_.@-]{3,64}") || !PasswordRules.isValid(password)) {
-            throw new IllegalStateException("Administrator bootstrap credentials do not satisfy username/password requirements");
+        if (identifier.isBlank() && password.isBlank()) return;
+        if (!identifier.matches("[A-Za-z0-9_.@-]{3,64}") || !PasswordRules.isValid(password)) {
+            throw new IllegalStateException("Administrator bootstrap credentials do not satisfy identifier/password requirements");
         }
-        UserEntity existing = users.findByUsername(username);
+        users.lockIdentityChanges();
+        UserEntity existing = users.findByIdentifier(identifier);
         if (existing != null) {
             requireAdmin(existing);
             return;
         }
-        if (users.createAdminBootstrap(username, passwords.encode(password)) == 0) {
-            requireAdmin(users.findByUsername(username));
+        if (users.createAdminBootstrap(identifier, passwords.encode(password)) == 0) {
+            requireAdmin(users.findByIdentifier(identifier));
         }
     }
 

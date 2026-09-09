@@ -32,7 +32,7 @@ public class AdminUserController {
 
     @GetMapping("/me")
     public AuthService.PublicUser me(@AuthenticationPrincipal UserPrincipal user) {
-        return new AuthService.PublicUser(Long.toString(user.id()), user.username(), user.role());
+        return new AuthService.PublicUser(Long.toString(user.id()), user.displayName(), user.role());
     }
 
     @GetMapping("/users")
@@ -44,7 +44,7 @@ public class AdminUserController {
     @PostMapping("/users")
     public ResponseEntity<UserView> create(@AuthenticationPrincipal UserPrincipal actor,
             @Valid @RequestBody CreateUser body) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(users.create(actor.id(), body.username(), body.password(),
+        return ResponseEntity.status(HttpStatus.CREATED).body(users.create(actor.id(), body.identifier(), body.password(),
                 body.dailyAnswers(), body.dailyKnowledgeQueries()));
     }
 
@@ -68,7 +68,7 @@ public class AdminUserController {
     }
 
     public record CreateUser(
-            @NotBlank @Pattern(regexp = "[A-Za-z0-9_.@-]{3,64}") String username,
+            @NotBlank @Pattern(regexp = "[A-Za-z0-9_.@-]{3,64}") String identifier,
             @NotBlank @Size(max = 72) String password,
             @NotNull @Min(0) @Max(1000000) Integer dailyAnswers,
             @NotNull @Min(0) @Max(1000000) Integer dailyKnowledgeQueries) {

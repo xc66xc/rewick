@@ -4,7 +4,6 @@ import com.interview.copilot.auth.AuthService;
 import com.interview.copilot.auth.UserEntity;
 import com.interview.copilot.auth.UserMapper;
 import java.time.Clock;
-import java.util.UUID;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,7 +29,7 @@ public class EmailRegistration {
         codes.verifyAndConsume(email, code);
         if (identities.exists(email)) throw EmailErrors.registered();
         UserEntity user = new UserEntity();
-        user.setUsername("u_" + UUID.randomUUID().toString().replace("-", ""));
+        user.setDisplayName(email);
         user.setPasswordHash(passwordHash);
         user.setRole("USER");
         user.setEnabled(true);

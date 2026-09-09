@@ -9,7 +9,7 @@ import type { AppEvent, DesktopBridge, Settings, SettingsInput } from '../src/sh
 
 function account(id = 'first'): Settings & { platform: NonNullable<Settings['platform']> } {
   return { ...structuredClone(defaultSettings), platform: { enabled: true, baseUrl: 'http://127.0.0.1:8080', authenticated: true,
-    user: { id, username: `${id}@example.test`, email: `${id}@example.test` },
+    user: { id, displayName: `${id}@example.test`, email: `${id}@example.test` },
     capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'fast', asr: 'asr' },
     services: { asr: [{ id: 'asr', name: '平台转写' }], knowledge: [{ id: 'rag', name: '平台知识库' }], embedding: [] } } }
 }
@@ -54,7 +54,7 @@ describe('desktop account gate', () => {
     expect(getHistory).not.toHaveBeenCalled()
     await login(user)
     expect(await screen.findByRole('heading', { name: '面试工作台' })).toBeTruthy()
-    expect(platformLogin).toHaveBeenCalledWith({ username: 'first@example.test', password: 'valid-test-password' })
+    expect(platformLogin).toHaveBeenCalledWith({ identifier: 'first@example.test', password: 'valid-test-password' })
     expect(saveSettings.mock.calls[0][0].platform).toEqual({ enabled: true, baseUrl: 'http://127.0.0.1:8080' })
     expect(JSON.stringify(saveSettings.mock.calls)).not.toContain('valid-test-password')
     expect(getHistory).toHaveBeenCalled()

@@ -99,7 +99,7 @@ try {
   await execute('docker', ['exec', container, 'psql', '-X', '-U', 'copilot_test', '-d', 'copilot_test',
     '-v', 'ON_ERROR_STOP=1', '--single-transaction',
     '-f', '/tmp/copilot-sql/01_schema.sql', '-f', '/tmp/copilot-sql/02_pgvector.sql',
-    '-f', '/tmp/copilot-sql/03_admin_users.sql', '-f', '/tmp/copilot-sql/04_platform_config.sql', '-f', '/tmp/copilot-sql/05_email_auth.sql'])
+    '-f', '/tmp/copilot-sql/03_admin_users.sql', '-f', '/tmp/copilot-sql/04_platform_config.sql', '-f', '/tmp/copilot-sql/05_email_auth.sql', '-f', '/tmp/copilot-sql/06_display_name.sql'])
   const mapping = (await execute('docker', ['port', container, '5432/tcp'])).stdout.trim()
   const databasePort = mapping.slice(mapping.lastIndexOf(':') + 1)
   const backendPort = await port()
@@ -122,11 +122,11 @@ try {
   await until(async () => {
     if (backend.exitCode !== null) throw new Error('Backend exited before test accounts were initialized')
     const initialized = await execute('docker', ['exec', container, 'psql', '-X', '-U', 'copilot_test', '-d', 'copilot_test', '-At',
-      '-c', "SELECT count(*) FROM app_users WHERE is_enabled AND ((username = 'platform-test' AND role = 'USER') OR (username = 'admin-test' AND role = 'ADMIN'))"])
+      '-c', "SELECT count(*) FROM app_users WHERE is_enabled AND ((display_name = 'platform-test' AND role = 'USER') OR (display_name = 'admin-test' AND role = 'ADMIN'))"])
     return initialized.stdout.trim() === '2'
   }, 'Backend bootstrap did not initialize both test accounts')
 
-  const adminLogin = await request(baseUrl, '/api/v1/auth/login', { username: 'admin-test', password })
+  const adminLogin = await request(baseUrl, '/api/v1/auth/login', { identifier: 'admin-test', password })
   assert.equal(adminLogin.status, 200)
   const adminToken = (await adminLogin.json()).accessToken
   async function publishConfig(path, body) {
@@ -161,9 +161,9 @@ try {
 
   await check('platform requires business authentication and rejects invalid login', async () => {
     assert.equal((await request(baseUrl, '/api/v1/platform')).status, 401)
-    assert.equal((await request(baseUrl, '/api/v1/auth/login', { username: 'platform-test', password: 'wrong-password' })).status, 401)
+    assert.equal((await request(baseUrl, '/api/v1/auth/login', { identifier: 'platform-test', password: 'wrong-password' })).status, 401)
   })
-  const loginResponse = await request(baseUrl, '/api/v1/auth/login', { username: 'platform-test', password })
+  const loginResponse = await request(baseUrl, '/api/v1/auth/login', { identifier: 'platform-test', password })
   assert.equal(loginResponse.status, 200)
   const { accessToken } = await loginResponse.json()
   await check('metadata contains public capabilities without platform secrets', async () => {

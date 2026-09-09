@@ -24,7 +24,7 @@ export class ApiClient {
       const response = await fetch(`/api/v1${path}`, { method: options.method ?? 'GET', signal: controller.signal, redirect: 'error', cache: 'no-store',
         headers: { 'Content-Type': 'application/json', ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) },
         ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }) })
-      if (response.status === 401) { this.dispose(); this.onExpired(); throw new ApiError(path === '/auth/login' ? '用户名或密码错误。' : '登录已失效，请重新登录。', 401) }
+      if (response.status === 401) { this.dispose(); this.onExpired(); throw new ApiError(path === '/auth/login' ? '账号或密码错误。' : '登录已失效，请重新登录。', 401) }
       const text = response.status === 204 ? '' : await response.text()
       if (text.length > 2_000_000) throw new ApiError('服务响应超过容量限制。', 502)
       let data: unknown

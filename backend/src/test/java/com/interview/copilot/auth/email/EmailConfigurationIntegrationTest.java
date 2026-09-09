@@ -142,8 +142,9 @@ class EmailConfigurationIntegrationTest {
         return new EmailConfiguration(version, true, host, 587, username, false, password, "mail@example.com", true, false);
     }
     private String account(String username, String role) {
-        jdbc.update("INSERT INTO app_users(username,password_hash,role) VALUES(?,?,?)", username, passwords.encode(PASSWORD), role);
-        return call(HttpMethod.POST, "/api/v1/auth/login", null, Map.of("username", username, "password", PASSWORD)).getBody().path("accessToken").asText();
+        long id = jdbc.queryForObject("INSERT INTO app_users(display_name,password_hash,role) VALUES(?,?,?) RETURNING id", Long.class, username, passwords.encode(PASSWORD), role);
+        jdbc.update("INSERT INTO auth_identities(app_users_id,identity_type,identifier,verified_at) VALUES(?,'account',?,CURRENT_TIMESTAMP)", id, username);
+        return call(HttpMethod.POST, "/api/v1/auth/login", null, Map.of("identifier", username, "password", PASSWORD)).getBody().path("accessToken").asText();
     }
     private ResponseEntity<JsonNode> call(HttpMethod method, String path, String token, Object body) {
         HttpHeaders headers = new HttpHeaders();

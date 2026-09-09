@@ -8,7 +8,7 @@ try {
   await page.route('**/api/**', async route => {
     if (route.request().method() !== 'GET') throw new Error('Unexpected mutation in draft-only test')
     const path = new URL(route.request().url()).pathname
-    const value = path.endsWith('/me') ? { id: 'synthetic-admin', username: 'synthetic-admin', role: 'ADMIN' }
+    const value = path.endsWith('/me') ? { id: 'synthetic-admin', displayName: 'synthetic-admin', role: 'ADMIN' }
       : path.endsWith('/config') ? { version: 0, providers: [], models: [], defaultModelId: '', asr: { enabled: false, providerId: '', model: '' }, knowledge: { enabled: false, providerId: '', agentId: '' }, embedding: { enabled: false, providerId: '', model: '', dimensions: 512 } }
         : { items: [], total: 0, page: 1, size: 20 }
     await route.fulfill({ json: value })

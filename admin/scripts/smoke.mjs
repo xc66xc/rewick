@@ -39,7 +39,7 @@ export async function runAdminSmoke({ baseUrl, username, password, output = 'adm
 
     await page.getByRole('button', { name: '创建用户', exact: true }).click()
     const create = page.getByRole('dialog', { name: '创建用户', exact: true })
-    await create.getByLabel('用户名', { exact: true }).fill(testUsername)
+    await create.getByLabel('登录账号', { exact: true }).fill(testUsername)
     await create.getByLabel('初始密码', { exact: true }).fill(testPassword)
     await create.getByLabel('每日回答次数', { exact: true }).fill('15')
     await create.getByLabel('每日知识检索次数', { exact: true }).fill('12')
@@ -49,7 +49,7 @@ export async function runAdminSmoke({ baseUrl, username, password, output = 'adm
     if (!created.id) throw new Error('测试用户创建失败。')
     createdUserId = created.id
     await expect(create).not.toBeVisible()
-    await page.getByLabel('搜索用户名', { exact: true }).fill(testUsername)
+    await page.getByLabel('邮箱或显示名称', { exact: true }).fill(testUsername)
     await page.getByRole('button', { name: '搜索', exact: true }).click()
     await page.getByRole('button', { name: `编辑 ${testUsername}`, exact: true }).click()
     const edit = page.getByRole('dialog', { name: `编辑用户 · ${testUsername}`, exact: true })

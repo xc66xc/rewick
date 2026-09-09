@@ -40,12 +40,12 @@ export function useAuth() {
     const timer = window.setInterval(check, 1000)
     return () => window.clearInterval(timer)
   }, [session])
-  async function login(username: string, password: string) {
+  async function login(identifier: string, password: string) {
     setBusy(true); setError('')
     const guest = new ApiClient()
     let candidate: ApiClient | undefined
     try {
-      const result = await guest.request('/auth/login', loginSchema, { method: 'POST', body: { username, password } })
+      const result = await guest.request('/auth/login', loginSchema, { method: 'POST', body: { identifier, password } })
       if (!(Date.parse(result.expiresAt) > Date.now())) throw new Error('登录凭证已过期，请重新登录。')
       candidate = new ApiClient(result.accessToken, expire)
       const admin = await candidate.request('/admin/me', adminSchema)

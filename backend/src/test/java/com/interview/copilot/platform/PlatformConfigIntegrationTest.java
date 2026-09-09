@@ -50,7 +50,7 @@ class PlatformConfigIntegrationTest {
     @BeforeEach void reset() {
         jdbc.execute("TRUNCATE audit_events, auth_tokens, usage_events, usage_daily, app_users RESTART IDENTITY CASCADE");
         jdbc.update("UPDATE platform_config SET version = 0, is_published = FALSE, payload = '{}'::jsonb WHERE id = 1");
-        jdbc.update("INSERT INTO app_users(username, password_hash, role) VALUES ('admin-config-test', 'unused-fixture-hash', 'ADMIN')");
+        jdbc.update("INSERT INTO app_users(display_name, password_hash, role) VALUES ('admin-config-test', 'unused-fixture-hash', 'ADMIN')");
     }
 
     @Test void publish_realDatabase_encryptsSecretsAndRebuiltResolverReadsCommittedConfiguration() {
@@ -103,7 +103,7 @@ class PlatformConfigIntegrationTest {
                 var result = execInContainer("psql", "-X", "-v", "ON_ERROR_STOP=1", "--single-transaction",
                         "-U", getUsername(), "-d", getDatabaseName(), "-f", "/tmp/copilot-sql/01_schema.sql",
                         "-f", "/tmp/copilot-sql/02_pgvector.sql", "-f", "/tmp/copilot-sql/03_admin_users.sql",
-                        "-f", "/tmp/copilot-sql/04_platform_config.sql", "-f", "/tmp/copilot-sql/05_email_auth.sql");
+                        "-f", "/tmp/copilot-sql/04_platform_config.sql", "-f", "/tmp/copilot-sql/05_email_auth.sql", "-f", "/tmp/copilot-sql/06_display_name.sql");
                 if (result.getExitCode() != 0) { throw new IllegalStateException("Test SQL initialization failed: " + result.getStderr()); }
             } catch (IOException error) { throw new IllegalStateException("Test SQL could not execute", error); }
             catch (InterruptedException error) {

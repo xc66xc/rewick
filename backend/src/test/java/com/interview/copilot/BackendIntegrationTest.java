@@ -158,7 +158,7 @@ class BackendIntegrationTest {
 
     @Test
     void login_wrongPassword_returnsSafeError() {
-        var response = http.postForEntity("/api/v1/auth/login", Map.of("username", "alice", "password", "incorrect"), JsonNode.class);
+        var response = http.postForEntity("/api/v1/auth/login", Map.of("identifier", "alice", "password", "incorrect"), JsonNode.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(response.getBody().get("code").asText()).isEqualTo("invalid_credentials");
@@ -241,18 +241,19 @@ class BackendIntegrationTest {
         }
     }
 
-    private long createUser(String username) {
+    private long createUser(String displayName) {
         UserEntity entity = new UserEntity();
-        entity.setUsername(username);
+        entity.setDisplayName(displayName);
         entity.setEnabled(true);
         entity.setPasswordHash(passwords.encode("test-only-password-2026"));
         users.insert(entity);
+        jdbc.update("INSERT INTO auth_identities(app_users_id,identity_type,identifier,verified_at) VALUES(?,'account',?,CURRENT_TIMESTAMP)", entity.getId(), displayName);
         return entity.getId();
     }
 
-    private String login(String username) {
+    private String login(String displayName) {
         var response = http.postForEntity("/api/v1/auth/login",
-                Map.of("username", username, "password", "test-only-password-2026"), JsonNode.class);
+                Map.of("identifier", displayName, "password", "test-only-password-2026"), JsonNode.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         return response.getBody().get("accessToken").asText();
     }
@@ -272,6 +273,7 @@ class BackendIntegrationTest {
             withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "03_admin_users.sql")), "/tmp/03_admin_users.sql");
             withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "04_platform_config.sql")), "/tmp/04_platform_config.sql");
             withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "05_email_auth.sql")), "/tmp/05_email_auth.sql");
+            withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "06_display_name.sql")), "/tmp/06_display_name.sql");
         }
 
         @Override
@@ -285,7 +287,7 @@ class BackendIntegrationTest {
                 var result = execInContainer("psql", "-X", "-v", "ON_ERROR_STOP=1", "--single-transaction",
                         "--username", getUsername(), "--dbname", getDatabaseName(),
                         "-f", "/tmp/01_schema.sql", "-f", "/tmp/02_pgvector.sql",
-                        "-f", "/tmp/03_admin_users.sql", "-f", "/tmp/04_platform_config.sql", "-f", "/tmp/05_email_auth.sql");
+                        "-f", "/tmp/03_admin_users.sql", "-f", "/tmp/04_platform_config.sql", "-f", "/tmp/05_email_auth.sql", "-f", "/tmp/06_display_name.sql");
                 if (result.getExitCode() != 0) {
                     throw new IllegalStateException("Database SQL initialization failed: " + result.getStderr());
                 }

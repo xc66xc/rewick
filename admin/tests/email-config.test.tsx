@@ -127,8 +127,8 @@ describe('email service configuration', () => {
   it('opens from navigation, clears draft passwords on navigation, and handles an expired login', async () => {
     let expired = false
     vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (url.endsWith('/auth/login')) return response({ accessToken: 'memory-token', expiresAt: '2099-01-01T00:00:00Z', user: { id: '1', username: 'admin' } })
-      if (url.endsWith('/admin/me')) return response({ id: '1', username: 'admin', role: 'ADMIN' })
+      if (url.endsWith('/auth/login')) return response({ accessToken: 'memory-token', expiresAt: '2099-01-01T00:00:00Z', user: { id: '1', displayName: 'admin' } })
+      if (url.endsWith('/admin/me')) return response({ id: '1', displayName: 'admin', role: 'ADMIN' })
       if (expired) return response({ message: 'expired' }, 401)
       return response(url.includes('/email-config') ? emailConfig : page([user]))
     }))

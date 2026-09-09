@@ -13,7 +13,7 @@
 
 Maven Wrapper 固定 3.9.16；Windows 使用 `mvnw.cmd`。第一次运行会从官方 Maven 仓库下载构建工具与依赖。数据库 SQL 放在 `backend/sql/`，不随应用自动执行，也不打入运行 jar。没有数据库凭据时不会使用内置账号或密码。
 
-数据库固定为 PostgreSQL 15.19 + pgvector 0.5.1。仓库根 `deploy/postgres/Dockerfile` 构建匹配版本的数据库镜像。空库依次执行 `sql/01_schema.sql` 至 `sql/05_email_auth.sql`；已执行 `01`–`04` 的数据库，本次只手动执行 `05_email_auth.sql`，新增邮箱身份、验证码和 SMTP 配置。具体命令见 [SQL 升级说明](sql/README.md#已有数据库)。项目不使用 Flyway，也禁用了 Spring SQL 自动初始化。
+数据库固定为 PostgreSQL 15.19 + pgvector 0.5.1。仓库根 `deploy/postgres/Dockerfile` 构建匹配版本的数据库镜像。空库依次执行 `sql/01_schema.sql` 至 `sql/06_display_name.sql`；已执行 `01`–`05` 的数据库，停止旧版后端后在事务内执行 `06_display_name.sql`，再启动新版。迁移保留用户 ID、令牌、密码与管理员登录，邮箱账号使用邮箱作为显示名称。具体命令见 [SQL 升级说明](sql/README.md#已有数据库)。项目不使用 Flyway，也禁用了 Spring SQL 自动初始化。
 
 自行部署或使用托管数据库时，先在数据库服务器安装 pgvector 0.5.1 扩展文件，由具备扩展创建权限的管理员在目标业务数据库执行：
 
@@ -51,7 +51,7 @@ Bootstrap 只在该用户名不存在时创建，不覆盖旧密码。两项均�
 | 方法 / 路径 | 输入 | 输出 / 权限 |
 | --- | --- | --- |
 | `GET /actuator/health` | 无 | 公开健康状态，不返回数据库细节 |
-| `POST /api/v1/auth/login` | `{username,password}` | `{accessToken,expiresAt,user:{id,username}}`；有频率限制 |
+| `POST /api/v1/auth/login` | `{identifier,password}` | `{accessToken,expiresAt,user:{id,displayName}}`；有频率限制 |
 | `POST /api/v1/auth/email-code` | `{email}` | `{retryAfterSeconds,expiresInSeconds}`；发送注册验证码，有邮箱和来源限流 |
 | `POST /api/v1/auth/register` | `{email,password,code}` | 201，创建 USER 并返回登录凭证；验证码为 6 位数字 |
 | `POST /api/v1/auth/logout` | `Authorization: Bearer …` | 204，立即撤销该 token 的后续认证 |
@@ -59,7 +59,7 @@ Bootstrap 只在该用户名不存在时创建，不覆盖旧密码。两项均�
 
 除登录、发送注册验证码、邮箱注册和公开健康检查外，所有 `/api/v1/**` 都必须认证，其他路径默认拒绝。错误统一为 `{code,message}`，不会返回 SQL、供应商响应或堆栈。用户 ID 在 JSON 中为字符串，身份来自服务端认证主体；不信任请求体中的用户 ID。
 
-桌面使用邮箱与密码登录，仍通过 `login.username` 传邮箱；后端同时保留原用户名账号登录。用户响应含 `role` 与可空的 `email`。注册只建立已验证邮箱身份，不把历史用户名自动认定为已验证邮箱，也不授予管理员角色。验证码只保存带独立密钥的摘要；有效期、重发间隔、尝试次数及单次消费由服务端校验。SMTP 发送在数据库事务之外执行，成功投递后才允许消费验证码；注册与用户/token 创建在同一事务内完成。邮件服务未配置、禁用或部署密钥缺失时返回安全的不可用错误。
+桌面使用邮箱与密码登录，通过 `login.identifier` 传邮箱；管理员账号使用同一字段传账号标识。登录统一从 `auth_identities` 查找身份，显示名称不能用于认证。用户响应含 `displayName`、`role` 与可空的 `email`。显示名称最长 254 字符且不唯一；邮箱注册时默认等于规范化邮箱。注册只建立已验证邮箱身份，不把历史用户名自动认定为已验证邮箱，也不授予管理员角色。验证码只保存带独立密钥的摘要；有效期、重发间隔、尝试次数及单次消费由服务端校验。SMTP 发送在数据库事务之外执行，成功投递后才允许消费验证码；注册与用户/token 创建在同一事务内完成。邮件服务未配置、禁用或部署密钥缺失时返回安全的不可用错误。
 
 业务 token 是 32 字节密码学随机数，以 Base64URL 编码。数据库只存 SHA-256 摘要和过期/撤销状态；密码使用 BCrypt。没有 JWT 自签名秘密，也不会生成 Spring 默认用户名密码。客户端应将业务 token 放系统安全存储，不当作供应商 Key 使用。
 
@@ -137,3 +137,5 @@ ASR 连接测试会等待 `task-started`，发送半秒合成静音 PCM（16 kHz
 调用 `POST /api/v1/embeddings`，正文为 `{ "serviceId": "配置的提供商ID", "input": ["待向量化文本"] }`；可附带与目录一致的 `model`、`dimensions` 和 `encoding_format: "float"`。服务端固定使用已选模型和密钥，拒绝覆盖服务地址或选择未启用服务。每次最多 10 段，每段最多 20,000 字符，总计最多 200,000 字符；超时 30 秒，返回仅含已校验的 `data[].index` 和 `data[].embedding`。
 
 第一版每次向量请求（包括建立资料索引的批次和问题向量）占用一次现有“知识检索”日额度，记录所用模型；并发上限为 8。额度用完返回 429，不调用上游；无需额外 SQL 变更。连接测试也验证返回向量维度，但不占用户日额度。
+
+管理台用户列表和调用记录均支持 `query` 参数按显示名称或邮箱搜索（最长 254 字符）。创建账号使用 `{identifier,password,dailyAnswers,dailyKnowledgeQueries}`，建立 `account` 身份并把账号标识作为初始显示名称；登录标识和显示名称是不同职责。

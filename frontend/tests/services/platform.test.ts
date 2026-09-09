@@ -14,7 +14,7 @@ import { AccountWorkspaces } from '../../src/main/services/account-workspace'
 import { LlmClient } from '../../src/main/services/llm-client'
 import { RemoteKnowledgeClient } from '../../src/main/services/remote-knowledge-client'
 
-const info: PlatformInfo = { user: { id: 'user-1', username: 'demo' }, capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'server-model', asr: 'server-asr' }, limits: { dailyAnswers: 50, dailyKnowledgeQueries: 60, maxAsrSessionSeconds: 3600 } }
+const info: PlatformInfo = { user: { id: 'user-1', displayName: 'demo' }, capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'server-model', asr: 'server-asr' }, limits: { dailyAnswers: 50, dailyKnowledgeQueries: 60, maxAsrSessionSeconds: 3600 } }
 const expiresAt = () => new Date(Date.now() + 3_600_000).toISOString()
 const crypto = { isEncryptionAvailable: () => true, encryptString: (value: string) => Buffer.from(value.split('').reverse().join('')), decryptString: (value: Buffer) => value.toString().split('').reverse().join('') }
 const enabledInput = (): SettingsInput => ({ ...structuredClone(defaultSettings), platform: { enabled: true, baseUrl: 'http://127.0.0.1:8080' } })
@@ -44,7 +44,7 @@ describe('platform credentials and sessions', () => {
       await vi.waitFor(async () => expect((await workspace.references.list())[0]).toMatchObject({ id: document.id, status: 'ready' }))
       expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer business-token')
       expect((await workspace.settings.getSecrets()).platformAccessToken).toBe('')
-      session.platform.user = { id: 'different-user', username: 'different' }
+      session.platform.user = { id: 'different-user', displayName: 'different' }
       const count = fetchMock.mock.calls.length
       await workspace.references.refreshConfiguration()
       const config = { ...await workspace.settings.getSettings(), platform: session.platform, retrieval: { enabled: true } }
@@ -84,7 +84,7 @@ describe('platform credentials and sessions', () => {
   it.each([
     ['emailCode', { email: 'test@example.com' }, '验证码发送过于频繁'],
     ['register', { email: 'test@example.com', password: 'test-password-123', code: '123456' }, '注册尝试过于频繁'],
-    ['login', { username: 'test@example.com', password: 'test-password-123' }, '登录尝试过于频繁'],
+    ['login', { identifier: 'test@example.com', password: 'test-password-123' }, '登录尝试过于频繁'],
   ] as const)('reports %s throttling without claiming model quota exhaustion', async (method, input, message) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ message: 'private upstream detail' }, { status: 429 })))
     const client = new PlatformClient('https://platform.example')
@@ -162,8 +162,8 @@ describe('platform credentials and sessions', () => {
       .mockResolvedValueOnce(Response.json({ ...info, providerApiKey: 'must-be-stripped' }))
     vi.stubGlobal('fetch', fetchMock)
     await store.saveSettings(enabledInput())
-    const visible = await new PlatformService(store).login({ username: 'demo', password: 'password-never-persist' })
-    expect(fetchMock.mock.calls[0]).toEqual(['http://127.0.0.1:8080/api/v1/auth/login', expect.objectContaining({ body: JSON.stringify({ username: 'demo', password: 'password-never-persist' }), redirect: 'error' })])
+    const visible = await new PlatformService(store).login({ identifier: 'demo', password: 'password-never-persist' })
+    expect(fetchMock.mock.calls[0]).toEqual(['http://127.0.0.1:8080/api/v1/auth/login', expect.objectContaining({ body: JSON.stringify({ identifier: 'demo', password: 'password-never-persist' }), redirect: 'error' })])
     expect(fetchMock.mock.calls[0][1].headers).not.toHaveProperty('Authorization')
     expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe('Bearer business-token')
     const stored = await readFile(join(directory, 'settings.json'), 'utf8')

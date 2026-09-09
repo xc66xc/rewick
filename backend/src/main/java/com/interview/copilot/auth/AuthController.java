@@ -24,8 +24,8 @@ public class AuthController {
 
     @PostMapping("/login")
     public AuthService.LoginResult login(@Valid @RequestBody LoginRequest body, HttpServletRequest request) {
-        limiter.acquire(request.getRemoteAddr(), body.username());
-        return auth.login(body.username(), body.password());
+        limiter.acquire(request.getRemoteAddr(), body.identifier());
+        return auth.login(body.identifier(), body.password());
     }
 
     @PostMapping("/logout")
@@ -35,7 +35,7 @@ public class AuthController {
     }
 
     public record LoginRequest(
-            @NotBlank @Size(min = 3, max = 254) String username,
+            @NotBlank @Size(min = 3, max = 254) String identifier,
             @NotBlank @Size(max = 128) String password) {
         @Override
         public String toString() { return "LoginRequest[password=redacted]"; }

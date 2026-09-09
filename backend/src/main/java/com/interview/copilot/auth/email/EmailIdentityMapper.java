@@ -10,7 +10,7 @@ import org.apache.ibatis.annotations.Select;
 public interface EmailIdentityMapper {
     @Select("""
             SELECT EXISTS(SELECT 1 FROM auth_identities WHERE identity_type = 'email' AND identifier = #{email})
-                OR EXISTS(SELECT 1 FROM app_users WHERE lower(username) = #{email})
+                OR EXISTS(SELECT 1 FROM auth_identities WHERE identity_type = 'account' AND lower(identifier) = #{email})
             """)
     boolean exists(String email);
 
