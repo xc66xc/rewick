@@ -63,7 +63,7 @@ Bootstrap 只在该用户名不存在时创建，不覆盖旧密码。两项均�
 
 业务 token 是 32 字节密码学随机数，以 Base64URL 编码。数据库只存 SHA-256 摘要和过期/撤销状态；密码使用 BCrypt。没有 JWT 自签名秘密，也不会生成 Spring 默认用户名密码。客户端应将业务 token 放系统安全存储，不当作供应商 Key 使用。
 
-HTTP 请求正文最多 1 MiB，同时验证 Content-Length 和实际读取字节数，覆盖 chunked 请求。登录限流使用连接来源地址，默认不信任任意 `X-Forwarded-For`；如增加反向代理，应统一配置可信代理边界。首版登录限流为进程内资源保护，多实例需要共享限流实现。
+HTTP 请求正文最多 1 MiB，同时验证 Content-Length 和实际读取字节数，覆盖 chunked 请求。登录和邮箱 IP 限流使用 `getRemoteAddr()`，直接启动默认不信任转发头。`deploy/server/compose.yaml` 的私有后端启用 Tomcat 原生转发头处理，公网 Nginx 用 `$remote_addr` 覆盖客户端传入的 `X-Forwarded-For`，避免所有用户共用代理 IP 的限额或伪造 IP 绕过限流。该配置要求后端端口不直接对公网开放；增加 CDN/代理时需重新确定可信代理边界。首版 IP 限流为进程内资源保护，多实例需要共享限流实现。
 
 ## 管理接口
 

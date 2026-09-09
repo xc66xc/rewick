@@ -24,6 +24,15 @@ beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'copilot-platf
 afterEach(async () => { vi.unstubAllGlobals(); vi.restoreAllMocks(); await rm(directory, { recursive: true, force: true }) })
 
 describe('platform credentials and sessions', () => {
+  it.each([
+    ['emailCode', { email: 'test@example.com' }, '验证码发送过于频繁'],
+    ['register', { email: 'test@example.com', password: 'test-password-123', code: '123456' }, '注册尝试过于频繁'],
+    ['login', { username: 'test@example.com', password: 'test-password-123' }, '登录尝试过于频繁'],
+  ] as const)('reports %s throttling without claiming model quota exhaustion', async (method, input, message) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ message: 'private upstream detail' }, { status: 429 })))
+    const client = new PlatformClient('https://platform.example')
+    await expect(client[method](input)).rejects.toThrow(message)
+  })
   it('persists the selected platform model across restart and capability refresh, clearing it on server change', async () => {
     const platform = { enabled: true, baseUrl: 'http://127.0.0.1:8080', selectedModelId: 'careful' }
     await store.saveSettings({ ...enabledInput(), platform })
