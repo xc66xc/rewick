@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { ApiClient } from '../src/api'
 import ConfigPage from '../src/pages/ConfigPage'
 import { config, response } from './fixtures'
-import { applyService, serviceForms } from '../src/hooks/unified-service'
+import { allowsBlankServiceKey, applyService, serviceForms } from '../src/hooks/unified-service'
 function setup() {
   let saved = structuredClone(config)
   const bodies: typeof config[] = []
@@ -23,10 +23,92 @@ describe('unified model service forms', () => {
     vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) })
     const { actor } = setup()
     await screen.findByDisplayValue('快速模型')
-    for (const name of ['添加回答模型', '添加语音转写', '添加远程知识库']) {
+    for (const name of ['添加回答模型', '添加语音转写', '添加远程知识库', '添加资料检索向量模型']) {
       await actor.click(screen.getByRole('button', { name }))
     }
-    expect(screen.getAllByRole('form')).toHaveLength(4)
+    expect(screen.getAllByRole('form')).toHaveLength(5)
+  })
+  it('saves, disables and deletes an embedding model using a single form', async () => {
+    const { actor, bodies } = setup()
+    await screen.findByDisplayValue('快速模型')
+    await actor.click(screen.getByRole('button', { name: '添加资料检索向量模型' }))
+    const draft = within(screen.getByRole('form', { name: '模型服务 新服务' }))
+    await actor.type(draft.getByLabelText('显示名称'), '中文资料向量')
+    await actor.type(draft.getByLabelText('模型名称'), 'bge-small-zh-v1.5')
+    await actor.type(draft.getByLabelText('接口地址'), 'https://embedding.example/v1/embeddings')
+    await actor.type(draft.getByLabelText('API Key'), 'test-embedding-key')
+    await actor.clear(draft.getByRole('spinbutton', { name: /向量维度/ }))
+    await actor.type(draft.getByRole('spinbutton', { name: /向量维度/ }), '512')
+    await actor.click(draft.getByRole('button', { name: '保存' }))
+    await screen.findByRole('status')
+    expect(bodies[0].embedding).toMatchObject({ enabled: true, model: 'bge-small-zh-v1.5', dimensions: 512 })
+    expect(bodies[0].providers.find(row => row.kind === 'embedding')).toMatchObject({ url: 'https://embedding.example/v1/embeddings', apiKey: 'test-embedding-key' })
+    expect(bodies[0].models).toEqual(config.models)
+    const saved = within(screen.getByRole('form', { name: '模型服务 中文资料向量' }))
+    expect(saved.getByLabelText('API Key')).toHaveProperty('value', '')
+    await actor.click(saved.getByRole('button', { name: '停用' }))
+    await waitFor(() => expect(bodies).toHaveLength(2))
+    expect(bodies[1].embedding.enabled).toBe(false)
+    await actor.click(saved.getByRole('button', { name: '删除' }))
+    await actor.click(screen.getByRole('button', { name: '确认删除' }))
+    await waitFor(() => expect(bodies).toHaveLength(3))
+    expect(bodies[2].embedding.providerId).toBe('')
+    expect(bodies[2].providers.some(row => row.kind === 'embedding')).toBe(false)
+  })
+  it('allows keyless loopback embedding and requires a key when moving to a remote service', async () => {
+    const { actor, bodies } = setup()
+    await screen.findByDisplayValue('快速模型')
+    await actor.click(screen.getByRole('button', { name: '添加资料检索向量模型' }))
+    const draft = within(screen.getByRole('form', { name: '模型服务 新服务' }))
+    await actor.type(draft.getByLabelText('显示名称'), '本机向量')
+    await actor.type(draft.getByLabelText('模型名称'), 'bge-small-zh-v1.5')
+    await actor.type(draft.getByLabelText('接口地址'), 'http://127.0.0.1:8000/v1/embeddings')
+    expect(draft.getByLabelText('API Key')).toHaveProperty('required', false)
+    await actor.click(draft.getByRole('button', { name: '保存' }))
+    await screen.findByRole('status')
+    expect(bodies[0].providers.find(row => row.kind === 'embedding')).not.toHaveProperty('apiKey')
+    const saved = within(screen.getByRole('form', { name: '模型服务 本机向量' }))
+    await actor.clear(saved.getByLabelText('接口地址'))
+    await actor.type(saved.getByLabelText('接口地址'), 'https://embedding.example/v1/embeddings')
+    expect(saved.getByLabelText('API Key')).toHaveProperty('required', true)
+    await actor.click(saved.getByRole('button', { name: '保存' }))
+    expect(bodies).toHaveLength(1)
+  })
+  it('limits blank credentials to embedding at exact supported loopback hosts', () => {
+    for (const url of ['http://localhost:8000/embeddings', 'https://127.0.0.1/embeddings', 'http://[::1]:8000/embeddings']) {
+      expect(allowsBlankServiceKey({ kind: 'embedding', url })).toBe(true)
+      expect(allowsBlankServiceKey({ kind: 'llm', url })).toBe(false)
+    }
+    for (const url of ['https://localhost.example/embeddings', 'http://127.0.0.2/embeddings', 'http://localhost@remote.example/embeddings', 'wss://localhost/embeddings']) {
+      expect(allowsBlankServiceKey({ kind: 'embedding', url })).toBe(false)
+    }
+    const form = { ...serviceForms(config)[0], kind: 'embedding' as const, url: 'http://localhost:8000/embeddings' }
+    expect(() => applyService(config, form)).toThrow('重新填写')
+    const newForm = { ...form, id: 'new-embedding', providerId: 'new-embedding' }
+    expect(() => applyService(config, newForm)).not.toThrow()
+    expect(() => applyService(config, { ...form, url: 'https://remote.example/embeddings' })).toThrow('重新填写')
+  })
+  it('tests an embedding draft without saving or sending another capability', async () => {
+    const calls: Record<string, unknown>[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+      if (url.endsWith('/test')) { calls.push(JSON.parse(String(options.body))); return response({ success: true, message: '连接成功', latencyMs: 10 }) }
+      return response(config)
+    }))
+    const actor = userEvent.setup()
+    render(<ConfigPage api={new ApiClient('token')} />)
+    await screen.findByDisplayValue('快速模型')
+    await actor.click(screen.getByRole('button', { name: '添加资料检索向量模型' }))
+    const draft = within(screen.getByRole('form', { name: '模型服务 新服务' }))
+    await actor.type(draft.getByLabelText('显示名称'), '测试向量')
+    await actor.type(draft.getByLabelText('模型名称'), 'bge-small-zh-v1.5')
+    await actor.type(draft.getByLabelText('接口地址'), 'https://embedding.example/v1/embeddings')
+    await actor.type(draft.getByLabelText('API Key'), 'test-key')
+    await actor.click(draft.getByRole('button', { name: '测试连接' }))
+    expect((await screen.findByRole('status')).textContent).toContain('未保存')
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toMatchObject({ capability: 'embedding', config: { embedding: { model: 'bge-small-zh-v1.5', dimensions: 512 } } })
+    expect(calls[0]).not.toHaveProperty('modelId')
+    expect(draft.getByLabelText('API Key')).toHaveProperty('value', 'test-key')
   })
   it('shows existing connection and model in one form and saves no other incomplete draft', async () => {
     const { actor, bodies } = setup()

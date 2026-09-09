@@ -6,10 +6,28 @@ import { isLoopback } from './validation'
 export type PlatformCapability = 'llm' | 'asr' | 'knowledge'
 export function assertEmbeddingSelection(settings: Settings): void {
   const selected = settings.serviceSelections?.embedding
-  if (selected?.source === 'platform') throw new Error('平台暂未提供向量服务，请选择自定义向量模型。')
+  if (selected?.source === 'platform') resolveEmbeddingConfig(settings)
   if (selected?.source === 'custom' && !settings.customServices?.some(value => value.id === selected.id && value.kind === 'embedding')) {
     throw new Error('所选自定义向量服务已移除，请重新选择。')
   }
+}
+export function resolveEmbeddingConfig(settings: Settings): Settings['embedding'] {
+  const selected = settings.serviceSelections?.embedding
+  if (selected?.source !== 'platform') return settings.embedding
+  const service = settings.platform?.services?.embedding.find(item => item.id === selected.id)
+  if (!settings.platform?.enabled || !service) throw new Error('所选平台向量模型已下架或不可用，请刷新列表并重新选择。')
+  return { baseUrl: `${settings.platform.baseUrl}/api/v1`, model: service.model, dimensions: service.dimensions,
+    hasApiKey: true, serviceId: service.id, fingerprint: service.fingerprint }
+}
+export function routeEmbedding(settings: Settings, secrets: ServiceSecrets): { config: Settings['embedding']; apiKey: string } {
+  assertEmbeddingSelection(settings)
+  const config = resolveEmbeddingConfig(settings)
+  if (settings.serviceSelections?.embedding?.source !== 'platform') return { config, apiKey: secrets.embeddingApiKey }
+  const platform = settings.platform
+  if (!platform?.authenticated || !secrets.platformAccessToken || !platform.expiresAt || Date.parse(platform.expiresAt) <= Date.now()) {
+    throw new Error('请先登录平台账号后再使用平台向量模型。')
+  }
+  return { config, apiKey: secrets.platformAccessToken }
 }
 export function needsPlatform(settings: Settings, secrets: ServiceSecrets, capability: PlatformCapability): boolean {
   const selected = settings.serviceSelections?.[capability]

@@ -33,7 +33,7 @@ public final class PlatformProbeService {
     }
 
     public Result test(long actorId, Request input) {
-        if (input == null || input.capability() == null || !Set.of("llm", "asr", "knowledge").contains(input.capability())) {
+        if (input == null || input.capability() == null || !Set.of("llm", "asr", "knowledge", "embedding").contains(input.capability())) {
             throw PlatformConfigErrors.invalid("请选择需要测试的服务能力。");
         }
         PlatformSnapshot snapshot = configs.draft(input.config());
@@ -57,6 +57,7 @@ public final class PlatformProbeService {
             case "llm" -> llm(snapshot, input.modelId());
             case "asr" -> asr.test(snapshot.asr());
             case "knowledge" -> knowledge(snapshot);
+            case "embedding" -> embedding(snapshot);
             default -> throw PlatformConfigErrors.invalid("服务能力无效。");
         }
     }
@@ -68,6 +69,14 @@ public final class PlatformProbeService {
         JsonNode response = http.json(endpoint, LlmRequestPolicy.request(json.parse(json.encode(body)), endpoint),
                 Duration.ofSeconds(Math.min(8, endpoint.getTotalTimeoutSeconds()))).block();
         json.completion(response, "message");
+    }
+
+    private void embedding(PlatformSnapshot snapshot) {
+        var endpoint = snapshot.embedding();
+        if (!endpoint.isEnabled()) { throw ProviderErrors.unavailable(); }
+        JsonNode response = http.json(endpoint, com.interview.copilot.embedding.EmbeddingProtocol.request(
+                List.of("资料检索连接测试"), endpoint), Duration.ofSeconds(8)).block();
+        com.interview.copilot.embedding.EmbeddingProtocol.response(response, 1, endpoint.getDimensions());
     }
 
     private void knowledge(PlatformSnapshot snapshot) {

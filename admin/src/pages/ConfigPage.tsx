@@ -24,7 +24,7 @@ export default function ConfigPage({ api, active = true }: Props) {
   if (!config) return <LoadState error={error} onRetry={() => setRevision(value => value + 1)} />
   function add(kind: Capability) {
     const id = createServiceId()
-    setItems(current => [...current, { id, providerId: id, kind, name: '', model: '', url: '', maxOutputTokens: 2048, enabled: true }])
+    setItems(current => [...current, { id, providerId: id, kind, name: '', model: '', url: '', maxOutputTokens: 2048, dimensions: 512, enabled: true }])
   }
   async function save(item: ServiceForm, test = false, remove = false): Promise<boolean> {
     if (!config || busy) return false
@@ -49,7 +49,7 @@ export default function ConfigPage({ api, active = true }: Props) {
     } catch (reason) { setError(message(reason) + (reason instanceof ApiError && reason.status === 409 ? ' 请重新加载配置后重试。' : '')); return false }
     finally { setBusy(false) }
   }
-  return <section className={styles.pageBody} aria-label="平台配置"><div className={styles.sectionHeading}><div><h2>模型与服务</h2><p>每个模型只需填写一张表单，启用后向桌面端提供。</p></div><div className={styles.actions}>{(['llm', 'asr', 'knowledge'] as const).map(kind => <button type="button" key={kind} className={styles.secondaryButton} disabled={busy} onClick={() => add(kind)}>添加{capabilityNames[kind]}</button>)}</div></div>
+  return <section className={styles.pageBody} aria-label="平台配置"><div className={styles.sectionHeading}><div><h2>模型与服务</h2><p>每个模型只需填写一张表单，启用后向桌面端提供。</p></div><div className={styles.actions}>{(['llm', 'asr', 'knowledge', 'embedding'] as const).map(kind => <button type="button" key={kind} className={styles.secondaryButton} disabled={busy} onClick={() => add(kind)}>添加{capabilityNames[kind]}</button>)}</div></div>
     {error && <p role="alert" className={styles.error}>{error}</p>}{notice && <p role="status" className={styles.notice}>{notice}</p>}
     <button type="button" disabled={busy} className={styles.secondaryButton} onClick={() => { if (window.confirm('重新加载会丢弃未保存内容，是否继续？')) setRevision(value => value + 1) }}>重新加载配置</button>
     {!items.length && <p className={styles.empty}>尚无模型或服务，请添加。</p>}

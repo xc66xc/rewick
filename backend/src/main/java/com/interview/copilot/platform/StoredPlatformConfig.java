@@ -3,7 +3,8 @@ package com.interview.copilot.platform;
 import java.util.List;
 
 record StoredPlatformConfig(List<Provider> providers, List<PlatformConfig.Model> models,
-                            String defaultModelId, PlatformConfig.Asr asr, PlatformConfig.Knowledge knowledge) {
+                            String defaultModelId, PlatformConfig.Asr asr, PlatformConfig.Knowledge knowledge,
+                            PlatformConfig.Embedding embedding) {
     StoredPlatformConfig {
         providers = List.copyOf(providers);
         models = List.copyOf(models);

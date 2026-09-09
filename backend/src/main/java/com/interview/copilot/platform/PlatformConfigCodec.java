@@ -26,7 +26,7 @@ public final class PlatformConfigCodec {
         }).toList();
         try {
             return mapper.writeValueAsString(new StoredPlatformConfig(providers, config.models(), config.defaultModelId(),
-                    config.asr(), config.knowledge()));
+                    config.asr(), config.knowledge(), config.embedding()));
         } catch (JsonProcessingException error) { throw PlatformConfigErrors.storageUnavailable(); }
     }
 
@@ -35,7 +35,7 @@ public final class PlatformConfigCodec {
         List<PlatformConfig.Provider> providers = config.providers().stream().map(provider -> new PlatformConfig.Provider(
                 provider.id(), provider.name(), provider.kind(), provider.url(), provider.enabled(),
                 !provider.encryptedKey().isEmpty(), null)).toList();
-        return new PlatformConfig(row.version(), providers, config.models(), config.defaultModelId(), config.asr(), config.knowledge());
+        return new PlatformConfig(row.version(), providers, config.models(), config.defaultModelId(), config.asr(), config.knowledge(), config.embedding());
     }
 
     PlatformSnapshot snapshot(PlatformConfigMapper.Row row, PlatformPolicy policy) {

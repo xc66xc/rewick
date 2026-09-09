@@ -40,7 +40,7 @@ describe('custom service library', () => {
   })
   it('rejects missing or unsupported embedding selections before contacting a legacy endpoint', () => {
     expect(() => assertEmbeddingSelection({ ...defaultSettings, serviceSelections: { embedding: { source: 'custom', id: 'removed' } } })).toThrow('已移除')
-    expect(() => assertEmbeddingSelection({ ...defaultSettings, serviceSelections: { embedding: { source: 'platform', id: 'unsupported' } } })).toThrow('暂未提供')
+    expect(() => assertEmbeddingSelection({ ...defaultSettings, serviceSelections: { embedding: { source: 'platform', id: 'unsupported' } } })).toThrow('已下架')
   })
   it('does not start a draft request after its authentication scope is cancelled', async () => {
     const controller = new AbortController()

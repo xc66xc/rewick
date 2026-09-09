@@ -7,6 +7,7 @@ export const CHUNK_VERSION = 1
 export function embeddingFingerprint(config: Settings['embedding']): string {
   return createHash('sha256').update(JSON.stringify({
     baseUrl: config.baseUrl.replace(/\/+$/, ''), model: config.model, dimensions: config.dimensions, chunkVersion: CHUNK_VERSION,
+    ...(config.serviceId ? { serviceId: config.serviceId, fingerprint: config.fingerprint } : {}),
   })).digest('hex')
 }
 const responseSchema = z.object({ data: z.array(z.object({ index: z.number().int().nonnegative(), embedding: z.array(z.number().finite()) })) })
@@ -34,7 +35,8 @@ export class EmbeddingClient {
     const response = await fetch(base, {
       method: 'POST', redirect: 'error', signal: combined,
       headers: { 'Content-Type': 'application/json', ...(this.apiKey.trim() ? { Authorization: `Bearer ${this.apiKey.trim()}` } : {}) },
-      body: JSON.stringify({ model: config.model, input, dimensions: config.dimensions, encoding_format: 'float' }),
+      body: JSON.stringify({ model: config.model, input, dimensions: config.dimensions, encoding_format: 'float',
+        ...(this.config.serviceId ? { serviceId: this.config.serviceId } : {}) }),
     })
     if (!response.ok) { await response.body?.cancel(); throw new Error(`向量服务请求失败（HTTP ${response.status}），请检查配置和额度。`) }
     if (!response.body) throw new Error('向量服务没有返回结果。')

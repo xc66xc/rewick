@@ -127,3 +127,13 @@ docker build -t interview-copilot-postgres:15.19-pgvector0.5.1 ../deploy/postgre
 Spring Boot 3.5.16 已是 3.5.x 最后一个 OSS 发行；本项目按既定 Java 21 / Boot 3.x 选择构建，长期生产维护需要另行安排补丁与支持。[官方说明](https://spring.io/blog/2026/06/25/spring-boot-3-5-16-available-now/)
 
 ASR 连接测试会等待 `task-started`，发送半秒合成静音 PCM（16 kHz、16-bit、单声道），再发 `finish-task`，并要求收到 `task-finished`。不发送音频会被 Paraformer 返回 `NO_VALID_AUDIO_ERROR`，不能用空任务判断服务不可用。测试不使用麦克风或个人录音。
+
+### 资料检索向量模型
+
+管理台配置 `embedding` 提供商及 `embedding: { enabled, providerId, model, dimensions }`，配置和密钥存数据库；不增加 YAML 服务地址。维度范围 64–4096，接口填写完整 `/embeddings` 地址，兼容 OpenAI Embeddings 的 `model`、`input`、`dimensions` 和 `encoding_format: float`。仅回环地址的自部署向量服务可留空 API Key；容器内 `127.0.0.1` 指后端容器本身。
+
+登录用户从 `/api/v1/platform` 的 `services.embedding` 获取 `{id,name,model,dimensions,fingerprint}`，未启用服务不显示。`fingerprint` 仅由接口地址、模型及维度计算，用于配置变更后重建本地向量；不包含密钥。
+
+调用 `POST /api/v1/embeddings`，正文为 `{ "serviceId": "配置的提供商ID", "input": ["待向量化文本"] }`；可附带与目录一致的 `model`、`dimensions` 和 `encoding_format: "float"`。服务端固定使用已选模型和密钥，拒绝覆盖服务地址或选择未启用服务。每次最多 10 段，每段最多 20,000 字符，总计最多 200,000 字符；超时 30 秒，返回仅含已校验的 `data[].index` 和 `data[].embedding`。
+
+第一版每次向量请求（包括建立资料索引的批次和问题向量）占用一次现有“知识检索”日额度，记录所用模型；并发上限为 8。额度用完返回 429，不调用上游；无需额外 SQL 变更。连接测试也验证返回向量维度，但不占用户日额度。

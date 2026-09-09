@@ -9,7 +9,7 @@ try {
     if (route.request().method() !== 'GET') throw new Error('Unexpected mutation in draft-only test')
     const path = new URL(route.request().url()).pathname
     const value = path.endsWith('/me') ? { id: 'synthetic-admin', username: 'synthetic-admin', role: 'ADMIN' }
-      : path.endsWith('/config') ? { version: 0, providers: [], models: [], defaultModelId: '', asr: { enabled: false, providerId: '', model: '' }, knowledge: { enabled: false, providerId: '', agentId: '' } }
+      : path.endsWith('/config') ? { version: 0, providers: [], models: [], defaultModelId: '', asr: { enabled: false, providerId: '', model: '' }, knowledge: { enabled: false, providerId: '', agentId: '' }, embedding: { enabled: false, providerId: '', model: '', dimensions: 512 } }
         : { items: [], total: 0, page: 1, size: 20 }
     await route.fulfill({ json: value })
   })
@@ -17,13 +17,13 @@ try {
   await page.getByRole('button', { name: '平台配置', exact: true }).click()
   await expect(page.getByText('尚无模型或服务，请添加。')).toBeVisible()
   console.log(await page.evaluate(() => ({ secureContext: isSecureContext, randomUUID: typeof crypto.randomUUID, getRandomValues: typeof crypto.getRandomValues })))
-  for (const name of ['添加回答模型', '添加语音转写', '添加远程知识库']) await page.getByRole('button', { name, exact: true }).click()
+  for (const name of ['添加回答模型', '添加语音转写', '添加远程知识库', '添加资料检索向量模型']) await page.getByRole('button', { name, exact: true }).click()
   if (process.argv.includes('--reproduce')) {
     console.log({ errors, forms: await page.getByRole('form').count() })
     if (!errors.some(value => value.includes('randomUUID'))) throw new Error('Expected pre-fix HTTP error was not reproduced')
   } else {
-    await expect(page.getByRole('form')).toHaveCount(3)
+    await expect(page.getByRole('form')).toHaveCount(4)
     expect(errors).toEqual([])
-    console.log('PASS public HTTP add model, ASR, knowledge drafts; all APIs mocked, no server config changed')
+    console.log('PASS public HTTP add model, ASR, knowledge, embedding drafts; all APIs mocked, no server config changed')
   }
 } finally { await browser.close() }

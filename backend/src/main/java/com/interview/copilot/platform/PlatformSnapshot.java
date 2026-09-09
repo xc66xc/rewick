@@ -27,7 +27,7 @@ public final class PlatformSnapshot {
         List<PlatformConfig.Provider> redacted = input.providers().stream().map(provider -> new PlatformConfig.Provider(
                 provider.id(), provider.name(), provider.kind(), provider.url(), provider.enabled(),
                 !key(provider.id()).isEmpty(), null)).toList();
-        config = new PlatformConfig(input.version(), redacted, input.models(), input.defaultModelId(), input.asr(), input.knowledge());
+        config = new PlatformConfig(input.version(), redacted, input.models(), input.defaultModelId(), input.asr(), input.knowledge(), input.embedding());
         Map<String, PlatformConfig.Provider> indexed = new LinkedHashMap<>();
         redacted.forEach(provider -> indexed.put(provider.id(), provider));
         providers = Map.copyOf(indexed);
@@ -39,6 +39,40 @@ public final class PlatformSnapshot {
 
     public List<AvailableModel> availableModels() {
         return config.models().stream().filter(this::available).map(model -> new AvailableModel(model.id(), model.name())).toList();
+    }
+
+    public List<AvailableEmbedding> availableEmbeddingServices() {
+        var endpoint = embedding();
+        if (!endpoint.isEnabled()) { return List.of(); }
+        var provider = providers.get(config.embedding().providerId());
+        return List.of(new AvailableEmbedding(provider.id(), provider.name(), endpoint.getModel(),
+                endpoint.getDimensions(), fingerprint(endpoint)));
+    }
+
+    private String fingerprint(ProviderProperties.Embedding endpoint) {
+        try {
+            String identity = endpoint.getUrl() + "\n" + endpoint.getModel() + "\n" + endpoint.getDimensions();
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(identity.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException error) {
+            throw new IllegalStateException("SHA-256 is required", error);
+        }
+    }
+
+    public ProviderProperties.Embedding embedding() {
+        var endpoint = new ProviderProperties.Embedding();
+        var service = config.embedding();
+        if (service.enabled()) { endpoint(providers.get(service.providerId()), endpoint); }
+        endpoint.setModel(service.model());
+        endpoint.setDimensions(service.dimensions());
+        return endpoint;
+    }
+
+    public ProviderProperties.Embedding embedding(String serviceId) {
+        if (serviceId == null || availableEmbeddingServices().stream().noneMatch(value -> value.id().equals(serviceId))) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "SERVICE_UNAVAILABLE", "所选平台向量服务已不可用，请重新选择");
+        }
+        return embedding();
     }
 
     public List<AvailableService> availableAsrServices() {
@@ -117,6 +151,7 @@ public final class PlatformSnapshot {
         endpoint.setApiKey(key(provider.id()));
     }
 
+    public record AvailableEmbedding(String id, String name, String model, int dimensions, String fingerprint) { }
     public record AvailableModel(String id, String name) { }
     public record AvailableService(String id, String name) { }
     public record LlmSelection(String id, ProviderProperties.Llm config) { }

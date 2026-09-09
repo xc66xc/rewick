@@ -39,9 +39,10 @@ public class ProviderProperties {
                     && validEndpoint(url);
         }
 
-        private boolean validEndpoint(String value) {
+        protected boolean validEndpoint(String value) {
             try {
                 URI uri = URI.create(value);
+                if (uri.getHost() == null) { return false; }
                 boolean secure = "https".equals(uri.getScheme()) || "wss".equals(uri.getScheme());
                 boolean local = List.of("127.0.0.1", "localhost", "[::1]").contains(uri.getHost());
                 boolean testProtocol = "http".equals(uri.getScheme()) || "ws".equals(uri.getScheme());
@@ -75,6 +76,21 @@ public class ProviderProperties {
         public int getTotalTimeoutSeconds() { return Math.clamp(totalTimeoutSeconds, 1, 300); }
         public void setTotalTimeoutSeconds(int value) { totalTimeoutSeconds = value; }
         @Override public boolean isEnabled() { return super.isEnabled() && !model.isBlank() && models().contains(model); }
+    }
+
+    public static class Embedding extends Endpoint {
+        private String model = "";
+        private int dimensions = 1024;
+
+        public String getModel() { return model; }
+        public void setModel(String value) { model = value == null ? "" : value.trim(); }
+        public int getDimensions() { return dimensions; }
+        public void setDimensions(int value) { dimensions = value; }
+        public boolean isLocalWithoutKey() {
+            return getApiKey().isBlank() && validEndpoint(getUrl())
+                    && List.of("127.0.0.1", "localhost", "[::1]").contains(URI.create(getUrl()).getHost());
+        }
+        @Override public boolean isEnabled() { return (super.isEnabled() || isLocalWithoutKey()) && !model.isBlank(); }
     }
 
     public static class Knowledge extends Endpoint {

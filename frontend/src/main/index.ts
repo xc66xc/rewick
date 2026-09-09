@@ -12,7 +12,7 @@ import { PlatformService } from './services/platform-client'
 import { testCustomService } from './services/custom-service-test'
 import { customServiceSchema } from './services/custom-service-profiles'
 import { PlatformWork } from './services/platform-work'
-import { assertEmbeddingSelection, needsPlatform, routeService } from './services/service-routing'
+import { routeEmbedding, needsPlatform, routeService } from './services/service-routing'
 import type { PlatformCapability } from './services/service-routing'
 import { InterviewStore } from './services/interview-store'
 import { environmentInputSchema } from './services/interview-validation'
@@ -61,7 +61,7 @@ const secretStorage = {
 }
 const authSettings = new SettingsStore(join(app.getPath('userData'), 'authentication-v2'), secretStorage)
 const platform = new PlatformService(authSettings)
-const accounts = new AccountWorkspaces(app.getPath('userData'), secretStorage, () => emit({ kind: 'documents-changed' }))
+const accounts = new AccountWorkspaces(app.getPath('userData'), secretStorage, () => emit({ kind: 'documents-changed' }), () => authSettings.getConnectionSnapshot())
 async function syncAccount() {
   const authenticated = await authSettings.getSettings()
   if (accounts.identity(authenticated) !== accounts.active?.id) disposeWork()
@@ -341,8 +341,8 @@ function registerHandlers(): void {
   }))
   handle('embedding:test', async () => {
     const snapshot = await settings.getConnectionSnapshot()
-    assertEmbeddingSelection(snapshot.settings)
-    return new EmbeddingClient(snapshot.settings.embedding, snapshot.secrets.embeddingApiKey).test()
+    const connection = routeEmbedding(snapshot.settings, snapshot.secrets)
+    return new EmbeddingClient(connection.config, connection.apiKey).test()
   })
   handle('remote-knowledge:test', () => testService('knowledge'))
   handle('references:list', () => references.list())

@@ -6,7 +6,7 @@ import { SettingsStore } from './settings-store'
 import { HistoryStore } from './history-store'
 import { InterviewStore } from './interview-store'
 import { ReferenceService } from './reference-service'
-import { assertEmbeddingSelection } from './service-routing'
+import { routeEmbedding } from './service-routing'
 export function accountDirectory(root: string, userId: string): string {
   return join(root, 'accounts', createHash('sha256').update(userId).digest('hex'))
 }
@@ -15,7 +15,8 @@ export class AccountWorkspaces {
   readonly context = new AsyncLocalStorage<AccountWorkspace>()
   active: AccountWorkspace | undefined
   private readonly stores = new Map<string, { settings: SettingsStore; history: HistoryStore; interviews: InterviewStore }>()
-  constructor(private readonly root: string, private readonly crypto: ConstructorParameters<typeof SettingsStore>[1], private readonly changed: (workspaceId: string) => void) {}
+  constructor(private readonly root: string, private readonly crypto: ConstructorParameters<typeof SettingsStore>[1], private readonly changed: (workspaceId: string) => void,
+    private readonly authentication?: () => ReturnType<SettingsStore['getConnectionSnapshot']>) {}
   identity(settings: Settings): string | undefined {
     const platform = settings.platform
     return platform?.authenticated && platform.user ? accountDirectory(this.root, platform.user.id) : undefined
@@ -36,8 +37,13 @@ export class AccountWorkspaces {
     const own = stores
     const references = new ReferenceService(id, () => { if (this.active?.id === id) this.changed(id) }, async () => {
       const snapshot = await own.settings.getConnectionSnapshot()
-      assertEmbeddingSelection(snapshot.settings)
-      return { config: snapshot.settings.embedding, apiKey: snapshot.secrets.embeddingApiKey }
+      if (snapshot.settings.serviceSelections?.embedding?.source === 'platform' && this.authentication) {
+        const auth = await this.authentication()
+        if (this.identity(auth.settings) !== id) throw new Error('账户已切换，请重试。')
+        return routeEmbedding({ ...snapshot.settings, platform: auth.settings.platform },
+          { ...snapshot.secrets, platformAccessToken: auth.secrets.platformAccessToken })
+      }
+      return routeEmbedding(snapshot.settings, snapshot.secrets)
     })
     this.active = { id, ...own, references }
     return this.active

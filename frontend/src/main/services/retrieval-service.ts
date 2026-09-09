@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import type { ReferenceExcerpt, RetrievalContext, Settings } from '../../shared/types'
 import { DocumentStore, type DocumentSnapshot } from './document-store'
 import { EmbeddingClient, embeddingFingerprint } from './embedding-client'
+import { resolveEmbeddingConfig } from './service-routing'
 
 export type EmbeddingProvider = () => Promise<{ config: Settings['embedding']; apiKey: string }>
 
@@ -40,18 +41,20 @@ export class RetrievalService {
     try {
       signal.throwIfAborted()
       if (!snapshot.count) return { status: 'empty', message: '没有已建索引的启用资料。', excerpts: [] }
-      const fingerprint = embeddingFingerprint(settings.embedding)
+      let fingerprint = embeddingFingerprint(settings.embedding)
       const budget = AbortSignal.any([signal, AbortSignal.timeout(1000)])
       let vector: number[] | undefined
       let message: string | undefined
-      const key = createHash('sha256').update(`${fingerprint}\n${snapshot.version}\n${query}`).digest('hex')
       try {
+        const config = resolveEmbeddingConfig(settings)
+        fingerprint = embeddingFingerprint(config)
+        const key = createHash('sha256').update(`${fingerprint}\n${snapshot.version}\n${query}`).digest('hex')
         const current = await abortable(this.getEmbedding(), budget)
         if (embeddingFingerprint(current.config) !== fingerprint) throw new Error('向量配置已改变，本次使用关键词检索。')
         if (!snapshot.fingerprints.includes(fingerprint)) throw new Error('资料需要按当前向量配置重建，本次使用关键词检索。')
         vector = this.cache.get(key)
         if (!vector) {
-          const vectors = await new EmbeddingClient(settings.embedding, current.apiKey).embed([query], budget)
+          const vectors = await new EmbeddingClient(config, current.apiKey).embed([query], budget)
           vector = vectors[0]
           if (this.cache.size >= 64) this.cache.delete(this.cache.keys().next().value ?? '')
           this.cache.set(key, vector)

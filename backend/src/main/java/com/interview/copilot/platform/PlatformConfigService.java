@@ -41,7 +41,7 @@ public class PlatformConfigService implements PlatformRuntimeResolver {
         if (mapper.publish(input.version(), codec.encode(prepared)) != 1) { throw PlatformConfigErrors.conflict(); }
         audit.record(actorId, "platform.config.publish", "version:" + (input.version() + 1));
         PlatformConfig view = prepared.view();
-        return new PlatformConfig(input.version() + 1, view.providers(), view.models(), view.defaultModelId(), view.asr(), view.knowledge());
+        return new PlatformConfig(input.version() + 1, view.providers(), view.models(), view.defaultModelId(), view.asr(), view.knowledge(), view.embedding());
     }
 
     public PlatformSnapshot draft(PlatformConfig input) {
@@ -53,10 +53,17 @@ public class PlatformConfigService implements PlatformRuntimeResolver {
         Map<String, String> keys = new HashMap<>();
         for (PlatformConfig.Provider provider : input.providers()) {
             String key = resolveKey(provider, previous);
-            if (provider.enabled() && key.isEmpty()) { throw PlatformConfigErrors.invalid("启用提供商前请填写 API Key。"); }
+            if (provider.enabled() && key.isEmpty() && !localEmbedding(provider)) { throw PlatformConfigErrors.invalid("启用提供商前请填写 API Key。"); }
             keys.put(provider.id(), key);
         }
         return new PlatformSnapshot(input, keys, PlatformPolicy.from(properties));
+    }
+
+    private boolean localEmbedding(PlatformConfig.Provider provider) {
+        if (!"embedding".equals(provider.kind())) { return false; }
+        var endpoint = new ProviderProperties.Embedding();
+        endpoint.setUrl(provider.url());
+        return endpoint.isLocalWithoutKey();
     }
 
     private String resolveKey(PlatformConfig.Provider provider, PlatformSnapshot previous) {

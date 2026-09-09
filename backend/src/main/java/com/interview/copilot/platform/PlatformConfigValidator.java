@@ -65,6 +65,7 @@ public final class PlatformConfigValidator {
     }
 
     private void validateServices(PlatformConfig config, Map<String, PlatformConfig.Provider> providers) {
+        validateService(config.embedding().enabled(), config.embedding().providerId(), config.embedding().model(), "embedding", providers);
         validateService(config.asr().enabled(), config.asr().providerId(), config.asr().model(), "asr", providers);
         validateService(config.knowledge().enabled(), config.knowledge().providerId(), config.knowledge().agentId(), "knowledge", providers);
     }

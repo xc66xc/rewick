@@ -8,7 +8,9 @@ import { defaultSettings } from '../../src/shared/defaults'
 import type { AppEvent, PlatformInfo, Settings, SettingsInput } from '../../src/shared/types'
 import { SettingsStore, type ServiceSecrets } from '../../src/main/services/settings-store'
 import { PlatformClient, PlatformService } from '../../src/main/services/platform-client'
-import { needsPlatform, routeService } from '../../src/main/services/service-routing'
+import { needsPlatform, routeService, routeEmbedding } from '../../src/main/services/service-routing'
+import { EmbeddingClient, embeddingFingerprint } from '../../src/main/services/embedding-client'
+import { AccountWorkspaces } from '../../src/main/services/account-workspace'
 import { LlmClient } from '../../src/main/services/llm-client'
 import { RemoteKnowledgeClient } from '../../src/main/services/remote-knowledge-client'
 
@@ -24,6 +26,61 @@ beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'copilot-platf
 afterEach(async () => { vi.unstubAllGlobals(); vi.restoreAllMocks(); await rm(directory, { recursive: true, force: true }) })
 
 describe('platform credentials and sessions', () => {
+  it('indexes account documents with the separate authentication store and rejects account changes', async () => {
+    const session = authenticatedSettings()
+    if (!session.platform) throw new Error('fixture')
+    session.platform.services = { asr: [], knowledge: [], embedding: [{ id: 'vector-service', name: '向量', model: 'bge', dimensions: 512 }] }
+    const accounts = new AccountWorkspaces(directory, crypto, () => undefined, async () => ({ settings: session, secrets }))
+    const workspace = accounts.activate(session)
+    if (!workspace) throw new Error('fixture')
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ data: [{ index: 0, embedding: Array(512).fill(0.1) }] }))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      await workspace.settings.saveSettings({ ...enabledInput(), serviceSelections: { embedding: { source: 'platform', id: 'vector-service' } } })
+      await workspace.references.refreshConfiguration()
+      const path = join(directory, 'reference.txt')
+      await writeFile(path, 'Redis 缓存使用 TTL 避免长期存储陈旧数据。')
+      const [document] = await workspace.references.importFiles([path])
+      await vi.waitFor(async () => expect((await workspace.references.list())[0]).toMatchObject({ id: document.id, status: 'ready' }))
+      expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer business-token')
+      expect((await workspace.settings.getSecrets()).platformAccessToken).toBe('')
+      session.platform.user = { id: 'different-user', username: 'different' }
+      const count = fetchMock.mock.calls.length
+      await workspace.references.refreshConfiguration()
+      const config = { ...await workspace.settings.getSettings(), platform: session.platform, retrieval: { enabled: true } }
+      expect(await workspace.references.retrieve('Redis TTL 是什么？', '', config, new AbortController().signal)).toMatchObject({ status: 'degraded' })
+      expect(fetchMock).toHaveBeenCalledTimes(count)
+    } finally { accounts.dispose() }
+  })
+  it('routes selected platform embeddings using the session token and published model dimensions', async () => {
+    const settings = authenticatedSettings()
+    settings.serviceSelections = { embedding: { source: 'platform', id: 'vector-service' } }
+    if (!settings.platform) throw new Error('fixture')
+    settings.platform.services = { asr: [], knowledge: [], embedding: [{ id: 'vector-service', name: '中文向量', model: 'bge-small', dimensions: 512, fingerprint: 'version-one' }] }
+    const clientInfo = { ...info, services: settings.platform.services }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(Response.json(clientInfo)))
+    expect((await new PlatformClient('https://platform.example').info('business-token')).services?.embedding[0]).toEqual(settings.platform.services.embedding[0])
+    const connection = routeEmbedding(settings, { ...secrets, embeddingApiKey: 'unused-own-key' })
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ data: [{ index: 0, embedding: Array(512).fill(0.1) }] }))
+    vi.stubGlobal('fetch', fetchMock)
+    await new EmbeddingClient(connection.config, connection.apiKey).embed(['索引资料'])
+    expect(String(fetchMock.mock.calls[0][0])).toBe('https://platform.example/api/v1/embeddings')
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer business-token')
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ model: 'bge-small', dimensions: 512, input: ['索引资料'], encoding_format: 'float', serviceId: 'vector-service' })
+    expect(embeddingFingerprint({ ...connection.config, fingerprint: 'version-two' })).not.toBe(embeddingFingerprint(connection.config))
+    settings.platform.services.embedding = []
+    expect(() => routeEmbedding(settings, secrets)).toThrow('已下架')
+  })
+  it('does not fall back from expired platform embeddings to a custom key', () => {
+    const settings = authenticatedSettings()
+    if (!settings.platform) throw new Error('fixture')
+    settings.serviceSelections = { embedding: { source: 'platform', id: 'vector-service' } }
+    settings.platform.services = { asr: [], knowledge: [], embedding: [{ id: 'vector-service', name: '向量', model: 'bge', dimensions: 512 }] }
+    settings.platform.expiresAt = '2000-01-01T00:00:00.000Z'
+    expect(() => routeEmbedding(settings, { ...secrets, embeddingApiKey: 'own-key' })).toThrow('请先登录')
+    settings.serviceSelections = undefined
+    expect(routeEmbedding(settings, { ...secrets, embeddingApiKey: 'own-key' }).apiKey).toBe('own-key')
+  })
   it.each([
     ['emailCode', { email: 'test@example.com' }, '验证码发送过于频繁'],
     ['register', { email: 'test@example.com', password: 'test-password-123', code: '123456' }, '注册尝试过于频繁'],

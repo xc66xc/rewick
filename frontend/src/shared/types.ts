@@ -5,7 +5,7 @@ export interface CustomServiceInput {
   model?: string; dimensions?: number; agentId?: string; apiKey?: string
 }
 export interface CustomServiceProfile extends Omit<CustomServiceInput, 'id' | 'apiKey'> { id: string; hasApiKey: boolean }
-export interface PlatformServices { asr: { id: string; name: string }[]; knowledge: { id: string; name: string }[]; embedding: { id: string; name: string }[] }
+export interface PlatformServices { asr: { id: string; name: string }[]; knowledge: { id: string; name: string }[]; embedding: { id: string; name: string; model: string; dimensions: number; fingerprint?: string }[] }
 export interface PlatformInfo {
   user: { id: string; username: string; email?: string | null }
   capabilities: { llm: boolean; asr: boolean; knowledge: boolean }
@@ -35,7 +35,7 @@ export interface Settings {
   context: { name: string; text: string }
   interviewTarget: InterviewTarget
   interviewEnvironment?: InterviewEnvironmentSnapshot
-  embedding: { baseUrl: string; model: string; dimensions: number; hasApiKey: boolean }
+  embedding: { baseUrl: string; model: string; dimensions: number; hasApiKey: boolean; serviceId?: string; fingerprint?: string }
   retrieval: { enabled: boolean }
   remoteKnowledge: { enabled: boolean; url: string; agentId: string; hasApiKey: boolean; serviceId?: string }
   answerStyle: 'concise' | 'detailed'

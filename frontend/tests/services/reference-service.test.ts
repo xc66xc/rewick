@@ -63,6 +63,25 @@ afterEach(async () => {
 })
 
 describe('ReferenceService', () => {
+  it('uses the selected platform vector config for indexing and retrieval instead of stale custom settings', async () => {
+    const baseUrl = configuration.baseUrl.replace(/\/v1$/, '')
+    configuration = { ...configuration, baseUrl: `${baseUrl}/api/v1`, serviceId: 'platform-vector', fingerprint: 'model-v1' }
+    await service.refreshConfiguration()
+    const document = await importText('platform.md', 'Redis 缓存使用 TTL 过期时间。')
+    await ready(document.id)
+    const config = settings()
+    config.embedding = { ...defaultSettings.embedding }
+    config.platform = { baseUrl, enabled: true, authenticated: true, capabilities: { llm: false, asr: false, knowledge: false }, models: { llm: '', asr: '' },
+      services: { asr: [], knowledge: [], embedding: [{ id: 'platform-vector', name: '中文向量', model: configuration.model, dimensions: 64, fingerprint: 'model-v1' }] } }
+    config.serviceSelections = { embedding: { source: 'platform', id: 'platform-vector' } }
+    const count = requests.length
+    const result = await service.retrieve('内存键值服务如何避免陈旧值', '', config, new AbortController().signal)
+    expect(result).toMatchObject({ status: 'ready', excerpts: [{ documentId: document.id }] })
+    expect(requests.length).toBe(count + 1)
+    expect(requests.at(-1)).toMatchObject({ serviceId: 'platform-vector', dimensions: 64 })
+    mode = 'error'
+    expect(await service.retrieve('Redis TTL 过期怎么实现？', '', config, new AbortController().signal)).toMatchObject({ status: 'degraded', excerpts: [{ documentId: document.id }] })
+  })
   it('ranks only the documents selected by this interview environment, including keyword fallback', async () => {
     const selected = await importText('selected.md', 'Redis 缓存一致性：先写数据库后删除缓存。SELECTED_ONLY')
     const excluded = await importText('excluded.md', 'Redis 缓存一致性：缓存击穿、雪崩与分布式锁。EXCLUDED_ONLY')

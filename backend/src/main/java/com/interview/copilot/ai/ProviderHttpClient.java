@@ -60,6 +60,8 @@ public class ProviderHttpClient {
     private WebClient.RequestHeadersSpec<?> request(WebClient webClient, ProviderProperties.Endpoint endpoint,
                                                    Map<String, Object> body) {
         return webClient.post().uri(endpoint.getUrl()).contentType(MediaType.APPLICATION_JSON)
-                .headers(headers -> headers.setBearerAuth(endpoint.getApiKey())).bodyValue(body);
+                .headers(headers -> {
+                    if (!endpoint.getApiKey().isBlank()) { headers.setBearerAuth(endpoint.getApiKey()); }
+                }).bodyValue(body);
     }
 }

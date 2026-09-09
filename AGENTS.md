@@ -38,3 +38,5 @@ Use focused commits with short prefixed subjects, e.g. `feat:`. PRs explain chan
 ## Security & Configuration
 
 Keep database credentials, the platform master key, and the email-code secret in ignored deployment configuration or environment variables; Java does not load root `.env`. Platform endpoints/keys and SMTP settings are managed through the admin console and database, with no environment fallback. Custom-service keys stay encrypted on the desktop. Require desktop login and honor explicit per-capability service selections without automatic fallback; preserve nonblocking ordinary RAG failures. Retain PostgreSQL 15.19/pgvector 0.5.1; add numbered SQL without Flyway or automatic initialization. Exclude dependencies, build output, logs, and personal data from Git.
+
+For incorrect configuration (such as a missing endpoint path), explain the exact correction to the user. Do not add automatic completion, fallback, or compatibility behavior to accommodate configuration mistakes unless explicitly requested.
