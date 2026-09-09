@@ -17,7 +17,8 @@
     "test:environments": "node scripts/smoke-environments.mjs",
     "test:remote-knowledge": "node scripts/smoke-remote-knowledge.mjs",
     "test:history": "node scripts/smoke-history.mjs",
-    "test:platform": "node scripts/smoke-platform.mjs"
+    "test:platform": "node scripts/smoke-platform.mjs",
+    "test:accounts": "node scripts/smoke-account-isolation.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

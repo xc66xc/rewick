@@ -84,7 +84,9 @@ export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mo
   await check('Electron selects a published display name and backend maps catalog ID to supplier model', async () => {
     await page.evaluate(() => window.copilot.refreshPlatform())
     await page.getByRole('button', { name: '打开设置', exact: true }).click()
-    await page.getByRole('combobox', { name: '平台回答模型' }).selectOption({ label: '深度回答' })
+    await page.getByRole('combobox', { name: /^回答模型/ }).selectOption({ label: '深度回答' })
+    await page.getByRole('combobox', { name: /^实时语音转写/ }).selectOption('platform:asr-supplier')
+    await page.getByRole('combobox', { name: /^远程知识库/ }).selectOption('platform:knowledge-supplier')
     await page.getByRole('button', { name: '保存设置', exact: true }).click()
     await expect(page.getByRole('status').filter({ hasText: '设置已保存' })).toBeVisible()
     await page.getByRole('button', { name: '关闭设置', exact: true }).click()
@@ -158,7 +160,7 @@ export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mo
     assert.equal(mock.requests.length, before)
     await page.evaluate(async () => {
       const settings = await window.copilot.getSettings()
-      await window.copilot.saveSettings({ ...settings, platform: { ...settings.platform, selectedModelId: '' } })
+      await window.copilot.saveSettings({ ...settings, serviceSelections: { ...settings.serviceSelections, llm: { source: 'platform', id: settings.platform.models.llm } } })
     })
     await answer('显式重新选择平台默认模型。')
     assert.equal(mock.requests.at(-1).body.model, 'mock-fast')

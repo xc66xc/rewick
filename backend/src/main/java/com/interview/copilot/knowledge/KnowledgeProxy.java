@@ -38,7 +38,8 @@ public class KnowledgeProxy {
 
     public Map<String, Object> search(long userId, String requestId, JsonNode input) {
         validate(input);
-        ProviderProperties.Knowledge config = providers.snapshot().knowledge();
+        String serviceId = input.has("serviceId") ? input.get("serviceId").asText() : null;
+        ProviderProperties.Knowledge config = providers.snapshot().knowledge(serviceId);
         if (!config.isEnabled()) { throw ProviderErrors.unavailable(); }
         if (!capacity.tryAcquire()) { throw ProviderErrors.busy(); }
         try { return reservedSearch(userId, requestId, input, config); }
@@ -68,7 +69,9 @@ public class KnowledgeProxy {
     }
 
     private void validate(JsonNode input) {
-        LlmRequestPolicy.requireFields(input, Set.of("query", "agent_id", "images"));
+        LlmRequestPolicy.requireFields(input, Set.of("query", "agent_id", "images", "serviceId"));
+        if (input.has("serviceId") && (!input.get("serviceId").isTextual()
+                || !input.get("serviceId").asText().matches("[A-Za-z0-9_.-]{1,64}"))) { throw ProviderErrors.invalid(); }
         JsonNode query = input.path("query");
         if (!query.isTextual() || query.asText().isBlank() || query.asText().length() > 20000) {
             throw ProviderErrors.invalid();

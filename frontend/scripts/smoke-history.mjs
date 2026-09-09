@@ -7,6 +7,7 @@ import electronPath from 'electron'
 import { _electron } from 'playwright'
 import { expect } from '@playwright/test'
 import { startMockServices } from './mock-services.mjs'
+import { loginForSmoke } from './mock-auth.mjs'
 import { checkHistoryDeletion } from '../tests/e2e/history-deletion.mjs'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -66,6 +67,7 @@ async function launch() {
   // Re-render with listeners installed so initial React errors cannot precede observation.
   await page.reload()
   await page.waitForFunction(() => Boolean(window.copilot?.getHistory && window.copilot?.removeSession))
+  await loginForSmoke(page, mock)
   const metadata = await app.evaluate(({ app }) => ({ packaged: app.isPackaged, version: app.getVersion() }))
   assert.equal(metadata.packaged, packaged)
   report.version = metadata.version

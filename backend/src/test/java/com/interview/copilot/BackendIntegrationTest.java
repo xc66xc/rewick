@@ -271,6 +271,7 @@ class BackendIntegrationTest {
             withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "02_pgvector.sql")), "/tmp/02_pgvector.sql");
             withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "03_admin_users.sql")), "/tmp/03_admin_users.sql");
             withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "04_platform_config.sql")), "/tmp/04_platform_config.sql");
+            withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "05_email_auth.sql")), "/tmp/05_email_auth.sql");
         }
 
         @Override
@@ -284,7 +285,7 @@ class BackendIntegrationTest {
                 var result = execInContainer("psql", "-X", "-v", "ON_ERROR_STOP=1", "--single-transaction",
                         "--username", getUsername(), "--dbname", getDatabaseName(),
                         "-f", "/tmp/01_schema.sql", "-f", "/tmp/02_pgvector.sql",
-                        "-f", "/tmp/03_admin_users.sql", "-f", "/tmp/04_platform_config.sql");
+                        "-f", "/tmp/03_admin_users.sql", "-f", "/tmp/04_platform_config.sql", "-f", "/tmp/05_email_auth.sql");
                 if (result.getExitCode() != 0) {
                     throw new IllegalStateException("Database SQL initialization failed: " + result.getStderr());
                 }

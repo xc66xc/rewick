@@ -53,7 +53,7 @@ class PlatformConfigServiceTest {
         fixture.environment.getLlm().setUrl("https://legacy.invalid/chat");
         fixture.environment.getLlm().setApiKey("legacy-secret");
         fixture.environment.getLlm().setModel("legacy-model");
-        assertThat(fixture.service.snapshot().availableModels()).hasSize(1);
+        assertThat(fixture.service.snapshot().availableModels()).isEmpty();
 
         fixture.service.publish(1, PlatformConfigFixture.empty(0));
 
@@ -102,16 +102,17 @@ class PlatformConfigServiceTest {
                 .extracting("code").isEqualTo("INVALID_PLATFORM_CONFIG");
     }
 
-    @Test void environment_nonstandardModelId_getsStablePublishableIdAndLegacyAlias() {
+    @Test void unpublishedConfiguration_doesNotImportEnvironmentEndpointsOrKeys() {
         fixture.environment.getLlm().setUrl("https://legacy.invalid/chat");
         fixture.environment.getLlm().setApiKey("legacy-secret");
         fixture.environment.getLlm().setModel("organization/model-v1");
         PlatformConfig draft = fixture.service.get();
 
-        assertThat(draft.defaultModelId()).matches("[A-Za-z0-9_.-]{1,64}").isEqualTo(fixture.service.get().defaultModelId());
-        assertThat(fixture.service.snapshot().llm("organization/model-v1").config().getModel()).isEqualTo("organization/model-v1");
-        fixture.service.publish(1, draft);
-        assertThat(fixture.service.snapshot().llm(draft.defaultModelId()).config().getModel()).isEqualTo("organization/model-v1");
+        assertThat(draft.providers()).isEmpty();
+        assertThat(draft.models()).isEmpty();
+        assertThat(draft.defaultModelId()).isEmpty();
+        assertThatThrownBy(() -> fixture.service.snapshot().llm("organization/model-v1"))
+                .isInstanceOf(ApiException.class).extracting("code").isEqualTo("MODEL_UNAVAILABLE");
     }
 
     @Test void deserialize_writeOnlyKey_isAcceptedWhileReadOnlyFlagIsIgnored() throws Exception {

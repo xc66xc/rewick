@@ -1,0 +1,42 @@
+import type { Capability, Config } from '../types'
+export interface ServiceForm {
+  id: string; providerId: string; kind: Capability; name: string; url: string; model: string
+  enabled: boolean; hasApiKey?: boolean; apiKey?: string; maxOutputTokens: number
+}
+export function serviceForms(config: Config): ServiceForm[] {
+  return config.providers.flatMap(provider => {
+    const base = { id: provider.id, providerId: provider.id, kind: provider.kind, name: provider.name, url: provider.url, enabled: provider.enabled, hasApiKey: provider.hasApiKey, maxOutputTokens: 2048, model: '' }
+    if (provider.kind === 'llm') {
+      const models = config.models.filter(model => model.providerId === provider.id)
+      return models.length ? models.map(model => ({ ...base, id: model.id, name: model.name, model: model.model, maxOutputTokens: model.maxOutputTokens, enabled: provider.enabled && model.enabled })) : [{ ...base, enabled: false }]
+    }
+    const binding = config[provider.kind]
+    return [{ ...base, model: binding.providerId === provider.id ? ('model' in binding ? binding.model : binding.agentId) : '', enabled: provider.enabled && binding.enabled && binding.providerId === provider.id }]
+  })
+}
+export function applyService(config: Config, form: ServiceForm, remove = false): Config {
+  const next = structuredClone(config)
+  const previous = next.providers.find(item => item.id === form.providerId)
+  const url = form.url.trim()
+  if (previous && previous.url !== url && !form.apiKey?.trim() && !remove) throw new Error('更换接口地址后请重新填写 API Key。')
+  if (remove) {
+    next.models = next.models.filter(model => model.id !== form.id)
+    if (!next.models.some(model => model.providerId === form.providerId)) next.providers = next.providers.filter(provider => provider.id !== form.providerId)
+    if (next.asr.providerId === form.providerId) next.asr = { enabled: false, providerId: '', model: '' }
+    if (next.knowledge.providerId === form.providerId) next.knowledge = { enabled: false, providerId: '', agentId: '' }
+  } else {
+    const provider = { id: form.providerId, kind: form.kind, name: form.name.trim(), url, enabled: form.kind === 'llm' ? true : form.enabled, ...(form.apiKey?.trim() ? { apiKey: form.apiKey.trim() } : {}) }
+    next.providers = [...next.providers.filter(item => item.id !== form.providerId), provider]
+    if (form.kind === 'llm') {
+      if (previous && !previous.enabled) next.models = next.models.map(model => model.providerId === form.providerId ? { ...model, enabled: false } : model)
+      const id = config.models.some(model => model.id === form.id) ? form.id : `model-${form.providerId}`
+      next.models = [...next.models.filter(item => item.id !== id), { id, name: form.name.trim(), providerId: form.providerId, model: form.model.trim(), enabled: form.enabled, maxOutputTokens: form.maxOutputTokens }]
+    } else if (form.enabled || !next[form.kind].providerId || next[form.kind].providerId === form.providerId) {
+      if (form.kind === 'asr') next.asr = { enabled: form.enabled, providerId: form.providerId, model: form.model.trim() }
+      else next.knowledge = { enabled: form.enabled, providerId: form.providerId, agentId: form.model.trim() }
+    } else throw new Error('当前该能力已有其他服务配置，请启用此项以切换服务。')
+  }
+  const available = next.models.filter(model => model.enabled && next.providers.some(provider => provider.id === model.providerId && provider.enabled))
+  if (!available.some(model => model.id === next.defaultModelId)) next.defaultModelId = available[0]?.id ?? ''
+  return next
+}

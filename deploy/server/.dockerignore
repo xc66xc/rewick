@@ -1,0 +1,7 @@
+*
+!backend.jar
+!admin/
+!admin/**
+!nginx.conf
+!Dockerfile.backend
+!Dockerfile.admin

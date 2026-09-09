@@ -3,6 +3,7 @@ package com.interview.copilot.platform;
 import com.interview.copilot.admin.audit.AuditService;
 import com.interview.copilot.ai.ProviderProperties;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,12 +27,12 @@ public class PlatformConfigService implements PlatformRuntimeResolver {
 
     public PlatformConfig get() {
         PlatformConfigMapper.Row row = row();
-        return row.published() ? codec.view(row) : environment().view();
+        return row.published() ? codec.view(row) : empty(row.version()).view();
     }
 
     @Override public PlatformSnapshot snapshot() {
         PlatformConfigMapper.Row row = row();
-        return row.published() ? codec.snapshot(row, PlatformPolicy.from(properties)) : environment();
+        return row.published() ? codec.snapshot(row, PlatformPolicy.from(properties)) : empty(row.version());
     }
 
     @Transactional
@@ -47,7 +48,7 @@ public class PlatformConfigService implements PlatformRuntimeResolver {
         PlatformConfigMapper.Row row = row();
         if (input == null) { throw PlatformConfigErrors.invalid("请提供完整平台配置。"); }
         if (input.version() != row.version()) { throw PlatformConfigErrors.conflict(); }
-        PlatformSnapshot previous = row.published() ? codec.snapshot(row, PlatformPolicy.from(properties)) : environment();
+        PlatformSnapshot previous = row.published() ? codec.snapshot(row, PlatformPolicy.from(properties)) : empty(row.version());
         validator.validate(input, previous.view());
         Map<String, String> keys = new HashMap<>();
         for (PlatformConfig.Provider provider : input.providers()) {
@@ -63,7 +64,11 @@ public class PlatformConfigService implements PlatformRuntimeResolver {
         return provider.apiKey().trim();
     }
 
-    private PlatformSnapshot environment() { return new EnvironmentPlatformResolver(properties).snapshot(); }
+    private PlatformSnapshot empty(long version) {
+        PlatformConfig config = new PlatformConfig(version, List.of(), List.of(), "",
+                new PlatformConfig.Asr(false, "", ""), new PlatformConfig.Knowledge(false, "", ""));
+        return new PlatformSnapshot(config, Map.of(), PlatformPolicy.from(properties));
+    }
     private PlatformConfigMapper.Row row() {
         PlatformConfigMapper.Row row = mapper.read();
         if (row == null) { throw PlatformConfigErrors.storageUnavailable(); }

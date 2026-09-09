@@ -7,6 +7,7 @@ import electronPath from 'electron'
 import { _electron } from 'playwright'
 import { expect } from '@playwright/test'
 import { startMockServices } from './mock-services.mjs'
+import { loginForSmoke } from './mock-auth.mjs'
 import { startRemoteKnowledgeMock } from './mock-remote-knowledge.mjs'
 import { checkRemoteKnowledge } from '../tests/e2e/remote-knowledge.mjs'
 
@@ -37,6 +38,7 @@ async function launch() {
   page = await app.firstWindow()
   page.setDefaultTimeout(15_000)
   await page.waitForFunction(() => Boolean(window.copilot?.testRemoteKnowledge))
+  await loginForSmoke(page, mock)
   const metadata = await app.evaluate(({ app }) => ({ packaged: app.isPackaged, version: app.getVersion() }))
   assert.equal(metadata.packaged, packaged)
   report.version = metadata.version

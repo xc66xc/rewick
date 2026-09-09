@@ -5,6 +5,7 @@ import { errorMessage, settingsInput } from '../hooks/useSettings'
 import ReferenceDocumentRow from './ReferenceDocumentRow'
 import ReferencePreviewDialog from './ReferencePreviewDialog'
 import styles from '../styles/App.module.css'
+import { explicitServiceReady } from '../hooks/serviceChoices'
 
 interface ReferenceLibraryProps { settings: Settings; bridge: DesktopBridge | undefined; onSave: (input: SettingsInput) => Promise<Settings> }
 export default function ReferenceLibrary({ settings, bridge, onSave }: ReferenceLibraryProps) {
@@ -66,7 +67,7 @@ export default function ReferenceLibrary({ settings, bridge, onSave }: Reference
   }
   function handleEnabled(enabled: boolean) { void perform(() => onSave({ ...settingsInput(settings), retrieval: { enabled } })) }
   const readyCount = documents.filter(document => document.enabled && document.status === 'ready').length
-  const embeddingReady = settings.embedding.hasApiKey || /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(?=[:/]|$)/.test(settings.embedding.baseUrl)
+  const embeddingReady = explicitServiceReady(settings, 'embedding') ?? (settings.embedding.hasApiKey || /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(?=[:/]|$)/.test(settings.embedding.baseUrl))
   return <section className={styles.referenceLibrary} aria-labelledby="references-title">
     <header className={styles.sectionHeading}><div><h2 id="references-title">参考资料</h2><p>导入技术材料或你的项目经历，回答时只参考相关片段。</p></div>
       <button className={styles.secondaryButton} disabled={!bridge || importBusy} onClick={() => void handleImport()}><FileArrowUp size={18} weight="bold" />导入参考资料</button></header>

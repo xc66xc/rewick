@@ -120,7 +120,7 @@ describe('RemoteKnowledgeClient', () => {
     expect(fetch).toHaveBeenCalledWith(config.url, expect.objectContaining({ body: JSON.stringify({ agent_id: config.agentId, query: '问题', images: [] }) }))
   })
 
-  it.each(['http://remote.example/search', 'https://user:password@example.com/search', 'file:///private/file', 'https://example.com/search#fragment', ''])('rejects unsafe or empty endpoint %s before requesting', async url => {
+  it.each(['ftp://remote.example/search', 'https://user:password@example.com/search', 'file:///private/file', 'https://example.com/search#fragment', ''])('rejects unsafe or empty endpoint %s before requesting', async url => {
     const fetch = vi.fn()
     vi.stubGlobal('fetch', fetch)
     const result = await new RemoteKnowledgeClient({ ...config, url }, 'test-key').retrieve('问题', signal())

@@ -248,7 +248,7 @@ class AdminIntegrationTest {
     private static final class AdminPostgres extends PostgreSQLContainer<AdminPostgres> {
         private AdminPostgres() {
             super(DockerImageName.parse("interview-copilot-postgres:15.19-pgvector0.5.1").asCompatibleSubstituteFor("postgres"));
-            for (String name : List.of("01_schema.sql", "02_pgvector.sql", "03_admin_users.sql", "04_platform_config.sql")) {
+            for (String name : List.of("01_schema.sql", "02_pgvector.sql", "03_admin_users.sql", "04_platform_config.sql", "05_email_auth.sql")) {
                 withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", name)), "/tmp/" + name);
             }
         }
@@ -258,7 +258,7 @@ class AdminIntegrationTest {
             super.containerIsStarted(info);
             try {
                 var result = execInContainer("psql", "-X", "-v", "ON_ERROR_STOP=1", "--single-transaction", "-U", getUsername(), "-d", getDatabaseName(),
-                        "-f", "/tmp/01_schema.sql", "-f", "/tmp/02_pgvector.sql", "-f", "/tmp/03_admin_users.sql", "-f", "/tmp/04_platform_config.sql");
+                        "-f", "/tmp/01_schema.sql", "-f", "/tmp/02_pgvector.sql", "-f", "/tmp/03_admin_users.sql", "-f", "/tmp/04_platform_config.sql", "-f", "/tmp/05_email_auth.sql");
                 if (result.getExitCode() != 0) throw new IllegalStateException("Admin test SQL initialization failed");
             } catch (IOException error) {
                 throw new IllegalStateException("Admin test SQL execution failed", error);

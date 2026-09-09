@@ -64,9 +64,9 @@ export class EmbeddingClient {
     return vectors
   }
 
-  async test(): Promise<{ latencyMs: number; message: string }> {
+  async test(signal?: AbortSignal): Promise<{ latencyMs: number; message: string }> {
     const started = performance.now()
-    await this.embed(['验证向量服务连接'])
+    await this.embed(['验证向量服务连接'], signal)
     return { latencyMs: Math.round(performance.now() - started), message: `向量服务可用，维度 ${this.config.dimensions}。` }
   }
 }

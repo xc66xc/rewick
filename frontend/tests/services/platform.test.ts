@@ -119,7 +119,16 @@ describe('platform credentials and sessions', () => {
     await expect(new PlatformService(store).refresh()).rejects.toThrow('登录已失效')
     expect((await store.getSettings()).platform?.authenticated).toBe(false)
   })
-  it.each(['http://remote.example', 'https://user:secret@remote.example', 'https://remote.example?q=token', 'file:///tmp'])('rejects unsafe platform base URL %s', baseUrl => {
+  it.each(['http://203.0.113.10:8080', 'https://platform.example'])('accepts platform HTTP and HTTPS at %s', async baseUrl => {
+    await store.saveSettings({ ...enabledInput(), platform: { enabled: true, baseUrl } })
+    expect((await store.getSettings()).platform?.baseUrl).toBe(baseUrl)
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(info), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await new PlatformClient(baseUrl).info('synthetic-token')
+    expect(fetchMock).toHaveBeenCalledWith(baseUrl + '/api/v1/platform', expect.anything())
+  })
+
+  it.each(['ftp://remote.example', 'https://user:secret@remote.example', 'https://remote.example?q=token', 'file:///tmp'])('rejects unsafe platform base URL %s', baseUrl => {
     expect(() => new PlatformClient(baseUrl)).toThrow()
   })
   it('times out an unavailable platform and propagates cancellation without consuming provider services', async () => {

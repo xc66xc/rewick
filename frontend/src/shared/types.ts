@@ -1,7 +1,16 @@
+export type ServiceKind = 'llm' | 'asr' | 'embedding' | 'knowledge'
+export interface ServiceSelection { source: 'platform' | 'custom'; id: string }
+export interface CustomServiceInput {
+  id?: string; name: string; kind: ServiceKind; url: string
+  model?: string; dimensions?: number; agentId?: string; apiKey?: string
+}
+export interface CustomServiceProfile extends Omit<CustomServiceInput, 'id' | 'apiKey'> { id: string; hasApiKey: boolean }
+export interface PlatformServices { asr: { id: string; name: string }[]; knowledge: { id: string; name: string }[]; embedding: { id: string; name: string }[] }
 export interface PlatformInfo {
-  user: { id: string; username: string }
+  user: { id: string; username: string; email?: string | null }
   capabilities: { llm: boolean; asr: boolean; knowledge: boolean }
   models: { llm: string; asr: string; available?: { id: string; name: string }[] }
+  services?: PlatformServices
   limits: { dailyAnswers: number; dailyKnowledgeQueries: number; maxAsrSessionSeconds: number }
 }
 export interface PlatformSettings {
@@ -13,9 +22,13 @@ export interface PlatformSettings {
   expiresAt?: string
   capabilities: PlatformInfo['capabilities']
   models: PlatformInfo['models']
+  services?: PlatformServices
   limits?: PlatformInfo['limits']
 }
 export interface Settings {
+  accountScope?: string
+  customServices?: CustomServiceProfile[]
+  serviceSelections?: Partial<Record<ServiceKind, ServiceSelection>>
   platform?: PlatformSettings
   asr: { url: string; model: string; hasApiKey: boolean; silenceMs: number }
   llm: { baseUrl: string; model: string; hasApiKey: boolean; temperature: number }
@@ -24,11 +37,12 @@ export interface Settings {
   interviewEnvironment?: InterviewEnvironmentSnapshot
   embedding: { baseUrl: string; model: string; dimensions: number; hasApiKey: boolean }
   retrieval: { enabled: boolean }
-  remoteKnowledge: { enabled: boolean; url: string; agentId: string; hasApiKey: boolean }
+  remoteKnowledge: { enabled: boolean; url: string; agentId: string; hasApiKey: boolean; serviceId?: string }
   answerStyle: 'concise' | 'detailed'
   autoAnswer: { enabled: boolean; pauseMs: number }
 }
 export interface SettingsInput {
+  serviceSelections?: Settings['serviceSelections']
   platform?: Pick<PlatformSettings, 'enabled' | 'baseUrl' | 'selectedModelId'>
   asr: Omit<Settings['asr'], 'hasApiKey'> & { apiKey?: string }
   llm: Omit<Settings['llm'], 'hasApiKey'> & { apiKey?: string }
@@ -135,9 +149,15 @@ export type AppEvent =
   | { kind: 'answer-error'; requestId: string; message: string }
   | { kind: 'shortcut'; action: 'answer' }
 export interface DesktopBridge {
+  withAccountScope?(scope: string): DesktopBridge
   getCaptureError(): Promise<string | null>
   getSettings(): Promise<Settings>
   platformLogin(input: { username: string; password: string }): Promise<Settings>
+  platformRegister(input: { email: string; password: string; code: string }): Promise<Settings>
+  requestEmailCode(input: { email: string }): Promise<{ retryAfterSeconds: number; expiresInSeconds: number }>
+  saveCustomService(input: CustomServiceInput): Promise<Settings>
+  testCustomService(input: CustomServiceInput): Promise<{ latencyMs: number; message: string }>
+  removeCustomService(id: string): Promise<Settings>
   platformLogout(): Promise<Settings>
   refreshPlatform(): Promise<Settings>
   saveSettings(input: SettingsInput): Promise<Settings>
@@ -168,7 +188,7 @@ export interface DesktopBridge {
   setAlwaysOnTop(value: boolean): Promise<boolean>
   setCompact(value: boolean): Promise<void>
   getHistory(): Promise<SessionRecord[]>
-  saveSession(record: SessionRecord): Promise<void>
+  saveSession(record: SessionRecord, accountScope?: string): Promise<void>
   removeSession(id: string): Promise<void>
   exportSession(record: SessionRecord): Promise<boolean>
   onEvent(callback: (event: AppEvent) => void): () => void

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 interface DraftRecord { id?: string }
 interface CachedDraft { draft: DraftRecord; baseline: string }
 const draftCache = new Map<string, CachedDraft>()
+export function clearLibraryDrafts() { draftCache.clear() }
 export default function useLibraryDraft<T extends DraftRecord>(records: T[], empty: T, ready: boolean, preferredId: string | null | undefined, cacheKey: string) {
   // Each editor owns a distinct key, so its cached record keeps the same draft type.
   const cached = useRef(draftCache.get(cacheKey) as { draft: T; baseline: string } | undefined)

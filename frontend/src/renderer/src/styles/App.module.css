@@ -68,7 +68,7 @@
 .meterBar { height: 10px; width: 2px; background: var(--neutral-300); border-radius: 1px; }
 .meterBarActive { background: var(--color-success); }
 .primaryButton, .secondaryButton, .stopRecordingButton { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: 36px; padding: var(--space-2) var(--space-3); border: 1px solid transparent; border-radius: var(--radius-sm); font-size: var(--text-sm); font-weight: 500; white-space: nowrap; transition: background .15s ease, transform .15s ease; }
-.primaryButton { background: var(--button-bg); color: var(--color-surface); }
+.primaryButton { background: var(--button-bg, var(--color-primary)); color: var(--color-surface); }
 .primaryButton:hover { background: var(--neutral-700); }
 .secondaryButton { background: var(--color-surface); border-color: var(--neutral-300); color: var(--color-primary); }
 .secondaryButton:hover { background: var(--color-canvas); }
@@ -318,3 +318,10 @@
 @media (max-width: 1060px) { .workspace { padding-right: var(--space-5); padding-left: var(--space-5); } .workspacePanels { grid-template-columns: minmax(260px, .68fr) minmax(340px, 1.32fr); gap: var(--space-4); } .contextStatus { font-size: var(--text-xs); } .contextLayout { grid-template-columns: minmax(0, 1fr) 210px; } .levelMeter .meterBar:nth-last-child(-n+4) { display: none; } .composerPlaceholderHint { font-size: 9px; } }
 @media (max-width: 820px) { .sidebar { flex-basis: 70px; } .workspacePanels { grid-template-columns: minmax(0, 1fr); overflow-y: auto; } .transcriptPanel { min-height: 360px; } .answerPanel { min-height: 540px; } .workspace { min-height: 1060px; } .contextStatus { max-width: 145px; flex-wrap: wrap; } .workspaceContextStatus { max-width: none; flex-wrap: nowrap; } .contextLayout { grid-template-columns: minmax(0, 1fr); } .contextGuide { display: none; } .pageHeading { align-items: flex-start; } .pageHeading h1 { font-size: var(--text-xl); } .contextPage, .historyPage { padding: var(--space-5); } .appCompact .workspace { min-height: 0; } .appCompact .workspacePanels { overflow: hidden; } .appCompact .answerPanel { min-height: 0; } }
 @media (max-width: 560px) { .windowSubtitle { display: none; } .windowTitle { font-size: 10px; } .windowInset { width: 76px; } .sidebar { flex-basis: 58px; padding-left: var(--space-1); padding-right: var(--space-1); } .navItem { font-size: 9px; } .workspace { padding-left: var(--space-3); padding-right: var(--space-3); } .contextStatus { display: none; } .setupBanner { font-size: 10px; padding: var(--space-2); } .workspaceFooter span:last-child { display: none; } .pageHeading { flex-wrap: wrap; } .historyItem { padding: var(--space-4); gap: var(--space-3); } .historyItemIcon { display: none; } .fieldRow { grid-template-columns: minmax(0, 1fr); gap: 0; } .settingsGroup legend > span { float: none; display: block; } .dialogHeader, .dialogBody { padding: var(--space-5); } .composerPlaceholderHint { display: none; } }
+
+.accountButton { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 30px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary); padding: var(--space-1) var(--space-2); font-size: var(--text-xs); }
+.accountButton:hover { background: var(--neutral-200); }
+.accountHeading { font-size: var(--text-md); margin-bottom: var(--space-2); }
+.appCompact .accountButton { max-width: 90px; }
+
+@media (max-width: 560px) { .topbar .windowTitle { display: none; } .accountButton { max-width: 110px; } }

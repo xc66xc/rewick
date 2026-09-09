@@ -1,6 +1,9 @@
 import { z } from 'zod'
+const publicUser = z.object({ id: z.string().min(1).max(128), username: z.string().min(1).max(200), email: z.string().max(254).nullable().optional() })
+const serviceList = z.array(z.object({ id: z.string().min(1).max(200), name: z.string().min(1).max(200) })).max(100)
 export const platformInfoSchema = z.object({
-  user: z.object({ id: z.string().min(1).max(128), username: z.string().min(1).max(200) }),
+  user: publicUser,
+  services: z.object({ asr: serviceList, knowledge: serviceList, embedding: serviceList }).optional(),
   capabilities: z.object({ llm: z.boolean(), asr: z.boolean(), knowledge: z.boolean() }),
   models: z.object({ llm: z.string().max(200), asr: z.string().max(200),
     available: z.array(z.object({ id: z.string().trim().min(1).max(200), name: z.string().trim().min(1).max(200) })).max(100).optional(),
@@ -18,10 +21,13 @@ export const platformInfoSchema = z.object({
     context.addIssue({ code: 'custom', path: ['models', capability], message: '已启用的能力缺少模型名称。' })
   }
 })
-export const platformLoginInputSchema = z.object({ username: z.string().trim().min(1).max(200), password: z.string().min(1).max(1024) }).strict()
+export const platformLoginInputSchema = z.object({ username: z.string().trim().min(1).max(254), password: z.string().min(1).max(1024) }).strict()
+export const emailInputSchema = z.object({ email: z.string().trim().toLowerCase().email().max(254) }).strict()
+export const registerInputSchema = emailInputSchema.extend({ password: z.string().min(12).refine(value => Buffer.byteLength(value, 'utf8') <= 72, '密码最多 72 个 UTF-8 字节。'), code: z.string().regex(/^\d{6}$/, '请输入六位验证码。') })
+export const emailCodeResponseSchema = z.object({ retryAfterSeconds: z.number().int().min(1).max(3600), expiresInSeconds: z.number().int().min(1).max(3600) })
 export const platformLoginResponseSchema = z.object({
   accessToken: z.string().min(1).max(4096).refine(value => !/\s/.test(value)),
   expiresAt: z.string().datetime({ offset: true }),
-  user: z.object({ id: z.string().min(1).max(128), username: z.string().min(1).max(200) }),
+  user: publicUser,
 })
 export const platformSessionSchema = z.object({ expiresAt: z.string().datetime({ offset: true }), info: platformInfoSchema })

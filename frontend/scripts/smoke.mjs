@@ -7,6 +7,7 @@ import electronPath from 'electron'
 import { _electron } from 'playwright'
 import { expect } from '@playwright/test'
 import { startMockServices } from './mock-services.mjs'
+import { loginForSmoke } from './mock-auth.mjs'
 import { checkAutoAnswers } from '../tests/e2e/auto-answer.mjs'
 import { checkAnswerScroll } from '../tests/e2e/answer-scroll.mjs'
 import { checkQuestionAssembly } from '../tests/e2e/question-assembly.mjs'
@@ -56,6 +57,7 @@ async function launch({ fakeMedia = true } = {}) {
   page = await app.firstWindow()
   page.setDefaultTimeout(10_000)
   await page.waitForFunction(() => Boolean(window.copilot))
+  await loginForSmoke(page, mock)
   await page.evaluate(() => {
     window.__smokeEvents = []
     window.copilot.onEvent((event) => window.__smokeEvents.push(event))
@@ -89,13 +91,21 @@ async function settingsPatch({ asr = {}, llm = {}, ...rest } = {}) {
         targetId: target.id, referenceIds: environment.referenceIds })
     }
     const current = await window.copilot.getSettings()
+    for (const kind of ['llm', 'asr']) {
+      const change = patch[kind]
+      if (!Object.keys(change).length || current.serviceSelections?.[kind]?.source !== 'custom') continue
+      const profile = current.customServices.find(value => value.id === current.serviceSelections[kind].id)
+      if (!profile) continue
+      await window.copilot.saveCustomService({ ...profile, url: change.baseUrl ?? change.url ?? profile.url,
+        model: change.model ?? profile.model, apiKey: change.apiKey ?? patch.keys[kind] })
+    }
     return window.copilot.saveSettings({
       ...current,
       ...patch.rest,
       asr: { ...current.asr, ...patch.asr },
       llm: { ...current.llm, ...patch.llm },
     })
-  }, { asr, llm, rest })
+  }, { asr, llm, rest, keys: { asr: fakeAsrKey, llm: fakeLlmKey } })
 }
 
 async function screenshot(filename) {
@@ -263,7 +273,13 @@ try {
   await page.waitForFunction(() => Boolean(window.copilot))
   await checkpoint('settings and both spoken answer styles can be edited and saved through the UI', async () => {
     await page.getByRole('button', { name: '打开设置', exact: true }).click()
-    await page.getByLabel('回答模型', { exact: true }).fill('mock-ui')
+    await page.getByRole('combobox', { name: /^回答模型/ }).selectOption('new')
+    const custom = page.getByRole('dialog', { name: '添加回答模型', exact: true })
+    await custom.getByLabel('配置名称', { exact: true }).fill('我的模拟模型')
+    await custom.getByLabel('模型名称', { exact: true }).fill('mock-ui')
+    await custom.getByLabel('API Key', { exact: true }).fill(fakeLlmKey)
+    await custom.getByRole('button', { name: '保存并选用', exact: true }).click()
+    await checked(custom).not.toBeVisible()
     const answerStyle = page.getByRole('combobox', { name: '回答风格', exact: true })
     await checked(answerStyle.getByRole('option')).toHaveText(['简短口语', '展开口语'])
     await answerStyle.selectOption({ label: '展开口语' })

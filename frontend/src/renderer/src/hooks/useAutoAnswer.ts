@@ -3,6 +3,7 @@ import type { AsrStatus, Settings, SettingsInput } from '../../../shared/types'
 import { selectedPlatformModel } from '../../../shared/platform-models'
 import { AutoAnswerCoordinator, type AutoAnswerSnapshot, type AutoAnswerState } from './autoAnswerCoordinator'
 import { settingsInput } from './useSettings'
+import { explicitServiceReady } from './serviceChoices'
 
 interface AutoAnswerOptions {
   settingsRef: RefObject<Settings>
@@ -19,17 +20,18 @@ function isLocalModel(baseUrl: string): boolean {
 }
 
 export function usesPlatformAnswer(settings: Settings): boolean {
+  if (settings.serviceSelections?.llm) return settings.serviceSelections.llm.source === 'platform'
   return !settings.llm.hasApiKey && !isLocalModel(settings.llm.baseUrl)
     && Boolean(settings.platform?.enabled && settings.platform.authenticated && settings.platform.capabilities.llm)
 }
 
 export function isAnswerModelReady(settings: Settings): boolean {
-  return settings.llm.hasApiKey || isLocalModel(settings.llm.baseUrl)
-    || (usesPlatformAnswer(settings) && Boolean(selectedPlatformModel(settings.platform)))
+  return explicitServiceReady(settings, 'llm') ?? (settings.llm.hasApiKey || isLocalModel(settings.llm.baseUrl)
+    || (usesPlatformAnswer(settings) && Boolean(selectedPlatformModel(settings.platform))))
 }
 
 export function isAsrReady(settings: Settings): boolean {
-  return settings.asr.hasApiKey || Boolean(settings.platform?.enabled && settings.platform.authenticated && settings.platform.capabilities.asr)
+  return explicitServiceReady(settings, 'asr') ?? (settings.asr.hasApiKey || Boolean(settings.platform?.enabled && settings.platform.authenticated && settings.platform.capabilities.asr))
 }
 
 export function useAutoAnswer(options: AutoAnswerOptions) {

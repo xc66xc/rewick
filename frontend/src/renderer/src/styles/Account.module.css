@@ -1,0 +1,14 @@
+.screen { min-height: 100dvh; padding: var(--space-16) var(--space-6) var(--space-8); overflow: auto; display: grid; align-items: center; justify-items: center; background: var(--color-canvas); }
+.dragBar { position: fixed; top: 0; right: 0; left: 0; height: 44px; padding: var(--space-3) var(--space-6) 0 96px; color: var(--color-text-muted); font-size: var(--text-xs); -webkit-app-region: drag; }
+.card { width: min(100%, 420px); padding: var(--space-8); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+.card h1 { font-size: var(--text-xl); line-height: 1.4; }
+.mark { color: var(--color-success); margin-bottom: var(--space-5); }
+.description { color: var(--color-text-secondary); margin: var(--space-2) 0 var(--space-6); font-size: var(--text-sm); }
+.tabs { display: flex; gap: var(--space-1); padding: var(--space-1); margin-bottom: var(--space-5); border-radius: var(--radius-sm); background: var(--color-canvas); }
+.tabs button { flex: 1; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; min-height: 36px; color: var(--color-text-secondary); }
+.tabs button[aria-selected='true'] { border-color: var(--color-border); background: var(--color-surface); color: var(--color-primary); }
+.codeRow { display: flex; gap: var(--space-2); }
+.codeRow input { min-width: 0; }
+.codeRow button { flex-shrink: 0; }
+.submit { width: 100%; justify-content: center; }
+@media (max-height: 700px) { .screen { align-items: start; padding-top: var(--space-12); } .card { padding: var(--space-5); } .mark { margin-bottom: var(--space-2); } }

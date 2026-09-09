@@ -10,9 +10,9 @@ export function endpoint(protocol: 'http' | 'ws') {
     try {
       const url = new URL(value)
       return !url.username && !url.password && !url.hash &&
-        (url.protocol === `${protocol}s:` || (url.protocol === `${protocol}:` && isLoopback(url.hostname)))
+        (url.protocol === `${protocol}s:` || url.protocol === `${protocol}:`)
     } catch { return false }
-  }, `远程地址必须使用 ${protocol.toUpperCase()}S，仅本机回环地址允许 ${protocol.toUpperCase()}；地址不能包含账号、密码或片段。`)
+  }, `地址必须使用 ${protocol.toUpperCase()} 或 ${protocol.toUpperCase()}S；地址不能包含账号、密码或片段。`)
 }
 
 const apiKey = z.string().trim().max(4096).refine((value) => !/[\r\n]/.test(value), 'API Key 不能包含换行。').optional()
@@ -57,6 +57,12 @@ export const platformSettingsSchema = z.object({
   selectedModelId: z.string().trim().max(200).optional(),
 })
 export const settingsInputSchema = z.object({
+  serviceSelections: z.object({
+    llm: z.object({ source: z.enum(['platform', 'custom']), id: z.string().max(200) }).optional(),
+    asr: z.object({ source: z.enum(['platform', 'custom']), id: z.string().max(200) }).optional(),
+    embedding: z.object({ source: z.enum(['platform', 'custom']), id: z.string().max(200) }).optional(),
+    knowledge: z.object({ source: z.enum(['platform', 'custom']), id: z.string().max(200) }).optional(),
+  }).optional(),
   platform: platformSettingsSchema.default({ enabled: false, baseUrl: 'http://127.0.0.1:8080' }),
   asr: asrSettingsSchema.extend({ apiKey }),
   llm: llmSettingsSchema.extend({ apiKey }),

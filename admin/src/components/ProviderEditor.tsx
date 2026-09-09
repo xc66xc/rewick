@@ -1,8 +1,8 @@
 import type { Provider, Capability } from '../types'
 import { capabilityNames } from '../types'
 import styles from '../styles.module.css'
-interface ProviderEditorProps { provider: Provider; original?: Provider; onChange: (provider: Provider) => void; onRemove: () => void; disabled: boolean }
-export default function ProviderEditor({ provider, original, onChange, onRemove, disabled }: ProviderEditorProps) {
+interface ProviderEditorProps { provider: Provider; original?: Provider; onChange: (provider: Provider) => void; onRemove: () => void; onSave: () => void; disabled: boolean }
+export default function ProviderEditor({ provider, original, onChange, onRemove, onSave, disabled }: ProviderEditorProps) {
   const changedDestination = Boolean(original && (provider.url.trim() !== original.url || provider.kind !== original.kind))
   const requiresKey = changedDestination || (provider.enabled && !original?.hasApiKey)
   return <fieldset className={styles.editorCard} disabled={disabled} aria-label={`服务配置 ${provider.name || provider.id}`}><legend>{provider.name || '新服务'}<span className={styles.tableDetail}>{provider.id}</span></legend>
@@ -11,6 +11,6 @@ export default function ProviderEditor({ provider, original, onChange, onRemove,
     <p className={styles.hint}>{provider.kind === 'llm' ? '填写 Chat Completions 完整请求地址，包含 /chat/completions。' : provider.kind === 'knowledge' ? '填写百炼完整知识检索地址，包含业务空间。' : '填写支持 Fun-ASR 协议的 WebSocket 地址。'}远程服务使用 HTTPS / WSS。</p>
     <label className={styles.field}><span>API Key{original?.hasApiKey && <span className={styles.badge}>已保存</span>}</span><input type="password" autoComplete="new-password" required={requiresKey} value={provider.apiKey ?? ''} onChange={event => onChange({ ...provider, apiKey: event.target.value })} placeholder={requiresKey ? '请录入密钥' : '留空保留现有密钥'} /></label>
     {changedDestination && <p className={styles.warning}>请求地址或服务类型已更改，必须重新录入密钥。</p>}
-    <div className={styles.sectionHeading}><label className={styles.check}><input type="checkbox" checked={provider.enabled} onChange={event => onChange({ ...provider, enabled: event.target.checked })} />启用服务</label><button type="button" className={styles.linkDanger} onClick={onRemove}>移除服务</button></div>
+    <div className={styles.sectionHeading}><label className={styles.check}><input type="checkbox" checked={provider.enabled} onChange={event => onChange({ ...provider, enabled: event.target.checked })} />启用服务</label><button type="button" className={styles.primaryButton} onClick={event => { const fields = event.currentTarget.closest('fieldset'); if (Array.from(fields?.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input,select') ?? []).every(field => field.reportValidity())) onSave() }}>保存服务</button><button type="button" className={styles.linkDanger} onClick={onRemove}>移除服务</button></div>
   </fieldset>
 }

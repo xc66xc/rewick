@@ -1,9 +1,9 @@
 import { useRef } from 'react'
 import { ArrowDown, ArrowUpRight, ChatTeardropText, FileText, Sparkle } from '@phosphor-icons/react'
 import type { Settings } from '../../../shared/types'
-import { selectedPlatformModel } from '../../../shared/platform-models'
+import { answerModelLabel } from '../hooks/serviceChoices'
 import type { SessionController } from '../hooks/useSession'
-import { isAnswerModelReady, usesPlatformAnswer } from '../hooks/useAutoAnswer'
+import { isAnswerModelReady } from '../hooks/useAutoAnswer'
 import AnswerCard from './AnswerCard'
 import SessionContextDetails from './SessionContextDetails'
 import QuestionComposer, { type QuestionComposerController } from './QuestionComposer'
@@ -12,7 +12,7 @@ import styles from '../styles/App.module.css'
 interface AnswerPanelProps { session: QuestionComposerController & Pick<SessionController, 'record'>; settings: Settings; onSettings: () => void; onContext: () => void; compact?: boolean }
 export default function AnswerPanel({ session, settings, onSettings, onContext, compact = false }: AnswerPanelProps) {
   const viewport = useRef<HTMLDivElement>(null)
-  const model = usesPlatformAnswer(settings) ? selectedPlatformModel(settings.platform)?.name ?? '请重选平台模型' : settings.llm.model
+  const model = answerModelLabel(settings)
   function handleLatestAnswer() {
     const scroll = viewport.current
     const latest = scroll?.querySelectorAll<HTMLElement>(':scope > article').item(session.record.answers.length - 1)

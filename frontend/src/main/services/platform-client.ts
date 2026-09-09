@@ -1,5 +1,5 @@
 import type { PlatformInfo, Settings } from '../../shared/types'
-import { platformInfoSchema, platformLoginInputSchema, platformLoginResponseSchema } from './platform-schema'
+import { emailCodeResponseSchema, emailInputSchema, platformInfoSchema, platformLoginInputSchema, platformLoginResponseSchema, registerInputSchema } from './platform-schema'
 import { parseInput, platformSettingsSchema } from './validation'
 import type { ServiceSecrets, SettingsStore } from './settings-store'
 
@@ -17,6 +17,14 @@ export class PlatformClient {
     if (!parsed.success) throw new Error('平台登录响应格式无效。')
     if (Date.parse(parsed.data.expiresAt) <= Date.now()) throw new Error('平台登录已过期，请重新登录。')
     return parsed.data
+  }
+  async register(input: unknown) {
+    const raw = await this.request('/api/v1/auth/register', undefined, parseInput(registerInputSchema, input))
+    return parseInput(platformLoginResponseSchema, raw)
+  }
+  async emailCode(input: unknown) {
+    const raw = await this.request('/api/v1/auth/email-code', undefined, parseInput(emailInputSchema, input))
+    return parseInput(emailCodeResponseSchema, raw)
   }
   async info(token: string, signal?: AbortSignal): Promise<PlatformInfo> {
     const parsed = platformInfoSchema.safeParse(await this.request('/api/v1/platform', token, undefined, signal))
@@ -40,7 +48,11 @@ export class PlatformClient {
         await response.body?.cancel().catch(() => undefined)
         const message = response.status === 401 ? (path.endsWith('/login') ? '平台用户名或密码错误。' : '平台登录已失效，请重新登录。')
           : response.status === 403 ? '平台账号没有此服务权限，请联系管理员。'
-          : response.status === 429 ? '平台额度已用完或请求过于频繁，请稍后重试。' : `平台请求失败（HTTP ${response.status}），请稍后重试。`
+          : response.status === 429 ? '平台额度已用完或请求过于频繁，请稍后重试。'
+          : response.status === 409 && path.endsWith('/register') ? '该邮箱已注册，请直接登录。'
+          : response.status === 400 && path.endsWith('/register') ? '邮箱、密码或验证码无效，验证码可能已过期，请检查后重试。'
+          : response.status === 503 && path.includes('/auth/') ? '邮箱注册服务暂不可用，请联系管理员检查邮件服务配置。'
+          : `平台请求失败（HTTP ${response.status}），请稍后重试。`
         throw new PlatformRequestError(message, response.status)
       }
       if (response.status === 204) return undefined
@@ -79,6 +91,20 @@ export class PlatformService {
     const info = await client.info(result.accessToken)
     if (info.user.id !== result.user.id) throw new Error('平台账号信息不一致，请重新登录。')
     return this.store.savePlatformSession(client.baseUrl, result.accessToken, result.expiresAt, info)
+  }
+  async register(input: unknown): Promise<Settings> {
+    const { settings } = await this.store.getConnectionSnapshot()
+    if (!settings.platform?.enabled) throw new Error('请先配置平台地址。')
+    const client = new PlatformClient(settings.platform.baseUrl)
+    const result = await client.register(input)
+    const info = await client.info(result.accessToken)
+    if (info.user.id !== result.user.id) throw new Error('注册账号信息不一致，请重新登录。')
+    return this.store.savePlatformSession(client.baseUrl, result.accessToken, result.expiresAt, info)
+  }
+  async emailCode(input: unknown) {
+    const { platform } = await this.store.getSettings()
+    if (!platform?.enabled) throw new Error('请先配置平台地址。')
+    return new PlatformClient(platform.baseUrl, 15000).emailCode(input)
   }
   async logout(): Promise<Settings> {
     const snapshot = await this.store.getConnectionSnapshot()

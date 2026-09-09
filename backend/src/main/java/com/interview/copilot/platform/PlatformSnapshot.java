@@ -41,6 +41,20 @@ public final class PlatformSnapshot {
         return config.models().stream().filter(this::available).map(model -> new AvailableModel(model.id(), model.name())).toList();
     }
 
+    public List<AvailableService> availableAsrServices() {
+        return serviceCatalog("asr", config.asr().providerId(), asr());
+    }
+
+    public List<AvailableService> availableKnowledgeServices() {
+        return serviceCatalog("knowledge", config.knowledge().providerId(), knowledge());
+    }
+
+    private List<AvailableService> serviceCatalog(String kind, String providerId, ProviderProperties.Endpoint endpoint) {
+        PlatformConfig.Provider provider = providers.get(providerId);
+        if (provider == null || !provider.kind().equals(kind) || !endpoint.isEnabled()) { return List.of(); }
+        return List.of(new AvailableService(provider.id(), provider.name()));
+    }
+
     private boolean available(PlatformConfig.Model model) {
         PlatformConfig.Provider provider = providers.get(model.providerId());
         return model.enabled() && provider != null && provider.enabled() && !key(provider.id()).isEmpty();
@@ -71,6 +85,11 @@ public final class PlatformSnapshot {
         return endpoint;
     }
 
+    public ProviderProperties.Asr asr(String serviceId) {
+        requireSelection(serviceId, availableAsrServices(), "转写");
+        return asr();
+    }
+
     public ProviderProperties.Knowledge knowledge() {
         ProviderProperties.Knowledge endpoint = new ProviderProperties.Knowledge();
         PlatformConfig.Knowledge service = config.knowledge();
@@ -80,6 +99,18 @@ public final class PlatformSnapshot {
         return endpoint;
     }
 
+    public ProviderProperties.Knowledge knowledge(String serviceId) {
+        requireSelection(serviceId, availableKnowledgeServices(), "知识库");
+        return knowledge();
+    }
+
+    private void requireSelection(String serviceId, List<AvailableService> available, String capability) {
+        if (serviceId == null) { return; }
+        if (available.stream().noneMatch(service -> service.id().equals(serviceId))) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "SERVICE_UNAVAILABLE", "所选平台" + capability + "服务已不可用，请重新选择");
+        }
+    }
+
     private void endpoint(PlatformConfig.Provider provider, ProviderProperties.Endpoint endpoint) {
         if (provider == null || !provider.enabled()) { return; }
         endpoint.setUrl(provider.url());
@@ -87,5 +118,6 @@ public final class PlatformSnapshot {
     }
 
     public record AvailableModel(String id, String name) { }
+    public record AvailableService(String id, String name) { }
     public record LlmSelection(String id, ProviderProperties.Llm config) { }
 }

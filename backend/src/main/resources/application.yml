@@ -44,6 +44,15 @@ copilot:
   platform:
     master-key: ${COPILOT_PLATFORM_MASTER_KEY:}
   auth:
+    email:
+      enabled: ${COPILOT_EMAIL_REGISTRATION_ENABLED:true}
+      code-secret: ${COPILOT_EMAIL_CODE_SECRET:}
+      code-ttl-seconds: ${COPILOT_EMAIL_CODE_TTL_SECONDS:600}
+      resend-seconds: ${COPILOT_EMAIL_RESEND_SECONDS:60}
+      hourly-send-limit: ${COPILOT_EMAIL_HOURLY_SEND_LIMIT:5}
+      maximum-attempts: ${COPILOT_EMAIL_MAXIMUM_ATTEMPTS:5}
+      ip-hourly-send-limit: ${COPILOT_EMAIL_IP_HOURLY_SEND_LIMIT:20}
+      ip-registration-limit: ${COPILOT_EMAIL_IP_REGISTRATION_LIMIT:30}
     admin:
       bootstrap-username: ${COPILOT_ADMIN_BOOTSTRAP_USERNAME:}
       bootstrap-password: ${COPILOT_ADMIN_BOOTSTRAP_PASSWORD:}
@@ -56,17 +65,3 @@ copilot:
     daily-answers: ${COPILOT_DAILY_ANSWERS:100}
     daily-knowledge-queries: ${COPILOT_DAILY_KNOWLEDGE_QUERIES:300}
     max-asr-session-seconds: ${COPILOT_MAX_ASR_SESSION_SECONDS:3600}
-  providers:
-    llm:
-      url: ${COPILOT_PROVIDERS_LLM_URL:}
-      api-key: ${COPILOT_PROVIDERS_LLM_APIKEY:}
-      model: ${COPILOT_PROVIDERS_LLM_MODEL:}
-      allowed-models: ${COPILOT_PROVIDERS_LLM_ALLOWEDMODELS:}
-    knowledge:
-      url: ${COPILOT_PROVIDERS_KNOWLEDGE_URL:}
-      api-key: ${COPILOT_PROVIDERS_KNOWLEDGE_APIKEY:}
-      agent-id: ${COPILOT_PROVIDERS_KNOWLEDGE_AGENTID:}
-    asr:
-      url: ${COPILOT_PROVIDERS_ASR_URL:}
-      api-key: ${COPILOT_PROVIDERS_ASR_APIKEY:}
-      model: ${COPILOT_PROVIDERS_ASR_MODEL:fun-asr-realtime}

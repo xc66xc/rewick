@@ -86,7 +86,7 @@ export class RemoteKnowledgeClient {
 
   private async request(query: string, signal: AbortSignal): Promise<ReferenceExcerpt[]> {
     const parsed = remoteKnowledgeSettingsSchema.safeParse({ ...this.config, enabled: true })
-    if (!parsed.success) throw new RemoteKnowledgeError('请填写有效的百炼远程知识库完整请求地址和 Agent ID；远程地址必须使用 HTTPS。')
+    if (!parsed.success) throw new RemoteKnowledgeError('请填写有效的百炼远程知识库完整请求地址和 Agent ID；地址必须使用 HTTP 或 HTTPS。')
     if (!query.trim() || query.length > 20_000) throw new RemoteKnowledgeError('远程知识库检索问题为空或超过 20,000 字符。')
     const apiKey = this.apiKey.trim()
     if (!apiKey || apiKey.length > 4096 || /[\r\n]/.test(apiKey)) throw new RemoteKnowledgeError('请在模型与设置中填写有效的百炼远程知识库 API Key。')
@@ -102,7 +102,7 @@ export class RemoteKnowledgeClient {
       const pendingResponse = fetch(parsed.data.url, {
         method: 'POST', redirect: 'error', signal: budget,
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ agent_id: parsed.data.agentId, query, images: [] }),
+        body: JSON.stringify({ agent_id: parsed.data.agentId, query, images: [], ...(this.config.serviceId ? { serviceId: this.config.serviceId } : {}) }),
       })
       // Clean up even when a transport returns a response after cancellation.
       void pendingResponse.then(response => {

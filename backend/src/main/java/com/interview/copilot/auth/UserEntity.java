@@ -12,6 +12,8 @@ public class UserEntity {
     private String username;
     private String passwordHash;
     private String role = "USER";
+    @TableField(exist = false)
+    private String email;
     private Integer dailyAnswers;
     private Integer dailyKnowledgeQueries;
     @TableField("is_enabled")
@@ -25,6 +27,8 @@ public class UserEntity {
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
     public Integer getDailyAnswers() { return dailyAnswers; }
     public void setDailyAnswers(Integer dailyAnswers) { this.dailyAnswers = dailyAnswers; }
     public Integer getDailyKnowledgeQueries() { return dailyKnowledgeQueries; }

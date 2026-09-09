@@ -33,6 +33,8 @@ function setup(fakeTimers = false) {
     { id: 'environment-two', name: '新环境', resumeId: null, targetId: null, referenceIds: [], createdAt, updatedAt: createdAt },
   ] }
   const bridge = {
+    platformRegister: vi.fn(async () => settings), requestEmailCode: vi.fn(async () => ({ retryAfterSeconds: 60, expiresInSeconds: 600 })),
+    saveCustomService: vi.fn(async () => settings), testCustomService: vi.fn(async () => ({ latencyMs: 1, message: 'ok' })), removeCustomService: vi.fn(async () => settings),
     platformLogin: vi.fn(async () => settings),
     platformLogout: vi.fn(async () => settings),
     refreshPlatform: vi.fn(async () => settings),
@@ -700,5 +702,35 @@ describe('actual model input attached to an answer', () => {
     expect(result.current.busy).toBe(false)
     expect(result.current.record.answers[0]).toMatchObject({ status, modelInput: input, text: '已经返回的文字' })
     await waitFor(() => expect(bridge.saveSession.mock.calls.at(-1)?.[0].answers[0]).toMatchObject({ status, modelInput: input }))
+  })
+})
+
+
+describe('final session snapshot on authentication gate unmount', () => {
+  it('preserves completed answers and finalizes partial output/input as cancelled even if the old IPC rejects later', async () => {
+    const { result, bridge, run, emit, unmount } = setup()
+    await run(() => result.current.setQuestion('已完成的问题'))
+    await run(() => result.current.generate())
+    const first = bridge.generateAnswer.mock.calls[0][0].requestId
+    await emit({ kind: 'answer-delta', requestId: first, delta: '完整回答' })
+    await emit({ kind: 'answer-done', requestId: first, cancelled: false })
+    let rejectRequest: (error: Error) => void = () => undefined
+    bridge.generateAnswer.mockImplementationOnce(() => new Promise<void>((_resolve, reject) => { rejectRequest = reject }))
+    await run(() => result.current.setQuestion('还在生成的问题'))
+    let pending: Promise<void> = Promise.resolve()
+    await run(() => { pending = result.current.generate() })
+    const second = bridge.generateAnswer.mock.calls[1][0].requestId
+    const modelInput: ModelInputSnapshot = { model: 'actual-model', messages: [{ role: 'user', content: '本次发送的完整问题' }] }
+    await emit({ kind: 'answer-request', requestId: second, modelInput })
+    await emit({ kind: 'answer-delta', requestId: second, delta: '已收到的部分回答' })
+    unmount()
+    await waitFor(() => expect(bridge.saveSession.mock.calls.at(-1)?.[0].answers.map(answer => answer.status)).toEqual(['complete', 'cancelled']))
+    const final = bridge.saveSession.mock.calls.at(-1)?.[0]
+    expect(final?.answers[1]).toMatchObject({ text: '已收到的部分回答', modelInput, status: 'cancelled' })
+    expect(bridge.cancelAnswer).toHaveBeenCalledOnce()
+    const writes = bridge.saveSession.mock.calls.length
+    await act(async () => { rejectRequest(new Error('退出后返回的过期网络错误')); await pending })
+    expect(bridge.saveSession).toHaveBeenCalledTimes(writes)
+    expect((await bridge.getHistory())[0].answers[1].status).toBe('cancelled')
   })
 })

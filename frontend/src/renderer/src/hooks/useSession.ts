@@ -48,13 +48,17 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
     setRecord(next)
   }
   function updateStatus(next: AsrStatus) { statusRef.current = next; setStatus(next); automatic.coordinator.current?.refresh() }
-  async function persist() {
-    const snapshot = recordRef.current
+  async function persist(finalize = false) {
+    const current = recordRef.current
+    const snapshot = finalize && current.answers.some(answer => answer.status === 'streaming')
+      ? { ...current, answers: current.answers.map(answer => answer.status === 'streaming' ? { ...answer, status: 'cancelled' as const } : answer) }
+      : current
+    if (finalize) recordRef.current = snapshot
     if (!bridge || !recordHasContent(snapshot) || lastSaved.current === snapshot
       || removingSessionId.current === snapshot.id || removedSessionIds.current.has(snapshot.id)) return
-    await bridge.saveSession(snapshotForSave(snapshot))
+    await bridge.saveSession(snapshotForSave(snapshot), settingsRef.current.accountScope)
     lastSaved.current = snapshot
-    setHistoryVersion(version => version + 1)
+    if (!finalize) setHistoryVersion(version => version + 1)
   }
   const { beginSegmentEdit: beginEdit, editSegment: applyEdit, finishSegmentEdit: finishEdit, mergeTranscript,
     clearTranscriptEdits, snapshotForSave, finishAllSegmentEdits, isEditing } = useTranscriptEditing({
@@ -65,7 +69,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
       editing: isEditing(), assembling: questionAssemblingRef.current, segments: recordRef.current.segments }),
     onAnswer: selection => { void generate(selection, true) },
   })
-  useEffect(() => { automatic.coordinator.current?.refresh() }, [settings.autoAnswer, settings.llm, source, status, busy])
+  useEffect(() => { automatic.coordinator.current?.refresh() }, [settings.autoAnswer, settings.llm, settings.platform, settings.serviceSelections, settings.customServices, source, status, busy])
   function setQuestion(next: string) {
     questionRef.current = next
     updateQuestion(next)
@@ -123,7 +127,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
   }
   async function start() {
     if (!bridge || stopping.current || changingTarget.current || !['idle', 'error'].includes(statusRef.current)) return
-    if (!isAsrReady(settingsRef.current)) { setError('请在设置中登录已开通转写的平台账号，或填写阿里云转写 API Key。'); return }
+    if (!isAsrReady(settingsRef.current)) { setError('请在模型与设置中选择可用的转写服务。'); return }
     attachEnvironment()
     const currentOperation = ++operation.current
     pendingAsrEvents.current = []
@@ -270,8 +274,12 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
   }, []) // Autosave reads the current session through refs; never captures an old session.
   useEffect(() => () => {
     operation.current += 1
+    requestId.current = null
+    asrId.current = null
     void capture.current?.stop().catch(() => undefined)
     void bridge?.stopAsr().catch(() => undefined)
+    void bridge?.cancelAnswer().catch(() => undefined)
+    void persistRef.current(true).catch(() => undefined)
   }, [bridge])
   async function reset() {
     if (changingTarget.current || stopping.current || !['idle', 'error'].includes(statusRef.current) || requestId.current) return

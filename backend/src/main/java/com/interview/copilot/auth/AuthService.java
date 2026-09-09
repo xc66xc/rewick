@@ -1,5 +1,7 @@
 package com.interview.copilot.auth;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.interview.copilot.auth.email.EmailAddress;
 import com.interview.copilot.common.ApiException;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -33,14 +35,32 @@ public class AuthService {
     @Transactional
     public LoginResult login(String username, String password) {
         if (password.getBytes(StandardCharsets.UTF_8).length > 72) throw invalidCredentials();
-        UserEntity user = users.findForLogin(username);
+        UserEntity user = findLoginUser(username);
         String hash = user == null ? absentPassword : user.getPasswordHash();
         boolean matches = passwords.matches(password, hash);
         if (!matches || user == null || !user.isEnabled()) throw invalidCredentials();
+        return issueToken(user);
+    }
+
+    private UserEntity findLoginUser(String username) {
+        if (username.contains("@")) {
+            try {
+                UserEntity emailUser = users.findForEmailLogin(EmailAddress.normalize(username));
+                if (emailUser != null) return emailUser;
+            } catch (ApiException error) {
+                // Existing username accounts may include @ without being an email address.
+                if (!"invalid_email".equals(error.code())) throw error;
+            }
+        }
+        return users.findForLogin(username);
+    }
+
+    @Transactional
+    public LoginResult issueToken(UserEntity user) {
         String token = TokenSecrets.create();
         Instant expiresAt = clock.instant().plus(properties.tokenHours(), ChronoUnit.HOURS);
         tokens.create(user.getId(), TokenSecrets.hash(token), expiresAt);
-        return new LoginResult(token, expiresAt, new PublicUser(user.getId().toString(), user.getUsername(), user.getRole()));
+        return new LoginResult(token, expiresAt, new PublicUser(user.getId().toString(), user.getUsername(), user.getRole(), user.getEmail()));
     }
 
     public Optional<UserPrincipal> authenticate(String token) {
@@ -54,7 +74,8 @@ public class AuthService {
         return new ApiException(HttpStatus.UNAUTHORIZED, "invalid_credentials", "用户名或密码不正确。");
     }
 
-    public record PublicUser(String id, String username, String role) {
+    public record PublicUser(String id, String username, String role, @JsonInclude(JsonInclude.Include.NON_NULL) String email) {
+        public PublicUser(String id, String username, String role) { this(id, username, role, null); }
         public PublicUser(String id, String username) { this(id, username, "USER"); }
     }
     public record LoginResult(String accessToken, Instant expiresAt, PublicUser user) {

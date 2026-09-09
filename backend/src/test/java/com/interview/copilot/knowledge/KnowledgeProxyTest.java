@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -18,9 +19,12 @@ import com.interview.copilot.usage.UsageService;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatus;
 import reactor.core.publisher.Mono;
 import reactor.netty.DisposableServer;
@@ -86,6 +90,48 @@ class KnowledgeProxyTest {
     void search_unapprovedEndpointField_rejects() {
         JsonNode request = mapper.valueToTree(Map.of("query", "question", "url", "https://evil.invalid"));
         assertThatThrownBy(() -> proxy.search(1, "invalid", request)).isInstanceOf(ApiException.class);
+    }
+
+    @Test void search_selectedService_usesBindingWithoutForwardingSelectionToSupplier() {
+        AtomicReference<String> captured = new AtomicReference<>();
+        server = HttpServer.create().port(0).handle((request, output) -> request.receive().aggregate().asString()
+                .flatMap(body -> {
+                    captured.set(body);
+                    return output.header("Content-Type", "application/json")
+                            .sendString(Mono.just("{\"success\":true,\"data\":{\"nodes\":[]}}")).then();
+                })).bindNow();
+        endpoint();
+        JsonNode request = mapper.valueToTree(Map.of("query", "question", "agent_id", "platform", "images", List.of(),
+                "serviceId", "environment-knowledge"));
+
+        Map<String, Object> result = proxy.search(1, "selected-rag", request);
+
+        assertThat(result).containsEntry("success", true);
+        assertThat(captured.get()).contains("server-agent").doesNotContain("serviceId", "environment-knowledge");
+    }
+
+    @Test void search_staleSelection_rejectsBeforeReservingOrCallingAnySupplier() {
+        AtomicInteger calls = new AtomicInteger();
+        server = HttpServer.create().port(0).handle((request, response) -> {
+            calls.incrementAndGet();
+            return response.send();
+        }).bindNow();
+        endpoint();
+        JsonNode request = mapper.valueToTree(Map.of("query", "question", "serviceId", "retired-knowledge"));
+
+        assertThatThrownBy(() -> proxy.search(1, "stale-rag", request)).isInstanceOf(ApiException.class)
+                .extracting("code").isEqualTo("SERVICE_UNAVAILABLE");
+        assertThat(calls).hasValue(0);
+        verifyNoInteractions(usage);
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"null", "42", "\"\"", "\"bad/id\""})
+    void search_invalidSelectionShape_returnsValidationError(String selection) throws Exception {
+        JsonNode request = mapper.readTree("{\"query\":\"question\",\"serviceId\":" + selection + "}");
+
+        assertThatThrownBy(() -> proxy.search(1, "bad-selection", request)).isInstanceOf(ApiException.class)
+                .extracting("code").isEqualTo("INVALID_AI_REQUEST");
+        verifyNoInteractions(usage);
     }
 
     private JsonNode input() { return mapper.valueToTree(Map.of("query", "question", "agent_id", "platform", "images", List.of())); }

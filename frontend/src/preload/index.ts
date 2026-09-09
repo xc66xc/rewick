@@ -1,47 +1,61 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AppEvent, DesktopBridge } from '../shared/types'
 
-const bridge: DesktopBridge = {
-  getCaptureError: () => ipcRenderer.invoke('audio:capture-error'),
-  getSettings: () => ipcRenderer.invoke('settings:get'),
-  platformLogin: input => ipcRenderer.invoke('platform:login', input),
-  platformLogout: () => ipcRenderer.invoke('platform:logout'),
-  refreshPlatform: () => ipcRenderer.invoke('platform:refresh'),
-  saveSettings: input => ipcRenderer.invoke('settings:save', input),
-  testModel: () => ipcRenderer.invoke('model:test'),
-  importContext: () => ipcRenderer.invoke('context:import'),
-  importTarget: () => ipcRenderer.invoke('target:import'),
-  getInterviewLibrary: () => ipcRenderer.invoke('interviews:list'),
-  saveResume: input => ipcRenderer.invoke('resumes:save', input),
-  removeResume: id => ipcRenderer.invoke('resumes:remove', id),
-  saveTarget: input => ipcRenderer.invoke('targets:save', input),
-  removeTarget: id => ipcRenderer.invoke('targets:remove', id),
-  saveEnvironment: input => ipcRenderer.invoke('environments:save', input),
-  removeEnvironment: id => ipcRenderer.invoke('environments:remove', id),
-  activateEnvironment: id => ipcRenderer.invoke('environments:activate', id),
-  testEmbedding: () => ipcRenderer.invoke('embedding:test'),
-  testRemoteKnowledge: () => ipcRenderer.invoke('remote-knowledge:test'),
-  listReferences: () => ipcRenderer.invoke('references:list'),
-  importReferences: () => ipcRenderer.invoke('references:import'),
-  previewReference: id => ipcRenderer.invoke('references:preview', id),
-  updateReference: (id, patch) => ipcRenderer.invoke('references:update', { id, patch }),
-  removeReference: id => ipcRenderer.invoke('references:remove', id),
-  reindexReference: id => ipcRenderer.invoke('references:reindex', id),
-  startAsr: () => ipcRenderer.invoke('asr:start'),
-  sendAudio: (sessionId, audio) => ipcRenderer.send('asr:audio', sessionId, audio),
-  stopAsr: () => ipcRenderer.invoke('asr:stop'),
-  generateAnswer: request => ipcRenderer.invoke('answer:generate', request),
-  cancelAnswer: () => ipcRenderer.invoke('answer:cancel'),
-  setAlwaysOnTop: value => ipcRenderer.invoke('window:pin', value),
-  setCompact: value => ipcRenderer.invoke('window:compact', value),
-  getHistory: () => ipcRenderer.invoke('history:list'),
-  saveSession: record => ipcRenderer.invoke('history:save', record),
-  removeSession: id => ipcRenderer.invoke('history:remove', id),
-  exportSession: record => ipcRenderer.invoke('history:export', record),
+let latestScope: string | undefined
+function createBridge(accountScope?: string): DesktopBridge {
+  const invoke = async (channel: string, payload?: unknown) => {
+    const value = await ipcRenderer.invoke(channel, { payload, accountScope: accountScope ?? latestScope })
+    if (!accountScope && value && typeof value === 'object' && 'platform' in value) latestScope = value.accountScope
+    return value
+  }
+  return {
+  withAccountScope: scope => createBridge(scope),
+  getCaptureError: () => invoke('audio:capture-error'),
+  getSettings: () => invoke('settings:get'),
+  platformLogin: input => invoke('platform:login', input),
+  platformRegister: input => invoke('platform:register', input),
+  requestEmailCode: input => invoke('platform:email-code', input),
+  saveCustomService: input => invoke('services:save', input),
+  testCustomService: input => invoke('services:test', input),
+  removeCustomService: id => invoke('services:remove', id),
+  platformLogout: () => invoke('platform:logout'),
+  refreshPlatform: () => invoke('platform:refresh'),
+  saveSettings: input => invoke('settings:save', input),
+  testModel: () => invoke('model:test'),
+  importContext: () => invoke('context:import'),
+  importTarget: () => invoke('target:import'),
+  getInterviewLibrary: () => invoke('interviews:list'),
+  saveResume: input => invoke('resumes:save', input),
+  removeResume: id => invoke('resumes:remove', id),
+  saveTarget: input => invoke('targets:save', input),
+  removeTarget: id => invoke('targets:remove', id),
+  saveEnvironment: input => invoke('environments:save', input),
+  removeEnvironment: id => invoke('environments:remove', id),
+  activateEnvironment: id => invoke('environments:activate', id),
+  testEmbedding: () => invoke('embedding:test'),
+  testRemoteKnowledge: () => invoke('remote-knowledge:test'),
+  listReferences: () => invoke('references:list'),
+  importReferences: () => invoke('references:import'),
+  previewReference: id => invoke('references:preview', id),
+  updateReference: (id, patch) => invoke('references:update', { id, patch }),
+  removeReference: id => invoke('references:remove', id),
+  reindexReference: id => invoke('references:reindex', id),
+  startAsr: () => invoke('asr:start'),
+  sendAudio: (sessionId, audio) => ipcRenderer.send('asr:audio', sessionId, audio, accountScope ?? latestScope),
+  stopAsr: () => invoke('asr:stop'),
+  generateAnswer: request => invoke('answer:generate', request),
+  cancelAnswer: () => invoke('answer:cancel'),
+  setAlwaysOnTop: value => invoke('window:pin', value),
+  setCompact: value => invoke('window:compact', value),
+  getHistory: () => invoke('history:list'),
+  saveSession: (record, owner) => invoke('history:save', { record, accountScope: owner ?? accountScope ?? latestScope }),
+  removeSession: id => invoke('history:remove', id),
+  exportSession: record => invoke('history:export', record),
   onEvent: callback => {
     const listener = (_event: Electron.IpcRendererEvent, data: AppEvent): void => callback(data)
     ipcRenderer.on('copilot:event', listener)
     return () => ipcRenderer.removeListener('copilot:event', listener)
   }
 }
-contextBridge.exposeInMainWorld('copilot', bridge)
+}
+contextBridge.exposeInMainWorld('copilot', createBridge())

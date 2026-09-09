@@ -68,5 +68,9 @@ public final class PlatformSecretCipher {
         return cipher;
     }
 
-    private void requireKey() { if (key == null) { throw PlatformConfigErrors.secretUnavailable(); } }
+    private void requireKey() {
+        if (key == null) {
+            throw PlatformConfigErrors.secretUnavailable();
+        }
+    }
 }

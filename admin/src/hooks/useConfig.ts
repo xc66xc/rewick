@@ -1,3 +1,4 @@
+import { recordPayload, mergeRecord, type ConfigRecord } from './config-record'
 import { useEffect, useState } from 'react'
 import { ApiError, type ApiClient, message } from '../api'
 import { cleanSecrets, configPayload, configSchema, testSchema, type Capability, type Config } from '../types'
@@ -34,5 +35,15 @@ export function useConfig(api: ApiClient, active: boolean) {
     } catch (reason) { setError(message(reason)); if (reason instanceof ApiError && reason.status === 409) setConflict(true) }
     finally { setBusy(false) }
   }
-  return { draft, saved, setDraft, loading, busy, error, setError, notice, conflict, submit, reload: () => setRevision(value => value + 1) }
+  async function saveRecord(target: ConfigRecord) {
+    if (!draft || !saved || busy) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const value = await api.request('/admin/config', configSchema, { method: 'PUT', body: configPayload(recordPayload(saved, draft, target)) })
+      setDraft(current => current ? mergeRecord(current, value, saved, target) : value)
+      setSaved(value); setConflict(false); setNotice(target.kind === 'providers' || target.kind === 'models' ? target.remove ? '该记录已删除。' : '该记录已保存，其他未保存内容保持不变。' : '该项设置已保存。')
+    } catch (reason) { setError(message(reason)); if (reason instanceof ApiError && reason.status === 409) setConflict(true) }
+    finally { setBusy(false) }
+  }
+  return { draft, saved, setDraft, loading, busy, error, setError, notice, conflict, submit, saveRecord, reload: () => setRevision(value => value + 1) }
 }

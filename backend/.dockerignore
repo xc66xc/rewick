@@ -6,3 +6,6 @@
 !pom.xml
 !src
 !src/**
+
+src/main/resources/application-local*
+src/main/resources/application-*-local*

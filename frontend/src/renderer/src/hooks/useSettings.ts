@@ -4,6 +4,7 @@ import type { DesktopBridge, Settings, SettingsInput } from '../../../shared/typ
 
 export function settingsInput(settings: Settings): SettingsInput {
   return {
+    serviceSelections: settings.serviceSelections,
     platform: { enabled: settings.platform?.enabled ?? false, baseUrl: settings.platform?.baseUrl ?? 'http://127.0.0.1:8080', selectedModelId: settings.platform?.selectedModelId },
     asr: { url: settings.asr.url, model: settings.asr.model, silenceMs: settings.asr.silenceMs },
     llm: { baseUrl: settings.llm.baseUrl, model: settings.llm.model, temperature: settings.llm.temperature },
@@ -41,7 +42,8 @@ export function useSettings(bridge: DesktopBridge | undefined) {
   }, [bridge])
   async function save(input: SettingsInput) {
     if (!bridge) throw new Error('请在桌面应用中保存配置。')
-    const result = await bridge.saveSettings(input)
+    const scoped = settings.accountScope ? bridge.withAccountScope?.(settings.accountScope) ?? bridge : bridge
+    const result = await scoped.saveSettings(input)
     apply(result)
     return result
   }

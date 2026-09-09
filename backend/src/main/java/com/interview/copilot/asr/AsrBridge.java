@@ -67,7 +67,7 @@ final class AsrBridge {
     }
 
     private void run(JsonNode frame, String taskId) {
-        ProviderProperties.Asr config = resources.config();
+        ProviderProperties.Asr config = resources.config(downstream.getUri());
         if (!config.isEnabled()) { throw ProviderErrors.unavailable(); }
         Map<String, Object> request = AsrProtocol.run(frame, upstreamId, config.getModel());
         clientId = taskId;

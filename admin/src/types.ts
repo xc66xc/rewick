@@ -21,6 +21,11 @@ export type Model = z.infer<typeof modelSchema>
 export const configSchema = z.object({ version: z.number(), providers: z.array(providerSchema), models: z.array(modelSchema), defaultModelId: z.string(), asr: z.object({ enabled: z.boolean(), providerId: z.string(), model: z.string() }), knowledge: z.object({ enabled: z.boolean(), providerId: z.string(), agentId: z.string() }) })
 export interface Config extends Omit<z.infer<typeof configSchema>, 'providers'> { providers: Provider[] }
 export const testSchema = z.object({ success: z.boolean(), message: z.string(), latencyMs: z.number() })
+export const emailConfigSchema = z.object({ version: z.number().int().nonnegative(), enabled: z.boolean(), host: z.string().max(253), port: z.number().int().min(1).max(65535), username: z.string().max(254), hasPassword: z.boolean(), from: z.string().max(254), startTls: z.boolean(), ssl: z.boolean() })
+export interface EmailConfig extends z.infer<typeof emailConfigSchema> { password?: string }
+export function cleanEmailPassword({ password: _password, ...config }: EmailConfig): EmailConfig { return config }
+export function emailConfigPayload({ hasPassword: _saved, password, ...config }: EmailConfig) { return { ...config, host: config.host.trim(), username: config.username.trim(), from: config.from.trim(), ...(config.username.trim() && password ? { password } : {}) } }
+export function emailPasswordRequired(draft: EmailConfig, saved: EmailConfig | null): boolean { return !!draft.username.trim() && (!saved?.hasPassword || draft.host.trim() !== saved.host || draft.port !== saved.port || draft.username.trim() !== saved.username) }
 export const capabilityNames: Record<Capability, string> = { llm: '回答模型', asr: '语音转写', knowledge: '远程知识库' }
 export const statusNames: Record<string, string> = { started: '进行中', complete: '已完成', failed: '失败', cancelled: '已取消', expired: '已过期' }
 export function dateTime(value: string | null): string { return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—' }

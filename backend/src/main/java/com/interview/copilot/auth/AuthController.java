@@ -3,7 +3,6 @@ package com.interview.copilot.auth;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -36,7 +35,7 @@ public class AuthController {
     }
 
     public record LoginRequest(
-            @NotBlank @Pattern(regexp = "[A-Za-z0-9_.@-]{3,64}") String username,
+            @NotBlank @Size(min = 3, max = 254) String username,
             @NotBlank @Size(max = 128) String password) {
         @Override
         public String toString() { return "LoginRequest[password=redacted]"; }

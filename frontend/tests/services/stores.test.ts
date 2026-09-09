@@ -119,7 +119,7 @@ describe('SettingsStore', () => {
     { enabled: true, url: '', agentId: 'aid-one' },
     { enabled: true, url: 'https://workspace.example/search', agentId: '' },
     { enabled: true, url: 'https://workspace.example/search', agentId: 'aid-one' },
-    { enabled: false, url: 'http://workspace.example/search', agentId: '' },
+    { enabled: false, url: 'ftp://workspace.example/search', agentId: '' },
     { enabled: false, url: 'https://user:secret@workspace.example/search', agentId: '' },
     { enabled: false, url: 'https://{workspaceId}.cn-beijing.maas.aliyuncs.com/api/v1/indices/knowledge/search', agentId: '' },
   ])('rejects incomplete or unsafe remote settings without replacing existing data %#', async remoteKnowledge => {
@@ -159,7 +159,7 @@ describe('SettingsStore', () => {
     saved.interviewTarget = { companyName: '原公司', roleName: '原岗位', jobDescription: '原 JD' }
     await store.saveSettings(saved)
     await expect(store.saveSettings({ ...saved, interviewTarget: { ...saved.interviewTarget, jobDescription: '字'.repeat(12001) } })).rejects.toThrow('配置或输入无效')
-    await expect(store.saveSettings({ ...saved, embedding: { ...saved.embedding, baseUrl: 'http://remote.example/v1' } })).rejects.toThrow('HTTPS')
+    await expect(store.saveSettings({ ...saved, embedding: { ...saved.embedding, baseUrl: 'ftp://remote.example/v1' } })).rejects.toThrow('HTTPS')
     expect((await store.getSettings()).interviewTarget).toEqual(saved.interviewTarget)
   })
 
@@ -172,7 +172,7 @@ describe('SettingsStore', () => {
     await expect(store.saveSettings(input())).resolves.toEqual(defaultSettings)
   })
 
-  it.each(['http://api.example.com/v1', 'http://localhost.evil.example/v1', 'https://user:secret@example.com/v1', 'file:///tmp/model'])('rejects unsafe model endpoint %s without changing saved settings', async (baseUrl) => {
+  it.each(['ftp://api.example.com/v1', 'https://user:secret@example.com/v1', 'file:///tmp/model'])('rejects unsafe model endpoint %s without changing saved settings', async (baseUrl) => {
     const store = new SettingsStore(directory, crypto)
     await store.saveSettings(input())
     const config = input()
@@ -181,7 +181,7 @@ describe('SettingsStore', () => {
     expect(await store.getSettings()).toEqual(defaultSettings)
   })
 
-  it.each(['http://localhost:11434/v1', 'http://127.0.0.1:8080/v1', 'http://[::1]:8000/v1'])('allows local endpoint %s', async (baseUrl) => {
+  it.each(['http://api.example.com/v1', 'http://localhost.evil.example/v1', 'http://localhost:11434/v1', 'http://127.0.0.1:8080/v1', 'http://[::1]:8000/v1'])('allows HTTP endpoint %s', async (baseUrl) => {
     const store = new SettingsStore(directory, crypto)
     const config = input()
     config.llm.baseUrl = baseUrl

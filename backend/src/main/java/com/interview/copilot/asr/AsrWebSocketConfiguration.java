@@ -30,10 +30,10 @@ public class AsrWebSocketConfiguration implements WebSocketConfigurer {
                 return false;
             }
             try {
-                proxy.checkAvailable();
+                proxy.checkAvailable(request.getURI());
                 return true;
             } catch (ApiException exception) {
-                response.setStatusCode(HttpStatus.SERVICE_UNAVAILABLE);
+                response.setStatusCode(exception.status());
                 return false;
             }
         }

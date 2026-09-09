@@ -1,3 +1,5 @@
+import { AccountWorkspaces } from './services/account-workspace'
+import { platformBaseUrl } from '../shared/defaults'
 import { app, BrowserWindow, Menu, dialog, globalShortcut, ipcMain, safeStorage, session, systemPreferences, desktopCapturer } from 'electron'
 import type { IpcMainInvokeEvent, Rectangle } from 'electron'
 import { basename, join } from 'node:path'
@@ -7,8 +9,10 @@ import { z } from 'zod'
 import { SettingsStore } from './services/settings-store'
 import type { ServiceSecrets } from './services/settings-store'
 import { PlatformService } from './services/platform-client'
+import { testCustomService } from './services/custom-service-test'
+import { customServiceSchema } from './services/custom-service-profiles'
 import { PlatformWork } from './services/platform-work'
-import { needsPlatform, routeService } from './services/service-routing'
+import { assertEmbeddingSelection, needsPlatform, routeService } from './services/service-routing'
 import type { PlatformCapability } from './services/service-routing'
 import { InterviewStore } from './services/interview-store'
 import { environmentInputSchema } from './services/interview-validation'
@@ -25,6 +29,13 @@ import { answerRequestSchema, parseInput, referencePatchSchema, settingsInputSch
 import type { AppEvent, Settings, SettingsInput, SessionRecord, RetrievalContext } from '../shared/types'
 import { resolveInterviewSettings } from '../shared/interview-settings'
 
+// IDE/terminal parents may lack NSAudioCaptureUsageDescription required by CoreAudio Tap.
+// Use Electron's documented screen-recording capture path during macOS development.
+if (process.platform === 'darwin' && !app.isPackaged) {
+  const disabled = app.commandLine.getSwitchValue('disable-features').split(',').filter(Boolean)
+  app.commandLine.appendSwitch('disable-features', [...new Set([...disabled, 'MacCatapLoopbackAudioForScreenShare'])].join(','))
+}
+
 const directory = fileURLToPath(new URL('.', import.meta.url))
 if (process.env.COPILOT_USER_DATA) app.setPath('userData', process.env.COPILOT_USER_DATA)
 app.setName('Interview Copilot')
@@ -36,18 +47,46 @@ let compact = false
 let startingAsr = false
 let asrEpoch = 0
 let answerEpoch = 0
+let answerDispatchEpoch = 0
 let pendingAnswerId: string | null = null
 let retrievalController: AbortController | null = null
 let activeAnswerId: string | null = null
 let activeAsrId: string | null = null
 let changingEnvironment = false
 const interviewMutations = new SerialQueue()
-const settings = new SettingsStore(app.getPath('userData'), {
-  encryptString: value => safeStorage.encryptString(value),
-  decryptString: value => safeStorage.decryptString(value),
+const secretStorage = {
+  encryptString: (value: string) => safeStorage.encryptString(value),
+  decryptString: (value: Buffer) => safeStorage.decryptString(value),
   isEncryptionAvailable: () => safeStorage.isEncryptionAvailable()
+}
+const authSettings = new SettingsStore(join(app.getPath('userData'), 'authentication-v2'), secretStorage)
+const platform = new PlatformService(authSettings)
+const accounts = new AccountWorkspaces(app.getPath('userData'), secretStorage, () => emit({ kind: 'documents-changed' }))
+async function syncAccount() {
+  const authenticated = await authSettings.getSettings()
+  if (accounts.identity(authenticated) !== accounts.active?.id) disposeWork()
+  return accounts.activate(authenticated)
+}
+const settings = new Proxy(authSettings, {
+  get(_target, property) {
+    if (property === 'getSettings' || property === 'getConnectionSnapshot' || property === 'getSecrets') return async () => {
+      const auth = await authSettings.getConnectionSnapshot()
+      const own = accounts.context.getStore() ?? accounts.active
+      if (own && accounts.identity(auth.settings) !== own.id) throw new Error('账户已切换，请重试。')
+      const snapshot = own ? await own.settings.getConnectionSnapshot() : auth
+      const value = { settings: { ...snapshot.settings, platform: auth.settings.platform, accountScope: own?.id }, secrets: { ...snapshot.secrets, platformAccessToken: auth.secrets.platformAccessToken } }
+      return property === 'getSettings' ? value.settings : property === 'getSecrets' ? value.secrets : value
+    }
+    if (property === 'saveSettings') return async (input: SettingsInput) => {
+      const own = accounts.context.getStore() ?? accounts.active
+      if (own) return own.settings.saveSettings(input)
+      return authSettings.saveSettings(input)
+    }
+    const target = accounts.current().settings
+    const method = Reflect.get(target, property)
+    return typeof method === 'function' ? method.bind(target) : method
+  }
 })
-const platform = new PlatformService(settings)
 const platformMutations = new SerialQueue()
 const platformWork = new PlatformWork()
 let releasePlatformAsr: (() => void) | undefined
@@ -60,7 +99,10 @@ async function serviceConnection(snapshot: { settings: Settings; secrets: Servic
   let config = snapshot.settings
   if (needsPlatform(config, snapshot.secrets, capability)) {
     try { const refreshed = await platform.refreshSnapshot(snapshot, signal); config = { ...config, platform: refreshed.platform } }
-    finally { emit({ kind: 'settings-changed' }) }
+    finally {
+      await syncAccount()
+      emit({ kind: 'settings-changed' })
+    }
   }
   return routeService(config, snapshot.secrets, capability)
 }
@@ -97,12 +139,14 @@ async function retrieveRemote(snapshot: { settings: Settings; secrets: ServiceSe
     return { status: 'degraded', excerpts: [], message, remote: { agentId: needsPlatform(snapshot.settings, snapshot.secrets, 'knowledge') ? 'platform' : snapshot.settings.remoteKnowledge.agentId, status: 'degraded', message } }
   } finally { release?.(); signal.removeEventListener('abort', onAbort) }
 }
-const history = new HistoryStore(app.getPath('userData'))
+const history = scopedStore('history')
 const displayCapture = new DisplayCaptureService({
   getSources: () => desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } }),
   screenPermission: () => process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'granted'
 })
 const emit = (event: AppEvent): void => {
+  const owner = accounts.context.getStore()
+  if (owner && owner !== accounts.active) return
   if (event.kind === 'asr-status') {
     if (event.status === 'connecting' || event.status === 'listening' || event.status === 'stopping') activeAsrId = event.sessionId
     else if (activeAsrId === event.sessionId) { activeAsrId = null; releasePlatformAsr?.(); releasePlatformAsr = undefined }
@@ -110,15 +154,19 @@ const emit = (event: AppEvent): void => {
   if ((event.kind === 'answer-done' || event.kind === 'answer-error') && event.requestId === activeAnswerId) { activeAnswerId = null; releasePlatformAnswer?.(); releasePlatformAnswer = undefined }
   if (window && !window.isDestroyed()) window.webContents.send('copilot:event', event)
 }
-const references = new ReferenceService(app.getPath('userData'), () => emit({ kind: 'documents-changed' }), async () => {
-  const config = await settings.getSettings()
-  const secrets = await settings.getSecrets()
-  return { config: config.embedding, apiKey: secrets.embeddingApiKey }
-})
-const interviews = new InterviewStore(app.getPath('userData'), async () => ({
-  settings: await settings.getSettings(), referenceIds: (await references.list()).filter(document => document.enabled).map(document => document.id),
-}))
-async function effectiveSettings() { return interviews.resolve(await settings.getSettings()) }
+function scopedStore<K extends 'history' | 'interviews' | 'references'>(kind: K): ReturnType<AccountWorkspaces['current']>[K] {
+  return new Proxy({} as ReturnType<AccountWorkspaces['current']>[K], { get(_target, property) {
+    const target = accounts.current()[kind]
+    const value = Reflect.get(target, property)
+    return typeof value === 'function' ? value.bind(target) : value
+  } })
+}
+const references = scopedStore('references')
+const interviews = scopedStore('interviews')
+async function effectiveSettings() {
+  const value = await settings.getSettings()
+  return accounts.active ? interviews.resolve(value) : value
+}
 function assertInterviewIdle() {
   if (startingAsr || activeAsrId || pendingAnswerId || activeAnswerId) throw new Error('请先停止转写和回答，再切换或修改当前面试环境。')
 }
@@ -144,7 +192,12 @@ function cancelAnswerWork(): void {
   pendingAnswerId = null
 }
 
+const serviceTests = new Set<AbortController>()
+
 function disposeWork(): void {
+  answerDispatchEpoch++
+  for (const controller of serviceTests) controller.abort(new Error('登录状态已改变，连接测试已取消。'))
+  serviceTests.clear()
   releasePlatformAsr?.(); releasePlatformAsr = undefined
   asrEpoch++
   startingAsr = false
@@ -158,39 +211,93 @@ function assertSender(event: IpcMainInvokeEvent): void {
 }
 
 function registerHandlers(): void {
+  const publicChannels = new Set(['settings:get', 'settings:save', 'platform:login', 'platform:register', 'platform:email-code', 'platform:logout', 'platform:refresh', 'asr:stop', 'answer:cancel', 'window:compact', 'window:pin'])
   const handle = (channel: string, callback: (arg: unknown) => unknown): void => {
-    ipcMain.handle(channel, (event, arg: unknown) => { assertSender(event); return callback(arg) })
+    ipcMain.handle(channel, async (event, envelope: unknown) => {
+      assertSender(event)
+      const { payload: arg, accountScope } = parseInput(z.object({ payload: z.unknown().optional(), accountScope: z.string().optional() }), envelope)
+      const dispatch = channel === 'answer:generate' || channel === 'answer:cancel' ? ++answerDispatchEpoch : answerDispatchEpoch
+      const asrDispatch = asrEpoch
+      const owner = await syncAccount()
+      if (accountScope && owner?.id !== accountScope && !channel.startsWith('platform:') && channel !== 'settings:get') throw new Error('账户已切换，旧操作已取消。')
+      if (!publicChannels.has(channel) && (!owner || accountScope !== owner.id)) {
+        disposeWork(); emit({ kind: 'settings-changed' })
+        throw new Error('请先使用邮箱注册或登录。')
+      }
+      if (channel === 'answer:generate' && dispatch !== answerDispatchEpoch) {
+        const request = parseInput(answerRequestSchema, arg)
+        emit({ kind: 'answer-done', requestId: request.requestId, cancelled: true })
+        return
+      }
+      if (channel === 'asr:start' && asrDispatch !== asrEpoch) throw new Error('转写连接已取消。')
+      if (channel.startsWith('platform:') || !owner) return callback(arg)
+      const result = await accounts.context.run(owner, () => callback(arg))
+      if (accounts.active !== owner) throw new Error('账户已切换，旧请求结果已丢弃。')
+      return result
+    })
   }
   handle('settings:get', () => effectiveSettings())
   handle('platform:login', input => {
-    return mutatePlatform(async () => { await platform.login(input); emit({ kind: 'settings-changed' }); return effectiveSettings() })
+    return mutatePlatform(async () => { disposeWork(); await platform.login(input); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings() })
   })
+  handle('platform:email-code', input => platform.emailCode(input))
+  handle('platform:register', input => mutatePlatform(async () => {
+    disposeWork(); await platform.register(input); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings()
+  }))
   handle('platform:logout', () => {
-    return mutatePlatform(async () => { await platform.logout(); emit({ kind: 'settings-changed' }); return effectiveSettings() })
+    return mutatePlatform(async () => { disposeWork(); await platform.logout(); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings() })
   })
   handle('platform:refresh', () => {
     const controller = new AbortController()
     const release = platformWork.track(platformWork.revision, () => controller.abort(new Error('平台连接已更改，状态刷新已取消。')))
     return platformMutations.run(async () => {
-      try { await platform.refresh(controller.signal); return await effectiveSettings() }
-      finally { release(); emit({ kind: 'settings-changed' }) }
+      try { await platform.refresh(controller.signal); await syncAccount(); return await effectiveSettings() }
+      finally {
+        release()
+        if (!(await settings.getSettings()).platform?.authenticated) disposeWork()
+        emit({ kind: 'settings-changed' })
+      }
     })
   })
   handle('audio:capture-error', () => displayCapture.getFailure())
   handle('settings:save', async input => {
-    const parsed = parseInput(settingsInputSchema, input)
+    let parsed = parseInput(settingsInputSchema, input)
     const previous = await settings.getSettings()
+    if (!previous.platform?.authenticated) parsed = { ...parseInput(settingsInputSchema, previous), platform: parsed.platform }
+    parsed.platform.enabled = true
     // Backgrounds belong to the interview library; stale settings dialogs cannot overwrite them.
     const platformChanged = parsed.platform.baseUrl !== previous.platform?.baseUrl || (previous.platform?.enabled && !parsed.platform.enabled)
     const finishPlatformChange = platformChanged ? platformWork.beginChange() : undefined
+    if (platformChanged) disposeWork()
     try { await settings.saveSettings({ ...parsed, context: previous.context, interviewTarget: previous.interviewTarget }) }
     finally { finishPlatformChange?.() }
     // A failed library rebuild must not report that an already-committed target was not saved.
-    try { await references.refreshConfiguration() }
+    try { if (previous.platform?.authenticated && !platformChanged) await references.refreshConfiguration() }
     catch { emit({ kind: 'documents-error', message: '设置已保存，但资料索引更新失败。请在参考资料中检查状态并重试。' }) }
     const saved = await effectiveSettings()
     emit({ kind: 'settings-changed' })
     return saved
+  })
+  handle('services:test', async input => {
+    const controller = new AbortController()
+    serviceTests.add(controller)
+    try { return await testCustomService(settings, parseInput(customServiceSchema, input), controller.signal) }
+    finally { serviceTests.delete(controller) }
+  })
+  handle('services:save', async input => {
+    const profile = parseInput(customServiceSchema, input)
+    await settings.saveCustomService(profile)
+    if (profile.kind === 'embedding') {
+      try { await references.refreshConfiguration() }
+      catch { emit({ kind: 'documents-error', message: '服务已保存，但资料索引更新失败，请在参考资料中重试。' }) }
+    }
+    emit({ kind: 'settings-changed' })
+    return effectiveSettings()
+  })
+  handle('services:remove', async input => {
+    await settings.removeCustomService(parseInput(z.string().min(1).max(128), input))
+    emit({ kind: 'settings-changed' })
+    return effectiveSettings()
   })
   handle('model:test', () => testService('llm'))
   handle('context:import', async () => {
@@ -233,9 +340,9 @@ function registerHandlers(): void {
     return resolveInterviewSettings(config, library)
   }))
   handle('embedding:test', async () => {
-    const config = await settings.getSettings()
-    const secrets = await settings.getSecrets()
-    return new EmbeddingClient(config.embedding, secrets.embeddingApiKey).test()
+    const snapshot = await settings.getConnectionSnapshot()
+    assertEmbeddingSelection(snapshot.settings)
+    return new EmbeddingClient(snapshot.settings.embedding, snapshot.secrets.embeddingApiKey).test()
   })
   handle('remote-knowledge:test', () => testService('knowledge'))
   handle('references:list', () => references.list())
@@ -284,7 +391,8 @@ function registerHandlers(): void {
       throw error
     } finally { if (epoch === asrEpoch) startingAsr = false }
   })
-  ipcMain.on('asr:audio', (event, sessionId: unknown, audio: unknown) => {
+  ipcMain.on('asr:audio', (event, sessionId: unknown, audio: unknown, accountScope: unknown) => {
+    if (!accounts.active || accountScope !== accounts.active.id) return
     if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) return
     if (typeof sessionId !== 'string' || !(audio instanceof ArrayBuffer) || audio.byteLength > 64000 || audio.byteLength % 2 !== 0) return
     asr?.sendAudio(sessionId, audio)
@@ -347,7 +455,11 @@ function registerHandlers(): void {
     }
   })
   handle('history:list', () => history.list())
-  handle('history:save', record => history.save(record as SessionRecord))
+  handle('history:save', input => {
+    const value = input as { record: SessionRecord; accountScope?: string }
+    if (!value.accountScope || value.accountScope !== accounts.current().id) throw new Error('会话不属于当前登录账户。')
+    return history.save(value.record)
+  })
   handle('history:remove', id => history.remove(id))
   handle('history:export', async record => {
     if (!window) return false
@@ -399,11 +511,15 @@ if (hasInstanceLock) app.whenReady().then(async () => {
     { label: '视图', submenu: [{ role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' }] },
     { label: '窗口', submenu: [{ role: 'minimize' }, { role: 'front' }] }
   ]))
+  await authSettings.initializeServices()
+  const startupSettings = await authSettings.getSettings()
+  if (startupSettings.platform?.baseUrl !== platformBaseUrl) await authSettings.saveSettings({ ...startupSettings, platform: { ...startupSettings.platform, enabled: true, baseUrl: platformBaseUrl } })
+  await syncAccount()
   registerHandlers()
   await createWindow()
   globalShortcut.register('CommandOrControl+Shift+Enter', () => emit({ kind: 'shortcut', action: 'answer' }))
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) void createWindow() })
 }).catch(error => { dialog.showErrorBox('启动失败', error instanceof Error ? error.message : '无法启动应用'); app.quit() })
 
-app.on('before-quit', () => { disposeWork(); references.dispose(); globalShortcut.unregisterAll() })
+app.on('before-quit', () => { disposeWork(); accounts.dispose(); globalShortcut.unregisterAll() })
 app.on('window-all-closed', () => app.quit())

@@ -103,7 +103,7 @@ class PlatformConfigIntegrationTest {
                 var result = execInContainer("psql", "-X", "-v", "ON_ERROR_STOP=1", "--single-transaction",
                         "-U", getUsername(), "-d", getDatabaseName(), "-f", "/tmp/copilot-sql/01_schema.sql",
                         "-f", "/tmp/copilot-sql/02_pgvector.sql", "-f", "/tmp/copilot-sql/03_admin_users.sql",
-                        "-f", "/tmp/copilot-sql/04_platform_config.sql");
+                        "-f", "/tmp/copilot-sql/04_platform_config.sql", "-f", "/tmp/copilot-sql/05_email_auth.sql");
                 if (result.getExitCode() != 0) { throw new IllegalStateException("Test SQL initialization failed: " + result.getStderr()); }
             } catch (IOException error) { throw new IllegalStateException("Test SQL could not execute", error); }
             catch (InterruptedException error) {

@@ -36,7 +36,7 @@ class AsrProviderProbeTest {
         if (server != null) { server.disposeNow(); }
     }
 
-    @Test void test_realWebSocket_runsTaskThenFinishesWithoutAudio() throws InterruptedException {
+    @Test void test_realWebSocket_sendsSyntheticAudioBeforeFinishing() throws InterruptedException {
         server = server(false);
 
         probe.test(endpoint());
@@ -47,7 +47,7 @@ class AsrProviderProbeTest {
         assertThat(requests.getFirst().path("payload").path("parameters").path("sample_rate").asInt()).isEqualTo(16000);
         assertThat(requests.getLast().path("header").path("action").asText()).isEqualTo("finish-task");
         assertThat(requests.getLast().path("header").path("task_id")).isEqualTo(requests.getFirst().path("header").path("task_id"));
-        assertThat(audioBytes).hasValue(0);
+        assertThat(audioBytes).hasValue(16000);
         assertThat(authorization).hasValue("Bearer fixture-asr-secret");
         assertThat(disconnected.await(3, TimeUnit.SECONDS)).isTrue();
     }
@@ -73,10 +73,13 @@ class AsrProviderProbeTest {
             authorization.set(request.requestHeaders().get("Authorization"));
             return response.sendWebsocket((input, output) -> {
                 input.withConnection(connection -> connection.onDispose().doFinally(signal -> disconnected.countDown()).subscribe());
-                return output.sendString(input.receiveFrames().doOnNext(frame -> {
-                    if (frame instanceof BinaryWebSocketFrame binary) { audioBytes.addAndGet(binary.content().readableBytes()); }
-                }).filter(frame -> frame instanceof TextWebSocketFrame)
-                        .map(frame -> reply(((TextWebSocketFrame) frame).text(), failTask))).then();
+                return output.sendString(input.receiveFrames().map(frame -> {
+                    if (frame instanceof BinaryWebSocketFrame binary) {
+                        audioBytes.addAndGet(binary.content().readableBytes());
+                        return "";
+                    }
+                    return frame instanceof TextWebSocketFrame text ? reply(text.text(), failTask) : "";
+                }).filter(text -> !text.isEmpty())).then();
             });
         }).bindNow();
     }
@@ -85,7 +88,8 @@ class AsrProviderProbeTest {
         JsonNode request = json.parse(text);
         requests.add(request);
         String action = request.path("header").path("action").asText();
-        String event = failTask ? "task-failed" : (action.equals("run-task") ? "task-started" : "task-finished");
+        boolean missingAudio = action.equals("finish-task") && audioBytes.get() == 0;
+        String event = failTask || missingAudio ? "task-failed" : (action.equals("run-task") ? "task-started" : "task-finished");
         return json.encode(Map.of("header", Map.of("event", event, "task_id", request.path("header").path("task_id").asText(),
                 "error", "provider-private-error"), "payload", Map.of()));
     }

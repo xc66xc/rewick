@@ -1,6 +1,7 @@
 import http from 'node:http'
 import { pathToFileURL } from 'node:url'
 import { WebSocket, WebSocketServer } from 'ws'
+import { mockAuthHandler } from './mock-auth.mjs'
 
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
@@ -26,7 +27,9 @@ export async function startMockServices() {
   const streamControls = new Map()
   const sockets = new Set()
   const stats = { cancelledStreams: 0 }
+  const handleAuth = mockAuthHandler()
   const server = http.createServer(async (request, response) => {
+    if (await handleAuth(request, response)) return
     if (request.method !== 'POST' || !['/v1/chat/completions', '/v1/embeddings'].includes(request.url)) {
       response.writeHead(404).end('Not found')
       return

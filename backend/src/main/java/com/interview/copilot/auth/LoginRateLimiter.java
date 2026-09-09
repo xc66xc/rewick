@@ -4,6 +4,7 @@ import com.interview.copilot.common.ApiException;
 import java.time.Clock;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Locale;
 import java.util.concurrent.locks.ReentrantLock;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -27,7 +28,7 @@ public class LoginRateLimiter {
             long now = clock.millis();
             buckets.entrySet().removeIf(entry -> entry.getValue().expiresAt <= now);
             consume("ip:" + address, properties.loginBurst() * 10, now);
-            consume("user:" + username, properties.loginBurst(), now);
+            consume("user:" + username.strip().toLowerCase(Locale.ROOT), properties.loginBurst(), now);
         } finally {
             lock.unlock();
         }

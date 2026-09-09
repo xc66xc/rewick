@@ -5,10 +5,12 @@ import com.interview.copilot.ai.ProviderJson;
 import com.interview.copilot.ai.ProviderProperties;
 import com.interview.copilot.auth.UserPrincipal;
 import com.interview.copilot.config.PlatformLimitsProperties;
+import com.interview.copilot.common.ApiException;
 import com.interview.copilot.platform.EnvironmentPlatformResolver;
 import com.interview.copilot.platform.PlatformRuntimeResolver;
 import com.interview.copilot.usage.UsageService;
 import jakarta.annotation.PreDestroy;
+import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
@@ -50,7 +52,7 @@ public class AsrProxy extends AbstractWebSocketHandler {
 
     @Override public void afterConnectionEstablished(WebSocketSession session) throws java.io.IOException {
         UserPrincipal user = principal(session.getPrincipal());
-        if (user == null || !config().isEnabled() || users.putIfAbsent(user.id(), session.getId()) != null) {
+        if (user == null || !available(session.getUri()) || users.putIfAbsent(user.id(), session.getId()) != null) {
             session.close(CloseStatus.POLICY_VIOLATION);
             return;
         }
@@ -88,8 +90,13 @@ public class AsrProxy extends AbstractWebSocketHandler {
         if (bridge != null) { bridge.close("cancel"); }
     }
 
-    public void checkAvailable() { if (!config().isEnabled()) { throw ProviderErrors.unavailable(); } }
-    ProviderProperties.Asr config() { return providers.snapshot().asr(); }
+    public void checkAvailable() { checkAvailable(null); }
+    public void checkAvailable(URI uri) { if (!config(uri).isEnabled()) { throw ProviderErrors.unavailable(); } }
+    ProviderProperties.Asr config(URI uri) { return providers.snapshot().asr(AsrServiceSelection.from(uri)); }
+    private boolean available(URI uri) {
+        try { return config(uri).isEnabled(); }
+        catch (ApiException exception) { return false; }
+    }
     ProviderJson json() { return json; }
     UsageService usage() { return usage; }
     HttpClient client() { return client; }

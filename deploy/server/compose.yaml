@@ -1,0 +1,47 @@
+name: interview-copilot-server
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    image: interview-copilot-backend:server
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=65.0 -XX:+ExitOnOutOfMemoryError
+    ports:
+      - '127.0.0.1:18081:8080'
+    networks: [copilot]
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://127.0.0.1:8080/actuator/health]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    mem_limit: 1536m
+    cpus: 2
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.admin
+    image: interview-copilot-admin:server
+    restart: unless-stopped
+    ports:
+      - '0.0.0.0:8080:80'
+      - '127.0.0.1:5174:80'
+    networks: [copilot]
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+networks:
+  copilot:
+    external: true
+    name: interview-copilot-network

@@ -13,6 +13,8 @@ import { expect } from '@playwright/test'
 import { startMockServices } from './mock-services.mjs'
 import { startRemoteKnowledgeMock, remoteMarker, remoteMetadataMarkers } from './mock-remote-knowledge.mjs'
 import { runAdminPlatformChecks } from '../tests/e2e/admin-platform.mjs'
+import { startSmtpMock } from './mock-smtp.mjs'
+import { checkServiceSelectors } from '../tests/e2e/service-selectors.mjs'
 
 const execute = promisify(execFile)
 const frontend = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -27,6 +29,7 @@ const keys = { llm: `test-platform-llm-${suffix}`, asr: `test-platform-asr-${suf
 const report = { realProviderTested: false, realAudioTested: false, checks: [], screenshots: [] }
 const mock = await startMockServices()
 const knowledge = await startRemoteKnowledgeMock()
+const smtp = await startSmtpMock()
 let application
 let backend
 let adminServer
@@ -96,7 +99,7 @@ try {
   await execute('docker', ['exec', container, 'psql', '-X', '-U', 'copilot_test', '-d', 'copilot_test',
     '-v', 'ON_ERROR_STOP=1', '--single-transaction',
     '-f', '/tmp/copilot-sql/01_schema.sql', '-f', '/tmp/copilot-sql/02_pgvector.sql',
-    '-f', '/tmp/copilot-sql/03_admin_users.sql', '-f', '/tmp/copilot-sql/04_platform_config.sql'])
+    '-f', '/tmp/copilot-sql/03_admin_users.sql', '-f', '/tmp/copilot-sql/04_platform_config.sql', '-f', '/tmp/copilot-sql/05_email_auth.sql'])
   const mapping = (await execute('docker', ['port', container, '5432/tcp'])).stdout.trim()
   const databasePort = mapping.slice(mapping.lastIndexOf(':') + 1)
   const backendPort = await port()
@@ -107,11 +110,7 @@ try {
       COPILOT_BOOTSTRAP_USERNAME: 'platform-test', COPILOT_BOOTSTRAP_PASSWORD: password,
       COPILOT_ADMIN_BOOTSTRAP_USERNAME: 'admin-test', COPILOT_ADMIN_BOOTSTRAP_PASSWORD: password,
       COPILOT_PLATFORM_MASTER_KEY: randomBytes(32).toString('base64'),
-      COPILOT_PROVIDERS_LLM_URL: `${mock.llmBaseUrl}/chat/completions`, COPILOT_PROVIDERS_LLM_APIKEY: keys.llm,
-      COPILOT_PROVIDERS_LLM_MODEL: 'mock-fast', COPILOT_PROVIDERS_LLM_ALLOWEDMODELS: 'mock-fast,mock-held',
-      COPILOT_PROVIDERS_ASR_URL: `${mock.asrUrl}?mode=manual`,
-      COPILOT_PROVIDERS_ASR_APIKEY: keys.asr, COPILOT_PROVIDERS_KNOWLEDGE_URL: knowledge.url,
-      COPILOT_PROVIDERS_KNOWLEDGE_APIKEY: keys.knowledge, COPILOT_PROVIDERS_KNOWLEDGE_AGENTID: 'aid-server-only',
+      COPILOT_EMAIL_CODE_SECRET: randomBytes(32).toString('base64'), COPILOT_EMAIL_REGISTRATION_ENABLED: 'true',
     }, stdio: ['ignore', 'pipe', 'pipe'] })
   backend.stdout.on('data', value => { logs = `${logs}${value}`.slice(-300000) })
   backend.stderr.on('data', value => { logs = `${logs}${value}`.slice(-300000) })
@@ -126,6 +125,29 @@ try {
       '-c', "SELECT count(*) FROM app_users WHERE is_enabled AND ((username = 'platform-test' AND role = 'USER') OR (username = 'admin-test' AND role = 'ADMIN'))"])
     return initialized.stdout.trim() === '2'
   }, 'Backend bootstrap did not initialize both test accounts')
+
+  const adminLogin = await request(baseUrl, '/api/v1/auth/login', { username: 'admin-test', password })
+  assert.equal(adminLogin.status, 200)
+  const adminToken = (await adminLogin.json()).accessToken
+  async function publishConfig(path, body) {
+    const response = await fetch(`${baseUrl}/api/v1/admin/${path}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` }, body: JSON.stringify(body) })
+    assert.equal(response.status, 200, await response.clone().text())
+    return response.json()
+  }
+  await check('provider and SMTP connections are published to the database without YAML addresses', async () => {
+    assert.equal((await (await request(baseUrl, '/api/v1/platform', undefined, adminToken)).json()).capabilities.llm, false)
+    await publishConfig('config', { version: 0,
+      providers: [
+        { id: 'initial-llm', name: '平台回答', kind: 'llm', url: `${mock.llmBaseUrl}/chat/completions`, enabled: true, apiKey: keys.llm },
+        { id: 'initial-asr', name: '平台转写', kind: 'asr', url: `${mock.asrUrl}?mode=manual`, enabled: true, apiKey: keys.asr },
+        { id: 'initial-knowledge', name: '平台知识库', kind: 'knowledge', url: knowledge.url, enabled: true, apiKey: keys.knowledge },
+      ],
+      models: ['mock-fast', 'mock-held'].map(model => ({ id: model, name: model, providerId: 'initial-llm', model, enabled: true, maxOutputTokens: 2048 })),
+      defaultModelId: 'mock-fast', asr: { enabled: true, providerId: 'initial-asr', model: 'fun-asr-realtime' },
+      knowledge: { enabled: true, providerId: 'initial-knowledge', agentId: 'aid-server-only' },
+    })
+    await publishConfig('email-config', { version: 0, enabled: true, host: '127.0.0.1', port: smtp.port, username: '', from: 'copilot@example.test', startTls: false, ssl: false })
+  })
 
   await check('explicit SQL initializes PostgreSQL 15.19 and pgvector 0.5.1 before backend startup', async () => {
     const result = await execute('docker', ['exec', container, 'psql', '-U', 'copilot_test', '-d', 'copilot_test', '-At',
@@ -196,21 +218,30 @@ try {
     window.copilot.onEvent(event => window.__platformEvents.push(event))
   }, baseUrl)
 
-  await check('Electron settings logs in and never exposes the business token to renderer', async () => {
-    await page.getByRole('button', { name: '打开设置', exact: true }).click()
-    await page.getByLabel('平台账号', { exact: true }).fill('platform-test')
-    await page.getByLabel('平台密码', { exact: true }).fill(password)
-    await page.getByRole('button', { name: '连接并登录平台' }).click()
-    await expect(page.getByText(/已登录：platform-test/)).toBeVisible()
+  await check('Electron requires verified email registration before entering the workspace and keeps tokens private', async () => {
+    await expect(page.getByRole('heading', { name: '登录面试工作台' })).toBeVisible()
+    await assert.rejects(page.evaluate(() => window.copilot.getHistory()), /注册或登录/)
+    await assert.rejects(page.evaluate(() => window.copilot.startAsr()), /注册或登录/)
+    await page.getByRole('tab', { name: '注册账号' }).click()
+    await page.getByLabel('邮箱', { exact: true }).fill('desktop@example.test')
+    await page.getByLabel('密码', { exact: true }).fill(password)
+    await page.getByRole('button', { name: '发送验证码', exact: true }).click()
+    await until(() => smtp.messages.length === 1, 'Registration mail did not reach isolated SMTP sink')
+    await expect(page.getByRole('button', { name: /秒后重发/ })).toBeDisabled()
+    await page.getByRole('textbox', { name: /邮箱验证码/ }).fill(smtp.code())
+    await page.getByRole('button', { name: '注册并登录', exact: true }).click()
+    await expect(page.getByRole('button', { name: '打开设置', exact: true })).toBeVisible()
     const settings = await page.evaluate(() => window.copilot.getSettings())
     assert.equal(settings.platform.authenticated, true)
+    assert.equal(settings.platform.user.email, 'desktop@example.test')
     assert.equal(JSON.stringify(settings).includes(accessToken), false)
     assert.equal(JSON.stringify(settings).includes(password), false)
     noSecrets(settings)
     await page.screenshot({ path: join(output, 'platform-settings.png') })
     report.screenshots.push('platform-settings.png')
-    await page.getByRole('button', { name: '关闭设置' }).click()
   })
+
+  await checkServiceSelectors({ page, mock, knowledge, check })
 
   await check('Electron question produces streamed answer through Java with server-owned Key', async () => {
     await page.getByRole('textbox', { name: '当前问题' }).fill('请介绍一下数据库索引。')
@@ -264,14 +295,14 @@ try {
 
   await check('personal credentials take precedence without sending a platform Key to their endpoint', async () => {
     await page.evaluate(async baseUrl => {
-      const settings = await window.copilot.getSettings()
-      await window.copilot.saveSettings({ ...settings, llm: { ...settings.llm, baseUrl, model: 'mock-fast', apiKey: 'personal-test-key' } })
+      await window.copilot.saveCustomService({ name: '我的模型', kind: 'llm', url: baseUrl, model: 'mock-fast', apiKey: 'personal-test-key' })
     }, mock.llmBaseUrl)
     await answer('用自带模型回答。')
     assert.equal(mock.requests.at(-1).authorization, 'Bearer personal-test-key')
     await page.evaluate(async () => {
       const settings = await window.copilot.getSettings()
-      await window.copilot.saveSettings({ ...settings, llm: { ...settings.llm, model: 'mock-error' } })
+      const profile = settings.customServices.find(value => value.id === settings.serviceSelections.llm.id)
+      await window.copilot.saveCustomService({ ...profile, hasApiKey: undefined, model: 'mock-error' })
     })
     const before = mock.requests.length
     await assert.rejects(page.evaluate(() => window.copilot.testModel()))
@@ -288,6 +319,19 @@ try {
     assert.equal(current.platform.authenticated, false)
     assert.equal((await request(baseUrl, '/api/v1/auth/logout', {}, accessToken)).status, 204)
     assert.equal((await request(baseUrl, '/api/v1/platform', undefined, accessToken)).status, 401)
+  })
+  await check('logout returns to email login and existing verified email can sign in again', async () => {
+    await expect(page.getByRole('heading', { name: '登录面试工作台' })).toBeVisible()
+    await assert.rejects(page.evaluate(() => window.copilot.getHistory()), /注册或登录/)
+    await page.screenshot({ path: join(output, 'email-login.png') })
+    report.screenshots.push('email-login.png')
+    await page.getByLabel('邮箱', { exact: true }).fill('desktop@example.test')
+    await page.getByLabel('密码', { exact: true }).fill(password)
+    await page.getByRole('button', { name: '登录', exact: true }).click()
+    await expect(page.getByRole('button', { name: '打开设置', exact: true })).toBeVisible()
+    noSecrets(await page.evaluate(() => window.__platformEvents))
+    await page.reload()
+    await expect(page.getByRole('button', { name: '打开设置', exact: true })).toBeVisible()
   })
   await check('Web admin manages real users and configuration through its same-origin API proxy', async () => {
     const adminPort = await port()
@@ -309,7 +353,7 @@ try {
     })
     process.stdout.write(result.stdout)
   })
-  noSecrets(await page.evaluate(() => window.__platformEvents))
+  noSecrets(await page.evaluate(() => window.copilot.getSettings()))
 } finally {
   await application?.close().catch(() => undefined)
   if (adminServer && adminServer.exitCode === null) {
@@ -323,6 +367,7 @@ try {
   if (databaseStarted) await execute('docker', ['rm', '-f', container]).catch(() => undefined)
   await mock.close()
   await knowledge.close()
+  await smtp.close()
   for (const secret of [...Object.values(keys), password]) logs = logs.replaceAll(secret, '[redacted]')
   await writeFile(join(output, 'platform-smoke-backend.log'), logs)
   await writeFile(join(output, 'platform-smoke-report.json'), JSON.stringify(report, null, 2))

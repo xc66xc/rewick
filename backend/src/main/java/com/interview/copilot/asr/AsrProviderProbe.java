@@ -6,6 +6,7 @@ import com.interview.copilot.ai.ProviderJson;
 import com.interview.copilot.ai.ProviderProperties;
 import jakarta.annotation.PreDestroy;
 import java.net.URI;
+import java.nio.ByteBuffer;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.time.Duration;
@@ -82,12 +83,20 @@ public final class AsrProviderProbe {
                 String event = frame.path("header").path("event").asText();
                 if ("task-started".equals(event) && !started) {
                     started = true;
-                    send(json.encode(AsrProtocol.finish(id)));
+                    sendProbeAudio();
                     return;
                 }
                 if ("task-finished".equals(event) && started) { finished.complete(null); return; }
                 if (!"result-generated".equals(event) || !started) { fail(); }
             } catch (RuntimeException error) { fail(); }
+        }
+
+        private void sendProbeAudio() {
+            // Half a second of mono 16-bit PCM at 16 kHz; never uses microphone data.
+            socket.sendBinary(ByteBuffer.allocate(16000), true).whenComplete((value, error) -> {
+                if (error != null) { fail(); return; }
+                if (!finished.isDone()) { send(json.encode(AsrProtocol.finish(id))); }
+            });
         }
 
         private void send(String message) {
