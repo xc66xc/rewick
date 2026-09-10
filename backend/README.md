@@ -13,7 +13,7 @@
 
 Maven Wrapper 固定 3.9.16；Windows 使用 `mvnw.cmd`。第一次运行会从官方 Maven 仓库下载构建工具与依赖。数据库 SQL 放在 `backend/sql/`，不随应用自动执行，也不打入运行 jar。没有数据库凭据时不会使用内置账号或密码。
 
-数据库固定为 PostgreSQL 15.19 + pgvector 0.5.1。仓库根 `deploy/postgres/Dockerfile` 构建匹配版本的数据库镜像。空库依次执行 `sql/01_schema.sql` 至 `sql/06_display_name.sql`；已执行 `01`–`05` 的数据库，停止旧版后端后在事务内执行 `06_display_name.sql`，再启动新版。迁移保留用户 ID、令牌、密码与管理员登录，邮箱账号使用邮箱作为显示名称。具体命令见 [SQL 升级说明](sql/README.md#已有数据库)。项目不使用 Flyway，也禁用了 Spring SQL 自动初始化。
+数据库固定为 PostgreSQL 15.19 + pgvector 0.5.1。仓库根 `deploy/postgres/Dockerfile` 构建匹配版本的数据库镜像。空库依次执行 `sql/01_schema.sql` 至 `sql/07_email_code_purpose.sql`；已执行 `01`–`05` 的数据库，停止旧版后端后在事务内依次执行 `06_display_name.sql`、`07_email_code_purpose.sql`，再启动新版。迁移保留用户 ID、令牌、密码与管理员登录，邮箱账号使用邮箱作为显示名称。具体命令见 [SQL 升级说明](sql/README.md#已有数据库)。项目不使用 Flyway，也禁用了 Spring SQL 自动初始化。
 
 自行部署或使用托管数据库时，先在数据库服务器安装 pgvector 0.5.1 扩展文件，由具备扩展创建权限的管理员在目标业务数据库执行：
 
@@ -39,7 +39,7 @@ FROM pg_extension WHERE extname = 'vector';
 | `COPILOT_ADMIN_BOOTSTRAP_USERNAME` / `COPILOT_ADMIN_BOOTSTRAP_PASSWORD` | 首次管理员；不要与已有普通用户同名，创建后移除 |
 | `COPILOT_PLATFORM_MASTER_KEY` | Base64 编码的 32 随机字节，加密数据库中的平台 Key 与 SMTP 密码，无默认值 |
 | `COPILOT_EMAIL_CODE_SECRET` | 独立的 Base64 编码 32 字节密钥，用于验证码摘要，无默认值 |
-| `COPILOT_EMAIL_REGISTRATION_ENABLED` | 验证码发送与注册应急开关，默认 `true`；设为 `false` 不影响已有账号登录 |
+| `COPILOT_EMAIL_REGISTRATION_ENABLED` | 验证码发送与注册应急开关，默认 `true`；设为 `false` 不影响已有账号登录或找回密码 |
 | `COPILOT_EMAIL_CODE_TTL_SECONDS` / `COPILOT_EMAIL_RESEND_SECONDS` | 验证码有效期 / 重发间隔，600 / 60 秒 |
 | `COPILOT_EMAIL_HOURLY_SEND_LIMIT` / `COPILOT_EMAIL_MAXIMUM_ATTEMPTS` | 单邮箱每小时发送数 / 单验证码最多错误次数，5 / 5 |
 | `COPILOT_EMAIL_IP_HOURLY_SEND_LIMIT` / `COPILOT_EMAIL_IP_REGISTRATION_LIMIT` | 单来源发送 / 注册尝试窗口上限，20 / 30 |
@@ -52,12 +52,14 @@ Bootstrap 只在该用户名不存在时创建，不覆盖旧密码。两项均�
 | --- | --- | --- |
 | `GET /actuator/health` | 无 | 公开健康状态，不返回数据库细节 |
 | `POST /api/v1/auth/login` | `{identifier,password}` | `{accessToken,expiresAt,user:{id,displayName}}`；有频率限制 |
-| `POST /api/v1/auth/email-code` | `{email}` | `{retryAfterSeconds,expiresInSeconds}`；发送注册验证码，有邮箱和来源限流 |
+| `POST /api/v1/auth/email-code` | `{email}` | `{retryAfterSeconds,expiresInSeconds}`；已注册返回 409 `email_registered`，否则发送注册验证码 |
+| `POST /api/v1/auth/password-reset/email-code` | `{email}` | 同上；仅已验证邮箱身份可用，不存在返回 404 `email_not_registered` |
+| `POST /api/v1/auth/password-reset` | `{email,password,code}` | 204；重置密码并撤销该用户所有登录令牌 |
 | `POST /api/v1/auth/register` | `{email,password,code}` | 201，创建 USER 并返回登录凭证；验证码为 6 位数字 |
 | `POST /api/v1/auth/logout` | `Authorization: Bearer …` | 204，立即撤销该 token 的后续认证 |
 | `GET /api/v1/platform` | `Authorization: Bearer …` | 当前用户、`capabilities`、`models`、`services`、`limits`；不返回供应商密钥与地址 |
 
-除登录、发送注册验证码、邮箱注册和公开健康检查外，所有 `/api/v1/**` 都必须认证，其他路径默认拒绝。错误统一为 `{code,message}`，不会返回 SQL、供应商响应或堆栈。用户 ID 在 JSON 中为字符串，身份来自服务端认证主体；不信任请求体中的用户 ID。
+除登录、注册/找回密码验证码、邮箱注册、密码重置和公开健康检查外，所有 `/api/v1/**` 都必须认证，其他路径默认拒绝。错误统一为 `{code,message}`，不会返回 SQL、供应商响应或堆栈。用户 ID 在 JSON 中为字符串，身份来自服务端认证主体；不信任请求体中的用户 ID。
 
 桌面使用邮箱与密码登录，通过 `login.identifier` 传邮箱；管理员账号使用同一字段传账号标识。登录统一从 `auth_identities` 查找身份，显示名称不能用于认证。用户响应含 `displayName`、`role` 与可空的 `email`。显示名称最长 254 字符且不唯一；邮箱注册时默认等于规范化邮箱。注册只建立已验证邮箱身份，不把历史用户名自动认定为已验证邮箱，也不授予管理员角色。验证码只保存带独立密钥的摘要；有效期、重发间隔、尝试次数及单次消费由服务端校验。SMTP 发送在数据库事务之外执行，成功投递后才允许消费验证码；注册与用户/token 创建在同一事务内完成。邮件服务未配置、禁用或部署密钥缺失时返回安全的不可用错误。
 
@@ -101,7 +103,7 @@ HTTP 请求正文最多 1 MiB，同时验证 Content-Length 和实际读取字�
 
 `UsageService.start(userId, requestId, capability)` 返回 `UsageLease`，上游成功、失败或取消分别调用 `complete()`、`fail()`、`cancel()`；未终态关闭 lease 记录为取消。状态更新幂等。`requestId` 为 1–128 位字母、数字或 `._:-`。
 
-预占用 PostgreSQL 用户行锁、每日计数和唯一约束完成，跨线程/进程都不能突破单用户次数上限。相同用户、能力与请求 ID 重复提交返回 409，不再次调用供应商；不同用户隔离。按 UTC 日期计数，成功预占后的失败和取消仍计入资源请求次数，不自动退款。ASR 并发也在数据库校验；意外终止的预占到期后可回收，连接仍由平台会话时长限制结束。
+预占用 PostgreSQL 用户行锁、每日计数和唯一约束完成，跨线程/进程都不能突破单用户次数上限。相同用户、能力与请求 ID 重复提交返回 409，不再次调用供应商；不同用户隔离。按北京时间（Asia/Shanghai）日期计数，成功预占后的失败和取消仍计入资源请求次数，不自动退款。ASR 并发也在数据库校验；意外终止的预占到期后可回收，连接仍由平台会话时长限制结束。
 
 这里的每日请求数是防滥用限额，`usage_events` 是执行状态记录，**不是供应商金额、充值余额或正式收费账本**。当前没有支付、套餐收费、退款、短信注册或云端简历同步。没有从未知的供应商输出推算费用。
 
@@ -109,7 +111,7 @@ MyBatis-Plus 用于实体映射和常规 CRUD；额度、请求去重等并发�
 
 ## 测试
 
-本次邮箱注册、数据库邮件配置与服务目录版本已通过后端全量 190 项测试，随后新增的 1 项 SMTP 大密码真实 PostgreSQL 测试也通过。覆盖管理员权限与并发保护、用户密码/令牌/额度、密钥加密、配置持久化与版本冲突、服务选择及流式快照，以及邮箱验证码生命周期、限流、注册事务和 SMTP 配置。ASR 完成通知在额度终结及会话释放之后发送，慢速写入场景也验证停止后可立即重启。完整平台链路 26/26（含管理端浏览器 7/7）与核心 Electron 回归 42/42 通过；均使用隔离数据库和本机假供应商，本次没有升级正式数据库或更新安装包。
+后端测试覆盖管理员权限、并发保护、用户密码/令牌/额度、密钥加密、配置持久化、服务选择、流式响应，以及邮箱验证码用途隔离、限流、注册与密码重置事务。数据库集成测试使用隔离 PostgreSQL 和模拟邮件/供应商，不发送真实邮件。运行最新完整验证：`node scripts/backend.mjs verify -Pintegration`（从仓库根目录）。
 
 ```sh
 ./mvnw test
@@ -118,7 +120,7 @@ docker build -t interview-copilot-postgres:15.19-pgvector0.5.1 ../deploy/postgre
 ./mvnw clean verify -Pintegration
 ```
 
-默认运行单元测试。`integration` 额外使用 Testcontainers 启动独立 `interview-copilot-postgres:15.19-pgvector0.5.1` 容器，在启动 Spring 上下文前通过 `psql` 单次事务显式执行 `sql/` 的五份脚本，验证真实初始化、精确数据库/扩展版本、向量距离与 HNSW，以及 token 摘要/过期/撤销、HTTP 鉴权、并发限额、重复请求和用户隔离。需要可用 Docker 且已构建上述镜像；测试不使用真实账号或云端供应商。Docker Desktop 若未自动发现 socket，可设置 `DOCKER_HOST` 为实际 Docker socket。数据库容器由测试管理，不连接桌面应用的真实资料或会话记录。Mac Apple Silicon 开发环境额外激活 `macos-arm64` profile，加载匹配架构的 Netty DNS 模块；生产 Linux 容器不使用这个依赖。
+默认运行单元测试。`integration` 额外使用 Testcontainers 启动独立 `interview-copilot-postgres:15.19-pgvector0.5.1` 容器，在启动 Spring 上下文前通过 `psql` 单次事务显式执行 `sql/` 的八份脚本，验证真实初始化、精确数据库/扩展版本、向量距离与 HNSW，以及 token 摘要/过期/撤销、HTTP 鉴权、并发限额、重复请求和用户隔离。需要可用 Docker 且已构建上述镜像；测试不使用真实账号或云端供应商。Docker Desktop 若未自动发现 socket，可设置 `DOCKER_HOST` 为实际 Docker socket。数据库容器由测试管理，不连接桌面应用的真实资料或会话记录。Mac Apple Silicon 开发环境额外激活 `macos-arm64` profile，加载匹配架构的 Netty DNS 模块；生产 Linux 容器不使用这个依赖。
 
 ## 发布边界
 
@@ -139,3 +141,13 @@ ASR 连接测试会等待 `task-started`，发送半秒合成静音 PCM（16 kHz
 第一版每次向量请求（包括建立资料索引的批次和问题向量）占用一次现有“知识检索”日额度，记录所用模型；并发上限为 8。额度用完返回 429，不调用上游；无需额外 SQL 变更。连接测试也验证返回向量维度，但不占用户日额度。
 
 管理台用户列表和调用记录均支持 `query` 参数按显示名称或邮箱搜索（最长 254 字符）。创建账号使用 `{identifier,password,dailyAnswers,dailyKnowledgeQueries}`，建立 `account` 身份并把账号标识作为初始显示名称；登录标识和显示名称是不同职责。
+
+## 邮箱找回密码
+
+部署前停止后端，在事务内执行 `sql/07_email_code_purpose.sql`；已执行 01–06 的数据库只执行 07。脚本将验证码唯一约束改为邮箱与用途组合，已有验证码会失效，升级后需重新获取。注册与重置密码验证码分别保存、限流并参与用途绑定的 HMAC 摘要，默认有效期 10 分钟、重发间隔 60 秒、每小时 5 次、错误 5 次失效；来源 IP 发送预算共享。更新密码、消费验证码和撤销所有令牌在同一事务完成，失败整体回滚，错误验证码尝试次数单独保留。登录与重置使用同一用户行锁，防止旧密码并发登录越过令牌撤销。停用账号不能借找回密码恢复可用状态；账号类型为 account 的邮箱形状标识不等于已验证邮箱，不能用它重置密码。SMTP 配置与摘要密钥仍必须可用。
+
+## 服务器本地时间
+
+数据库时间列统一为 `TIMESTAMP(6) WITHOUT TIME ZONE`，保存北京时间，Java 数据库读写使用 `LocalDateTime` 并按微秒截断。应用与数据库会话固定 `Asia/Shanghai`，不依赖客户端时区。每日额度在北京零点重置；接口仍返回带明确时区的时间，避免客户端误判过期。
+
+已完成 01–07 的开发数据库停止后端后，直接事务执行 `sql/08_server_local_time.sql`（本次不备份），随后更新并重启后端。已有时刻按北京时区转换，空值与微秒精度保留；旧 `usage_day` 计数日期保持原值。仅改变当前业务数据库的默认时区。

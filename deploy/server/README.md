@@ -54,3 +54,9 @@ ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \
 Nginx 映射 `0.0.0.0:8080:80`，后端容器通过内部网络访问。宿主机直连后端端口为 `127.0.0.1:18081`，管理页面原回环端口 5174 仍用于 SSH 隧道。没有向公网开放新的数据库端口。
 
 此入口仅供临时 HTTP 验收，正式部署应配置 HTTPS。桌面应用地址未改变。云安全组需允许 TCP 8080。
+
+## 北京时间存储
+
+后端容器设置 `TZ=Asia/Shanghai` 和 JVM 时区；连接池为每条数据库连接设置同一时区。数据库业务时间字段通过 `backend/sql/08_server_local_time.sql` 转为 `TIMESTAMP(6) WITHOUT TIME ZONE`，原数据使用 `AT TIME ZONE 'Asia/Shanghai'` 转换。脚本只设置当前业务库的默认时区，不修改同一个 PostgreSQL 实例的其他数据库。
+
+本次开发阶段按用户要求不做数据库备份：先停止后端，事务执行 08，再发布并启动新版后端。不要重复执行已完成的脚本。确认新连接 `SHOW timezone` 为 `Asia/Shanghai`，业务表不再含带时区时间字段，并验证登录与验证码有效期。历史每日额度日期不回算，新请求按北京时间日期计数。

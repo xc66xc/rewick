@@ -33,8 +33,10 @@ export async function runAdminSmoke({ baseUrl, username, password, output = 'adm
     if (!login.accessToken) throw new Error('隔离管理员登录失败。')
     token = login.accessToken
     await expect(page.getByRole('heading', { name: '平台用户', exact: true })).toBeVisible()
-    await expect.poll(() => page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0])
-    passed.push('管理员鉴权与内存登录')
+    await expect.poll(() => page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 1])
+    await page.reload()
+    await expect(page.getByRole('heading', { name: '平台用户', exact: true })).toBeVisible()
+    passed.push('管理员鉴权与刷新保留登录')
     initialConfig = await api('/admin/config')
 
     await page.getByRole('button', { name: '创建用户', exact: true }).click()

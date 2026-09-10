@@ -3,10 +3,11 @@ package com.interview.copilot.auth;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.interview.copilot.auth.email.EmailAddress;
 import com.interview.copilot.common.ApiException;
+import com.interview.copilot.common.ServerTime;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -58,14 +59,14 @@ public class AuthService {
     @Transactional
     public LoginResult issueToken(UserEntity user) {
         String token = TokenSecrets.create();
-        Instant expiresAt = clock.instant().plus(properties.tokenHours(), ChronoUnit.HOURS);
+        LocalDateTime expiresAt = ServerTime.now(clock).plusHours(properties.tokenHours());
         tokens.create(user.getId(), TokenSecrets.hash(token), expiresAt);
-        return new LoginResult(token, expiresAt, new PublicUser(user.getId().toString(), user.getDisplayName(), user.getRole(), user.getEmail()));
+        return new LoginResult(token, ServerTime.instant(expiresAt), new PublicUser(user.getId().toString(), user.getDisplayName(), user.getRole(), user.getEmail()));
     }
 
     public Optional<UserPrincipal> authenticate(String token) {
         if (token == null || !token.matches("[A-Za-z0-9_-]{43}")) return Optional.empty();
-        return Optional.ofNullable(tokens.authenticate(TokenSecrets.hash(token), clock.instant()));
+        return Optional.ofNullable(tokens.authenticate(TokenSecrets.hash(token), ServerTime.now(clock)));
     }
 
     public void logout(String token) { tokens.revoke(TokenSecrets.hash(token)); }

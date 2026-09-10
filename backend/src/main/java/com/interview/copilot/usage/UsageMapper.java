@@ -1,7 +1,7 @@
 package com.interview.copilot.usage;
 
-import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -25,7 +25,7 @@ public interface UsageMapper {
             UPDATE usage_events SET status = 'expired', finished_at = #{now}, updated_at = #{now}
             WHERE app_users_id = #{userId} AND status = 'started' AND expires_at <= #{now}
             """)
-    void expire(@Param("userId") long userId, @Param("now") Instant now);
+    void expire(@Param("userId") long userId, @Param("now") LocalDateTime now);
 
     @Select("SELECT COUNT(id) FROM usage_events WHERE app_users_id = #{userId} AND capability = 'asr' AND status = 'started'")
     int activeAsr(long userId);
@@ -37,7 +37,7 @@ public interface UsageMapper {
     void ensureDaily(@Param("userId") long userId, @Param("day") LocalDate day, @Param("capability") String capability);
 
     @Update("""
-            UPDATE usage_daily SET used_count = used_count + 1, updated_at = CURRENT_TIMESTAMP
+            UPDATE usage_daily SET used_count = used_count + 1, updated_at = LOCALTIMESTAMP(6)
             WHERE app_users_id = #{userId} AND usage_day = #{day} AND capability = #{capability} AND used_count < #{limit}
             """)
     int reserveDaily(@Param("userId") long userId, @Param("day") LocalDate day,
@@ -48,17 +48,17 @@ public interface UsageMapper {
             VALUES(#{userId}, #{requestId}, #{capability}, #{expiresAt})
             """)
     void create(@Param("userId") long userId, @Param("requestId") String requestId,
-            @Param("capability") String capability, @Param("expiresAt") Instant expiresAt);
+            @Param("capability") String capability, @Param("expiresAt") LocalDateTime expiresAt);
 
     @Update("""
             UPDATE usage_events SET status = #{status}, finished_at = #{now}, updated_at = #{now}
             WHERE app_users_id = #{userId} AND request_id = #{requestId} AND capability = #{capability} AND status = 'started'
             """)
     void finish(@Param("userId") long userId, @Param("requestId") String requestId,
-            @Param("capability") String capability, @Param("status") String status, @Param("now") Instant now);
+            @Param("capability") String capability, @Param("status") String status, @Param("now") LocalDateTime now);
 
     @Update("""
-            UPDATE usage_events SET model = #{model}, updated_at = CURRENT_TIMESTAMP
+            UPDATE usage_events SET model = #{model}, updated_at = LOCALTIMESTAMP(6)
             WHERE app_users_id = #{userId} AND request_id = #{requestId} AND capability = #{capability}
                 AND status = 'started' AND model = ''
             """)

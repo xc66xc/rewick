@@ -2,6 +2,7 @@ package com.interview.copilot.auth;
 
 import com.interview.copilot.common.ApiException;
 import java.time.Clock;
+import java.time.LocalDateTime;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,10 +40,11 @@ class AuthServiceTest {
         var result = service.login("alice", "a-test-password");
 
         ArgumentCaptor<String> stored = ArgumentCaptor.forClass(String.class);
-        verify(tokens).create(eq(7L), stored.capture(), eq(now.plusSeconds(86400)));
+        verify(tokens).create(eq(7L), stored.capture(), eq(LocalDateTime.parse("2026-09-09T08:00:00")));
         assertThat(stored.getValue()).hasSize(64).isNotEqualTo(result.accessToken());
         assertThat(result.accessToken()).matches("[A-Za-z0-9_-]{43}");
         assertThat(result.user().id()).isEqualTo("7");
+        assertThat(result.expiresAt()).isEqualTo(now.plusSeconds(86400));
         assertThat(result.toString()).doesNotContain(result.accessToken());
     }
 

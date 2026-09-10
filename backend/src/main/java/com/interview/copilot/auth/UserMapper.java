@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 @Mapper
 public interface UserMapper extends BaseMapper<UserEntity> {
@@ -31,6 +32,9 @@ public interface UserMapper extends BaseMapper<UserEntity> {
     @Options(useGeneratedKeys = true, keyProperty = "id")
     void createEmailUser(UserEntity user);
 
+    @Update("UPDATE app_users SET password_hash = #{passwordHash}, updated_at = LOCALTIMESTAMP(6) WHERE id = #{id}")
+    void updatePassword(@Param("id") long id, @Param("passwordHash") String passwordHash);
+
     @Select("SELECT 1 FROM pg_advisory_xact_lock(1649911918)")
     int lockIdentityChanges();
 
@@ -39,7 +43,7 @@ public interface UserMapper extends BaseMapper<UserEntity> {
                 INSERT INTO app_users(display_name, password_hash, role)
                 VALUES(#{identifier}, #{passwordHash}, 'USER') RETURNING id
             ) INSERT INTO auth_identities(app_users_id, identity_type, identifier, verified_at)
-              SELECT id, 'account', #{identifier}, CURRENT_TIMESTAMP FROM created
+              SELECT id, 'account', #{identifier}, LOCALTIMESTAMP(6) FROM created
             """)
     int createBootstrap(@Param("identifier") String identifier, @Param("passwordHash") String passwordHash);
 
@@ -48,7 +52,7 @@ public interface UserMapper extends BaseMapper<UserEntity> {
                 INSERT INTO app_users(display_name, password_hash, role)
                 VALUES(#{identifier}, #{passwordHash}, 'ADMIN') RETURNING id
             ) INSERT INTO auth_identities(app_users_id, identity_type, identifier, verified_at)
-              SELECT id, 'account', #{identifier}, CURRENT_TIMESTAMP FROM created
+              SELECT id, 'account', #{identifier}, LOCALTIMESTAMP(6) FROM created
             """)
     int createAdminBootstrap(@Param("identifier") String identifier, @Param("passwordHash") String passwordHash);
 }

@@ -16,7 +16,7 @@ public interface EmailConfigurationMapper {
     @Update("""
             UPDATE email_config SET version = version + 1, is_enabled = #{config.enabled}, host = #{config.host},
                 port = #{config.port}, username = #{config.username}, encrypted_password = #{encrypted},
-                from_address = #{config.from}, is_start_tls = #{config.startTls}, is_ssl = #{config.ssl}, updated_at = CURRENT_TIMESTAMP
+                from_address = #{config.from}, is_start_tls = #{config.startTls}, is_ssl = #{config.ssl}, updated_at = LOCALTIMESTAMP(6)
             WHERE id = 1 AND version = #{config.version}
             """)
     int publish(@Param("config") EmailConfiguration config, @Param("encrypted") String encrypted);

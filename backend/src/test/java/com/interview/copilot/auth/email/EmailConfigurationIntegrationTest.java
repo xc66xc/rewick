@@ -134,7 +134,7 @@ class EmailConfigurationIntegrationTest {
         assertThat(tested.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(tested.getBody().path("success").asBoolean()).isTrue();
         assertThat(jdbc.queryForObject("SELECT version FROM email_config", Long.class)).isZero();
-        verify(smtp, never()).send(any(), any(), any(), anyInt());
+        verify(smtp, never()).send(any(), any(), any(), anyInt(), any());
         assertThat(call(HttpMethod.PUT, PATH, admin, draft).getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 

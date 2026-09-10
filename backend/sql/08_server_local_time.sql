@@ -1,0 +1,72 @@
+-- Execute once after 07, with the backend stopped, in one transaction.
+-- Existing instants become Beijing wall-clock values; retain microsecond precision.
+DO $$
+BEGIN
+    EXECUTE format('ALTER DATABASE %I SET timezone TO %L', current_database(), 'Asia/Shanghai');
+END $$;
+SET TIME ZONE 'Asia/Shanghai';
+
+ALTER TABLE app_users
+    ALTER COLUMN created_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING created_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN created_at SET DEFAULT LOCALTIMESTAMP(6),
+    ALTER COLUMN updated_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING updated_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN updated_at SET DEFAULT LOCALTIMESTAMP(6);
+
+ALTER TABLE auth_tokens
+    ALTER COLUMN expires_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING expires_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN created_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING created_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN created_at SET DEFAULT LOCALTIMESTAMP(6),
+    ALTER COLUMN updated_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING updated_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN updated_at SET DEFAULT LOCALTIMESTAMP(6);
+
+ALTER TABLE usage_daily
+    ALTER COLUMN created_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING created_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN created_at SET DEFAULT LOCALTIMESTAMP(6),
+    ALTER COLUMN updated_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING updated_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN updated_at SET DEFAULT LOCALTIMESTAMP(6);
+
+ALTER TABLE usage_events
+    ALTER COLUMN expires_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING expires_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN finished_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING finished_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN created_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING created_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN created_at SET DEFAULT LOCALTIMESTAMP(6),
+    ALTER COLUMN updated_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING updated_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN updated_at SET DEFAULT LOCALTIMESTAMP(6);
+
+ALTER TABLE audit_events
+    ALTER COLUMN created_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING created_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN created_at SET DEFAULT LOCALTIMESTAMP(6),
+    ALTER COLUMN updated_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING updated_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN updated_at SET DEFAULT LOCALTIMESTAMP(6);
+
+ALTER TABLE platform_config
+    ALTER COLUMN created_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING created_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN created_at SET DEFAULT LOCALTIMESTAMP(6),
+    ALTER COLUMN updated_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING updated_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN updated_at SET DEFAULT LOCALTIMESTAMP(6);
+
+ALTER TABLE auth_identities
+    ALTER COLUMN verified_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING verified_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN created_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING created_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN created_at SET DEFAULT LOCALTIMESTAMP(6),
+    ALTER COLUMN updated_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING updated_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN updated_at SET DEFAULT LOCALTIMESTAMP(6);
+
+ALTER TABLE email_verifications
+    ALTER COLUMN expires_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING expires_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN expires_at SET DEFAULT LOCALTIMESTAMP(6),
+    ALTER COLUMN next_send_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING next_send_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN next_send_at SET DEFAULT LOCALTIMESTAMP(6),
+    ALTER COLUMN window_started_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING window_started_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN window_started_at SET DEFAULT LOCALTIMESTAMP(6),
+    ALTER COLUMN created_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING created_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN created_at SET DEFAULT LOCALTIMESTAMP(6),
+    ALTER COLUMN updated_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING updated_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN updated_at SET DEFAULT LOCALTIMESTAMP(6);
+
+ALTER TABLE email_config
+    ALTER COLUMN created_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING created_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN created_at SET DEFAULT LOCALTIMESTAMP(6),
+    ALTER COLUMN updated_at TYPE TIMESTAMP(6) WITHOUT TIME ZONE USING updated_at AT TIME ZONE 'Asia/Shanghai',
+    ALTER COLUMN updated_at SET DEFAULT LOCALTIMESTAMP(6);
+

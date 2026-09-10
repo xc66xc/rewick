@@ -24,18 +24,20 @@ function setup(initial = structuredClone(defaultSettings), strict = false) {
   const platformLogout = vi.fn(async () => { current = { ...current, platform: { ...account().platform, authenticated: false } }; return current })
   const refreshPlatform = vi.fn(async () => current)
   const requestEmailCode = vi.fn(async () => ({ retryAfterSeconds: 60, expiresInSeconds: 600 }))
+  const requestPasswordResetCode = vi.fn(async () => ({ retryAfterSeconds: 60, expiresInSeconds: 600 }))
+  const resetPassword = vi.fn(async () => undefined)
   const nativeWindow = { compact: false, pinned: false }
   const setCompact = vi.fn(async (value: boolean) => { nativeWindow.compact = value })
   const setAlwaysOnTop = vi.fn(async (value: boolean) => { nativeWindow.pinned = value; return value })
   const stopAsr = vi.fn(async () => undefined)
   const cancelAnswer = vi.fn(async () => undefined)
-  const bridge = { getSettings, saveSettings, platformLogin, platformLogout, platformRegister, refreshPlatform, requestEmailCode,
+  const bridge = { getSettings, saveSettings, platformLogin, platformLogout, platformRegister, refreshPlatform, requestEmailCode, requestPasswordResetCode, resetPassword,
     getHistory, stopAsr, cancelAnswer, setCompact, setAlwaysOnTop, saveSession: vi.fn(async () => undefined),
     onEvent: (listener: (event: AppEvent) => void) => { listeners.add(listener); return () => { listeners.delete(listener) } },
   } as unknown as DesktopBridge
   const mount = () => render(strict ? <StrictMode><App bridge={bridge} /></StrictMode> : <App bridge={bridge} />)
   function change(settings: Settings) { current = settings; act(() => { for (const listener of listeners) listener({ kind: 'settings-changed' }) }) }
-  return { mount, bridge, change, getHistory, getSettings, saveSettings, platformLogin, platformLogout, platformRegister, refreshPlatform, requestEmailCode, stopAsr, cancelAnswer, nativeWindow, user: userEvent.setup() }
+  return { mount, bridge, change, getHistory, getSettings, saveSettings, platformLogin, platformLogout, platformRegister, refreshPlatform, requestEmailCode, requestPasswordResetCode, resetPassword, stopAsr, cancelAnswer, nativeWindow, user: userEvent.setup() }
 }
 afterEach(() => { cleanup(); vi.useRealTimers() })
 async function login(user: ReturnType<typeof userEvent.setup>) {
@@ -153,4 +155,51 @@ describe('desktop account gate', () => {
     expect(platformRegister).toHaveBeenCalledWith({ email: 'new@example.test', password: 'register-test-password', code: '123456' })
     expect(JSON.stringify(saveSettings.mock.calls)).not.toMatch(/register-test-password|123456/)
   })
+  it('shows registered email guidance without claiming a code was sent and opens recovery', async () => {
+    const { mount, user, requestEmailCode, getHistory } = setup()
+    requestEmailCode.mockRejectedValueOnce(new Error('该邮箱已注册，如果该邮箱为您的邮箱，可以直接登录或找回密码。'))
+    mount()
+    await user.click(await screen.findByRole('tab', { name: '注册账号' }))
+    await user.type(screen.getByRole('textbox', { name: '邮箱' }), 'existing@example.test')
+    await user.click(screen.getByRole('button', { name: '发送验证码' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('该邮箱已注册')
+    expect(screen.queryByText(/验证码已发送/)).toBeNull()
+    await user.click(screen.getByRole('button', { name: '找回密码' }))
+    expect(screen.getByRole('heading', { name: '找回密码' })).toBeTruthy()
+    expect((screen.getByRole('textbox', { name: '邮箱' }) as HTMLInputElement).value).toBe('existing@example.test')
+    expect(getHistory).not.toHaveBeenCalled()
+  })
+  it('validates recovery passwords before sending, then resets and returns to login without persisting secrets', async () => {
+    const { mount, user, requestPasswordResetCode, resetPassword, platformLogin, saveSettings, getHistory } = setup()
+    mount()
+    await user.click(await screen.findByRole('button', { name: '找回密码' }))
+    await user.type(screen.getByRole('textbox', { name: '邮箱' }), 'existing@example.test')
+    await user.click(screen.getByRole('button', { name: '发送验证码' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('至少 12')
+    expect(requestPasswordResetCode).not.toHaveBeenCalled()
+    await user.type(screen.getByLabelText('新密码', { exact: true }), 'new-secret-password')
+    await user.type(screen.getByLabelText('确认密码', { exact: true }), 'different-password')
+    await user.click(screen.getByRole('button', { name: '发送验证码' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('不一致')
+    expect(requestPasswordResetCode).not.toHaveBeenCalled()
+    await user.clear(screen.getByLabelText('确认密码', { exact: true }))
+    await user.type(screen.getByLabelText('确认密码', { exact: true }), 'new-secret-password')
+    await user.click(screen.getByRole('button', { name: '发送验证码' }))
+    expect(await screen.findByRole('button', { name: '60 秒后重发' })).toBeTruthy()
+    expect(requestPasswordResetCode).toHaveBeenCalledWith({ email: 'existing@example.test' })
+    await user.type(screen.getByRole('textbox', { name: '邮箱验证码' }), '654321')
+    resetPassword.mockRejectedValueOnce(new Error('验证码错误，密码修改失败。'))
+    await user.click(screen.getByRole('button', { name: '确认修改密码' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('密码修改失败')
+    expect(screen.getByRole('heading', { name: '找回密码' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: '确认修改密码' }))
+    expect(await screen.findByRole('heading', { name: '登录面试工作台' })).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toContain('密码修改成功')
+    expect(resetPassword).toHaveBeenLastCalledWith({ email: 'existing@example.test', password: 'new-secret-password', code: '654321' })
+    expect((screen.getByLabelText('密码', { exact: true }) as HTMLInputElement).value).toBe('')
+    expect(JSON.stringify(saveSettings.mock.calls)).not.toMatch(/new-secret-password|654321/)
+    expect(platformLogin).not.toHaveBeenCalled()
+    expect(getHistory).not.toHaveBeenCalled()
+  })
+
 })

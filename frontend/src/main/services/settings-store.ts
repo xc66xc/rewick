@@ -112,7 +112,8 @@ export class SettingsStore {
           && previous.settings.serviceSelections?.[kind]?.id !== choice.id) throw new Error('所选自定义服务不存在，请重新选择。')
       }
       if (parsed.platform.baseUrl !== previous.settings.platform.baseUrl) delete parsed.platform.selectedModelId
-      if (parsed.platform.baseUrl !== previous.settings.platform.baseUrl && parsed.serviceSelections) {
+      // Explicit selections belong to the submitted catalog; only discard inherited selections on address changes.
+      if (parsed.platform.baseUrl !== previous.settings.platform.baseUrl && input.serviceSelections === undefined && parsed.serviceSelections) {
         for (const kind of serviceKinds) if (parsed.serviceSelections[kind]?.source === 'platform') delete parsed.serviceSelections[kind]
       }
       const { apiKey: asrKey, ...asr } = parsed.asr

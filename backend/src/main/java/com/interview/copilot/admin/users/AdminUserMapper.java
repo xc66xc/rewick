@@ -27,7 +27,8 @@ public interface AdminUserMapper {
     @Select("""
             SELECT id::text, display_name, role, is_enabled AS enabled,
                 COALESCE(daily_answers, #{defaultAnswers}) AS daily_answers,
-                COALESCE(daily_knowledge_queries, #{defaultKnowledge}) AS daily_knowledge_queries, created_at
+                COALESCE(daily_knowledge_queries, #{defaultKnowledge}) AS daily_knowledge_queries,
+                created_at AT TIME ZONE 'Asia/Shanghai' AS created_at
             FROM app_users WHERE #{query} = '' OR (strpos(lower(display_name), lower(#{query})) > 0 OR EXISTS(SELECT 1 FROM auth_identities i WHERE i.app_users_id=app_users.id AND i.identity_type='email' AND strpos(lower(i.identifier), lower(#{query})) > 0))
             ORDER BY id DESC LIMIT #{size} OFFSET #{offset}
             """)
@@ -37,7 +38,8 @@ public interface AdminUserMapper {
     @Select("""
             SELECT id::text, display_name, role, is_enabled AS enabled,
                 COALESCE(daily_answers, #{defaultAnswers}) AS daily_answers,
-                COALESCE(daily_knowledge_queries, #{defaultKnowledge}) AS daily_knowledge_queries, created_at
+                COALESCE(daily_knowledge_queries, #{defaultKnowledge}) AS daily_knowledge_queries,
+                created_at AT TIME ZONE 'Asia/Shanghai' AS created_at
             FROM app_users WHERE id = #{id}
             """)
     UserView view(@Param("id") long id, @Param("defaultAnswers") int defaultAnswers, @Param("defaultKnowledge") int defaultKnowledge);
@@ -49,17 +51,17 @@ public interface AdminUserMapper {
     @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "id")
     void create(UserEntity user);
 
-    @Insert("INSERT INTO auth_identities(app_users_id, identity_type, identifier, verified_at) VALUES(#{id}, 'account', #{identifier}, CURRENT_TIMESTAMP)")
+    @Insert("INSERT INTO auth_identities(app_users_id, identity_type, identifier, verified_at) VALUES(#{id}, 'account', #{identifier}, LOCALTIMESTAMP(6))")
     void createAccountIdentity(@Param("id") long id, @Param("identifier") String identifier);
 
     @Update("""
             UPDATE app_users SET is_enabled = #{enabled}, daily_answers = #{answers},
-                daily_knowledge_queries = #{knowledge}, updated_at = CURRENT_TIMESTAMP WHERE id = #{id}
+                daily_knowledge_queries = #{knowledge}, updated_at = LOCALTIMESTAMP(6) WHERE id = #{id}
             """)
     void update(@Param("id") long id, @Param("enabled") boolean enabled,
             @Param("answers") int answers, @Param("knowledge") int knowledge);
 
-    @Update("UPDATE app_users SET password_hash = #{hash}, updated_at = CURRENT_TIMESTAMP WHERE id = #{id}")
+    @Update("UPDATE app_users SET password_hash = #{hash}, updated_at = LOCALTIMESTAMP(6) WHERE id = #{id}")
     void resetPassword(@Param("id") long id, @Param("hash") String hash);
 
     record Account(long id, String displayName, String role, boolean enabled) {}

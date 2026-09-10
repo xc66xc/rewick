@@ -25,14 +25,14 @@ public class EmailAuthService {
     }
 
     public void sendCode(String email) {
+        if (identities.exists(email)) throw EmailErrors.registered();
         mail.requireConfigured();
-        EmailCodeSecrets.Code code = codes.reserve(email);
-        if (identities.exists(email)) { codes.failed(email, code.nonce()); return; }
+        EmailCodeSecrets.Code code = codes.reserve(email, "register");
         try {
-            mail.send(email, code.value());
-            codes.delivered(email, code.nonce());
+            mail.send(email, code.value(), "register");
+            codes.delivered(email, "register", code.nonce());
         } catch (ApiException error) {
-            codes.failed(email, code.nonce());
+            codes.failed(email, "register", code.nonce());
             throw error;
         }
     }

@@ -12,7 +12,7 @@ public interface PlatformConfigMapper {
 
     @Update("""
             UPDATE platform_config SET version = version + 1, is_published = TRUE,
-                payload = CAST(#{payload} AS jsonb), updated_at = CURRENT_TIMESTAMP
+                payload = CAST(#{payload} AS jsonb), updated_at = LOCALTIMESTAMP(6)
             WHERE id = 1 AND version = #{version}
             """)
     int publish(@Param("version") long version, @Param("payload") String payload);

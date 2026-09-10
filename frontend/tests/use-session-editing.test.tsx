@@ -33,6 +33,7 @@ function setup(fakeTimers = false) {
     { id: 'environment-two', name: '新环境', resumeId: null, targetId: null, referenceIds: [], createdAt, updatedAt: createdAt },
   ] }
   const bridge = {
+    requestPasswordResetCode: vi.fn(async () => ({ retryAfterSeconds: 60, expiresInSeconds: 600 })), resetPassword: vi.fn(async () => undefined),
     platformRegister: vi.fn(async () => settings), requestEmailCode: vi.fn(async () => ({ retryAfterSeconds: 60, expiresInSeconds: 600 })),
     saveCustomService: vi.fn(async () => settings), testCustomService: vi.fn(async () => ({ latencyMs: 1, message: 'ok' })), removeCustomService: vi.fn(async () => settings),
     platformLogin: vi.fn(async () => settings),

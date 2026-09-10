@@ -18,15 +18,21 @@ public class RegistrationMailSender {
         this.transport = transport;
     }
 
-    public void requireConfigured() { configured(); }
+    public void requireConfigured() {
+        if (!policy.enabled()) throw EmailErrors.unavailable();
+        configured();
+    }
 
-    public void send(String email, String code) {
+    public void requireResetConfigured() { configured(); }
+
+    public void send(String email, String code, String purpose) {
+        if ("register".equals(purpose)) requireConfigured();
         SmtpProperties smtp = configured();
-        transport.send(smtp, email, code, policy.codeTtlSeconds());
+        transport.send(smtp, email, code, policy.codeTtlSeconds(), purpose);
     }
 
     private SmtpProperties configured() {
-        if (!policy.enabled() || !secrets.isConfigured()) throw EmailErrors.unavailable();
+        if (!secrets.isConfigured()) throw EmailErrors.unavailable();
         try {
             EmailConfigurationService.Prepared snapshot = configurations.snapshot();
             if (!snapshot.view().enabled()) throw EmailErrors.unavailable();

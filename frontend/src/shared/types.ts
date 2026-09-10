@@ -155,6 +155,8 @@ export interface DesktopBridge {
   platformLogin(input: { identifier: string; password: string }): Promise<Settings>
   platformRegister(input: { email: string; password: string; code: string }): Promise<Settings>
   requestEmailCode(input: { email: string }): Promise<{ retryAfterSeconds: number; expiresInSeconds: number }>
+  requestPasswordResetCode(input: { email: string }): Promise<{ retryAfterSeconds: number; expiresInSeconds: number }>
+  resetPassword(input: { email: string; password: string; code: string }): Promise<void>
   saveCustomService(input: CustomServiceInput): Promise<Settings>
   testCustomService(input: CustomServiceInput): Promise<{ latencyMs: number; message: string }>
   removeCustomService(id: string): Promise<Settings>

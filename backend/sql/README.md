@@ -1,66 +1,48 @@
 # 数据库 SQL
 
-> **当前安装必须执行 01–06。06 会删除 app_users.username，必须停止旧后端、事务执行 SQL、再发布新版前后端。回滚旧程序需先从备份恢复数据库，不能只替换旧 JAR。**
-
-
-PostgreSQL 15.19 / pgvector 0.5.1。SQL 由开发或部署人员显式执行，后端启动不会自动建表或修改结构。
+PostgreSQL 15.19 / pgvector 0.5.1。脚本手动按编号执行；后端不使用 Flyway，也不自动初始化数据库。
 
 | 文件 | 用途 |
 | --- | --- |
-| `01_schema.sql` | 初始化账号、登录凭证、每日额度、调用记录及索引 |
-| `02_pgvector.sql` | 启用 pgvector 0.5.1，并验证扩展版本 |
-| `03_admin_users.sql` | 新增管理员角色、用户额度覆盖、调用模型字段及操作记录 |
-| `04_platform_config.sql` | 平台配置版本及加密供应商配置 |
-| `05_email_auth.sql` | 已验证邮箱身份、注册验证码生命周期、带版本的加密 SMTP 配置 |
+| `01_schema.sql` | 账号、令牌、额度与调用记录 |
+| `02_pgvector.sql` | 启用并检查 pgvector 0.5.1 |
+| `03_admin_users.sql` | 管理员角色、用户额度与操作记录 |
+| `04_platform_config.sql` | 加密平台服务配置 |
+| `05_email_auth.sql` | 邮箱身份、验证码与加密 SMTP 配置 |
+| `06_display_name.sql` | 删除 username，添加 display_name 与 account 登录身份 |
+| `07_email_code_purpose.sql` | 隔离注册与重置密码验证码用途 |
+| `08_server_local_time.sql` | 全部时间列改为北京时间无时区微秒值，设置当前业务库时区 |
 
 ## 初始化空数据库
 
-先安装 PostgreSQL 及 pgvector 扩展文件，创建业务数据库。将连接参数传给 `psql`，从 `backend/` 目录按顺序执行：
+从 backend 目录执行，密码通过交互提示或本机凭据提供：
 
 ```sh
-psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f sql/01_schema.sql -f sql/02_pgvector.sql -f sql/03_admin_users.sql -f sql/04_platform_config.sql -f sql/05_email_auth.sql
+psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f sql/01_schema.sql -f sql/02_pgvector.sql -f sql/03_admin_users.sql -f sql/04_platform_config.sql -f sql/05_email_auth.sql -f sql/06_display_name.sql -f sql/07_email_code_purpose.sql -f sql/08_server_local_time.sql
 ```
 
-数据库密码由交互提示、环境变量或本机凭据配置提供。执行扩展脚本需要相应权限；管理员也可先安装并启用扩展，再由业务结构的维护账号执行上述脚本。
-
-使用项目 Compose 时，从仓库根目录执行：
+使用 Compose 时，从仓库根目录执行：
 
 ```sh
 docker compose up -d --build --wait database
-docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql
+docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql -f /opt/copilot/sql/06_display_name.sql -f /opt/copilot/sql/07_email_code_purpose.sql -f /opt/copilot/sql/08_server_local_time.sql
 docker compose up -d --build backend admin
 ```
 
-Compose 仅以只读方式挂载 SQL，不自动运行它们。`ON_ERROR_STOP` 配合单次事务，让初始化出错时整体回滚。
+Compose 仅只读挂载 SQL。安装扩展需要相应权限；管理员可先安装扩展，再由维护账号执行业务结构脚本。
 
 ## 已有数据库
 
-`01_schema.sql` 用于空库，只执行一次；已有相同业务表的数据库直接沿用，不重复初始化。`02_pgvector.sql` 可在已有同版本扩展时重复执行；版本不匹配会报错，不自动切换版本。
-
-已完成 `01`–`04` 的数据库，本次升级前先备份，再只执行新增 `05`：
+开发阶段本次不备份。停止后端，再按顺序执行尚未执行的编号，不能重复执行 06、07 或 08。已完成 01–07 的实例本次只需：
 
 ```sh
-docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f /opt/copilot/sql/05_email_auth.sql
+psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f sql/08_server_local_time.sql
 ```
 
-使用外部 PostgreSQL 时，从 `backend/` 目录执行：
+08 使用 `AT TIME ZONE 'Asia/Shanghai'` 把已有时刻转换成北京时间，所有 25 个时间列为 `TIMESTAMP(6) WITHOUT TIME ZONE`，默认值为 `LOCALTIMESTAMP(6)`。仅修改当前业务库默认时区；新连接生效。原有 `usage_day` 日期计数保留，未来配额按北京零点划分。接口对外时间仍带明确偏移，旧应用不能与新结构混用。
 
-```sh
-psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f sql/05_email_auth.sql
-```
+07 保留用户和登录会话，把验证码唯一约束改为 `(email, purpose)`。由于摘要现在绑定用途，所有已有验证码均失效，用户升级后必须重新获取验证码。应用密码重置会原子撤销该用户的全部旧令牌。SQL 成功后发布新版后端和客户端。
 
-`05` 不修改旧账号、密码、角色或用户名，不自动把历史用户名认定为已验证邮箱。它建立邮箱身份、验证码状态和 SMTP 配置表；初始邮件服务为禁用。升级后由管理员在「邮件服务」保存连接配置，并在部署环境保留 `COPILOT_PLATFORM_MASTER_KEY`、提供独立 `COPILOT_EMAIL_CODE_SECRET` 后，才能发送注册验证码。已有账号仍可按原方式登录。
+06 删除 `app_users.username` 并建立非唯一显示名称；登录身份独立存储。用户 ID、密码、角色不变。SMTP username 不受影响。若从 05 升级，先执行 06 再执行 07。
 
-仅完成 `01` / `02` 的更早数据库，则只补齐 `03` / `04` / `05`：
-
-```sh
-docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql
-```
-
-新增脚本不删除既有用户或会话数据，既有普通用户不会自动获得管理员权限。升级前的应用可以读取原业务字段；回滚应用时保留新增表/字段，不执行删表回滚。平台和邮件服务地址、模型/Agent 绑定均存数据库，Key 与 SMTP 密码保存为密文；恢复数据库时也需要原部署加密主密钥。后端不读取供应商或 SMTP 环境配置作为回退。
-
-移除迁移工具不删除已有业务数据或历史表。已存在的 `flyway_schema_history` 可以保留，应用不再使用它。后续结构变更在此目录新增独立 SQL 文件，并记录适用版本、执行顺序及操作结果，由部署人员执行。
-
-## 显示名称迁移（06）
-
-完成 01–05 后，停止旧版后端，备份数据库，再使用 `psql -v ON_ERROR_STOP=1 --single-transaction -f backend/sql/06_display_name.sql` 执行。脚本为一次性升级，不可重复运行。它先复制邮箱或账号到非唯一 `display_name`，为非邮箱账号建立 `account` 登录身份，再删除 `app_users.username`；用户 ID、密码和令牌不变。随后必须启动使用 `identifier` 登录字段的新版后端和客户端。新空库也需要按顺序执行至 06。SMTP 的 username 是邮件服务器认证账号，不在本次迁移范围。
+结构变更后不能仅替换旧 JAR。本次未创建数据库备份，不能依赖备份回滚。平台主密钥必须妥善保管，否则密文无法恢复。供应商和 SMTP 地址从管理页面配置，无环境变量回退。后续结构变更新增编号文件并记录执行结果。

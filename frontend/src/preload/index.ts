@@ -15,6 +15,8 @@ function createBridge(accountScope?: string): DesktopBridge {
   platformLogin: input => invoke('platform:login', input),
   platformRegister: input => invoke('platform:register', input),
   requestEmailCode: input => invoke('platform:email-code', input),
+  requestPasswordResetCode: input => invoke('platform:password-reset-code', input),
+  resetPassword: input => invoke('platform:password-reset', input),
   saveCustomService: input => invoke('services:save', input),
   testCustomService: input => invoke('services:test', input),
   removeCustomService: id => invoke('services:remove', id),

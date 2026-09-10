@@ -17,7 +17,7 @@ import static org.mockito.Mockito.verify;
 class SmtpTransportTest {
     @Test void send_configuredMail_composesCodeOnlyForTheRequestedRecipient() {
         JavaMailSenderImpl mail = mock(JavaMailSenderImpl.class);
-        new SmtpTransport(config -> mail).send(EmailTestData.smtp(), "alice@example.com", "582916", 600);
+        new SmtpTransport(config -> mail).send(EmailTestData.smtp(), "alice@example.com", "582916", 600, "register");
         var message = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mail).send(message.capture());
         assertThat(message.getValue().getTo()).containsExactly("alice@example.com");
@@ -25,10 +25,19 @@ class SmtpTransportTest {
         assertThat(message.getValue().getText()).contains("582916", "10 分钟").doesNotContain("test-password", EmailTestData.SECRET);
     }
 
+    @Test void send_passwordReset_usesResetSubjectAndInstructions() {
+        JavaMailSenderImpl mail = mock(JavaMailSenderImpl.class);
+        new SmtpTransport(config -> mail).send(EmailTestData.smtp(), "alice@example.com", "582916", 600, "password_reset");
+        var message = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mail).send(message.capture());
+        assertThat(message.getValue().getSubject()).isEqualTo("Interview Copilot 重置密码验证码");
+        assertThat(message.getValue().getText()).contains("重置密码", "582916").doesNotContain("注册");
+    }
+
     @Test void send_transportError_returnsSafe503WithoutSmtpCredentialsOrCode() {
         JavaMailSenderImpl mail = mock(JavaMailSenderImpl.class);
         doThrow(new MailSendException("provider secret 582916 test-password")).when(mail).send(any(SimpleMailMessage.class));
-        assertThatThrownBy(() -> new SmtpTransport(config -> mail).send(EmailTestData.smtp(), "alice@example.com", "582916", 600))
+        assertThatThrownBy(() -> new SmtpTransport(config -> mail).send(EmailTestData.smtp(), "alice@example.com", "582916", 600, "register"))
                 .isInstanceOf(ApiException.class).hasMessage("邮箱注册服务暂不可用，请稍后重试。");
     }
 

@@ -19,13 +19,14 @@ public class SmtpTransport {
     @Autowired public SmtpTransport() { this(SmtpTransport::configure); }
     SmtpTransport(Function<SmtpProperties, JavaMailSenderImpl> factory) { this.factory = factory; }
 
-    public void send(SmtpProperties smtp, String email, String code, int expiresInSeconds) {
+    public void send(SmtpProperties smtp, String email, String code, int expiresInSeconds, String purpose) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(smtp.from());
         message.setTo(email);
-        message.setSubject("Interview Copilot 邮箱注册验证码");
-        message.setText("你的注册验证码是：" + code + "\n有效期 " + expiresInSeconds / 60
-                + " 分钟。请勿向他人提供验证码。如果不是你发起的注册，请忽略此邮件。");
+        String action = "password_reset".equals(purpose) ? "重置密码" : "注册";
+        message.setSubject("Interview Copilot " + action + "验证码");
+        message.setText("你的" + action + "验证码是：" + code + "\n有效期 " + expiresInSeconds / 60
+                + " 分钟。请勿向他人提供验证码。如果不是你发起的" + action + "，请忽略此邮件。");
         if (!sending.tryAcquire()) throw EmailErrors.limited();
         try { factory.apply(smtp).send(message); }
         catch (MailException error) {

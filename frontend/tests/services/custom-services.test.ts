@@ -18,6 +18,23 @@ beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'copilot-custo
 afterEach(async () => { vi.unstubAllGlobals(); await rm(directory, { recursive: true, force: true }) })
 
 describe('custom service library', () => {
+  it('preserves explicit mixed selections when an account first saves the authenticated platform address', async () => {
+    const saved = await store.saveCustomService({ name: '本机向量', kind: 'embedding', url: 'http://localhost:11434/v1', model: 'bge', dimensions: 512 })
+    const embedding = saved.serviceSelections?.embedding
+    const selections = { llm: { source: 'platform' as const, id: 'fast' }, embedding }
+    const result = await store.saveSettings({ ...defaultSettings, platform: { enabled: true, baseUrl: 'https://platform.example' }, serviceSelections: selections })
+    expect(result.serviceSelections).toEqual(selections)
+    const authenticated = { ...result, platform: { ...result.platform, ...info, enabled: true, baseUrl: 'https://platform.example', authenticated: true, expiresAt: new Date(Date.now() + 60000).toISOString() } }
+    const connection = routeService(authenticated, { ...(await store.getSecrets()), platformAccessToken: 'business-token' }, 'llm')
+    expect(connection.platform).toBe(true)
+    expect(connection.settings.llm.model).toBe('fast')
+    expect(() => routeService({ ...authenticated, serviceSelections: { llm: { source: 'platform', id: 'unpublished' } } }, { platformAccessToken: 'business-token', llmApiKey: '', asrApiKey: '', embeddingApiKey: '', remoteKnowledgeApiKey: '' }, 'llm')).toThrow('所选平台模型已下架')
+  })
+  it('clears inherited platform selections when changing addresses without a new selection', async () => {
+    await store.saveSettings({ ...defaultSettings, platform: { enabled: true, baseUrl: 'https://old.example' }, serviceSelections: { llm: { source: 'platform', id: 'fast' } } })
+    const result = await store.saveSettings({ ...defaultSettings, platform: { enabled: true, baseUrl: 'https://new.example' }, serviceSelections: undefined })
+    expect(result.serviceSelections?.llm).toBeUndefined()
+  })
   it('migrates existing keys once and preserves working credentials without exposing them', async () => {
     await store.saveSettings({ ...defaultSettings, llm: { ...defaultSettings.llm, apiKey: 'old-private-key' } })
     await store.initializeServices()

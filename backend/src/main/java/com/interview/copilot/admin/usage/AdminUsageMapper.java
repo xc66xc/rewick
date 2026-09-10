@@ -24,7 +24,8 @@ public interface AdminUsageMapper {
 
     @Select("""
             <script>SELECT e.id::text, e.app_users_id::text AS user_id, u.display_name, e.request_id, e.capability,
-                e.model, e.status, e.created_at, e.finished_at
+                e.model, e.status, e.created_at AT TIME ZONE 'Asia/Shanghai' AS created_at,
+                e.finished_at AT TIME ZONE 'Asia/Shanghai' AS finished_at
             FROM usage_events e JOIN app_users u ON u.id = e.app_users_id
             """ + FILTER + " ORDER BY e.id DESC LIMIT #{size} OFFSET #{offset}</script>")
     List<UsageView> page(@Param("filter") Filter filter, @Param("size") int size, @Param("offset") int offset);

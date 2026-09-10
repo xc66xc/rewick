@@ -26,6 +26,13 @@ export class PlatformClient {
     const raw = await this.request('/api/v1/auth/email-code', undefined, parseInput(emailInputSchema, input))
     return parseInput(emailCodeResponseSchema, raw)
   }
+  async passwordResetCode(input: unknown) {
+    const raw = await this.request('/api/v1/auth/password-reset/email-code', undefined, parseInput(emailInputSchema, input))
+    return parseInput(emailCodeResponseSchema, raw)
+  }
+  async resetPassword(input: unknown): Promise<void> {
+    await this.request('/api/v1/auth/password-reset', undefined, parseInput(registerInputSchema, input))
+  }
   async info(token: string, signal?: AbortSignal): Promise<PlatformInfo> {
     const parsed = platformInfoSchema.safeParse(await this.request('/api/v1/platform', token, undefined, signal))
     if (!parsed.success) throw new Error('平台能力响应格式无效，请联系平台管理员。')
@@ -48,13 +55,15 @@ export class PlatformClient {
         await response.body?.cancel().catch(() => undefined)
         const message = response.status === 401 ? (path.endsWith('/login') ? '平台登录账号或密码错误。' : '平台登录已失效，请重新登录。')
           : response.status === 403 ? '平台账号没有此服务权限，请联系管理员。'
-          : response.status === 429 && path.endsWith('/email-code') ? '验证码发送过于频繁，请稍后再试；如果已收到验证码，请直接填写并注册。'
+          : response.status === 429 && path.endsWith('/email-code') ? '验证码发送过于频繁，请稍后再试；如果已收到验证码，请直接填写并提交。'
           : response.status === 429 && path.endsWith('/register') ? '注册尝试过于频繁，请稍后重试。'
           : response.status === 429 && path.endsWith('/login') ? '登录尝试过于频繁，请稍后重试。'
           : response.status === 429 ? '平台请求过于频繁，请稍后重试。'
-          : response.status === 409 && path.endsWith('/register') ? '该邮箱已注册，请直接登录。'
+          : response.status === 409 && (path.endsWith('/register') || path === '/api/v1/auth/email-code') ? '该邮箱已注册，如果该邮箱为您的邮箱，可以直接登录或找回密码。'
+          : response.status === 400 && path.endsWith('/password-reset') ? '邮箱、密码或验证码无效，验证码可能已过期，密码修改失败，请检查后重试。'
+          : response.status === 404 && path.includes('/password-reset') ? '该邮箱尚未注册，请先注册账号。'
           : response.status === 400 && path.endsWith('/register') ? '邮箱、密码或验证码无效，验证码可能已过期，请检查后重试。'
-          : response.status === 503 && path.includes('/auth/') ? '邮箱注册服务暂不可用，请联系管理员检查邮件服务配置。'
+          : response.status === 503 && path.includes('/auth/') ? '邮箱验证码服务暂不可用，请联系管理员检查邮件服务配置。'
           : `平台请求失败（HTTP ${response.status}），请稍后重试。`
         throw new PlatformRequestError(message, response.status)
       }
@@ -108,6 +117,16 @@ export class PlatformService {
     const { platform } = await this.store.getSettings()
     if (!platform?.enabled) throw new Error('请先配置平台地址。')
     return new PlatformClient(platform.baseUrl, 15000).emailCode(input)
+  }
+  async passwordResetCode(input: unknown) {
+    const { platform } = await this.store.getSettings()
+    if (!platform?.enabled) throw new Error('请先配置平台地址。')
+    return new PlatformClient(platform.baseUrl, 15000).passwordResetCode(input)
+  }
+  async resetPassword(input: unknown): Promise<void> {
+    const { platform } = await this.store.getSettings()
+    if (!platform?.enabled) throw new Error('请先配置平台地址。')
+    await new PlatformClient(platform.baseUrl, 15000).resetPassword(input)
   }
   async logout(): Promise<Settings> {
     const snapshot = await this.store.getConnectionSnapshot()

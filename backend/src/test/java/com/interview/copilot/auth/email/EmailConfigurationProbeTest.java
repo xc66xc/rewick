@@ -27,6 +27,6 @@ class EmailConfigurationProbeTest {
         assertThat(failed.success()).isFalse();
         assertThat(failed.message()).doesNotContain("private", "secret");
         verify(service, never()).publish(anyLong(), any());
-        verify(transport, never()).send(any(), any(), any(), org.mockito.ArgumentMatchers.anyInt());
+        verify(transport, never()).send(any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(), any());
     }
 }

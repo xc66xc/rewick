@@ -17,6 +17,7 @@ spring:
     password: ${COPILOT_DATABASE_PASSWORD:}
     hikari:
       maximum-pool-size: 10
+      connection-init-sql: "SET TIME ZONE 'Asia/Shanghai'"
   sql:
     init:
       mode: never

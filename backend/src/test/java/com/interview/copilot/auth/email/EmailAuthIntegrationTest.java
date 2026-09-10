@@ -65,7 +65,7 @@ class EmailAuthIntegrationTest {
         mailbox.clear();
         reset(mail);
         doAnswer(invocation -> { mailbox.put(invocation.getArgument(0), invocation.getArgument(1)); return null; })
-                .when(mail).send(anyString(), anyString());
+                .when(mail).send(anyString(), anyString(), anyString());
     }
 
     @Test void register_validCode_normalizesEmailAndReturnsUsableUserTokenWithoutSecrets() {
@@ -142,7 +142,7 @@ class EmailAuthIntegrationTest {
     }
 
     @Test void send_mailFailure_returnsSafe503AndNeverActivatesTheCode() {
-        doThrow(EmailErrors.unavailable()).when(mail).send(anyString(), anyString());
+        doThrow(EmailErrors.unavailable()).when(mail).send(anyString(), anyString(), anyString());
         var result = send(EMAIL);
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
         assertThat(result.getBody().path("code").asText()).isEqualTo("email_unavailable");
@@ -150,12 +150,15 @@ class EmailAuthIntegrationTest {
         assertThat(register(EMAIL, PASSWORD, "123456").getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
 
-    @Test void send_registeredAddress_hasGenericResponseAndDoesNotResetTheAccount() {
+    @Test void send_registeredAddress_returnsConflictAndDoesNotResetTheAccount() {
         send(EMAIL);
         register(EMAIL, PASSWORD, mailbox.get(EMAIL));
         mailbox.clear();
-        allowResend();
-        assertThat(send(EMAIL).getStatusCode()).isEqualTo(HttpStatus.OK);
+        doThrow(EmailErrors.unavailable()).when(mail).requireConfigured();
+        var repeated = send(EMAIL);
+        assertThat(repeated.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(repeated.getBody().path("message").asText())
+                .isEqualTo("该邮箱已注册，如果该邮箱为您的邮箱，可以直接登录或找回密码");
         assertThat(mailbox).isEmpty();
         assertThat(login(EMAIL, PASSWORD).getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(count("app_users")).isEqualTo(1);
@@ -185,7 +188,7 @@ class EmailAuthIntegrationTest {
         jdbc.update("INSERT INTO auth_identities(app_users_id,identity_type,identifier,verified_at) VALUES(?,'account',?,CURRENT_TIMESTAMP)", id, EMAIL);
         assertThat(login(EMAIL, PASSWORD).getBody().path("user").path("role").asText()).isEqualTo("ADMIN");
         assertThat(login(EMAIL, PASSWORD).getBody().path("user").has("email")).isFalse();
-        assertThat(send(EMAIL).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(send(EMAIL).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(mailbox).isEmpty();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM auth_identities WHERE identity_type='email'", Integer.class)).isZero();
     }

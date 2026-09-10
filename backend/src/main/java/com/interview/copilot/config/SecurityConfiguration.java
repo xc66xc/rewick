@@ -25,7 +25,8 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests(access -> access
                         .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/email-code", "/api/v1/auth/register").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/email-code", "/api/v1/auth/register",
+                                "/api/v1/auth/password-reset/email-code", "/api/v1/auth/password-reset").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/**").authenticated()
                         .anyRequest().denyAll())

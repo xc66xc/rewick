@@ -90,6 +90,31 @@ describe('platform credentials and sessions', () => {
     const client = new PlatformClient('https://platform.example')
     await expect(client[method](input)).rejects.toThrow(message)
   })
+
+  it('uses distinct recovery endpoints without saving secrets or creating a session', async () => {
+    await store.saveSettings(enabledInput())
+    const fetchMock = vi.fn().mockResolvedValueOnce(Response.json({ retryAfterSeconds: 60, expiresInSeconds: 600 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const service = new PlatformService(store)
+    await service.passwordResetCode({ email: 'Existing@Example.com' })
+    await service.resetPassword({ email: 'Existing@Example.com', password: 'new-secret-password', code: '654321' })
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual(['http://127.0.0.1:8080/api/v1/auth/password-reset/email-code', 'http://127.0.0.1:8080/api/v1/auth/password-reset'])
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ email: 'existing@example.com', password: 'new-secret-password', code: '654321' })
+    expect(fetchMock.mock.calls[1][1].headers).not.toHaveProperty('Authorization')
+    expect((await store.getSettings()).platform?.authenticated).toBe(false)
+    expect(await readFile(join(directory, 'settings.json'), 'utf8')).not.toMatch(/new-secret-password|654321/)
+    await expect(service.resetPassword({ email: 'existing@example.com', password: 'short', code: '654321' })).rejects.toThrow()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+  it.each([
+    ['emailCode', { email: 'test@example.com' }, 409, '该邮箱已注册，如果该邮箱为您的邮箱，可以直接登录或找回密码。'],
+    ['resetPassword', { email: 'test@example.com', password: 'test-password-123', code: '123456' }, 400, '密码修改失败'],
+    ['passwordResetCode', { email: 'test@example.com' }, 404, '该邮箱尚未注册'],
+  ] as const)('reports actionable %s errors', async (method, input, status, message) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('private body', { status })))
+    await expect(new PlatformClient('https://platform.example')[method](input)).rejects.toThrow(message)
+  })
   it('persists the selected platform model across restart and capability refresh, clearing it on server change', async () => {
     const platform = { enabled: true, baseUrl: 'http://127.0.0.1:8080', selectedModelId: 'careful' }
     await store.saveSettings({ ...enabledInput(), platform })

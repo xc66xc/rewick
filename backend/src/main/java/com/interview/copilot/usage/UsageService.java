@@ -1,11 +1,11 @@
 package com.interview.copilot.usage;
 
 import com.interview.copilot.common.ApiException;
+import com.interview.copilot.common.ServerTime;
 import com.interview.copilot.config.PlatformLimitsProperties;
 import java.time.Clock;
-import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
+import java.time.LocalDateTime;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -33,7 +33,7 @@ public class UsageService {
         if (mapper.countRequest(userId, requestId, capability) > 0) {
             throw new ApiException(HttpStatus.CONFLICT, "duplicate_request", "此请求已经提交，请勿重复发送。");
         }
-        Instant now = clock.instant();
+        LocalDateTime now = ServerTime.now(clock);
         mapper.expire(userId, now);
         reserve(userId, capability, now);
         long duration = capability.equals("asr") ? limits.maxAsrSessionSeconds() + 30L : 600L;
@@ -42,7 +42,7 @@ public class UsageService {
     }
 
     void finish(long userId, String requestId, String capability, String status) {
-        mapper.finish(userId, requestId, capability, status, clock.instant());
+        mapper.finish(userId, requestId, capability, status, ServerTime.now(clock));
     }
 
     public void describeModel(long userId, String requestId, String capability, String model) {
@@ -54,14 +54,14 @@ public class UsageService {
         mapper.describeModel(userId, requestId, capability, value);
     }
 
-    private void reserve(long userId, String capability, Instant now) {
+    private void reserve(long userId, String capability, LocalDateTime now) {
         if (capability.equals("asr")) {
             if (mapper.activeAsr(userId) > 0) throw limited("同一账户只能同时进行一场平台转写。");
             return;
         }
         var effective = userLimits.effective(userId);
         int limit = capability.equals("llm") ? effective.dailyAnswers() : effective.dailyKnowledgeQueries();
-        LocalDate day = now.atZone(ZoneOffset.UTC).toLocalDate();
+        LocalDate day = now.toLocalDate();
         mapper.ensureDaily(userId, day, capability);
         if (mapper.reserveDaily(userId, day, capability, limit) == 0) throw limited("该能力今日请求次数已达上限。");
     }

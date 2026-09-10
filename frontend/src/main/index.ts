@@ -211,7 +211,7 @@ function assertSender(event: IpcMainInvokeEvent): void {
 }
 
 function registerHandlers(): void {
-  const publicChannels = new Set(['settings:get', 'settings:save', 'platform:login', 'platform:register', 'platform:email-code', 'platform:logout', 'platform:refresh', 'asr:stop', 'answer:cancel', 'window:compact', 'window:pin'])
+  const publicChannels = new Set(['settings:get', 'settings:save', 'platform:login', 'platform:register', 'platform:email-code', 'platform:password-reset-code', 'platform:password-reset', 'platform:logout', 'platform:refresh', 'asr:stop', 'answer:cancel', 'window:compact', 'window:pin'])
   const handle = (channel: string, callback: (arg: unknown) => unknown): void => {
     ipcMain.handle(channel, async (event, envelope: unknown) => {
       assertSender(event)
@@ -241,6 +241,8 @@ function registerHandlers(): void {
     return mutatePlatform(async () => { disposeWork(); await platform.login(input); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings() })
   })
   handle('platform:email-code', input => platform.emailCode(input))
+  handle('platform:password-reset-code', input => platform.passwordResetCode(input))
+  handle('platform:password-reset', input => platform.resetPassword(input))
   handle('platform:register', input => mutatePlatform(async () => {
     disposeWork(); await platform.register(input); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings()
   }))

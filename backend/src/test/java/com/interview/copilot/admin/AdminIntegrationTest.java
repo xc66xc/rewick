@@ -217,6 +217,15 @@ class AdminIntegrationTest {
     }
 
     @Test
+    void usage_beijingStoredTimestamp_returnsUnambiguousInstant() {
+        jdbc.update("INSERT INTO usage_events(app_users_id,request_id,capability,expires_at,created_at) VALUES(?,'local-clock','llm','2026-09-11 00:00:00.123456','2026-09-10 13:30:00.654321')", member);
+
+        JsonNode page = call(HttpMethod.GET, "/api/v1/admin/usage?userId=" + member, adminToken, null).getBody();
+
+        assertThat(page.path("items").get(0).path("createdAt").asText()).isEqualTo("2026-09-10T05:30:00.654321Z");
+    }
+
+    @Test
     void audit_failedInsert_rollsBackUserCreation() {
         jdbc.execute("ALTER TABLE audit_events ADD CONSTRAINT reject_create CHECK (action <> 'user.create')");
         try {
@@ -263,7 +272,7 @@ class AdminIntegrationTest {
     private static final class AdminPostgres extends PostgreSQLContainer<AdminPostgres> {
         private AdminPostgres() {
             super(DockerImageName.parse("interview-copilot-postgres:15.19-pgvector0.5.1").asCompatibleSubstituteFor("postgres"));
-            for (String name : List.of("01_schema.sql", "02_pgvector.sql", "03_admin_users.sql", "04_platform_config.sql", "05_email_auth.sql", "06_display_name.sql")) {
+            for (String name : List.of("01_schema.sql", "02_pgvector.sql", "03_admin_users.sql", "04_platform_config.sql", "05_email_auth.sql", "06_display_name.sql", "07_email_code_purpose.sql", "08_server_local_time.sql")) {
                 withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", name)), "/tmp/" + name);
             }
         }
@@ -273,7 +282,7 @@ class AdminIntegrationTest {
             super.containerIsStarted(info);
             try {
                 var result = execInContainer("psql", "-X", "-v", "ON_ERROR_STOP=1", "--single-transaction", "-U", getUsername(), "-d", getDatabaseName(),
-                        "-f", "/tmp/01_schema.sql", "-f", "/tmp/02_pgvector.sql", "-f", "/tmp/03_admin_users.sql", "-f", "/tmp/04_platform_config.sql", "-f", "/tmp/05_email_auth.sql", "-f", "/tmp/06_display_name.sql");
+                        "-f", "/tmp/01_schema.sql", "-f", "/tmp/02_pgvector.sql", "-f", "/tmp/03_admin_users.sql", "-f", "/tmp/04_platform_config.sql", "-f", "/tmp/05_email_auth.sql", "-f", "/tmp/06_display_name.sql", "-f", "/tmp/07_email_code_purpose.sql", "-f", "/tmp/08_server_local_time.sql");
                 if (result.getExitCode() != 0) throw new IllegalStateException("Admin test SQL initialization failed");
             } catch (IOException error) {
                 throw new IllegalStateException("Admin test SQL execution failed", error);

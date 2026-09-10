@@ -8,7 +8,8 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=65.0 -XX:+ExitOnOutOfMemoryError
+      TZ: Asia/Shanghai
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Shanghai -XX:MaxRAMPercentage=65.0 -XX:+ExitOnOutOfMemoryError
       # Backend is private; Nginx overwrites forwarded IP headers at the public boundary.
       SERVER_FORWARD_HEADERS_STRATEGY: native
     ports:
