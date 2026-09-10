@@ -51,7 +51,7 @@ public record PlatformConfig(
             @Min(1) @Max(8192) int maxOutputTokens) { }
 
     public record Embedding(boolean enabled, @NotNull @Size(max = 64) String providerId,
-                            @NotNull @Size(max = 200) String model, @Min(64) @Max(4096) int dimensions) { }
+                            @NotNull @Size(max = 200) String model, @Min(1024) @Max(1024) int dimensions) { }
 
     public record Asr(boolean enabled, @NotNull @Size(max = 64) String providerId,
                       @NotNull @Size(max = 200) String model) { }

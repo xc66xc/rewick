@@ -1,0 +1,37 @@
+import { describe, expect, it, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { ApiClient } from '../src/api'
+import ReferencePolicy from '../src/components/ReferencePolicy'
+import { response } from './fixtures'
+
+describe('reference upload policy', () => {
+  it('loads user limits and saves capacity in bytes', async () => {
+    let submitted: unknown
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, options: RequestInit) => {
+      if (options.method === 'PUT') { submitted = JSON.parse(String(options.body)); return new Response(null, { status: 204 }) }
+      return response({ maxFiles: 20, maxTotalBytes: 104857600, maxChunks: 10000 })
+    }))
+    const actor = userEvent.setup()
+    render(<ReferencePolicy api={new ApiClient('test-token')} />)
+    const capacity = await screen.findByLabelText('每用户资料总容量（MB）')
+    expect(capacity).toHaveProperty('value', '100')
+    await actor.clear(capacity)
+    await actor.type(capacity, '50')
+    await actor.click(screen.getByRole('button', { name: '保存资料配额' }))
+    expect((await screen.findByRole('status')).textContent).toContain('已保存')
+    expect(submitted).toEqual({ maxFiles: 20, maxTotalBytes: 52428800, maxChunks: 10000 })
+  })
+  it('preserves edited limits and explains failed save', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, options: RequestInit) => options.method === 'PUT'
+      ? response({ message: '保存失败' }, 500)
+      : response({ maxFiles: 20, maxTotalBytes: 104857600, maxChunks: 10000 })))
+    const actor = userEvent.setup()
+    render(<ReferencePolicy api={new ApiClient('test-token')} />)
+    const count = await screen.findByLabelText('每用户文件数量')
+    await actor.clear(count); await actor.type(count, '30')
+    await actor.click(screen.getByRole('button', { name: '保存资料配额' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('保存失败')
+    expect(count).toHaveProperty('value', '30')
+  })
+})

@@ -28,7 +28,7 @@ export default function ServiceSelector({ kind, settings, selection, onChange, o
       <option value="new">+ 自定义模型/服务…</option>
     </select></label>
     <p id={`${id}-note`} className={selection && !available ? styles.inlineError : styles.fieldHint} role={selection && !available ? 'alert' : undefined}>
-      {selection && !available ? '原服务已删除或下架，请明确选择其他服务后保存。' : kind === 'embedding' && !platform.length ? '平台暂未提供向量服务，可添加自己的 Embeddings 接口。' : '按所选服务连接；平台配置由管理员维护。'}</p>
+      {selection && !available ? '原服务已删除或下架，请明确选择其他服务后保存。' : '按所选服务连接；平台配置由管理员维护。'}</p>
     {profile && <div className={styles.platformActions}>
       <button type="button" className={styles.secondaryButton} onClick={() => onCustom(profile)}>编辑{serviceLabels[kind]}</button>
       <button type="button" className={styles.textButton} onClick={() => onRemove(profile)}>删除{serviceLabels[kind]}</button>

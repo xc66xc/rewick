@@ -14,7 +14,7 @@ interface SettingsDialogProps {
   settings: Settings; bridge: DesktopBridge | undefined; onSave: (input: SettingsInput) => Promise<Settings>
   onApply?: (settings: Settings) => void; onLogout?: () => Promise<void>; onClose: () => void
 }
-const kinds: ServiceKind[] = ['llm', 'asr', 'embedding', 'knowledge']
+const kinds: ServiceKind[] = ['llm', 'asr', 'knowledge']
 function initialDraft(settings: Settings): SettingsInput {
   return { ...settingsInput(settings), serviceSelections: Object.fromEntries(kinds.map(kind => [kind, selectionFor(settings, kind)])) }
 }

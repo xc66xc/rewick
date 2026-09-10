@@ -12,7 +12,7 @@ import { PlatformService } from './services/platform-client'
 import { testCustomService } from './services/custom-service-test'
 import { customServiceSchema } from './services/custom-service-profiles'
 import { PlatformWork } from './services/platform-work'
-import { routeEmbedding, needsPlatform, routeService } from './services/service-routing'
+import { needsPlatform, routeService } from './services/service-routing'
 import type { PlatformCapability } from './services/service-routing'
 import { InterviewStore } from './services/interview-store'
 import { environmentInputSchema } from './services/interview-validation'
@@ -23,7 +23,6 @@ import { LlmClient } from './services/llm-client'
 import { DisplayCaptureService } from './services/display-capture'
 import { ReferenceService } from './services/reference-service'
 import { extractDocument } from './services/document-extractor'
-import { EmbeddingClient } from './services/embedding-client'
 import { RemoteKnowledgeClient } from './services/remote-knowledge-client'
 import { answerRequestSchema, parseInput, referencePatchSchema, settingsInputSchema } from './services/validation'
 import type { AppEvent, Settings, SettingsInput, SessionRecord, RetrievalContext } from '../shared/types'
@@ -61,7 +60,11 @@ const secretStorage = {
 }
 const authSettings = new SettingsStore(join(app.getPath('userData'), 'authentication-v3'), secretStorage)
 const platform = new PlatformService(authSettings)
-const accounts = new AccountWorkspaces(app.getPath('userData'), secretStorage, () => emit({ kind: 'documents-changed' }), () => authSettings.getConnectionSnapshot())
+const accounts = new AccountWorkspaces(app.getPath('userData'), secretStorage, () => emit({ kind: 'documents-changed' }), () => authSettings.getConnectionSnapshot(), async token => {
+  await authSettings.clearPlatformSession(token)
+  await syncAccount()
+  emit({ kind: 'settings-changed' })
+})
 async function syncAccount() {
   const authenticated = await authSettings.getSettings()
   if (accounts.identity(authenticated) !== accounts.active?.id) disposeWork()
@@ -273,9 +276,6 @@ function registerHandlers(): void {
     if (platformChanged) disposeWork()
     try { await settings.saveSettings({ ...parsed, context: previous.context, interviewTarget: previous.interviewTarget }) }
     finally { finishPlatformChange?.() }
-    // A failed library rebuild must not report that an already-committed target was not saved.
-    try { if (previous.platform?.authenticated && !platformChanged) await references.refreshConfiguration() }
-    catch { emit({ kind: 'documents-error', message: '设置已保存，但资料索引更新失败。请在参考资料中检查状态并重试。' }) }
     const saved = await effectiveSettings()
     emit({ kind: 'settings-changed' })
     return saved
@@ -289,10 +289,6 @@ function registerHandlers(): void {
   handle('services:save', async input => {
     const profile = parseInput(customServiceSchema, input)
     await settings.saveCustomService(profile)
-    if (profile.kind === 'embedding') {
-      try { await references.refreshConfiguration() }
-      catch { emit({ kind: 'documents-error', message: '服务已保存，但资料索引更新失败，请在参考资料中重试。' }) }
-    }
     emit({ kind: 'settings-changed' })
     return effectiveSettings()
   })
@@ -341,11 +337,6 @@ function registerHandlers(): void {
     const library = await interviews.activate(parseInput(profileId, input))
     return resolveInterviewSettings(config, library)
   }))
-  handle('embedding:test', async () => {
-    const snapshot = await settings.getConnectionSnapshot()
-    const connection = routeEmbedding(snapshot.settings, snapshot.secrets)
-    return new EmbeddingClient(connection.config, connection.apiKey).test()
-  })
   handle('remote-knowledge:test', () => testService('knowledge'))
   handle('references:list', () => references.list())
   handle('references:import', async () => {

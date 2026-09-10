@@ -28,7 +28,6 @@ describe('SettingsStore', () => {
     const config = input()
     config.asr.apiKey = 'test-asr-secret'
     config.llm.apiKey = 'test-llm-secret'
-    config.embedding.apiKey = 'test-embedding-secret'
     config.remoteKnowledge = { enabled: true, url: 'https://workspace.example/api/v1/indices/knowledge/search', agentId: 'aid-test', apiKey: 'test-remote-secret' }
     config.interviewTarget = { companyName: '示例公司', roleName: '开发工程师', jobDescription: '需要 Redis 经验' }
     config.autoAnswer = { enabled: false, pauseMs: 2500 }
@@ -39,10 +38,9 @@ describe('SettingsStore', () => {
     const persisted = await readFile(join(directory, 'settings.json'), 'utf8')
     expect(persisted).not.toContain('test-asr-secret')
     expect(persisted).not.toContain('test-llm-secret')
-    expect(persisted).not.toContain('test-embedding-secret')
     expect(persisted).not.toContain('test-remote-secret')
     expect(visible.remoteKnowledge).toEqual({ enabled: true, url: config.remoteKnowledge.url, agentId: 'aid-test', hasApiKey: true })
-    expect(await new SettingsStore(directory, crypto).getSecrets()).toEqual({ platformAccessToken: '', asrApiKey: 'test-asr-secret', llmApiKey: 'test-llm-secret', embeddingApiKey: 'test-embedding-secret', remoteKnowledgeApiKey: 'test-remote-secret' })
+    expect(await new SettingsStore(directory, crypto).getSecrets()).toEqual({ platformAccessToken: '', asrApiKey: 'test-asr-secret', llmApiKey: 'test-llm-secret', remoteKnowledgeApiKey: 'test-remote-secret' })
     expect((await new SettingsStore(directory, crypto).getSettings()).interviewTarget).toEqual(config.interviewTarget)
     expect((await new SettingsStore(directory, crypto).getSettings()).autoAnswer).toEqual({ enabled: false, pauseMs: 2500 })
     expect((await stat(join(directory, 'settings.json'))).mode & 0o777).toBe(0o600)
@@ -59,7 +57,7 @@ describe('SettingsStore', () => {
     update.context.text = '后端工程师'
     update.llm.apiKey = ''
     await store.saveSettings(update)
-    expect(await store.getSecrets()).toEqual({ platformAccessToken: '', asrApiKey: 'first-secret', llmApiKey: '', embeddingApiKey: '', remoteKnowledgeApiKey: '' })
+    expect(await store.getSecrets()).toEqual({ platformAccessToken: '', asrApiKey: 'first-secret', llmApiKey: '', remoteKnowledgeApiKey: '' })
     expect((await store.getSettings()).context.text).toBe('后端工程师')
   })
 
@@ -77,7 +75,7 @@ describe('SettingsStore', () => {
   })
 
   it('loads legacy settings without losing the resume or encrypted credentials', async () => {
-    const { interviewTarget: _target, embedding: _embedding, retrieval: _retrieval, remoteKnowledge: _remote, ...legacy } = input()
+    const { interviewTarget: _target, retrieval: _retrieval, remoteKnowledge: _remote, ...legacy } = input()
     legacy.context.text = '旧版个人背景保持原样'
     await writeFile(join(directory, 'settings.json'), JSON.stringify({ version: 1, settings: legacy,
       secrets: { asr: crypto.encryptString('legacy-asr').toString('base64'), llm: crypto.encryptString('legacy-llm').toString('base64') } }))
@@ -86,14 +84,13 @@ describe('SettingsStore', () => {
     expect(loaded.context.text).toBe(legacy.context.text)
     expect(loaded.interviewTarget).toEqual(defaultSettings.interviewTarget)
     expect(loaded.retrieval.enabled).toBe(false)
-    expect(loaded.embedding.hasApiKey).toBe(false)
     expect(loaded.remoteKnowledge).toEqual(defaultSettings.remoteKnowledge)
-    expect(await store.getSecrets()).toEqual({ platformAccessToken: '', asrApiKey: 'legacy-asr', llmApiKey: 'legacy-llm', embeddingApiKey: '', remoteKnowledgeApiKey: '' })
+    expect(await store.getSecrets()).toEqual({ platformAccessToken: '', asrApiKey: 'legacy-asr', llmApiKey: 'legacy-llm', remoteKnowledgeApiKey: '' })
   })
 
   it('migrates 0.3.0 settings read-only with the remote service off and existing data untouched', async () => {
     const { remoteKnowledge: _remote, ...legacy } = input()
-    const content = JSON.stringify({ version: 1, settings: legacy, secrets: { asr: '', llm: '', embedding: '' } })
+    const content = JSON.stringify({ version: 1, settings: legacy, secrets: { asr: '', llm: '' } })
     await writeFile(join(directory, 'settings.json'), content)
     const loaded = await new SettingsStore(directory, crypto).getSettings()
     expect(loaded.remoteKnowledge).toEqual(defaultSettings.remoteKnowledge)
@@ -133,7 +130,7 @@ describe('SettingsStore', () => {
   it('does not expose a plaintext remote key injected into the settings file', async () => {
     const config = input()
     config.remoteKnowledge.apiKey = 'injected-plaintext-secret'
-    await writeFile(join(directory, 'settings.json'), JSON.stringify({ version: 1, settings: config, secrets: { asr: '', llm: '', embedding: '', remoteKnowledge: '' } }))
+    await writeFile(join(directory, 'settings.json'), JSON.stringify({ version: 1, settings: config, secrets: { asr: '', llm: '', remoteKnowledge: '' } }))
     const store = new SettingsStore(directory, crypto)
     expect(JSON.stringify(await store.getSettings())).not.toContain('injected-plaintext-secret')
     expect((await store.getSecrets()).remoteKnowledgeApiKey).toBe('')
@@ -153,13 +150,12 @@ describe('SettingsStore', () => {
     expect((await store.getSettings()).remoteKnowledge.url).toBe(second.remoteKnowledge.url)
   })
 
-  it('rejects an oversized JD and unsafe embedding endpoint without overwriting a saved target', async () => {
+  it('rejects an oversized JD without overwriting a saved target', async () => {
     const store = new SettingsStore(directory, crypto)
     const saved = input()
     saved.interviewTarget = { companyName: '原公司', roleName: '原岗位', jobDescription: '原 JD' }
     await store.saveSettings(saved)
     await expect(store.saveSettings({ ...saved, interviewTarget: { ...saved.interviewTarget, jobDescription: '字'.repeat(12001) } })).rejects.toThrow('配置或输入无效')
-    await expect(store.saveSettings({ ...saved, embedding: { ...saved.embedding, baseUrl: 'ftp://remote.example/v1' } })).rejects.toThrow('HTTPS')
     expect((await store.getSettings()).interviewTarget).toEqual(saved.interviewTarget)
   })
 

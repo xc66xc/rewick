@@ -5,13 +5,13 @@ import { join } from 'node:path'
 import { defaultSettings } from '../../src/shared/defaults'
 import type { PlatformInfo } from '../../src/shared/types'
 import { SettingsStore } from '../../src/main/services/settings-store'
-import { assertEmbeddingSelection, routeService } from '../../src/main/services/service-routing'
+import { routeService } from '../../src/main/services/service-routing'
 import { PlatformClient, PlatformService } from '../../src/main/services/platform-client'
 import { testCustomService } from '../../src/main/services/custom-service-test'
 
 const crypto = { isEncryptionAvailable: () => true, encryptString: (value: string) => Buffer.from(value.split('').reverse().join('')), decryptString: (value: Buffer) => value.toString().split('').reverse().join('') }
 const draft = { name: '我的回答', kind: 'llm' as const, url: 'https://models.example/v1', model: 'own-model', apiKey: 'private-api-key' }
-const info: PlatformInfo = { user: { id: '1', displayName: 'u_demo', email: 'demo@example.com' }, capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'fast', asr: 'asr-model', available: [{ id: 'fast', name: '平台快速' }] }, services: { asr: [{ id: 'asr-one', name: '平台语音' }], knowledge: [{ id: 'knowledge-one', name: '平台知识库' }], embedding: [] }, limits: { dailyAnswers: 10, dailyKnowledgeQueries: 10, maxAsrSessionSeconds: 600 } }
+const info: PlatformInfo = { user: { id: '1', displayName: 'u_demo', email: 'demo@example.com' }, capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'fast', asr: 'asr-model', available: [{ id: 'fast', name: '平台快速' }] }, services: { asr: [{ id: 'asr-one', name: '平台语音' }], knowledge: [{ id: 'knowledge-one', name: '平台知识库' }] }, limits: { dailyAnswers: 10, dailyKnowledgeQueries: 10, maxAsrSessionSeconds: 600 } }
 let directory: string
 let store: SettingsStore
 beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'copilot-custom-')); store = new SettingsStore(directory, crypto) })
@@ -19,16 +19,16 @@ afterEach(async () => { vi.unstubAllGlobals(); await rm(directory, { recursive: 
 
 describe('custom service library', () => {
   it('preserves explicit mixed selections when an account first saves the authenticated platform address', async () => {
-    const saved = await store.saveCustomService({ name: '本机向量', kind: 'embedding', url: 'http://localhost:11434/v1', model: 'bge', dimensions: 512 })
-    const embedding = saved.serviceSelections?.embedding
-    const selections = { llm: { source: 'platform' as const, id: 'fast' }, embedding }
+    const saved = await store.saveCustomService({ name: '我的转写', kind: 'asr', url: 'wss://speech.example/asr', model: 'asr', apiKey: 'test-asr-key' })
+    const asr = saved.serviceSelections?.asr
+    const selections = { llm: { source: 'platform' as const, id: 'fast' }, asr }
     const result = await store.saveSettings({ ...defaultSettings, platform: { enabled: true, baseUrl: 'https://platform.example' }, serviceSelections: selections })
     expect(result.serviceSelections).toEqual(selections)
     const authenticated = { ...result, platform: { ...result.platform, ...info, enabled: true, baseUrl: 'https://platform.example', authenticated: true, expiresAt: new Date(Date.now() + 60000).toISOString() } }
     const connection = routeService(authenticated, { ...(await store.getSecrets()), platformAccessToken: 'business-token' }, 'llm')
     expect(connection.platform).toBe(true)
     expect(connection.settings.llm.model).toBe('fast')
-    expect(() => routeService({ ...authenticated, serviceSelections: { llm: { source: 'platform', id: 'unpublished' } } }, { platformAccessToken: 'business-token', llmApiKey: '', asrApiKey: '', embeddingApiKey: '', remoteKnowledgeApiKey: '' }, 'llm')).toThrow('所选平台模型已下架')
+    expect(() => routeService({ ...authenticated, serviceSelections: { llm: { source: 'platform', id: 'unpublished' } } }, { platformAccessToken: 'business-token', llmApiKey: '', asrApiKey: '', remoteKnowledgeApiKey: '' }, 'llm')).toThrow('所选平台模型已下架')
   })
   it('clears inherited platform selections when changing addresses without a new selection', async () => {
     await store.saveSettings({ ...defaultSettings, platform: { enabled: true, baseUrl: 'https://old.example' }, serviceSelections: { llm: { source: 'platform', id: 'fast' } } })
@@ -45,19 +45,6 @@ describe('custom service library', () => {
     expect((await store.getSecrets()).llmApiKey).toBe('old-private-key')
     expect(JSON.stringify(value)).not.toContain('old-private-key')
     expect(await readFile(join(directory, 'settings.json'), 'utf8')).not.toContain('old-private-key')
-  })
-  it('migrates keyless local embeddings and removes the legacy secret copy with its profile', async () => {
-    await store.saveSettings({ ...defaultSettings, embedding: { ...defaultSettings.embedding, baseUrl: 'http://localhost:11434/v1' }, llm: { ...defaultSettings.llm, apiKey: 'legacy-secret' } })
-    await store.initializeServices()
-    expect((await store.getSettings()).serviceSelections?.embedding).toEqual({ source: 'custom', id: 'legacy-embedding' })
-    await store.removeCustomService('legacy-llm')
-    const persisted = JSON.parse(await readFile(join(directory, 'settings.json'), 'utf8'))
-    expect(persisted.secrets.llm).toBe('')
-    expect(persisted.customServices.some((profile: { id: string }) => profile.id === 'legacy-llm')).toBe(false)
-  })
-  it('rejects missing or unsupported embedding selections before contacting a legacy endpoint', () => {
-    expect(() => assertEmbeddingSelection({ ...defaultSettings, serviceSelections: { embedding: { source: 'custom', id: 'removed' } } })).toThrow('已移除')
-    expect(() => assertEmbeddingSelection({ ...defaultSettings, serviceSelections: { embedding: { source: 'platform', id: 'unsupported' } } })).toThrow('已下架')
   })
   it('does not start a draft request after its authentication scope is cancelled', async () => {
     const controller = new AbortController()

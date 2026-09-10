@@ -93,7 +93,7 @@ class PlatformConfigIntegrationTest {
 
     private static final class ConfigDatabase extends PostgreSQLContainer<ConfigDatabase> {
         private ConfigDatabase() {
-            super(DockerImageName.parse("interview-copilot-postgres:15.19-pgvector0.5.1").asCompatibleSubstituteFor("postgres"));
+            super(DockerImageName.parse("interview-copilot-postgres:15.19-pgvector0.8.6").asCompatibleSubstituteFor("postgres"));
             withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql")), "/tmp/copilot-sql");
         }
 
@@ -103,7 +103,7 @@ class PlatformConfigIntegrationTest {
                 var result = execInContainer("psql", "-X", "-v", "ON_ERROR_STOP=1", "--single-transaction",
                         "-U", getUsername(), "-d", getDatabaseName(), "-f", "/tmp/copilot-sql/01_schema.sql",
                         "-f", "/tmp/copilot-sql/02_pgvector.sql", "-f", "/tmp/copilot-sql/03_admin_users.sql",
-                        "-f", "/tmp/copilot-sql/04_platform_config.sql", "-f", "/tmp/copilot-sql/05_email_auth.sql", "-f", "/tmp/copilot-sql/06_display_name.sql", "-f", "/tmp/copilot-sql/07_email_code_purpose.sql", "-f", "/tmp/copilot-sql/08_server_local_time.sql");
+                        "-f", "/tmp/copilot-sql/04_platform_config.sql", "-f", "/tmp/copilot-sql/05_email_auth.sql", "-f", "/tmp/copilot-sql/06_display_name.sql", "-f", "/tmp/copilot-sql/07_email_code_purpose.sql", "-f", "/tmp/copilot-sql/08_server_local_time.sql", "-f", "/tmp/copilot-sql/09_pg_references.sql");
                 if (result.getExitCode() != 0) { throw new IllegalStateException("Test SQL initialization failed: " + result.getStderr()); }
             } catch (IOException error) { throw new IllegalStateException("Test SQL could not execute", error); }
             catch (InterruptedException error) {

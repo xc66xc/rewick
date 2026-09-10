@@ -4,8 +4,8 @@ import { endpoint, isLoopback, parseInput } from './validation'
 
 const base = z.object({
   id: z.string().min(1).max(128).optional(), name: z.string().trim().min(1).max(100),
-  kind: z.enum(['llm', 'asr', 'embedding', 'knowledge']), url: z.string().trim().min(1).max(2048),
-  model: z.string().trim().max(200).optional(), dimensions: z.number().int().min(64).max(4096).optional(),
+  kind: z.enum(['llm', 'asr', 'knowledge']), url: z.string().trim().min(1).max(2048),
+  model: z.string().trim().max(200).optional(),
   agentId: z.string().trim().max(200).optional(),
   apiKey: z.string().trim().max(4096).refine(value => !/[\r\n]/.test(value)).optional(),
 })
@@ -13,14 +13,13 @@ export const customServiceSchema = base.superRefine((value, context) => {
   const url = endpoint(value.kind === 'asr' ? 'ws' : 'http').safeParse(value.url)
   if (!url.success) context.addIssue({ code: 'custom', path: ['url'], message: '请填写有效的安全服务地址；HTTP/WS 仅限本机。' })
   if (value.kind !== 'knowledge' && !value.model) context.addIssue({ code: 'custom', path: ['model'], message: '请填写模型名称。' })
-  if (value.kind === 'embedding' && !value.dimensions) context.addIssue({ code: 'custom', path: ['dimensions'], message: '请填写向量维度。' })
   if (value.kind === 'knowledge' && (!value.agentId || /\s/.test(value.agentId) || /[{}]|%7[bd]/i.test(value.url))) {
     context.addIssue({ code: 'custom', path: ['agentId'], message: '请填写真实的完整检索地址和 Agent ID。' })
   }
 })
 export const storedCustomServiceSchema = base.omit({ apiKey: true }).extend({ id: z.string().min(1).max(128), secret: z.string().max(16_384) })
 export type StoredCustomService = z.infer<typeof storedCustomServiceSchema>
-export const serviceKinds: ServiceKind[] = ['llm', 'asr', 'embedding', 'knowledge']
+export const serviceKinds: ServiceKind[] = ['llm', 'asr', 'knowledge']
 
 export function profileView({ secret, ...profile }: StoredCustomService): CustomServiceProfile {
   return { ...profile, hasApiKey: Boolean(secret) }
@@ -30,7 +29,6 @@ export function profileSettings(settings: Settings, profile: CustomServiceProfil
   switch (profile.kind) {
     case 'llm': return { ...settings, llm: { ...settings.llm, baseUrl: profile.url, model: profile.model ?? '', hasApiKey: profile.hasApiKey } }
     case 'asr': return { ...settings, asr: { ...settings.asr, url: profile.url, model: profile.model ?? '', hasApiKey: profile.hasApiKey } }
-    case 'embedding': return { ...settings, embedding: { baseUrl: profile.url, model: profile.model ?? '', dimensions: profile.dimensions ?? 1024, hasApiKey: profile.hasApiKey } }
     case 'knowledge': return { ...settings, remoteKnowledge: { enabled: settings.remoteKnowledge.enabled, url: profile.url, agentId: profile.agentId ?? '', hasApiKey: profile.hasApiKey } }
   }
 }

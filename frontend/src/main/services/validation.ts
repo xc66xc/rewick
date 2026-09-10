@@ -27,9 +27,6 @@ export const llmSettingsSchema = z.object({
 export const interviewTargetSchema = z.object({
   companyName: z.string().trim().max(200), roleName: z.string().trim().max(200), jobDescription: z.string().max(12_000),
 })
-export const embeddingSettingsSchema = z.object({
-  baseUrl: endpoint('http'), model: z.string().trim().min(1).max(200), dimensions: z.number().int().min(64).max(4096),
-})
 const remoteKnowledgeBaseSchema = z.object({
   enabled: z.boolean(),
   url: z.union([z.literal(''), endpoint('http')]).refine(value => !/[{}]|%7[bd]/i.test(value), '请将请求地址中的业务空间占位符替换为真实 Workspace ID。'),
@@ -44,7 +41,7 @@ export const referencePatchSchema = z.object({ enabled: z.boolean().optional(), 
 export const retrievalContextSchema = z.object({
   status: z.enum(['disabled', 'ready', 'degraded', 'empty']), message: z.string().max(2000).optional(),
   excerpts: z.array(z.object({
-    source: z.enum(['local', 'bailian']).optional(),
+    source: z.enum(['platform', 'bailian']).optional(),
     documentId: z.string().min(1).max(128), revision: z.number().int().positive(),
     name: z.string().max(255), kind: z.enum(['technical', 'personal']), chunkId: z.string().min(1).max(200),
     text: z.string().max(2000), pageStart: z.number().int().positive().max(100_000).optional(), pageEnd: z.number().int().positive().max(100_000).optional(),
@@ -60,7 +57,6 @@ export const settingsInputSchema = z.object({
   serviceSelections: z.object({
     llm: z.object({ source: z.enum(['platform', 'custom']), id: z.string().max(200) }).optional(),
     asr: z.object({ source: z.enum(['platform', 'custom']), id: z.string().max(200) }).optional(),
-    embedding: z.object({ source: z.enum(['platform', 'custom']), id: z.string().max(200) }).optional(),
     knowledge: z.object({ source: z.enum(['platform', 'custom']), id: z.string().max(200) }).optional(),
   }).optional(),
   platform: platformSettingsSchema.default({ enabled: false, baseUrl: 'http://127.0.0.1:8080' }),
@@ -68,7 +64,6 @@ export const settingsInputSchema = z.object({
   llm: llmSettingsSchema.extend({ apiKey }),
   context: z.object({ name: z.string().max(255), text: z.string().max(100_000) }),
   interviewTarget: interviewTargetSchema.default({ companyName: '', roleName: '', jobDescription: '' }),
-  embedding: embeddingSettingsSchema.extend({ apiKey }).default({ baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'text-embedding-v4', dimensions: 1024 }),
   retrieval: z.object({ enabled: z.boolean() }).default({ enabled: false }),
   remoteKnowledge: remoteKnowledgeBaseSchema.extend({ apiKey }).default({ enabled: false, url: '', agentId: '' }),
   answerStyle: z.enum(['concise', 'detailed']),

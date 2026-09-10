@@ -10,7 +10,6 @@ export function settingsInput(settings: Settings): SettingsInput {
     llm: { baseUrl: settings.llm.baseUrl, model: settings.llm.model, temperature: settings.llm.temperature },
     context: settings.context,
     interviewTarget: settings.interviewTarget,
-    embedding: { baseUrl: settings.embedding.baseUrl, model: settings.embedding.model, dimensions: settings.embedding.dimensions },
     retrieval: settings.retrieval,
     remoteKnowledge: { enabled: settings.remoteKnowledge.enabled, url: settings.remoteKnowledge.url, agentId: settings.remoteKnowledge.agentId },
     answerStyle: settings.answerStyle,

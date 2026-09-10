@@ -15,7 +15,7 @@ import org.testcontainers.utility.DockerImageName;
 @Testcontainers
 class DisplayNameMigrationIntegrationTest {
     @Container static final PostgreSQLContainer<?> DATABASE = new PostgreSQLContainer<>(DockerImageName
-            .parse("interview-copilot-postgres:15.19-pgvector0.5.1").asCompatibleSubstituteFor("postgres"));
+            .parse("interview-copilot-postgres:15.19-pgvector0.8.6").asCompatibleSubstituteFor("postgres"));
 
     @Test void migration_existingEmailAndAdmin_preservesIdsTokensAndLoginAndAllowsDuplicateDisplayNames() throws Exception {
         try (var connection = DriverManager.getConnection(DATABASE.getJdbcUrl(), DATABASE.getUsername(), DATABASE.getPassword());

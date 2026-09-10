@@ -18,10 +18,10 @@ const persistedSchema = z.object({
   customServices: z.array(storedCustomServiceSchema).max(100).default([]),
   serviceProfilesInitialized: z.boolean().default(false),
   platformSession: platformSessionSchema.optional(),
-  secrets: z.object({ asr: z.string().max(16_384), llm: z.string().max(16_384), embedding: z.string().max(16_384).default(''), remoteKnowledge: z.string().max(16_384).default(''), platformAccessToken: z.string().max(16_384).default('') }),
+  secrets: z.object({ asr: z.string().max(16_384), llm: z.string().max(16_384), remoteKnowledge: z.string().max(16_384).default(''), platformAccessToken: z.string().max(16_384).default('') }),
 })
 type Persisted = z.infer<typeof persistedSchema>
-export interface ServiceSecrets { platformAccessToken: string; asrApiKey: string; llmApiKey: string; embeddingApiKey: string; remoteKnowledgeApiKey: string }
+export interface ServiceSecrets { platformAccessToken: string; asrApiKey: string; llmApiKey: string; remoteKnowledgeApiKey: string }
 
 export class SettingsStore {
   private readonly path: string
@@ -38,13 +38,12 @@ export class SettingsStore {
     return this.queue.run(async () => {
       const saved = await this.read()
       if (saved.serviceProfilesInitialized) return
-      const { llm, asr, embedding, remoteKnowledge } = saved.settings
+      const { llm, asr, remoteKnowledge } = saved.settings
       const candidates = [
         { id: 'legacy-llm', kind: 'llm' as const, name: llm.model, url: llm.baseUrl, model: llm.model, secret: saved.secrets.llm },
         { id: 'legacy-asr', kind: 'asr' as const, name: asr.model, url: asr.url, model: asr.model, secret: saved.secrets.asr },
-        { id: 'legacy-embedding', kind: 'embedding' as const, name: embedding.model, url: embedding.baseUrl, model: embedding.model, dimensions: embedding.dimensions, secret: saved.secrets.embedding },
         { id: 'legacy-knowledge', kind: 'knowledge' as const, name: '我的百炼知识库', url: remoteKnowledge.url, agentId: remoteKnowledge.agentId, secret: saved.secrets.remoteKnowledge },
-      ].filter(value => value.secret || (['llm', 'asr', 'embedding'].includes(value.kind) && /^(localhost|127\.\d+\.\d+\.\d+|\[::1\])$/.test(new URL(value.url).hostname)))
+      ].filter(value => value.secret || (['llm', 'asr'].includes(value.kind) && /^(localhost|127\.\d+\.\d+\.\d+|\[::1\])$/.test(new URL(value.url).hostname)))
       const selections = { ...saved.settings.serviceSelections }
       for (const profile of candidates) {
         if (!saved.customServices.some(value => value.id === profile.id)) saved.customServices.push(profile)
@@ -85,7 +84,7 @@ export class SettingsStore {
     return this.queue.run(async () => {
       const saved = await this.read()
       saved.customServices = saved.customServices.filter(value => value.id !== id)
-      const legacySecret = { 'legacy-llm': 'llm', 'legacy-asr': 'asr', 'legacy-embedding': 'embedding', 'legacy-knowledge': 'remoteKnowledge' } as const
+      const legacySecret = { 'legacy-llm': 'llm', 'legacy-asr': 'asr', 'legacy-knowledge': 'remoteKnowledge' } as const
       if (id in legacySecret) saved.secrets[legacySecret[id as keyof typeof legacySecret]] = ''
       // Preserve a missing selection so removal never silently switches a paid provider.
       await writeJsonAtomic(this.path, saved)
@@ -118,17 +117,15 @@ export class SettingsStore {
       }
       const { apiKey: asrKey, ...asr } = parsed.asr
       const { apiKey: llmKey, ...llm } = parsed.llm
-      const { apiKey: embeddingKey, ...embedding } = parsed.embedding
       const { apiKey: remoteKnowledgeKey, ...remoteKnowledge } = parsed.remoteKnowledge
       const next: Persisted = {
         customServices: previous.customServices, serviceProfilesInitialized: previous.serviceProfilesInitialized,
-        version: 1, settings: { ...parsed, asr, llm, embedding, remoteKnowledge },
+        version: 1, settings: { ...parsed, asr, llm, remoteKnowledge },
         platformSession: parsed.platform.baseUrl === previous.settings.platform.baseUrl ? previous.platformSession : undefined,
         secrets: {
           platformAccessToken: parsed.platform.baseUrl === previous.settings.platform.baseUrl ? previous.secrets.platformAccessToken : '',
           asr: this.encrypt(asrKey, previous.secrets.asr),
           llm: this.encrypt(llmKey, previous.secrets.llm),
-          embedding: this.encrypt(embeddingKey, previous.secrets.embedding),
           remoteKnowledge: this.encrypt(remoteKnowledgeKey, previous.secrets.remoteKnowledge),
         },
       }
@@ -175,26 +172,25 @@ export class SettingsStore {
       if (choice.source === 'platform') return ''
       return this.decrypt(saved.customServices.find(value => value.id === choice.id && value.kind === kind)?.secret ?? '')
     }
-    return { platformAccessToken: this.decrypt(secrets.platformAccessToken), asrApiKey: secretFor('asr', secrets.asr), llmApiKey: secretFor('llm', secrets.llm), embeddingApiKey: secretFor('embedding', secrets.embedding), remoteKnowledgeApiKey: secretFor('knowledge', secrets.remoteKnowledge) }
+    return { platformAccessToken: this.decrypt(secrets.platformAccessToken), asrApiKey: secretFor('asr', secrets.asr), llmApiKey: secretFor('llm', secrets.llm), remoteKnowledgeApiKey: secretFor('knowledge', secrets.remoteKnowledge) }
   }
 
   private async read(): Promise<Persisted> {
     const saved = await readJson(this.path, 1_048_576)
     if (saved === undefined) {
-      return { version: 1, customServices: [], serviceProfilesInitialized: false, settings: parseInput(settingsInputSchema, defaultSettings), secrets: { asr: '', llm: '', embedding: '', remoteKnowledge: '', platformAccessToken: '' } }
+      return { version: 1, customServices: [], serviceProfilesInitialized: false, settings: parseInput(settingsInputSchema, defaultSettings), secrets: { asr: '', llm: '', remoteKnowledge: '', platformAccessToken: '' } }
     }
     const parsed = persistedSchema.safeParse(saved)
     if (!parsed.success) throw new Error('本地设置文件格式无效，请先备份后检查 settings.json。')
     // Never accept plaintext secrets from a manually altered settings file.
     delete parsed.data.settings.asr.apiKey
     delete parsed.data.settings.llm.apiKey
-    delete parsed.data.settings.embedding.apiKey
     delete parsed.data.settings.remoteKnowledge.apiKey
     return parsed.data
   }
 
   private publicSettings(value: Persisted): Settings {
-    const { asr, llm, embedding, remoteKnowledge, context, interviewTarget, retrieval, answerStyle, autoAnswer } = value.settings
+    const { asr, llm, remoteKnowledge, context, interviewTarget, retrieval, answerStyle, autoAnswer } = value.settings
     const authenticated = Boolean(value.secrets.platformAccessToken && value.platformSession && Date.parse(value.platformSession.expiresAt) > Date.now())
     const info = authenticated ? value.platformSession?.info : undefined
     let result: Settings = {
@@ -202,7 +198,6 @@ export class SettingsStore {
       platform: { ...value.settings.platform, authenticated, user: info?.user, expiresAt: value.platformSession?.expiresAt, capabilities: info?.capabilities ?? { llm: false, asr: false, knowledge: false }, models: info?.models ?? { llm: '', asr: '' }, services: info?.services, limits: info?.limits },
       asr: { url: asr.url, model: asr.model, silenceMs: asr.silenceMs, hasApiKey: Boolean(value.secrets.asr) },
       llm: { baseUrl: llm.baseUrl, model: llm.model, temperature: llm.temperature, hasApiKey: Boolean(value.secrets.llm) },
-      embedding: { baseUrl: embedding.baseUrl, model: embedding.model, dimensions: embedding.dimensions, hasApiKey: Boolean(value.secrets.embedding) },
       remoteKnowledge: { ...remoteKnowledge, hasApiKey: Boolean(value.secrets.remoteKnowledge) },
       context, interviewTarget, retrieval, answerStyle, autoAnswer,
     }

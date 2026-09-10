@@ -1,6 +1,6 @@
 # Interview Copilot 后端
 
-独立 Java 模块化单体，供 macOS / Windows 客户端调用平台能力。采用 JDK 21、Spring Boot 3.5.16、MyBatis-Plus 3.5.17、PostgreSQL 15.19 和 pgvector 0.5.1。MyBatis-Plus 模块由其 3.5.17 BOM 统一管理，其余 Spring/数据库组件使用 Boot BOM。平台供应商与 SMTP 连接只从后台管理的数据库配置读取，Key/密码加密保存，不回退环境配置；客户端持有可撤销的业务登录凭证。
+独立 Java 模块化单体，供 macOS / Windows 客户端调用平台能力。采用 JDK 21、Spring Boot 3.5.16、MyBatis-Plus 3.5.17、PostgreSQL 15.19 和 pgvector 0.8.6。MyBatis-Plus 模块由其 3.5.17 BOM 统一管理，其余 Spring/数据库组件使用 Boot BOM。平台供应商与 SMTP 连接只从后台管理的数据库配置读取，Key/密码加密保存，不回退环境配置；客户端持有可撤销的业务登录凭证。
 
 ## 构建与运行
 
@@ -13,17 +13,17 @@
 
 Maven Wrapper 固定 3.9.16；Windows 使用 `mvnw.cmd`。第一次运行会从官方 Maven 仓库下载构建工具与依赖。数据库 SQL 放在 `backend/sql/`，不随应用自动执行，也不打入运行 jar。没有数据库凭据时不会使用内置账号或密码。
 
-数据库固定为 PostgreSQL 15.19 + pgvector 0.5.1。仓库根 `deploy/postgres/Dockerfile` 构建匹配版本的数据库镜像。空库依次执行 `sql/01_schema.sql` 至 `sql/07_email_code_purpose.sql`；已执行 `01`–`05` 的数据库，停止旧版后端后在事务内依次执行 `06_display_name.sql`、`07_email_code_purpose.sql`，再启动新版。迁移保留用户 ID、令牌、密码与管理员登录，邮箱账号使用邮箱作为显示名称。具体命令见 [SQL 升级说明](sql/README.md#已有数据库)。项目不使用 Flyway，也禁用了 Spring SQL 自动初始化。
+数据库固定为 PostgreSQL 15.19 + pgvector 0.8.6。仓库根 `deploy/postgres/Dockerfile` 构建匹配版本的数据库镜像。空库依次执行 `sql/01_schema.sql` 至 `sql/07_email_code_purpose.sql`；已执行 `01`–`05` 的数据库，停止旧版后端后在事务内依次执行 `06_display_name.sql`、`07_email_code_purpose.sql`，再启动新版。迁移保留用户 ID、令牌、密码与管理员登录，邮箱账号使用邮箱作为显示名称。具体命令见 [SQL 升级说明](sql/README.md#已有数据库)。项目不使用 Flyway，也禁用了 Spring SQL 自动初始化。
 
-自行部署或使用托管数据库时，先在数据库服务器安装 pgvector 0.5.1 扩展文件，由具备扩展创建权限的管理员在目标业务数据库执行：
+自行部署或使用托管数据库时，先在数据库服务器安装 pgvector 0.8.6 扩展文件，由具备扩展创建权限的管理员在目标业务数据库执行：
 
 ```sql
-CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public VERSION '0.5.1';
+CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public VERSION '0.8.6';
 SELECT current_setting('server_version'), extversion
 FROM pg_extension WHERE extname = 'vector';
 ```
 
-扩展和表结构准备好后，运行应用的账号不需要为此获得超级用户权限。pgvector 当前只准备数据库能力；百炼远程检索、客户端本地资料检索逻辑不因此切换，也未新增资料切块、Embedding 或向量检索接口。版本对应安装说明见 [pgvector 0.5.1 官方文档](https://github.com/pgvector/pgvector/tree/v0.5.1#installation)。
+扩展和表结构准备好后，运行应用的账号不需要为此获得超级用户权限。参考资料通过 `/api/v1/references` 上传、管理与检索，后台持久任务调用平台向量服务并写入 `vector(1024)`。普通用户不直接调用向量接口；百炼检索保持独立。版本对应安装说明见 [pgvector 0.8.6 官方文档](https://github.com/pgvector/pgvector/tree/v0.8.6#installation)。
 
 | 环境变量 | 用途 / 默认值 |
 | --- | --- |
@@ -116,11 +116,11 @@ MyBatis-Plus 用于实体映射和常规 CRUD；额度、请求去重等并发�
 ```sh
 ./mvnw test
 # 先构建固定版本数据库镜像；此处命令从 backend/ 执行
-docker build -t interview-copilot-postgres:15.19-pgvector0.5.1 ../deploy/postgres
+docker build -t interview-copilot-postgres:15.19-pgvector0.8.6 ../deploy/postgres
 ./mvnw clean verify -Pintegration
 ```
 
-默认运行单元测试。`integration` 额外使用 Testcontainers 启动独立 `interview-copilot-postgres:15.19-pgvector0.5.1` 容器，在启动 Spring 上下文前通过 `psql` 单次事务显式执行 `sql/` 的八份脚本，验证真实初始化、精确数据库/扩展版本、向量距离与 HNSW，以及 token 摘要/过期/撤销、HTTP 鉴权、并发限额、重复请求和用户隔离。需要可用 Docker 且已构建上述镜像；测试不使用真实账号或云端供应商。Docker Desktop 若未自动发现 socket，可设置 `DOCKER_HOST` 为实际 Docker socket。数据库容器由测试管理，不连接桌面应用的真实资料或会话记录。Mac Apple Silicon 开发环境额外激活 `macos-arm64` profile，加载匹配架构的 Netty DNS 模块；生产 Linux 容器不使用这个依赖。
+默认运行单元测试。`integration` 额外使用 Testcontainers 启动独立 `interview-copilot-postgres:15.19-pgvector0.8.6` 容器，在启动 Spring 上下文前通过 `psql` 单次事务显式执行 `sql/` 的八份脚本，验证真实初始化、精确数据库/扩展版本、向量距离与 HNSW，以及 token 摘要/过期/撤销、HTTP 鉴权、并发限额、重复请求和用户隔离。需要可用 Docker 且已构建上述镜像；测试不使用真实账号或云端供应商。Docker Desktop 若未自动发现 socket，可设置 `DOCKER_HOST` 为实际 Docker socket。数据库容器由测试管理，不连接桌面应用的真实资料或会话记录。Mac Apple Silicon 开发环境额外激活 `macos-arm64` profile，加载匹配架构的 Netty DNS 模块；生产 Linux 容器不使用这个依赖。
 
 ## 发布边界
 

@@ -46,17 +46,10 @@ async function launch() {
     globalThis.__remoteDialogSelections = []
     globalThis.__remoteUnexpectedNetwork = []
     globalThis.__remoteLocalRetrievalOperations = []
-    const { Worker } = process.getBuiltinModule('node:worker_threads')
-    const originalPostMessage = Worker.prototype.postMessage
-    Worker.prototype.postMessage = function (message, ...args) {
-      if (['snapshot', 'search', 'releaseSnapshot'].includes(message?.operation)) {
-        globalThis.__remoteLocalRetrievalOperations.push(message.operation)
-      }
-      return Reflect.apply(originalPostMessage, this, [message, ...args])
-    }
     const originalFetch = globalThis.fetch
     globalThis.fetch = (input, options) => {
       const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url)
+      if (url.pathname === '/api/v1/references/search') globalThis.__remoteLocalRetrievalOperations.push('search')
       if (!['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) {
         globalThis.__remoteUnexpectedNetwork.push(`${url.protocol}//${url.host}${url.pathname}`)
         return Promise.reject(new Error('Non-loopback fetch blocked by isolated remote E2E'))

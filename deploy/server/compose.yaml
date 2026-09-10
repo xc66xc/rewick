@@ -12,6 +12,8 @@ services:
       JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Shanghai -XX:MaxRAMPercentage=65.0 -XX:+ExitOnOutOfMemoryError
       # Backend is private; Nginx overwrites forwarded IP headers at the public boundary.
       SERVER_FORWARD_HEADERS_STRATEGY: native
+    volumes:
+      - reference-files:/app/data/references
     ports:
       - '127.0.0.1:18081:8080'
     networks: [copilot]
@@ -48,3 +50,6 @@ networks:
   copilot:
     external: true
     name: interview-copilot-network
+
+volumes:
+  reference-files:

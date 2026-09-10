@@ -1,273 +1,106 @@
-import { createHash, randomUUID } from 'node:crypto'
-import { createReadStream, createWriteStream } from 'node:fs'
-import { mkdir, stat, unlink } from 'node:fs/promises'
-import { basename, extname, join } from 'node:path'
-import { Transform } from 'node:stream'
-import { pipeline } from 'node:stream/promises'
+import { open } from 'node:fs/promises'
+import { basename, extname } from 'node:path'
 import { z } from 'zod'
 import type { ReferenceDocument, ReferenceKind, RetrievalContext, Settings } from '../../shared/types'
-import { chunkDocument } from './chunker'
-import { extractDocument } from './document-extractor'
-import { DocumentStore, type IndexData } from './document-store'
-import { EmbeddingClient, embeddingFingerprint } from './embedding-client'
-import { RetrievalService, type EmbeddingProvider } from './retrieval-service'
-import { isLoopback, parseInput } from './validation'
+import type { SettingsStore } from './settings-store'
+import { parseInput, referencePatchSchema, retrievalContextSchema } from './validation'
 
 const identifier = z.string().uuid()
-const patchSchema = z.object({ enabled: z.boolean().optional(), kind: z.enum(['technical', 'personal']).optional() }).strict()
-async function contentHash(path: string): Promise<string> {
-  const hash = createHash('sha256')
-  for await (const block of createReadStream(path)) hash.update(block)
-  return hash.digest('hex')
-}
-async function copySource(path: string, copy: string): Promise<void> {
-  let size = 0
-  await pipeline(createReadStream(path), new Transform({ transform(block, _encoding, callback) {
-    size += block.length
-    callback(size > 10 * 1024 * 1024 ? new Error('文件不能超过 10 MB。') : null, block)
-  } }), createWriteStream(copy, { flags: 'wx', mode: 0o600 }))
-}
-async function deletePrivateCopy(path: string): Promise<void> {
-  try { await unlink(path) }
-  catch (error) {
-    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new Error('资料副本无法删除，请检查资料目录权限后重试。')
-  }
-}
-function failureMessage(error: unknown): string {
-  return error instanceof Error && /^(PDF|文档|资料|文件|文本|未提取|仅支持|向量|请先)/.test(error.message)
-    ? error.message.slice(0, 500) : '资料处理失败，请检查文件、向量服务和网络后重试。'
-}
-
+const documentSchema = z.object({
+  id: identifier, name: z.string().max(255), kind: z.enum(['technical', 'personal']), enabled: z.boolean(),
+  status: z.enum(['parsing', 'pending', 'indexing', 'ready', 'error']), pageCount: z.number().int().nonnegative(),
+  contentHash: z.string().max(128), revision: z.number().int().nonnegative(), createdAt: z.string(), updatedAt: z.string(),
+  error: z.string().max(2000).optional(), chunkCount: z.number().int().nonnegative(),
+})
 export class ReferenceService {
-  private readonly store: DocumentStore
-  private readonly retrieval: RetrievalService
-  private readonly directory: string
-  private readonly queue = new Set<string>()
-  private readonly parsers = new Map<string, AbortController>()
-  private configuration?: Awaited<ReturnType<EmbeddingProvider>>
-  private running = false
-  private job?: { id: string; controller: AbortController }
-  private disposed = false
-  private importTail: Promise<unknown> = Promise.resolve()
-  private configurationTail: Promise<void> = Promise.resolve()
+  private readonly lifetime = new AbortController()
+  constructor(private readonly changed: () => void,
+    private readonly authentication: () => ReturnType<SettingsStore['getConnectionSnapshot']>,
+    private readonly expired?: (token: string) => Promise<void>) {}
 
-  constructor(userDataPath: string, private readonly emitDocumentsChanged: () => void, private readonly getEmbedding: EmbeddingProvider) {
-    this.directory = join(userDataPath, 'documents')
-    this.store = new DocumentStore(userDataPath)
-    this.retrieval = new RetrievalService(this.store, getEmbedding)
-    void this.refreshConfiguration()
-  }
-
-  list(): Promise<ReferenceDocument[]> { return this.store.request('list') }
-
-  importFiles(paths: string[]): Promise<ReferenceDocument[]> {
-    const files = parseInput(z.array(z.string().min(1).max(4096)).min(1).max(30), paths)
-    const result = this.importTail.then(async () => {
-      const imported: ReferenceDocument[] = []
-      await mkdir(this.directory, { recursive: true, mode: 0o700 })
-      for (const path of files) {
-        this.assertOpen()
-        const extension = extname(path).toLowerCase()
-        if (!['.pdf', '.txt', '.md'].includes(extension)) throw new Error('仅支持 PDF、TXT 和 MD 文件。')
-        let source
-        try { source = await stat(path) }
-        catch { throw new Error('文件无法读取，请确认原文件仍然存在。') }
-        if (!source.isFile() || source.size > 10 * 1024 * 1024) throw new Error('文件不能超过 10 MB，且必须是普通文件。')
-        const id = randomUUID()
-        const copy = join(this.directory, `${id}${extension}`)
-        let created = false
-        try {
-          await copySource(path, copy)
-          const hash = await contentHash(copy)
-          const existing = await this.store.request<ReferenceDocument | null>('findHash', { hash })
-          if (existing) { imported.push(existing); continue }
-          await this.store.request('create', { id, name: basename(path).slice(0, 255), hash, path: copy })
-          created = true
-          this.changed()
-          await this.parse(id, copy)
-          let current: IndexData
-          try { current = await this.store.request<IndexData>('indexData', { id }) }
-          catch (error) {
-            if (error instanceof Error && error.message === '资料不存在或已移除。') continue
-            throw error
-          }
-          imported.push(current.document)
-          if (current.document.status === 'pending') this.enqueue(id)
-        } finally { if (!created) await deletePrivateCopy(copy) }
-      }
-      return imported
-    })
-    this.importTail = result.catch(() => undefined)
-    return result
-  }
-
-  preview(id: string): Promise<{ document: ReferenceDocument; text: string }> {
-    return this.store.request('preview', { id: parseInput(identifier, id) })
-  }
-
-  async update(id: string, patch: { enabled?: boolean; kind?: ReferenceKind }): Promise<void> {
-    parseInput(identifier, id)
-    const validated = parseInput(patchSchema, patch)
-    await this.store.request('update', { id, patch: validated })
-    if (validated.enabled === false) { this.queue.delete(id); if (this.job?.id === id) this.job.controller.abort() }
-    if (validated.enabled === true) {
-      const data = await this.store.request<IndexData>('indexData', { id })
-      const mismatched = this.configuration && data.fingerprint !== embeddingFingerprint(this.configuration.config)
-      if (data.pages.length && (data.document.status === 'pending' || mismatched)) {
-        await this.store.request('mark', { id, status: 'pending' })
-        this.enqueue(id)
-      }
-    }
-    this.retrieval.clear()
-    this.changed()
-  }
-
-  async remove(id: string): Promise<void> {
-    parseInput(identifier, id)
-    const data = await this.store.request<IndexData>('indexData', { id })
-    this.queue.delete(id)
-    this.parsers.get(id)?.abort()
-    if (this.job?.id === id) this.job.controller.abort()
-    try { await deletePrivateCopy(data.path) }
-    catch (error) {
-      await this.store.request('mark', { id, status: 'error', error: failureMessage(error) })
-      this.changed()
-      throw error
-    }
-    await this.store.request('remove', { id })
-    this.retrieval.clear()
-    this.changed()
-  }
-
-  async reindex(id: string): Promise<void> {
-    parseInput(identifier, id)
-    const data = await this.store.request<IndexData>('indexData', { id })
-    if (this.job?.id === id) this.job.controller.abort()
-    if (!data.pages.length) await this.parse(id, data.path)
-    else await this.store.request('mark', { id, status: 'pending' })
-    const current = await this.store.request<IndexData>('indexData', { id })
-    if (current.document.status === 'pending' && current.document.enabled) this.enqueue(id)
-    this.changed()
-  }
-
-  retrieve(question: string, transcript: string, settings: Settings, signal: AbortSignal): Promise<RetrievalContext> {
-    return this.retrieval.retrieve(question, transcript, settings, signal)
-  }
-
-  refreshConfiguration(): Promise<void> {
-    const refresh = this.configurationTail.then(async () => {
-      if (this.disposed) return
-      const current = await this.getEmbedding()
-      const fingerprint = embeddingFingerprint(current.config)
-      const changed = !this.configuration || embeddingFingerprint(this.configuration.config) !== fingerprint || this.configuration.apiKey !== current.apiKey
-      if (!changed) { this.pump(); return }
-      if (changed) this.configuration = { config: { ...current.config }, apiKey: current.apiKey }
-      if (changed) { this.job?.controller.abort(); this.retrieval.clear() }
-      const documents = await this.list()
-      for (const document of documents) {
-        if (!document.enabled || document.status === 'parsing') continue
-        if (!changed && this.job?.id === document.id) continue
-        const data = await this.store.request<IndexData>('indexData', { id: document.id })
-        if (!data.pages.length) continue
-        if (data.fingerprint !== fingerprint || document.status === 'pending' || (changed && document.status === 'error')) {
-          await this.store.request('mark', { id: document.id, status: 'pending' })
-          this.queue.add(document.id)
+  async list(): Promise<ReferenceDocument[]> { return parseInput(z.array(documentSchema).max(100), await this.request('', 'GET')) }
+  async importFiles(paths: string[]): Promise<ReferenceDocument[]> {
+    const files = parseInput(z.array(z.string().min(1).max(4096)).min(1).max(20), paths)
+    const documents: ReferenceDocument[] = []
+    for (const path of files) {
+      this.lifetime.signal.throwIfAborted()
+      if (!['.pdf', '.txt', '.md'].includes(extname(path).toLowerCase())) throw new Error('仅支持 PDF、TXT 和 MD 文件。')
+      const file = await open(path, 'r')
+      try {
+        const stat = await file.stat()
+        if (!stat.isFile() || stat.size > 10 * 1024 * 1024) throw new Error('文件不能超过 10 MB，且必须是普通文件。')
+        // Read through the checked handle with a bounded buffer, even if the file grows concurrently.
+        const buffer = Buffer.alloc(10 * 1024 * 1024 + 1)
+        let count = 0
+        while (count < buffer.length) {
+          const { bytesRead } = await file.read(buffer, count, buffer.length - count, null)
+          if (!bytesRead) break
+          count += bytesRead
         }
-      }
-      this.changed()
-      this.pump()
-    }).catch(async () => {
-      // Settings have already been saved; expose indexing failure without turning that save into a false failure.
-      this.configuration = undefined
-      this.queue.clear()
-      this.job?.controller.abort()
-      const documents = await this.list().catch(() => [])
-      await Promise.allSettled(documents.filter((document) => ['pending', 'indexing'].includes(document.status)).map((document) =>
-        this.store.request('mark', { id: document.id, status: 'error', error: '无法读取向量配置或资料库，请检查配置后重试。' })))
-      this.changed()
+        if (count > 10 * 1024 * 1024) throw new Error('文件不能超过 10 MB。')
+        const form = new FormData()
+        form.append('file', new Blob([buffer.subarray(0, count)]), basename(path))
+        documents.push(parseInput(documentSchema, await this.request('', 'POST', form)))
+        this.changed()
+      } finally { await file.close() }
+    }
+    return documents
+  }
+  async preview(id: string): Promise<{ document: ReferenceDocument; text: string }> {
+    return parseInput(z.object({ document: documentSchema, text: z.string().max(2_000_000) }), await this.request(`/${parseInput(identifier, id)}/preview`, 'GET'))
+  }
+  async update(id: string, patch: { enabled?: boolean; kind?: ReferenceKind }): Promise<void> {
+    await this.request(`/${parseInput(identifier, id)}`, 'PATCH', parseInput(referencePatchSchema, patch)); this.changed()
+  }
+  async remove(id: string): Promise<void> { await this.request(`/${parseInput(identifier, id)}`, 'DELETE'); this.changed() }
+  async reindex(id: string): Promise<void> { await this.request(`/${parseInput(identifier, id)}/reindex`, 'POST', {}); this.changed() }
+  async retrieve(question: string, _transcript: string, settings: Settings, signal: AbortSignal): Promise<RetrievalContext> {
+    signal.throwIfAborted()
+    if (!settings.retrieval.enabled) return { status: 'disabled', excerpts: [] }
+    const referenceIds = settings.interviewEnvironment?.referenceIds ?? []
+    if (!referenceIds.length || !question.trim()) return { status: 'empty', message: '当前面试环境未选择参考资料。', excerpts: [] }
+    try { return parseInput(retrievalContextSchema, await this.request('/search', 'POST', { query: question.trim().slice(0, 12_000), referenceIds }, signal)) }
+    catch (error) {
+      signal.throwIfAborted(); this.lifetime.signal.throwIfAborted()
+      if (error instanceof Error && error.message.includes('登录')) throw error
+      return { status: 'degraded', message: '平台资料检索暂不可用，本次仍参考简历和岗位描述回答。', excerpts: [] }
+    }
+  }
+  dispose(): void { this.lifetime.abort(new Error('账户已切换，请重试。')) }
+  private async request(path: string, method: string, body?: unknown, signal?: AbortSignal): Promise<unknown> {
+    const combined = AbortSignal.any([this.lifetime.signal, ...(signal ? [signal] : []), AbortSignal.timeout(30_000)])
+    combined.throwIfAborted()
+    const { settings, secrets } = await this.authentication()
+    if (!settings.platform?.authenticated || !secrets.platformAccessToken) throw new Error('平台登录已失效，请重新登录。')
+    combined.throwIfAborted()
+    const multipart = body instanceof FormData
+    const response = await fetch(`${settings.platform.baseUrl}/api/v1/references${path}`, {
+      method, signal: combined, redirect: 'error', headers: { Authorization: `Bearer ${secrets.platformAccessToken}`, ...(!multipart ? { 'Content-Type': 'application/json' } : {}) },
+      ...(body === undefined ? {} : { body: multipart ? body : JSON.stringify(body) }),
     })
-    this.configurationTail = refresh
-    return refresh
-  }
-
-  dispose(): void {
-    this.disposed = true
-    this.queue.clear()
-    this.job?.controller.abort()
-    for (const parser of this.parsers.values()) parser.abort()
-    this.parsers.clear()
-    this.retrieval.clear()
-    this.store.dispose()
-  }
-
-  private async parse(id: string, path: string): Promise<void> {
-    this.parsers.get(id)?.abort()
-    const controller = new AbortController()
-    this.parsers.set(id, controller)
-    try {
-      await this.store.request('mark', { id, status: 'parsing' })
-      this.changed()
-      const extracted = await extractDocument(path, controller.signal)
-      controller.signal.throwIfAborted()
-      const chunks = chunkDocument(extracted.pages, extracted.pageCount > 0)
-      await this.store.request('setText', { id, pages: extracted.pages, pageCount: extracted.pageCount, chunks })
-    } catch (error) {
-      if (!controller.signal.aborted) await this.store.request('mark', { id, status: 'error', error: failureMessage(error) }).catch(() => undefined)
-    } finally {
-      if (this.parsers.get(id) === controller) this.parsers.delete(id)
-      this.changed()
+    if (!response.ok) {
+      await response.body?.cancel()
+      if (response.status === 401) { await this.expired?.(secrets.platformAccessToken); throw new Error('平台登录已失效，请重新登录。') }
+      if (response.status === 403) throw new Error('没有该资料的访问权限。')
+      if (response.status === 404) throw new Error('资料不存在或已移除。')
+      if (response.status === 413) throw new Error('文件或资料总量超过平台限制。')
+      if (response.status === 429) throw new Error('资料请求过于频繁或额度不足，请稍后重试。')
+      throw new Error(`平台资料请求失败（HTTP ${response.status}），请稍后重试。`)
     }
-  }
-
-  private enqueue(id: string): void { if (!this.disposed) { this.queue.add(id); this.pump() } }
-
-  private pump(): void {
-    if (this.running || this.disposed || !this.configuration) return
-    const config = this.configuration
-    if (!config.apiKey.trim() && !isLoopback(new URL(config.config.baseUrl).hostname)) return
-    this.running = true
-    void (async () => {
-      while (this.queue.size && !this.disposed) {
-        if (!this.configuration?.apiKey.trim() && this.configuration && !isLoopback(new URL(this.configuration.config.baseUrl).hostname)) break
-        const id = this.queue.values().next().value
-        if (!id) break
-        this.queue.delete(id)
-        const configuration = this.configuration
-        if (!configuration) break
-        await this.index(id, configuration)
-      }
-    })().catch(() => undefined).finally(() => { this.running = false; if (this.queue.size && !this.disposed) this.pump() })
-  }
-
-  private async index(id: string, configuration: Awaited<ReturnType<EmbeddingProvider>>): Promise<void> {
-    const controller = new AbortController()
-    this.job = { id, controller }
+    if (response.status === 204) return undefined
+    const reader = response.body?.getReader()
+    if (!reader) throw new Error('平台资料响应为空。')
+    const chunks: Uint8Array[] = []; let size = 0
     try {
-      const data = await this.store.request<IndexData>('indexData', { id })
-      if (!data.document.enabled || !data.pages.length) return
-      await this.store.request('mark', { id, status: 'indexing' })
-      this.changed()
-      const chunks = chunkDocument(data.pages, data.document.pageCount > 0)
-      const vectors: number[][] = []
-      const client = new EmbeddingClient(configuration.config, configuration.apiKey)
-      for (let i = 0; i < chunks.length; i += 10) {
-        controller.signal.throwIfAborted()
-        vectors.push(...await client.embed(chunks.slice(i, i + 10).map((chunk) => chunk.text), controller.signal))
+      while (true) {
+        const part = await reader.read()
+        if (part.done) break
+        size += part.value.length
+        if (size > 8_000_000) throw new Error('平台资料响应超过容量限制。')
+        chunks.push(part.value)
       }
-      controller.signal.throwIfAborted()
-      if (this.disposed || this.configuration !== configuration) return
-      await this.store.request('commit', { id, revision: data.document.revision, fingerprint: embeddingFingerprint(configuration.config), chunks, vectors })
-      this.retrieval.clear()
-    } catch (error) {
-      const missingConfiguration = controller.signal.aborted && !this.configuration
-      await this.store.request('mark', { id, status: controller.signal.aborted && !missingConfiguration ? 'pending' : 'error',
-        error: missingConfiguration ? '无法读取向量配置，请检查配置后重试。' : controller.signal.aborted ? '' : failureMessage(error) }).catch(() => undefined)
-    } finally {
-      if (this.job?.controller === controller) this.job = undefined
-      this.changed()
-    }
+    } finally { await reader.cancel().catch(() => undefined); reader.releaseLock() }
+    combined.throwIfAborted()
+    return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown
   }
-
-  private changed(): void { if (!this.disposed) this.emitDocumentsChanged() }
-  private assertOpen(): void { if (this.disposed) throw new Error('资料库已关闭。') }
 }

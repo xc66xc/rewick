@@ -78,9 +78,9 @@ class BackendIntegrationTest {
     }
 
     @Test
-    void database_initializedExtension_matchesPgvector051() {
+    void database_initializedExtension_matchesPgvector086() {
         assertThat(jdbc.queryForObject("SELECT extversion FROM pg_extension WHERE extname = 'vector'", String.class))
-                .isEqualTo("0.5.1");
+                .isEqualTo("0.8.6");
     }
 
     @Test
@@ -221,6 +221,15 @@ class BackendIntegrationTest {
                 .containsExactly("expired", "complete");
     }
 
+    @Test
+    void embeddings_authenticatedUser_noPublicVectorEndpoint() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(login("alice"));
+        var response = http.postForEntity("/api/v1/embeddings",
+                new HttpEntity<>(Map.of("input", "私人资料", "serviceId", "vector"), headers), String.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
     private void inIsolatedTransaction(Runnable assertions) {
         TransactionTemplate transaction = new TransactionTemplate(transactionManager);
         transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -266,7 +275,7 @@ class BackendIntegrationTest {
 
     private static final class SqlInitializedPostgres extends PostgreSQLContainer<SqlInitializedPostgres> {
         private SqlInitializedPostgres() {
-            super(DockerImageName.parse("interview-copilot-postgres:15.19-pgvector0.5.1")
+            super(DockerImageName.parse("interview-copilot-postgres:15.19-pgvector0.8.6")
                     .asCompatibleSubstituteFor("postgres"));
             withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "01_schema.sql")), "/tmp/01_schema.sql");
             withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "02_pgvector.sql")), "/tmp/02_pgvector.sql");
@@ -276,6 +285,7 @@ class BackendIntegrationTest {
             withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "06_display_name.sql")), "/tmp/06_display_name.sql");
             withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "07_email_code_purpose.sql")), "/tmp/07_email_code_purpose.sql");
             withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "08_server_local_time.sql")), "/tmp/08_server_local_time.sql");
+            withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "09_pg_references.sql")), "/tmp/09_pg_references.sql");
         }
 
         @Override
@@ -289,7 +299,7 @@ class BackendIntegrationTest {
                 var result = execInContainer("psql", "-X", "-v", "ON_ERROR_STOP=1", "--single-transaction",
                         "--username", getUsername(), "--dbname", getDatabaseName(),
                         "-f", "/tmp/01_schema.sql", "-f", "/tmp/02_pgvector.sql",
-                        "-f", "/tmp/03_admin_users.sql", "-f", "/tmp/04_platform_config.sql", "-f", "/tmp/05_email_auth.sql", "-f", "/tmp/06_display_name.sql", "-f", "/tmp/07_email_code_purpose.sql", "-f", "/tmp/08_server_local_time.sql");
+                        "-f", "/tmp/03_admin_users.sql", "-f", "/tmp/04_platform_config.sql", "-f", "/tmp/05_email_auth.sql", "-f", "/tmp/06_display_name.sql", "-f", "/tmp/07_email_code_purpose.sql", "-f", "/tmp/08_server_local_time.sql", "-f", "/tmp/09_pg_references.sql");
                 if (result.getExitCode() != 0) {
                     throw new IllegalStateException("Database SQL initialization failed: " + result.getStderr());
                 }

@@ -1,11 +1,11 @@
-export type ServiceKind = 'llm' | 'asr' | 'embedding' | 'knowledge'
+export type ServiceKind = 'llm' | 'asr' | 'knowledge'
 export interface ServiceSelection { source: 'platform' | 'custom'; id: string }
 export interface CustomServiceInput {
   id?: string; name: string; kind: ServiceKind; url: string
-  model?: string; dimensions?: number; agentId?: string; apiKey?: string
+  model?: string; agentId?: string; apiKey?: string
 }
 export interface CustomServiceProfile extends Omit<CustomServiceInput, 'id' | 'apiKey'> { id: string; hasApiKey: boolean }
-export interface PlatformServices { asr: { id: string; name: string }[]; knowledge: { id: string; name: string }[]; embedding: { id: string; name: string; model: string; dimensions: number; fingerprint?: string }[] }
+export interface PlatformServices { asr: { id: string; name: string }[]; knowledge: { id: string; name: string }[] }
 export interface PlatformInfo {
   user: { id: string; displayName: string; email?: string | null }
   capabilities: { llm: boolean; asr: boolean; knowledge: boolean }
@@ -35,7 +35,6 @@ export interface Settings {
   context: { name: string; text: string }
   interviewTarget: InterviewTarget
   interviewEnvironment?: InterviewEnvironmentSnapshot
-  embedding: { baseUrl: string; model: string; dimensions: number; hasApiKey: boolean; serviceId?: string; fingerprint?: string }
   retrieval: { enabled: boolean }
   remoteKnowledge: { enabled: boolean; url: string; agentId: string; hasApiKey: boolean; serviceId?: string }
   answerStyle: 'concise' | 'detailed'
@@ -48,7 +47,6 @@ export interface SettingsInput {
   llm: Omit<Settings['llm'], 'hasApiKey'> & { apiKey?: string }
   context: Settings['context']
   interviewTarget: InterviewTarget
-  embedding: Omit<Settings['embedding'], 'hasApiKey'> & { apiKey?: string }
   retrieval: Settings['retrieval']
   remoteKnowledge: Omit<Settings['remoteKnowledge'], 'hasApiKey'> & { apiKey?: string }
   answerStyle: Settings['answerStyle']
@@ -85,7 +83,7 @@ export interface ReferenceDocument {
   chunkCount: number
 }
 export interface ReferenceExcerpt {
-  source?: 'local' | 'bailian'
+  source?: 'platform' | 'bailian'
   documentId: string
   revision: number
   name: string
@@ -174,7 +172,6 @@ export interface DesktopBridge {
   saveEnvironment(input: EnvironmentInput): Promise<InterviewLibrary>
   removeEnvironment(id: string): Promise<InterviewLibrary>
   activateEnvironment(id: string): Promise<Settings>
-  testEmbedding(): Promise<{ latencyMs: number; message: string }>
   testRemoteKnowledge(): Promise<{ latencyMs: number; message: string }>
   listReferences(): Promise<ReferenceDocument[]>
   importReferences(): Promise<ReferenceDocument[]>

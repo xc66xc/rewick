@@ -63,7 +63,6 @@ function setup(fakeTimers = false) {
       Object.assign(settings, resolveInterviewSettings(settings, library))
       return structuredClone(settings)
     }),
-    testEmbedding: vi.fn(async () => ({ latencyMs: 1, message: 'OK' })),
     testRemoteKnowledge: vi.fn(async () => ({ latencyMs: 1, message: 'OK' })),
     listReferences: vi.fn(async () => []),
     importReferences: vi.fn(async () => []),

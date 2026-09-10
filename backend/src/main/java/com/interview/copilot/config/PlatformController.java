@@ -26,15 +26,14 @@ public class PlatformController {
     public PlatformResponse platform(@AuthenticationPrincipal UserPrincipal user) {
         var snapshot = providers.snapshot();
         return new PlatformResponse(new AuthService.PublicUser(Long.toString(user.id()), user.displayName(), user.role(), user.email()),
-                new Capabilities(!snapshot.availableModels().isEmpty(), !snapshot.availableAsrServices().isEmpty(), !snapshot.availableKnowledgeServices().isEmpty(), !snapshot.availableEmbeddingServices().isEmpty()),
+                new Capabilities(!snapshot.availableModels().isEmpty(), !snapshot.availableAsrServices().isEmpty(), !snapshot.availableKnowledgeServices().isEmpty()),
                 new Models(snapshot.defaultModelId(), snapshot.asr().getModel(), snapshot.availableModels()), limits.effective(user.id()),
-                new Services(snapshot.availableAsrServices(), snapshot.availableKnowledgeServices(), snapshot.availableEmbeddingServices()));
+                new Services(snapshot.availableAsrServices(), snapshot.availableKnowledgeServices()));
     }
 
-    public record Capabilities(boolean llm, boolean asr, boolean knowledge, boolean embedding) {}
+    public record Capabilities(boolean llm, boolean asr, boolean knowledge) {}
     public record Models(String llm, String asr, List<PlatformSnapshot.AvailableModel> available) {}
-    public record Services(List<PlatformSnapshot.AvailableService> asr, List<PlatformSnapshot.AvailableService> knowledge,
-                           List<PlatformSnapshot.AvailableEmbedding> embedding) {}
+    public record Services(List<PlatformSnapshot.AvailableService> asr, List<PlatformSnapshot.AvailableService> knowledge) {}
     public record PlatformResponse(AuthService.PublicUser user, Capabilities capabilities,
             Models models, UserLimitsService.EffectiveLimits limits, Services services) {}
 }

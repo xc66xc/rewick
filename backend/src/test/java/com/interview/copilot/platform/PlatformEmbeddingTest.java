@@ -17,7 +17,7 @@ class PlatformEmbeddingTest {
         assertThat(snapshot.availableEmbeddingServices()).hasSize(1);
         assertThat(snapshot.embedding("vector").getApiKey()).isEqualTo("secret");
         assertThat(fixture.json.writeValueAsString(snapshot.availableEmbeddingServices()))
-                .contains("\"dimensions\":384", "\"model\":\"bge\"").doesNotContain("secret", "example.invalid");
+                .contains("\"dimensions\":1024", "\"model\":\"bge\"").doesNotContain("secret", "example.invalid");
         assertThat(fixture.row.get().payload()).doesNotContain("secret");
     }
 
@@ -44,6 +44,6 @@ class PlatformEmbeddingTest {
     private PlatformConfig config(long version, boolean enabled, String url, String key) {
         return new PlatformConfig(version, List.of(new PlatformConfig.Provider("vector", "向量服务", "embedding", url,
                 enabled, false, key)), List.of(), "", new PlatformConfig.Asr(false, "", ""),
-                new PlatformConfig.Knowledge(false, "", ""), new PlatformConfig.Embedding(enabled, "vector", "bge", 384));
+                new PlatformConfig.Knowledge(false, "", ""), new PlatformConfig.Embedding(enabled, "vector", "bge", 1024));
     }
 }

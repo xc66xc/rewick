@@ -1,5 +1,5 @@
 import { Worker } from 'node:worker_threads'
-import type { DocumentPage } from './chunker'
+interface DocumentPage { number: number; text: string }
 
 export interface ExtractedDocument { text: string; pages: DocumentPage[]; pageCount: number }
 

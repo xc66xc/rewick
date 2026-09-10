@@ -13,7 +13,6 @@ export default function ServicePreferences({ kind, draft, onChange }: ServicePre
     <label className={styles.referenceGlobalToggle}><input type="checkbox" checked={draft.autoAnswer.enabled} onChange={event => onChange({ ...draft, autoAnswer: { ...draft.autoAnswer, enabled: event.target.checked } })} />系统音频自动回答</label>
     <p className={styles.formNote}>句末静音控制转写分句；自动回答等待面试官停顿后提交问题。更改转写服务后，重新开始转写生效。</p>
   </>
-  if (kind === 'embedding') return <><label className={styles.referenceGlobalToggle}><input type="checkbox" checked={draft.retrieval.enabled} onChange={event => onChange({ ...draft, retrieval: { enabled: event.target.checked } })} />使用本地参考资料</label><p className={styles.formNote}>更换向量服务后需重建资料索引。远程知识库开启时暂停本地检索。</p></>
   return <><label className={styles.referenceGlobalToggle}><input type="checkbox" checked={draft.remoteKnowledge.enabled} onChange={event => onChange({ ...draft, remoteKnowledge: { ...draft.remoteKnowledge, enabled: event.target.checked } })} />启用远程知识库</label>
-    <p className={styles.formNote}>开启后只检索所选远程知识库，不检索本地资料。检索失败仍继续回答；简历和岗位 JD 始终作为参考。</p></>
+    <p className={styles.formNote}>开启后只检索所选远程知识库，不检索平台个人资料。检索失败仍继续回答；简历和岗位 JD 始终作为参考。</p></>
 }

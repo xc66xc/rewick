@@ -19,7 +19,7 @@ export default function ReferenceSources({ retrieval }: ReferenceSourcesProps) {
     <p className={styles.sourceExplanation}>以下片段提供给了本次回答模型，不代表逐句引用或事实核验。复制回答时不会包含这些资料。</p>
     {remoteNote}
     {retrieval.message && <p className={styles.retrievalNote}>{retrieval.message}</p>}
-    {degraded && !retrieval.message && <p className={styles.retrievalNote}>{remote ? '部分资料检索暂不可用，本次回答使用已取得的内容。' : '语义检索暂不可用，本次使用本地关键词匹配。'}</p>}
+    {degraded && !retrieval.message && <p className={styles.retrievalNote}>{remote ? '部分资料检索暂不可用，本次回答使用已取得的内容。' : '语义检索暂不可用，本次使用平台关键词匹配。'}</p>}
     <ol className={styles.sourceList}>{retrieval.excerpts.map(excerpt => <li key={`${excerpt.source ?? 'local'}:${excerpt.documentId}:${excerpt.revision}:${excerpt.chunkId}`} className={styles.sourceItem}>
       <header><FileText size={15} aria-hidden="true" /><strong>{excerpt.name}</strong><span>{excerptLocation(excerpt)}{excerpt.source !== 'bailian' && ` · 版本 ${excerpt.revision}`}</span></header>
       <span className={styles.sourceKind}>{excerpt.source === 'bailian' ? '百炼远程知识库 · 技术参考' : excerpt.kind === 'personal' ? '我的项目经历' : '技术参考'}</span><p>{excerpt.text}</p>

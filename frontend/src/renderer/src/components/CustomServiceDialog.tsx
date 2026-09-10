@@ -12,7 +12,6 @@ function initial(kind: ServiceKind, settings: Settings, profile?: CustomServiceP
   if (profile) { const { hasApiKey: _hasApiKey, ...input } = profile; return input }
   if (kind === 'llm') return { kind, name: '', url: settings.llm.baseUrl, model: settings.llm.model }
   if (kind === 'asr') return { kind, name: '', url: settings.asr.url, model: settings.asr.model }
-  if (kind === 'embedding') return { kind, name: '', url: settings.embedding.baseUrl, model: settings.embedding.model, dimensions: settings.embedding.dimensions }
   return { kind, name: '', url: settings.remoteKnowledge.url, agentId: settings.remoteKnowledge.agentId }
 }
 export default function CustomServiceDialog({ kind, profile, settings, bridge, onSaved, onClose }: CustomServiceDialogProps) {

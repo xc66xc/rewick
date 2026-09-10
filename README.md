@@ -19,7 +19,7 @@ interview-copilot/
 │   ├── pom.xml
 │   └── mvnw / mvnw.cmd
 ├── compose.yaml          本机管理端、后端与 PostgreSQL 开发部署
-├── deploy/postgres/      PostgreSQL 15.19 + pgvector 0.5.1 数据库镜像
+├── deploy/postgres/      PostgreSQL 15.19 + pgvector 0.8.6 数据库镜像
 ├── .env.example          仅服务端使用的配置示例
 ├── dist/                 桌面安装产物，源代码迁移不移动原安装包
 └── workspace/            产品与实现记录
@@ -27,9 +27,9 @@ interview-copilot/
 
 ## 本轮实现边界
 
-用户已指定 JDK 21、Spring Boot 3.x、MyBatis-Plus、PostgreSQL 15.19 和 pgvector 0.5.1。后端基线为 Boot 3.5.16、MyBatis-Plus 3.5.17、Maven Wrapper 3.9.16；数据库 SQL 统一放在 `backend/sql/`，由部署人员手动执行，应用启动不自动修改结构。pgvector 扩展已纳入部署和初始化 SQL，现有远程知识检索继续使用百炼，尚未加入服务端资料向量化或向量检索业务。桌面仍保留现有音频采集、编辑转写、合并问题、自动回答、口语回答、简历/JD、多环境和本地记录。
+用户已指定 JDK 21、Spring Boot 3.x、MyBatis-Plus、PostgreSQL 15.19 和 pgvector 0.8.6。后端基线为 Boot 3.5.16、MyBatis-Plus 3.5.17、Maven Wrapper 3.9.16；数据库 SQL 统一放在 `backend/sql/`，由部署人员手动执行，应用启动不自动修改结构。pgvector 扩展已纳入部署和初始化 SQL，现有远程知识检索继续使用百炼，参考资料由后端统一解析和向量化，存入 pgvector(1024) 并按用户与环境检索。桌面仍保留现有音频采集、编辑转写、合并问题、自动回答、口语回答、简历/JD、多环境和本地记录。
 
-桌面先登录再进入工作台，支持邮箱验证码注册、邮箱密码登录、找回密码与退出。注册发送验证码前检查邮箱是否已注册，已有邮箱提示直接登录或找回密码。找回密码填写邮箱、新密码与确认密码，接收并提交重置验证码后修改密码，成功后重新登录；注册和重置验证码分别校验，重置密码会撤销旧登录凭证。登录后按能力显式选择平台或自定义服务：回答模型、语音转写、向量服务和远程知识库分别使用独立下拉框。平台模型 HTTP/SSE、实时语音 WebSocket、向量接口和百炼正文检索经 Java 后端调用。
+桌面先登录再进入工作台，支持邮箱验证码注册、邮箱密码登录、找回密码与退出。注册发送验证码前检查邮箱是否已注册，已有邮箱提示直接登录或找回密码。找回密码填写邮箱、新密码与确认密码，接收并提交重置验证码后修改密码，成功后重新登录；注册和重置验证码分别校验，重置密码会撤销旧登录凭证。登录后按能力显式选择平台或自定义服务：回答模型、语音转写和远程知识库分别使用独立下拉框；向量服务仅由管理员配置。平台模型 HTTP/SSE、实时语音 WebSocket、向量接口和百炼正文检索经 Java 后端调用。
 
 平台供应商地址、Key、模型和知识库绑定由管理员在后台保存到数据库；SMTP 地址、发件人和认证信息也在后台管理。平台 Key 与 SMTP 密码加密存储，不返回客户端，也没有供应商环境变量回退。用户自定义服务的 Key 与业务登录凭证只在本机加密保存。平台按用户隔离请求与资源额度，记录调用状态；目前的次数限制用于资源保护，未实现支付和货币扣费。
 
@@ -48,7 +48,7 @@ npm run dev
 
 ## 启动独立后端
 
-安装 JDK 21，准备 PostgreSQL 15.19 并在数据库服务器安装 pgvector 0.5.1 扩展文件。先按 [SQL 说明](backend/sql/README.md) 初始化空库，再提供数据库连接、部署密钥与首次管理员配置。项目自带 Maven Wrapper，无需全局安装 Maven，执行：
+安装 JDK 21，准备 PostgreSQL 15.19 并在数据库服务器安装 pgvector 0.8.6 扩展文件。先按 [SQL 说明](backend/sql/README.md) 初始化空库，再提供数据库连接、部署密钥与首次管理员配置。项目自带 Maven Wrapper，无需全局安装 Maven，执行：
 
 ```sh
 npm run backend:dev
@@ -69,7 +69,7 @@ docker compose up -d --build backend admin
 
 后端默认仅监听本机映射 `http://127.0.0.1:8080`；数据库没有向宿主机开放端口。管理员尚未发布的能力保持不可用，不会使用内置平台 Key 或旧环境配置。注册需先在管理后台启用并保存邮件服务；运行环境可设 `COPILOT_EMAIL_REGISTRATION_ENABLED=false` 应急关闭验证码发送和注册，已有账号仍可登录。首次账号密码至少 12 字符且最多 72 个 UTF-8 字节；账号创建后从部署配置移除 bootstrap 凭据。正式跨设备使用时为后端配置 HTTPS 入口及 SSE/WebSocket 转发。
 
-Compose 从固定 PostgreSQL 15.19 镜像构建 pgvector 0.5.1，使用新的 `database-pg15-data` 卷。已有 PostgreSQL 17 数据卷保留，不能直接交给 PostgreSQL 15 使用。`backend/sql/` 仅只读挂载到数据库容器，不自动执行。已有业务表的数据库不重复初始化；托管数据库应由管理员准备扩展并执行相应 SQL，详见 [SQL 说明](backend/sql/README.md)。
+Compose 从固定 PostgreSQL 15.19 镜像构建 pgvector 0.8.6，使用新的 `database-pg15-data` 卷。已有 PostgreSQL 17 数据卷保留，不能直接交给 PostgreSQL 15 使用。`backend/sql/` 仅只读挂载到数据库容器，不自动执行。已有业务表的数据库不重复初始化；托管数据库应由管理员准备扩展并执行相应 SQL，详见 [SQL 说明](backend/sql/README.md)。
 
 Dockerfile 使用 JDK 21 构建、JRE 21 运行，并以非 root 用户启动。正式发布时通过构建参数固定经过验收的镜像摘要；本机开发配置未宣称具备生产高可用。
 
@@ -99,7 +99,7 @@ npm run admin:dev
 ## 客户端使用平台服务
 
 1. 首次打开显示登录页。后台地址在构建时由 `COPILOT_PLATFORM_URL` 指定，开发默认 `http://127.0.0.1:8080`，登录页不提供地址输入；选择「注册账号」，通过邮箱验证码设置密码，或使用已有邮箱与密码登录。
-2. 登录后打开「模型与设置」。回答、转写、向量、远程知识库分别在下拉框中按「平台提供」和「我的自定义」分组，显式选择后保存。平台未提供的类型显示不可用；目前平台向量目录为空。
+2. 登录后打开「模型与设置」。回答、转写、远程知识库分别在下拉框中按「平台提供」和「我的自定义」分组，显式选择后保存。平台未提供的类型显示不可用；资料向量化和检索统一使用平台 Key，桌面不配置向量服务。
 3. 选择「+ 自定义模型/服务…」填写名称、地址、模型或 Agent ID 与自己的 Key。可以先测试草稿，再「保存并选用」；测试不会保存。自定义配置可编辑或删除，本机无需 Key 的模型也可作为自定义服务使用。
 4. 服务下架、删除或连接失败不会静默切换到其他服务；平台转写和知识库只公开已绑定的可用服务。开启远程知识库后只检索所选远程服务；普通检索失败会标记降级并继续回答，不回退本地检索。所选平台服务失效需重新选择。
 
@@ -107,7 +107,7 @@ npm run admin:dev
 
 ## 验证
 
-本次邮箱注册与服务选择改动已通过 379 项客户端测试、20 项管理端组件测试、后端全量 190 项及随后新增的 1 项 SMTP 大密码真实 PostgreSQL 测试。核心 Electron 回归 42/42、完整平台链路 26/26 和其中管理端浏览器操作 7/7 通过，使用隔离 PostgreSQL 15.19 / pgvector 0.5.1 与本机假供应商、SMTP。管理端生产构建和邮件页桌面/移动浏览器检查也通过。管理端验证方式见 [测试说明](admin/README.md#真实浏览器验证)。
+本次邮箱注册与服务选择改动已通过 379 项客户端测试、20 项管理端组件测试、后端全量 190 项及随后新增的 1 项 SMTP 大密码真实 PostgreSQL 测试。核心 Electron 回归 42/42、完整平台链路 26/26 和其中管理端浏览器操作 7/7 通过，使用隔离 PostgreSQL 15.19 / pgvector 0.8.6 与本机假供应商、SMTP。管理端生产构建和邮件页桌面/移动浏览器检查也通过。管理端验证方式见 [测试说明](admin/README.md#真实浏览器验证)。
 
 此前管理后台版本曾通过 42 项核心 Electron 回归和 23 项完整平台链路检查（含管理端浏览器 6 组操作）；这些历史结果不替代本轮新增功能的最终验收。
 
@@ -121,7 +121,7 @@ npm run backend:test
 npm run admin:test
 npm run admin:build
 # 包含需要 Docker 的真实 PostgreSQL 集成测试
-docker build -t interview-copilot-postgres:15.19-pgvector0.5.1 deploy/postgres
+docker build -t interview-copilot-postgres:15.19-pgvector0.8.6 deploy/postgres
 node scripts/backend.mjs verify -Pintegration
 # 完整桌面/管理端 → Java → 本机模拟供应商，先安装两个前端包并构建桌面
 npm run backend:build

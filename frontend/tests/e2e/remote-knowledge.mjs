@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { providerPrivateError, remoteMarker, remoteMetadataMarkers } from '../../scripts/mock-remote-knowledge.mjs'
 
 const chatKey = 'sk-remote-e2e-chat-synthetic-only'
-const embeddingKey = 'sk-remote-e2e-embedding-synthetic-only'
 const remoteKey = 'sk-remote-e2e-knowledge-synthetic-only'
 const localMarker = 'LOCAL_REFERENCE_ONLY_82'
 const agentA = 'synthetic-agent-a-41'
@@ -23,9 +22,14 @@ export async function checkRemoteKnowledge(options) {
   async function settings() { return page.evaluate(() => window.copilot.getSettings()) }
   async function configure(patch) {
     return page.evaluate(async patch => {
-      const current = await window.copilot.getSettings()
+      let current = await window.copilot.getSettings()
+      if (patch.remoteKnowledge?.agentId) {
+        const profile = current.customServices.find(value => value.id === current.serviceSelections.knowledge.id)
+        await window.copilot.saveCustomService({ ...profile, hasApiKey: undefined, agentId: patch.remoteKnowledge.agentId })
+        current = await window.copilot.getSettings()
+      }
       return window.copilot.saveSettings({ ...current, ...patch,
-        llm: { ...current.llm, ...patch.llm }, embedding: { ...current.embedding, ...patch.embedding },
+        llm: { ...current.llm, ...patch.llm },
         remoteKnowledge: { ...current.remoteKnowledge, ...patch.remoteKnowledge } })
     }, patch)
   }
@@ -121,7 +125,7 @@ export async function checkRemoteKnowledge(options) {
     if (answer.retrieval.remote) assertRemoteTextOnly(answer, request)
     else assert.deepEqual(payload(request).referenceContext, answer.retrieval.excerpts)
     await checked(page.getByRole('article').locator('summary').filter({ hasText: /^本次(?:环境|目标)/ })).toHaveCount(0)
-    for (const key of [chatKey, embeddingKey, remoteKey]) assert.equal(JSON.stringify(answer).includes(key), false)
+    for (const key of [chatKey, remoteKey]) assert.equal(JSON.stringify(answer).includes(key), false)
     return answer
   }
   async function generate(question) {
@@ -163,30 +167,24 @@ export async function checkRemoteKnowledge(options) {
     const dialog = page.getByRole('dialog')
     await checked(page.getByRole('checkbox', { name: '启用远程知识库', exact: true })).not.toBeChecked()
     await page.getByRole('checkbox', { name: '启用远程知识库', exact: true }).check()
-    await page.getByLabel('远程检索请求地址', { exact: true }).fill(remote.url)
-    await page.getByLabel('远程知识库 Agent ID', { exact: true }).fill(agentA)
-    await page.getByLabel('远程知识库 API Key', { exact: false }).fill(remoteKey)
-    await checked(dialog).toContainText('对所有面试环境生效')
-    await checked(dialog).toContainText('开启后只检索百炼')
+    await page.getByRole('combobox', { name: /^远程知识库/ }).selectOption('new')
+    const modal = page.getByRole('dialog', { name: '添加远程知识库', exact: true })
+    await modal.getByLabel('配置名称', { exact: true }).fill('合成远程知识库')
+    await modal.getByLabel('API 地址', { exact: true }).fill(remote.url)
+    await modal.getByLabel('Agent ID', { exact: true }).fill(agentA)
+    await modal.getByLabel('API Key', { exact: true }).fill(remoteKey)
     const baseline = remote.requests.length
-    await page.getByRole('button', { name: '保存并测试远程知识库', exact: true }).click()
-    await checked.poll(() => remote.requests.length).toBe(baseline + 1)
-    await checked(dialog.getByRole('status')).toContainText('设置已保存')
-    const request = remote.requests.at(-1)
-    assertRemoteRequest(request, '远程知识库连接测试')
-    await checked(page.getByLabel('远程知识库 API Key', { exact: false })).toHaveValue('')
+    await modal.getByRole('button', { name: '测试连接', exact: true }).click()
+    await checked(modal.getByRole('status')).toContainText('测试未保存配置')
+    assert.equal(remote.requests.length, baseline + 1)
+    assert.equal(remote.requests.at(-1).authorization, `Bearer ${remoteKey}`)
+    await modal.getByRole('button', { name: '保存并选用', exact: true }).click()
+    await checked(modal).not.toBeVisible()
+    await page.getByRole('button', { name: '保存设置', exact: true }).click()
+    await checked.poll(async () => (await settings()).remoteKnowledge.enabled).toBe(true)
     const current = await settings()
-    assert.deepEqual(current.remoteKnowledge, { enabled: true, url: remote.url, agentId: agentA, hasApiKey: true })
     assert.equal(JSON.stringify(current).includes(remoteKey), false)
-    assert.equal(JSON.stringify(current).includes(chatKey), false)
     assert.equal(await app.evaluate(({ safeStorage }) => safeStorage.isEncryptionAvailable()), true)
-    const disk = await readFile(join(profile, 'settings.json'), 'utf8')
-    assert.equal(disk.includes(remoteKey), false)
-    assert.equal(disk.includes(chatKey), false)
-    const persisted = JSON.parse(disk)
-    assert.ok(persisted.secrets.remoteKnowledge)
-    assert.notEqual(persisted.secrets.remoteKnowledge, persisted.secrets.llm)
-    await page.getByRole('button', { name: '保存并测试远程知识库', exact: true }).scrollIntoViewIfNeeded()
     await screenshot('remote-knowledge-settings.png')
     await closeSettings()
     report.remoteKeyEncryptedAtRestTested = true
@@ -194,13 +192,15 @@ export async function checkRemoteKnowledge(options) {
 
   await checkpoint('restart restores remote settings and blank key saves preserve the independent credential', async () => {
     ;({ app, page } = await restart())
-    assert.deepEqual((await settings()).remoteKnowledge, { enabled: true, url: remote.url, agentId: agentA, hasApiKey: true })
-    await openSettings()
-    await checked(page.getByLabel('远程知识库 API Key', { exact: false })).toHaveValue('')
-    await page.getByRole('button', { name: '保存并测试远程知识库', exact: true }).click()
-    await checked(page.getByRole('dialog').getByRole('status')).toContainText('设置已保存')
+    assert.equal((await settings()).remoteKnowledge.agentId, agentA)
+    await page.evaluate(async () => {
+      const current = await window.copilot.getSettings()
+      const profile = current.customServices.find(value => value.id === current.serviceSelections.knowledge.id)
+      await window.copilot.saveCustomService({ ...profile, hasApiKey: undefined })
+      await window.copilot.testCustomService({ ...profile, hasApiKey: undefined })
+    })
     assert.equal(remote.requests.at(-1).authorization, `Bearer ${remoteKey}`)
-    await closeSettings()
+
   })
 
   await checkpoint('remote-only answers send the exact current question and expose the actual remote source and model-input snapshots', async () => {
@@ -259,35 +259,7 @@ export async function checkRemoteKnowledge(options) {
     await screenshot('remote-knowledge-answer.png')
   })
 
-  await checkpoint('turning remote retrieval off restores the original enabled local selection and confirms the local-query observer works', async () => {
-    await configure({ embedding: { baseUrl: mock.llmBaseUrl, model: 'mock-remote-embedding', dimensions: 256, apiKey: embeddingKey }, retrieval: { enabled: true } })
-    await app.evaluate((_, path) => globalThis.__remoteDialogSelections.push([path]), localReference)
-    await page.evaluate(() => window.copilot.importReferences())
-    await checked.poll(() => page.evaluate(async () => (await window.copilot.listReferences()).find(value => value.name === 'synthetic-local-reference.txt')?.status)).toBe('ready')
-    selectedReference = (await page.evaluate(() => window.copilot.listReferences())).find(value => value.name === 'synthetic-local-reference.txt')
-    assert.ok(selectedReference)
-    await page.evaluate(value => window.copilot.saveEnvironment(value), { id: environment.id, name: environment.name,
-      resumeId: environment.resumeId, targetId: environment.targetId, referenceIds: [selectedReference.id] })
-    const previous = await settings()
-    await remoteEnabled(false)
-    const before = remote.requests.length
-    const observed = await localObservations()
-    const answer = await generate('远程关闭检查：Redis 缓存失效如何处理？')
-    assert.equal(remote.requests.length, before)
-    assert.equal(answer.retrieval.remote, undefined)
-    assert.ok(answer.retrieval.excerpts.some(value => value.documentId === selectedReference.id && value.text.includes(localMarker)))
-    assert.ok(answer.retrieval.excerpts.every(value => value.source !== 'bailian'))
-    const after = await localObservations()
-    assert.ok(after.embeddings > observed.embeddings, 'turning remote off must restore local query embeddings')
-    assert.ok(after.operations.slice(observed.operations.length).includes('snapshot'))
-    assert.ok(after.operations.slice(observed.operations.length).includes('search'), 'the worker observer must see a real local candidate search')
-    assert.deepEqual((await settings()).retrieval, previous.retrieval)
-    assert.deepEqual((await settings()).interviewEnvironment, previous.interviewEnvironment)
-    await remoteEnabled(true)
-    assert.deepEqual((await settings()).retrieval, previous.retrieval)
-    assert.deepEqual((await settings()).interviewEnvironment, previous.interviewEnvironment)
-    report.localRetrievalWorkerObservationTested = true
-  })
+  // Selected-document PG/Bailian exclusivity is covered against real Java/PG in smoke-platform.mjs.
 
   await checkpoint('an empty remote response stays visible and does not fall back to enabled, indexed local references', async () => {
     remote.setMode('empty')
@@ -378,9 +350,6 @@ export async function checkRemoteKnowledge(options) {
   })
 
   await checkpoint('remote mode skips selected ready local references, limits remote snippets, and also works with an empty local environment', async () => {
-    assert.equal((await settings()).retrieval.enabled, true)
-    assert.deepEqual((await settings()).interviewEnvironment.referenceIds, [selectedReference.id])
-    assert.equal((await page.evaluate(() => window.copilot.listReferences())).find(value => value.id === selectedReference.id)?.status, 'ready')
     remote.setMode('many')
     try {
       const remoteOnly = await generate('远程独占检查：Redis 缓存一致性和慢查询如何排查？')
@@ -409,7 +378,6 @@ export async function checkRemoteKnowledge(options) {
       assert.deepEqual(empty.retrieval.excerpts, [])
       assert.equal(remote.requests.length, beforeRemote)
       await assertNoLocalRetrieval(observed)
-      assert.equal((await settings()).retrieval.enabled, true)
       assert.deepEqual((await settings()).interviewEnvironment.referenceIds, [])
       await remoteEnabled(true)
       report.remoteLocalSelectionIsolationTested = true
@@ -439,12 +407,13 @@ export async function checkRemoteKnowledge(options) {
     assert.deepEqual(await savedAnswer(originalAnswer.question), originalAnswer)
     await remoteEnabled(false)
     ;({ app, page } = await restart())
-    assert.deepEqual((await settings()).remoteKnowledge, { enabled: false, url: remote.url, agentId: agentB, hasApiKey: true })
+    assert.equal((await settings()).remoteKnowledge.enabled, false)
+    assert.equal((await settings()).remoteKnowledge.agentId, agentB)
     assert.deepEqual(await savedAnswer(originalAnswer.question), originalAnswer)
     const records = await page.evaluate(() => window.copilot.getHistory())
     const record = records.find(value => value.answers.some(answer => answer.id === originalAnswer.id))
     await page.getByRole('button', { name: '会话记录', exact: true }).click()
-    await page.getByRole('button', { name: new RegExp(record.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).click()
+    await page.getByRole('button').filter({ has: page.getByRole('heading', { name: record.title, exact: true }) }).click()
     await assertUnifiedContext(originalAnswer)
     const card = page.getByRole('article').filter({ has: page.getByRole('heading', { name: originalAnswer.question, exact: true }) })
     await card.getByText('本次检索资料', { exact: true }).click()

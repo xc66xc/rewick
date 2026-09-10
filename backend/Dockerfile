@@ -12,6 +12,7 @@ RUN --mount=type=cache,target=/root/.m2,sharing=locked chmod +x mvnw && ./mvnw -
 FROM ${RUNTIME_IMAGE}
 WORKDIR /app
 RUN groupadd --system copilot && useradd --system --gid copilot copilot
+RUN mkdir -p /app/data/references && chown copilot:copilot /app/data/references
 COPY --from=build /build/target/*.jar /app/backend.jar
 USER copilot
 EXPOSE 8080

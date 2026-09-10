@@ -8,7 +8,6 @@ export const defaultSettings: Settings = {
   llm: { baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash', hasApiKey: false, temperature: 0.5 },
   context: { name: '', text: '' },
   interviewTarget: { companyName: '', roleName: '', jobDescription: '' },
-  embedding: { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'text-embedding-v4', dimensions: 1024, hasApiKey: false },
   retrieval: { enabled: false },
   remoteKnowledge: { enabled: false, url: '', agentId: '', hasApiKey: false },
   answerStyle: 'concise',

@@ -13,6 +13,7 @@ import { expect } from '@playwright/test'
 import { startMockServices } from './mock-services.mjs'
 import { startRemoteKnowledgeMock, remoteMarker, remoteMetadataMarkers } from './mock-remote-knowledge.mjs'
 import { runAdminPlatformChecks } from '../tests/e2e/admin-platform.mjs'
+import { createPdfRagFixtures, syntheticResumeChineseMarker } from '../tests/fixtures/pdf-rag.mjs'
 import { startSmtpMock } from './mock-smtp.mjs'
 import { checkServiceSelectors } from '../tests/e2e/service-selectors.mjs'
 
@@ -23,9 +24,9 @@ const output = join(frontend, 'test-results')
 const userData = await mkdtemp(join(tmpdir(), 'copilot-platform-e2e-'))
 const suffix = randomBytes(6).toString('hex')
 const container = `copilot-platform-e2e-${suffix}`
-const databaseImage = 'interview-copilot-postgres:15.19-pgvector0.5.1'
+const databaseImage = 'interview-copilot-postgres:15.19-pgvector0.8.6'
 const password = randomBytes(20).toString('hex')
-const keys = { llm: `test-platform-llm-${suffix}`, asr: `test-platform-asr-${suffix}`, knowledge: `test-platform-knowledge-${suffix}` }
+const keys = { llm: `test-platform-llm-${suffix}`, asr: `test-platform-asr-${suffix}`, knowledge: `test-platform-knowledge-${suffix}`, embedding: `test-platform-embedding-${suffix}` }
 const report = { realProviderTested: false, realAudioTested: false, checks: [], screenshots: [] }
 const mock = await startMockServices()
 const knowledge = await startRemoteKnowledgeMock()
@@ -85,7 +86,7 @@ try {
   const artifacts = (await readdir(join(repository, 'backend/target'))).filter(name => name.endsWith('.jar'))
   assert.equal(artifacts.length, 1, 'Build backend with npm run backend:build before the smoke test')
   await execute('docker', ['image', 'inspect', databaseImage]).catch(() => {
-    throw new Error('Build the database image first: docker build -t interview-copilot-postgres:15.19-pgvector0.5.1 deploy/postgres')
+    throw new Error('Build the database image first: docker build -t interview-copilot-postgres:15.19-pgvector0.8.6 deploy/postgres')
   })
   await execute('docker', ['run', '--rm', '-d', '--name', container, '-p', '127.0.0.1::5432',
     '-e', 'POSTGRES_USER=copilot_test', '-e', 'POSTGRES_DB=copilot_test', '-e', 'POSTGRES_PASSWORD', databaseImage],
@@ -99,12 +100,12 @@ try {
   await execute('docker', ['exec', container, 'psql', '-X', '-U', 'copilot_test', '-d', 'copilot_test',
     '-v', 'ON_ERROR_STOP=1', '--single-transaction',
     '-f', '/tmp/copilot-sql/01_schema.sql', '-f', '/tmp/copilot-sql/02_pgvector.sql',
-    '-f', '/tmp/copilot-sql/03_admin_users.sql', '-f', '/tmp/copilot-sql/04_platform_config.sql', '-f', '/tmp/copilot-sql/05_email_auth.sql', '-f', '/tmp/copilot-sql/06_display_name.sql', '-f', '/tmp/copilot-sql/07_email_code_purpose.sql', '-f', '/tmp/copilot-sql/08_server_local_time.sql'])
+    '-f', '/tmp/copilot-sql/03_admin_users.sql', '-f', '/tmp/copilot-sql/04_platform_config.sql', '-f', '/tmp/copilot-sql/05_email_auth.sql', '-f', '/tmp/copilot-sql/06_display_name.sql', '-f', '/tmp/copilot-sql/07_email_code_purpose.sql', '-f', '/tmp/copilot-sql/08_server_local_time.sql', '-f', '/tmp/copilot-sql/09_pg_references.sql'])
   const mapping = (await execute('docker', ['port', container, '5432/tcp'])).stdout.trim()
   const databasePort = mapping.slice(mapping.lastIndexOf(':') + 1)
   const backendPort = await port()
   const baseUrl = `http://127.0.0.1:${backendPort}`
-  backend = spawn('java', ['-jar', join(repository, 'backend/target', artifacts[0])], { cwd: repository,
+  backend = spawn('java', [`-Dcopilot.references.directory=${join(userData, 'server-references')}`, '-jar', join(repository, 'backend/target', artifacts[0])], { cwd: repository,
     env: { ...process.env, PORT: String(backendPort), COPILOT_DATABASE_URL: `jdbc:postgresql://127.0.0.1:${databasePort}/copilot_test`,
       COPILOT_DATABASE_USERNAME: 'copilot_test', COPILOT_DATABASE_PASSWORD: password,
       COPILOT_BOOTSTRAP_USERNAME: 'platform-test', COPILOT_BOOTSTRAP_PASSWORD: password,
@@ -140,23 +141,25 @@ try {
       providers: [
         { id: 'initial-llm', name: '平台回答', kind: 'llm', url: `${mock.llmBaseUrl}/chat/completions`, enabled: true, apiKey: keys.llm },
         { id: 'initial-asr', name: '平台转写', kind: 'asr', url: `${mock.asrUrl}?mode=manual`, enabled: true, apiKey: keys.asr },
+        { id: 'initial-embedding', name: '平台向量', kind: 'embedding', url: `${mock.llmBaseUrl}/embeddings`, enabled: true, apiKey: keys.embedding },
         { id: 'initial-knowledge', name: '平台知识库', kind: 'knowledge', url: knowledge.url, enabled: true, apiKey: keys.knowledge },
       ],
       models: ['mock-fast', 'mock-held'].map(model => ({ id: model, name: model, providerId: 'initial-llm', model, enabled: true, maxOutputTokens: 2048 })),
       defaultModelId: 'mock-fast', asr: { enabled: true, providerId: 'initial-asr', model: 'fun-asr-realtime' },
+      embedding: { enabled: true, providerId: 'initial-embedding', model: 'mock-embedding', dimensions: 1024 },
       knowledge: { enabled: true, providerId: 'initial-knowledge', agentId: 'aid-server-only' },
     })
     await publishConfig('email-config', { version: 0, enabled: true, host: '127.0.0.1', port: smtp.port, username: '', from: 'copilot@example.test', startTls: false, ssl: false })
   })
 
-  await check('explicit SQL initializes PostgreSQL 15.19 and pgvector 0.5.1 before backend startup', async () => {
+  await check('explicit SQL initializes PostgreSQL 15.19 and pgvector 0.8.6 before backend startup', async () => {
     const result = await execute('docker', ['exec', container, 'psql', '-U', 'copilot_test', '-d', 'copilot_test', '-At',
       '-c', "SELECT current_setting('server_version_num'), extversion FROM pg_extension WHERE extname = 'vector'"])
-    assert.equal(result.stdout.trim(), '150019|0.5.1')
+    assert.equal(result.stdout.trim(), '150019|0.8.6')
     const history = await execute('docker', ['exec', container, 'psql', '-U', 'copilot_test', '-d', 'copilot_test', '-At',
       '-c', "SELECT to_regclass('public.flyway_schema_history') IS NULL"])
     assert.equal(history.stdout.trim(), 't')
-    report.database = { postgres: '15.19', pgvector: '0.5.1' }
+    report.database = { postgres: '15.19', pgvector: '0.8.6' }
   })
 
   await check('platform requires business authentication and rejects invalid login', async () => {
@@ -170,7 +173,7 @@ try {
     const response = await request(baseUrl, '/api/v1/platform', undefined, accessToken)
     assert.equal(response.status, 200)
     const info = await response.json()
-    assert.deepEqual(info.capabilities, { llm: true, asr: true, knowledge: true, embedding: false })
+    assert.deepEqual(info.capabilities, { llm: true, asr: true, knowledge: true })
     assert.equal(info.models.llm, 'mock-fast')
     noSecrets(info)
   })
@@ -207,7 +210,7 @@ try {
 
   const environment = { ...process.env, COPILOT_USER_DATA: userData }
   delete environment.ELECTRON_RUN_AS_NODE
-  application = await _electron.launch({ executablePath: electronPath, args: ['.'], cwd: frontend, env: environment, timeout: 45000 })
+  application = await _electron.launch({ executablePath: process.env.COPILOT_TEST_APP_PATH ? join(process.env.COPILOT_TEST_APP_PATH, 'Contents/MacOS/Interview Copilot') : electronPath, args: process.env.COPILOT_TEST_APP_PATH ? [] : ['.'], cwd: frontend, env: environment, timeout: 45000 })
   page = await application.firstWindow()
   page.setDefaultTimeout(10000)
   await page.waitForFunction(() => Boolean(window.copilot))
@@ -230,7 +233,7 @@ try {
     await expect(page.getByRole('button', { name: /秒后重发/ })).toBeDisabled()
     await page.getByRole('textbox', { name: /邮箱验证码/ }).fill(smtp.code())
     await page.getByRole('button', { name: '注册并登录', exact: true }).click()
-    await expect(page.getByRole('button', { name: '打开设置', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: '打开设置', exact: true })).toBeVisible({ timeout: 30000 })
     const settings = await page.evaluate(() => window.copilot.getSettings())
     assert.equal(settings.platform.authenticated, true)
     assert.equal(settings.platform.user.email, 'desktop@example.test')
@@ -255,6 +258,78 @@ try {
     noSecrets(events)
     await page.screenshot({ path: join(output, 'platform-answer.png') })
     report.screenshots.push('platform-answer.png')
+  })
+
+  await check('desktop uploads references to PostgreSQL and retrieves only selected user documents with platform embeddings', async () => {
+    const fixtures = await createPdfRagFixtures(join(userData, 'pdf-fixtures'))
+    await application.evaluate(({ dialog }, path) => { globalThis.__savedOpenDialog = dialog.showOpenDialog; dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] }) }, fixtures.resume)
+    try {
+      const resume = await page.evaluate(() => window.copilot.importContext())
+      assert.ok(resume.text.includes(syntheticResumeChineseMarker))
+    } finally { await application.evaluate(({ dialog }) => { dialog.showOpenDialog = globalThis.__savedOpenDialog; delete globalThis.__savedOpenDialog }) }
+    const source = join(userData, 'reference-fixture.txt')
+    const marker = 'Redis 缓存一致性：先更新数据库，再删除缓存；失败时通过消息队列重试。'
+    await writeFile(source, marker)
+    await application.evaluate(({ dialog }, path) => {
+      globalThis.__savedOpenDialog = dialog.showOpenDialog
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] })
+    }, source)
+    let uploaded
+    try { uploaded = await page.evaluate(() => window.copilot.importReferences()) }
+    finally { await application.evaluate(({ dialog }) => { dialog.showOpenDialog = globalThis.__savedOpenDialog; delete globalThis.__savedOpenDialog }) }
+    assert.equal(uploaded.length, 1)
+    const id = uploaded[0].id
+    await until(async () => {
+      const docs = await page.evaluate(() => window.copilot.listReferences())
+      const document = docs.find(value => value.id === id)
+      assert.notEqual(document?.status, 'error', document?.error)
+      return document?.status === 'ready'
+    }, 'Uploaded document never became indexed', 45000)
+    assert.ok(mock.embeddingRequests.length > 0)
+    assert.equal(mock.embeddingRequests.at(-1).authorization, `Bearer ${keys.embedding}`)
+    assert.equal(mock.embeddingRequests.at(-1).body.dimensions, 1024)
+    const preview = await page.evaluate(id => window.copilot.previewReference(id), id)
+    assert.ok(preview.text.includes(marker))
+    const isolated = await request(baseUrl, '/api/v1/references', undefined, accessToken)
+    assert.deepEqual(await isolated.json(), [])
+    const forbidden = await request(baseUrl, '/api/v1/references/search', { query: 'Redis', referenceIds: [id] }, accessToken)
+    assert.equal(forbidden.status, 404)
+    await page.evaluate(async id => {
+      const library = await window.copilot.saveEnvironment({ name: 'PG 检索验证', resumeId: null, targetId: null, referenceIds: [id] })
+      const environment = library.environments.find(value => value.name === 'PG 检索验证')
+      await window.copilot.activateEnvironment(environment.id)
+      const settings = await window.copilot.getSettings()
+      await window.copilot.saveSettings({ ...settings, retrieval: { enabled: true }, remoteKnowledge: { ...settings.remoteKnowledge, enabled: false } })
+    }, id)
+    const events = await answer('Redis 缓存一致性怎么保证？')
+    assert.ok(JSON.stringify(mock.requests.at(-1).body).includes(marker))
+    assert.equal(events.find(event => event.kind === 'answer-context').retrieval.excerpts[0].source, 'platform')
+    mock.setEmbeddingMode('error')
+    const degraded = await answer('Redis 缓存一致性怎么保证？')
+    assert.equal(degraded.find(event => event.kind === 'answer-context').retrieval.status, 'degraded')
+    assert.ok(JSON.stringify(mock.requests.at(-1).body).includes(marker))
+    mock.setEmbeddingMode('fast')
+    const embeddedBeforeRemote = mock.embeddingRequests.length
+    await page.evaluate(async () => {
+      const settings = await window.copilot.getSettings()
+      await window.copilot.saveSettings({ ...settings, remoteKnowledge: { ...settings.remoteKnowledge, enabled: true } })
+    })
+    await answer('Redis 缓存一致性怎么保证？')
+    assert.equal(mock.embeddingRequests.length, embeddedBeforeRemote)
+    assert.equal(JSON.stringify(mock.requests.at(-1).body).includes(marker), false)
+    assert.ok(JSON.stringify(mock.requests.at(-1).body).includes(remoteMarker))
+    await page.evaluate(async () => {
+      const settings = await window.copilot.getSettings()
+      await window.copilot.saveSettings({ ...settings, remoteKnowledge: { ...settings.remoteKnowledge, enabled: false } })
+    })
+    await page.evaluate(id => window.copilot.updateReference(id, { enabled: false }), id)
+    await answer('Redis 缓存一致性怎么保证？')
+    assert.equal(JSON.stringify(mock.requests.at(-1).body).includes(marker), false)
+    await page.evaluate(id => window.copilot.removeReference(id), id)
+    assert.deepEqual(await page.evaluate(() => window.copilot.listReferences()), [])
+    noSecrets(events)
+    const schema = await execute('docker', ['exec', container, 'psql', '-U', 'copilot_test', '-d', 'copilot_test', '-At', '-c', "SELECT format_type(atttypid,atttypmod) FROM pg_attribute WHERE attrelid='reference_embeddings'::regclass AND attname='embedding'"])
+    assert.equal(schema.stdout.trim(), 'vector(1024)')
   })
 
   await check('platform RAG sends only text to model and uses server Agent ID', async () => {
@@ -328,10 +403,10 @@ try {
     await page.getByLabel('邮箱', { exact: true }).fill('desktop@example.test')
     await page.getByLabel('密码', { exact: true }).fill(password)
     await page.getByRole('button', { name: '登录', exact: true }).click()
-    await expect(page.getByRole('button', { name: '打开设置', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: '打开设置', exact: true })).toBeVisible({ timeout: 30000 })
     noSecrets(await page.evaluate(() => window.__platformEvents))
     await page.reload()
-    await expect(page.getByRole('button', { name: '打开设置', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: '打开设置', exact: true })).toBeVisible({ timeout: 30000 })
   })
   await check('registered email sends no registration mail and Electron recovers its password with isolated SMTP', async () => {
     await page.evaluate(() => window.copilot.platformLogout())
@@ -363,7 +438,7 @@ try {
     assert.equal((await request(baseUrl, '/api/v1/auth/login', { identifier: 'desktop@example.test', password })).status, 401)
     await page.getByLabel('密码', { exact: true }).fill(replacement)
     await page.getByRole('button', { name: '登录', exact: true }).click()
-    await expect(page.getByRole('button', { name: '打开设置', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: '打开设置', exact: true })).toBeVisible({ timeout: 30000 })
     await page.screenshot({ path: join(output, 'password-reset-complete.png') })
     report.screenshots.push('password-reset-complete.png')
     const visible = JSON.stringify(await page.evaluate(() => window.copilot.getSettings()))

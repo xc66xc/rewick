@@ -6,7 +6,6 @@ import { SettingsStore } from './settings-store'
 import { HistoryStore } from './history-store'
 import { InterviewStore } from './interview-store'
 import { ReferenceService } from './reference-service'
-import { routeEmbedding } from './service-routing'
 export function accountDirectory(root: string, userId: string): string {
   return join(root, 'accounts', createHash('sha256').update(userId).digest('hex'))
 }
@@ -16,7 +15,8 @@ export class AccountWorkspaces {
   active: AccountWorkspace | undefined
   private readonly stores = new Map<string, { settings: SettingsStore; history: HistoryStore; interviews: InterviewStore }>()
   constructor(private readonly root: string, private readonly crypto: ConstructorParameters<typeof SettingsStore>[1], private readonly changed: (workspaceId: string) => void,
-    private readonly authentication?: () => ReturnType<SettingsStore['getConnectionSnapshot']>) {}
+    private readonly authentication?: () => ReturnType<SettingsStore['getConnectionSnapshot']>,
+    private readonly expired?: (token: string) => Promise<void>) {}
   identity(settings: Settings): string | undefined {
     const platform = settings.platform
     return platform?.authenticated && platform.user ? accountDirectory(this.root, platform.user.id) : undefined
@@ -34,18 +34,13 @@ export class AccountWorkspaces {
         interviews: new InterviewStore(id, async () => ({ settings: await privateSettings.getSettings(), referenceIds: [] })) }
       this.stores.set(id, stores)
     }
-    const own = stores
-    const references = new ReferenceService(id, () => { if (this.active?.id === id) this.changed(id) }, async () => {
-      const snapshot = await own.settings.getConnectionSnapshot()
-      if (snapshot.settings.serviceSelections?.embedding?.source === 'platform' && this.authentication) {
-        const auth = await this.authentication()
-        if (this.identity(auth.settings) !== id) throw new Error('账户已切换，请重试。')
-        return routeEmbedding({ ...snapshot.settings, platform: auth.settings.platform },
-          { ...snapshot.secrets, platformAccessToken: auth.secrets.platformAccessToken })
-      }
-      return routeEmbedding(snapshot.settings, snapshot.secrets)
-    })
-    this.active = { id, ...own, references }
+    const references = new ReferenceService(() => { if (this.active?.id === id) this.changed(id) }, async () => {
+      if (!this.authentication) throw new Error('请先登录账户。')
+      const auth = await this.authentication()
+      if (this.identity(auth.settings) !== id) throw new Error('账户已切换，请重试。')
+      return auth
+    }, this.expired)
+    this.active = { id, ...stores, references }
     return this.active
   }
   current(): AccountWorkspace {

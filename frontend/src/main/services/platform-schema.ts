@@ -3,10 +3,7 @@ const publicUser = z.object({ id: z.string().min(1).max(128), displayName: z.str
 const serviceList = z.array(z.object({ id: z.string().min(1).max(200), name: z.string().min(1).max(200) })).max(100)
 export const platformInfoSchema = z.object({
   user: publicUser,
-  services: z.object({ asr: serviceList, knowledge: serviceList, embedding: z.array(z.object({
-    id: z.string().min(1).max(200), name: z.string().min(1).max(200), model: z.string().min(1).max(200),
-    dimensions: z.number().int().min(64).max(4096), fingerprint: z.string().max(200).optional(),
-  })).max(100) }).optional(),
+  services: z.object({ asr: serviceList, knowledge: serviceList }).optional(),
   capabilities: z.object({ llm: z.boolean(), asr: z.boolean(), knowledge: z.boolean() }),
   models: z.object({ llm: z.string().max(200), asr: z.string().max(200),
     available: z.array(z.object({ id: z.string().trim().min(1).max(200), name: z.string().trim().min(1).max(200) })).max(100).optional(),

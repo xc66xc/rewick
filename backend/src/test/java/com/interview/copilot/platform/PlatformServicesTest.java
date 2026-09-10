@@ -44,8 +44,7 @@ class PlatformServicesTest {
         assertThat(response.at("/services/asr/0/id").asText()).isEqualTo("asr-bound");
         assertThat(response.at("/services/asr/0/name").asText()).isEqualTo("Selected ASR");
         assertThat(response.at("/services/knowledge/0/id").asText()).isEqualTo("knowledge-bound");
-        assertThat(response.at("/services/embedding").isArray()).isTrue();
-        assertThat(response.at("/services/embedding")).isEmpty();
+        assertThat(response.at("/services/embedding").isMissingNode()).isTrue();
         assertThat(response.at("/models/available/0/id").asText()).isEqualTo("answer-model");
         assertThat(response.at("/models/llm").asText()).isEqualTo("answer-model");
         assertThat(response.at("/models/asr").asText()).isEqualTo("transcriber-v1");

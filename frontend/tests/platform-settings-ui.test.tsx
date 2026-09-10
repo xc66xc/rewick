@@ -17,11 +17,11 @@ function platformSettings(): Settings & { platform: NonNullable<Settings['platfo
     enabled: true, baseUrl: 'http://127.0.0.1:8080', authenticated: true,
     user: { id: '1', displayName: 'tester', email: 'tester@example.test' },
     capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'fast', asr: 'platform-asr', available: [{ id: 'fast', name: '快速回答' }, { id: 'careful', name: '深度回答' }] },
-    services: { asr: [{ id: 'speech', name: '平台转写' }], knowledge: [{ id: 'rag', name: '平台知识库' }], embedding: [] },
+    services: { asr: [{ id: 'speech', name: '平台转写' }], knowledge: [{ id: 'rag', name: '平台知识库' }] },
   } }
 }
 function setup(settings = platformSettings()) {
-  const onSave = vi.fn(async (input: SettingsInput): Promise<Settings> => ({ ...settings, ...input, llm: { ...settings.llm, ...input.llm }, asr: { ...settings.asr, ...input.asr }, embedding: settings.embedding, remoteKnowledge: { ...settings.remoteKnowledge, ...input.remoteKnowledge }, platform: settings.platform }))
+  const onSave = vi.fn(async (input: SettingsInput): Promise<Settings> => ({ ...settings, ...input, llm: { ...settings.llm, ...input.llm }, asr: { ...settings.asr, ...input.asr }, remoteKnowledge: { ...settings.remoteKnowledge, ...input.remoteKnowledge }, platform: settings.platform }))
   const testCustomService = vi.fn(async () => ({ latencyMs: 12, message: '连接成功' }))
   const saveCustomService = vi.fn(async (input: CustomServiceInput): Promise<Settings> => ({ ...settings,
     customServices: [...settings.customServices ?? [], { ...input, id: input.id || 'new-service', hasApiKey: Boolean(input.apiKey) }],

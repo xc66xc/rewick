@@ -11,10 +11,10 @@ import org.testcontainers.utility.MountableFile;
 
 final class EmailAuthTestDatabase extends PostgreSQLContainer<EmailAuthTestDatabase> {
     private static final List<String> SCRIPTS = List.of("01_schema.sql", "02_pgvector.sql", "03_admin_users.sql",
-            "04_platform_config.sql", "05_email_auth.sql", "06_display_name.sql", "07_email_code_purpose.sql", "08_server_local_time.sql");
+            "04_platform_config.sql", "05_email_auth.sql", "06_display_name.sql", "07_email_code_purpose.sql", "08_server_local_time.sql", "09_pg_references.sql");
 
     EmailAuthTestDatabase() {
-        super(DockerImageName.parse("interview-copilot-postgres:15.19-pgvector0.5.1").asCompatibleSubstituteFor("postgres"));
+        super(DockerImageName.parse("interview-copilot-postgres:15.19-pgvector0.8.6").asCompatibleSubstituteFor("postgres"));
         for (String file : SCRIPTS) withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", file)), "/tmp/" + file);
     }
 

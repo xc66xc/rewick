@@ -15,31 +15,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 class EmbeddingProtocolTest {
     private final ObjectMapper json = new ObjectMapper();
 
-    @Test void input_maximumDesktopBatch_preservesTexts() {
-        var texts = Collections.nCopies(10, "中".repeat(20000));
-        assertThat(EmbeddingProtocol.input(json.valueToTree(Map.of("serviceId", "vector", "input", texts)))).isEqualTo(texts);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"[]", "[\"\"]", "[1]", "null"})
-    void input_invalidTexts_rejects(String input) throws Exception {
-        var body = json.readTree("{\"serviceId\":\"vector\",\"input\":" + input + "}");
-        assertThatThrownBy(() -> EmbeddingProtocol.input(body)).isInstanceOf(ApiException.class);
-    }
-
-    @Test void input_endpointInjection_rejects() {
-        assertThatThrownBy(() -> EmbeddingProtocol.input(json.valueToTree(Map.of(
-                "serviceId", "vector", "input", "hello", "url", "https://attacker.invalid")))).isInstanceOf(ApiException.class);
-    }
-
-    @Test void selection_unapprovedModel_rejects() {
-        var config = new ProviderProperties.Embedding();
-        config.setModel("approved");
-        assertThatThrownBy(() -> EmbeddingProtocol.validateSelection(json.valueToTree(Map.of("model", "expensive")), config))
-                .isInstanceOf(ApiException.class);
-        assertThat(EmbeddingProtocol.request(List.of("hi"), config)).containsEntry("dimensions", 1024).containsEntry("model", "approved");
-    }
-
     @Test void response_metadataRemovedAndIndexesPreserved() {
         var response = json.valueToTree(Map.of("secret", "hidden", "data", List.of(
                 Map.of("index", 1, "embedding", List.of(1, 2), "metadata", "hidden"),

@@ -1,7 +1,7 @@
 name: interview-copilot
 services:
   database:
-    image: interview-copilot-postgres:15.19-pgvector0.5.1
+    image: interview-copilot-postgres:15.19-pgvector0.8.6
     command: [postgres, -c, timezone=Asia/Shanghai]
     build:
       context: ./deploy/postgres
@@ -26,6 +26,8 @@ services:
   backend:
     build:
       context: ./backend
+    volumes:
+      - reference-files:/app/data/references
     depends_on:
       database:
         condition: service_healthy
@@ -55,3 +57,4 @@ services:
       - '127.0.0.1:${COPILOT_ADMIN_PORT:-5174}:80'
 volumes:
   database-pg15-data:
+  reference-files:

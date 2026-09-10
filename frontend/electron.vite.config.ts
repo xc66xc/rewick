@@ -10,7 +10,7 @@ const define = { __COPILOT_PLATFORM_URL__: JSON.stringify(platformUrl.replace(/\
 
 export default defineConfig({
   main: { define, plugins: [externalizeDepsPlugin()], build: { rollupOptions: {
-    input: { index: resolve('src/main/index.ts'), 'document-worker': resolve('src/main/services/document-worker.mjs'), 'document-store-worker': resolve('src/main/services/document-store-worker.mjs') },
+    input: { index: resolve('src/main/index.ts'), 'document-worker': resolve('src/main/services/document-worker.mjs') },
     output: { entryFileNames: (entry) => entry.name.endsWith('-worker') ? '[name].mjs' : '[name].js' },
   } } },
   preload: { plugins: [externalizeDepsPlugin()], build: { rollupOptions: { output: { format: 'cjs', entryFileNames: '[name].cjs' } } } },

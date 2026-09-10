@@ -1,7 +1,6 @@
 package com.interview.copilot.embedding;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.interview.copilot.ai.LlmRequestPolicy;
 import com.interview.copilot.ai.ProviderErrors;
 import com.interview.copilot.ai.ProviderProperties;
 import java.util.ArrayList;
@@ -12,43 +11,6 @@ import java.util.Set;
 /** Restricts costs and returns only verified vector values, never supplier metadata. */
 public final class EmbeddingProtocol {
     private EmbeddingProtocol() { }
-
-    public static List<String> input(JsonNode body) {
-        LlmRequestPolicy.requireFields(body, Set.of("serviceId", "model", "dimensions", "encoding_format", "input"));
-        if (!body.path("serviceId").isTextual()
-                || !body.path("serviceId").asText().matches("[A-Za-z0-9_.-]{1,64}")) { throw ProviderErrors.invalid(); }
-        JsonNode input = body.path("input");
-        List<String> texts = new ArrayList<>();
-        if (input.isTextual()) { texts.add(input.asText()); }
-        else if (input.isArray()) {
-            for (JsonNode text : input) {
-                if (!text.isTextual()) { throw ProviderErrors.invalid(); }
-                texts.add(text.asText());
-            }
-        } else { throw ProviderErrors.invalid(); }
-        validateTexts(texts);
-        return List.copyOf(texts);
-    }
-
-    private static void validateTexts(List<String> texts) {
-        if (texts.isEmpty() || texts.size() > 10) { throw ProviderErrors.invalid(); }
-        int total = 0;
-        for (String text : texts) {
-            if (text.isBlank() || text.length() > 20000) { throw ProviderErrors.invalid(); }
-            total += text.length();
-        }
-        if (total > 200000) { throw ProviderErrors.invalid(); }
-    }
-
-    public static void validateSelection(JsonNode body, ProviderProperties.Embedding config) {
-        if (body.has("model") && (!body.get("model").isTextual()
-                || !body.get("model").asText().equals(config.getModel()))) { throw ProviderErrors.invalid(); }
-        if (body.has("dimensions") && (!body.get("dimensions").isIntegralNumber() || !body.get("dimensions").canConvertToInt()
-                || body.get("dimensions").asInt() != config.getDimensions())) { throw ProviderErrors.invalid(); }
-        if (body.has("encoding_format") && !"float".equals(body.get("encoding_format").asText())) {
-            throw ProviderErrors.invalid();
-        }
-    }
 
     public static Map<String, Object> request(List<String> texts, ProviderProperties.Embedding config) {
         return Map.of("model", config.getModel(), "input", texts, "encoding_format", "float", "dimensions", config.getDimensions());

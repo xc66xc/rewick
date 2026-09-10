@@ -2,13 +2,13 @@ import assert from 'node:assert/strict'
 import { expect } from '@playwright/test'
 
 export async function checkServiceSelectors({ page, mock, knowledge, check }) {
-  await check('all four selectors support separate custom drafts, real connection tests and explicit platform selection', async () => {
+  await check('all three selectors support separate custom drafts, real connection tests and explicit platform selection', async () => {
     await page.getByRole('button', { name: '打开设置', exact: true }).click()
     await expect(page.getByRole('checkbox', { name: '启用平台服务' })).toHaveCount(0)
+    await expect(page.getByRole('combobox', { name: /^资料检索向量模型/ })).toHaveCount(0)
     const cases = [
       { label: '回答模型', kind: 'llm', url: mock.llmBaseUrl, model: 'mock-fast', platformId: 'mock-fast' },
       { label: '实时语音转写', kind: 'asr', url: `${mock.asrUrl}?mode=manual`, model: 'fun-asr-realtime', platformId: 'initial-asr' },
-      { label: '资料检索向量模型', kind: 'embedding', url: mock.llmBaseUrl, model: 'mock-embedding' },
       { label: '远程知识库', kind: 'knowledge', url: knowledge.url, agentId: 'aid-custom', platformId: 'initial-knowledge' },
     ]
     for (const [index, item] of cases.entries()) {

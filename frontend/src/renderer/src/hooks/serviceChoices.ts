@@ -1,12 +1,12 @@
 import type { ServiceKind, ServiceSelection, Settings } from '../../../shared/types'
 import { platformModels } from '../../../shared/platform-models'
 
-export const serviceLabels: Record<ServiceKind, string> = { llm: '回答模型', asr: '实时语音转写', embedding: '资料检索向量模型', knowledge: '远程知识库' }
+export const serviceLabels: Record<ServiceKind, string> = { llm: '回答模型', asr: '实时语音转写', knowledge: '远程知识库' }
 export function platformChoices(settings: Settings, kind: ServiceKind): { id: string; name: string }[] {
   const platform = settings.platform
   if (!platform?.authenticated) return []
   if (kind === 'llm') return platform.capabilities.llm ? platformModels(platform) : []
-  if (kind !== 'embedding' && !platform.capabilities[kind]) return []
+  if (!platform.capabilities[kind]) return []
   return platform.services?.[kind] ?? []
 }
 export function selectionFor(settings: Settings, kind: ServiceKind): ServiceSelection | undefined {

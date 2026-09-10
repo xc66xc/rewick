@@ -3,7 +3,6 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { extractDocument } from '../../src/main/services/document-extractor'
-import { chunkDocument } from '../../src/main/services/chunker'
 
 let directory: string
 beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'copilot-extract-')) })
@@ -31,7 +30,7 @@ describe('Document extraction worker', () => {
     const { files } = await fixtures()
     const result = await extractDocument(files.cache)
     expect(result.pageCount).toBe(2)
-    expect(new Set(chunkDocument(result.pages, true).map((chunk) => chunk.pageStart))).toEqual(new Set([1, 2]))
+    expect(result.pages.map(page => page.number)).toEqual([1, 2])
   })
 
   it('rejects blank and damaged PDFs instead of importing empty usable documents', async () => {
@@ -45,7 +44,6 @@ describe('Document extraction worker', () => {
     await writeFile(path, '\uFEFF# Redis\r\n\r\n缓存一致性\r\n```ts\r\nconst count = 1\r\n```')
     const result = await extractDocument(path)
     expect(result).toMatchObject({ pageCount: 0, text: '# Redis\n\n缓存一致性\n```ts\nconst count = 1\n```' })
-    expect(chunkDocument(result.pages, false)[0]).not.toHaveProperty('pageStart')
   })
 
   it('rejects invalid encodings, files over 10 MB and already cancelled requests', async () => {
@@ -59,12 +57,4 @@ describe('Document extraction worker', () => {
     expect(() => extractDocument(path, controller.signal)).toThrow()
   })
 
-  it('bounds chunk length and overlaps long paragraphs without losing the tail', () => {
-    const text = '分布式缓存。'.repeat(400) + '最后一行'
-    const chunks = chunkDocument([{ number: 1, text }], true)
-    expect(chunks.length).toBeGreaterThan(2)
-    expect(chunks.every((chunk) => chunk.text.length <= 800)).toBe(true)
-    expect(chunks.at(-1)?.text).toContain('最后一行')
-    expect(chunks[1].text.slice(0, 100)).toBe(chunks[0].text.slice(-100))
-  })
 })

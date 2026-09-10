@@ -28,6 +28,13 @@ public class HttpBodyLimitFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
             FilterChain chain) throws ServletException, IOException {
+        if ("POST".equals(request.getMethod()) && "/api/v1/references".equals(request.getRequestURI())
+                && request.getContentType() != null && request.getContentType().startsWith("multipart/form-data")) {
+            if (request.getContentLengthLong() > 11L * MAX_BODY_BYTES) { reject(response); return; }
+            // Servlet multipart limits enforce chunked requests without consuming the multipart stream here.
+            chain.doFilter(request, response);
+            return;
+        }
         if (request.getContentLengthLong() > MAX_BODY_BYTES) {
             reject(response);
             return;

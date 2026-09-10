@@ -13,17 +13,17 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl --fail --show-error --location --retry 3 \
-        https://codeload.github.com/pgvector/pgvector/tar.gz/refs/tags/v0.5.1 \
+        https://codeload.github.com/pgvector/pgvector/tar.gz/refs/tags/v0.8.6 \
         --output pgvector.tar.gz \
-    && echo 'cc7a8e034a96e30a819911ac79d32f6bc47bdd1aa2de4d7d4904e26b83209dc8  pgvector.tar.gz' | sha256sum --check --strict \
+    && echo '10bf9938906e5d643bbc4a7eea104b6f57ba4898e5b76b20e60484ea1d5a7f8f  pgvector.tar.gz' | sha256sum --check --strict \
     && tar -xzf pgvector.tar.gz \
-    && make -C pgvector-0.5.1 -j2 PG_CONFIG=/usr/lib/postgresql/15/bin/pg_config OPTFLAGS="" with_llvm=no \
-    && make -C pgvector-0.5.1 install PG_CONFIG=/usr/lib/postgresql/15/bin/pg_config OPTFLAGS="" with_llvm=no DESTDIR=/opt/pgvector \
-    && install -D -m 644 pgvector-0.5.1/LICENSE /opt/pgvector/usr/share/doc/pgvector/LICENSE
+    && make -C pgvector-0.8.6 -j2 PG_CONFIG=/usr/lib/postgresql/15/bin/pg_config OPTFLAGS="" with_llvm=no \
+    && make -C pgvector-0.8.6 install PG_CONFIG=/usr/lib/postgresql/15/bin/pg_config OPTFLAGS="" with_llvm=no DESTDIR=/opt/pgvector \
+    && install -D -m 644 pgvector-0.8.6/LICENSE /opt/pgvector/usr/share/doc/pgvector/LICENSE
 
 FROM postgres
 LABEL org.opencontainers.image.title="Interview Copilot PostgreSQL" \
-      org.opencontainers.image.version="15.19-pgvector0.5.1"
+      org.opencontainers.image.version="15.19-pgvector0.8.6"
 COPY --from=build /opt/pgvector/usr/lib/postgresql/15/lib/vector.so /usr/lib/postgresql/15/lib/vector.so
 COPY --from=build /opt/pgvector/usr/share/postgresql/15/extension/ /usr/share/postgresql/15/extension/
 COPY --from=build /opt/pgvector/usr/share/doc/pgvector/LICENSE /usr/share/doc/pgvector/LICENSE
