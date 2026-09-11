@@ -75,7 +75,7 @@ describe('deleting a session from history', () => {
 
     rejectDelete(new Error('暂时无法写入会话记录'))
     expect((await screen.findByRole('alert')).textContent).toContain('暂时无法写入会话记录')
-    expect(screen.getByRole('button', { name: '删除会话：上一场面试' })).toBeDefined()
+    expect(within(screen.getByRole('dialog', { name: '删除会话记录' })).getByText('「上一场面试」')).toBeDefined()
     await user.click(screen.getByRole('button', { name: '确认删除' }))
     await screen.findByText('已删除「上一场面试」。')
     expect(onDelete).toHaveBeenCalledTimes(2)

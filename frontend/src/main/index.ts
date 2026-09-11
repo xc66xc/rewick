@@ -43,6 +43,8 @@ let window: BrowserWindow | null = null
 let asr: AsrClient | null = null
 let llm: LlmClient | null = null
 let fullBounds: Rectangle | null = null
+let fullMaximized = false
+let fullFullScreen = false
 let compact = false
 let startingAsr = false
 let asrEpoch = 0
@@ -471,12 +473,22 @@ function registerHandlers(): void {
     if (!window || value === compact) return
     compact = value
     if (value) {
+      // setSize is ignored while maximized/fullscreen: capture the flags, leave those
+      // states first, and re-apply them when returning to the full window.
       fullBounds = window.getBounds()
+      fullMaximized = window.isMaximized()
+      fullFullScreen = window.isFullScreen()
       window.setMinimumSize(430, 500)
+      if (fullMaximized) window.unmaximize()
+      if (fullFullScreen) window.setFullScreen(false)
       window.setSize(480, 640)
+      // setSize keeps the top-left corner; re-center so the compact window lands mid-screen.
+      window.center()
     } else {
       window.setMinimumSize(900, 640)
       if (fullBounds) window.setBounds(fullBounds)
+      if (fullMaximized) window.maximize()
+      if (fullFullScreen) window.setFullScreen(true)
     }
   })
   handle('history:list', () => history.list())
@@ -506,7 +518,7 @@ async function createWindow(): Promise<void> {
   })
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', event => event.preventDefault())
-  window.on('closed', () => { interviewTimer.dispose(); disposeWork(); window = null; compact = false; fullBounds = null })
+  window.on('closed', () => { interviewTimer.dispose(); disposeWork(); window = null; compact = false; fullBounds = null; fullMaximized = false; fullFullScreen = false })
   window.once('ready-to-show', () => window?.show())
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) await window.loadURL(process.env.ELECTRON_RENDERER_URL)
   else await window.loadFile(join(directory, '../renderer/index.html'))
@@ -530,10 +542,13 @@ if (hasInstanceLock) app.whenReady().then(async () => {
   session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
     void displayCapture.grant(Boolean(window && _request.frame === window.webContents.mainFrame), _request.audioRequested, callback)
   })
+  const viewSubmenu: Electron.MenuItemConstructorOptions[] = [{ role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' }]
+  // 开发模式加 DevTools 入口(自定义菜单顶掉了默认的 Ctrl+Shift+I 绑定);打包版不暴露
+  if (!app.isPackaged) viewSubmenu.push({ type: 'separator' }, { role: 'reload', label: '重新加载' }, { role: 'toggleDevTools', label: '开发者工具' })
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: 'Interview Copilot', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },
     { label: '编辑', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
-    { label: '视图', submenu: [{ role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { role: 'togglefullscreen' }] },
+    { label: '视图', submenu: viewSubmenu },
     { label: '窗口', submenu: [{ role: 'minimize' }, { role: 'front' }] }
   ]))
   await authSettings.initializeServices()

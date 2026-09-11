@@ -5,7 +5,11 @@ export async function checkAutoAnswers({ app, page, mock, checked, checkpoint, s
   const pauseMs = 1000
   const silenceWindow = pauseMs + 300
   const toggle = page.getByRole('switch', { name: '自动回答', exact: true })
-  const pause = page.getByLabel('等待停顿')
+  // 等待停顿在面板内为文本展示(修改入口在「模型与设置」),e2e 经设置桥直写
+  const setPauseMs = async (ms) => {
+    await settingsPatch({ autoAnswer: { enabled: true, pauseMs: ms } })
+    await checked.poll(() => page.evaluate(async () => (await window.copilot.getSettings()).autoAnswer.pauseMs)).toBe(ms)
+  }
 
   // Never invoke the operating system's display or system-audio capture API.
   await page.addInitScript(() => {
@@ -44,6 +48,13 @@ export async function checkAutoAnswers({ app, page, mock, checked, checkpoint, s
     await checked(page.getByRole('textbox', { name: `转写文字 ${id + 1}`, exact: true })).toHaveValue(text)
   }
 
+  // v30 speech-actions: 历史转写条的操作按钮默认收起，需先悬停所在条目展开再点击。
+  async function answerSentence(text) {
+    const button = page.getByRole('button', { name: `回答这句：${text}`, exact: true })
+    await button.locator('xpath=ancestor::li[1]').hover()
+    await button.click()
+  }
+
   async function noNewAnswer(requests, milliseconds = silenceWindow) {
     const answers = await page.getByRole('article').count()
     // A deliberate observation window is required to assert that a debounce never fires.
@@ -74,12 +85,9 @@ export async function checkAutoAnswers({ app, page, mock, checked, checkpoint, s
 
   await checkpoint('automatic-answer preferences save through the UI and greetings do not trigger an answer', async () => {
     await checked(toggle).toBeChecked()
-    await checked(pause).toHaveValue('1500')
-    assert.deepEqual(await pause.getByRole('option').evaluateAll((options) => options.map((option) => option.value)), ['1000', '1500', '2500'])
-    await pause.selectOption('2500')
-    await checked.poll(() => page.evaluate(async () => (await window.copilot.getSettings()).autoAnswer.pauseMs)).toBe(2500)
-    await pause.selectOption(String(pauseMs))
-    await checked.poll(() => page.evaluate(async () => (await window.copilot.getSettings()).autoAnswer.pauseMs)).toBe(pauseMs)
+    await checked(page.getByText('等待停顿 1.5 秒', { exact: true })).toBeVisible()
+    await setPauseMs(2500)
+    await setPauseMs(pauseMs)
     const connection = await start()
     const baseline = mock.requests.length
     await sentence(connection, 0, '你好，今天网络很稳定。', true)
@@ -109,8 +117,7 @@ export async function checkAutoAnswers({ app, page, mock, checked, checkpoint, s
   })
 
   await checkpoint('spoken self-introduction request with repeated ASR words automatically answers after 1.5 seconds', async () => {
-    await pause.selectOption('1500')
-    await checked.poll(() => page.evaluate(async () => (await window.copilot.getSettings()).autoAnswer.pauseMs)).toBe(1500)
+    await setPauseMs(1500)
     const connection = await start()
     const baseline = mock.requests.length
     const question = '先简单自介介绍一下自己。'
@@ -139,8 +146,7 @@ export async function checkAutoAnswers({ app, page, mock, checked, checkpoint, s
       return records.some(record => record.answers.some(answer => answer.question === text && answer.status === 'complete'))
     }, question)).toBe(true)
     await reset()
-    await pause.selectOption(String(pauseMs))
-    await checked.poll(() => page.evaluate(async () => (await window.copilot.getSettings()).autoAnswer.pauseMs)).toBe(pauseMs)
+    await setPauseMs(pauseMs)
   })
 
   await checkpoint('manual sentence answers take precedence over a pending automatic answer', async () => {
@@ -148,7 +154,7 @@ export async function checkAutoAnswers({ app, page, mock, checked, checkpoint, s
     const baseline = mock.requests.length
     const question = '你如何定位订单系统的慢查询？'
     await sentence(connection, 0, question, true)
-    await page.getByRole('button', { name: `回答这句：${question}`, exact: true }).click()
+    await answerSentence(question)
     await completed(baseline + 1)
     assert.equal(payload(mock.requests.at(-1)).question, question)
     await noNewAnswer(baseline + 1)
@@ -172,7 +178,7 @@ export async function checkAutoAnswers({ app, page, mock, checked, checkpoint, s
     await sentence(connection, 1, revised, true)
     await noNewAnswer(baseline)
     await screenshot('auto-dismissed-question.png')
-    await page.getByRole('button', { name: `回答这句：${revised}`, exact: true }).click()
+    await answerSentence(revised)
     await completed(baseline + 1)
     assert.equal(payload(mock.requests.at(-1)).question, revised)
     const next = '你如何排查系统中的慢查询？'
@@ -216,7 +222,7 @@ export async function checkAutoAnswers({ app, page, mock, checked, checkpoint, s
     await noNewAnswer(baseline)
     await page.evaluate(() => window.dispatchEvent(new Event('blur')))
     await noNewAnswer(baseline)
-    await page.getByRole('button', { name: `回答这句：${continued}`, exact: true }).click()
+    await answerSentence(continued)
     await completed(baseline + 1)
     assert.equal(payload(mock.requests.at(-1)).question, continued)
     await checked(editor).toHaveValue(edited)
@@ -318,7 +324,6 @@ export async function checkAutoAnswers({ app, page, mock, checked, checkpoint, s
     await noNewAnswer(baseline)
     await stop()
     await reset()
-    await pause.selectOption('1500')
-    await checked.poll(() => page.evaluate(async () => (await window.copilot.getSettings()).autoAnswer.pauseMs)).toBe(1500)
+    await setPauseMs(1500)
   })
 }

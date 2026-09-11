@@ -4,8 +4,11 @@ import type { SessionRecord } from '../../../shared/types'
 import AnswerCard from './AnswerCard'
 import SessionContextDetails from './SessionContextDetails'
 import DeleteSessionDialog from './DeleteSessionDialog'
-import styles from '../styles/App.module.css'
-import historyStyles from '../styles/HistoryManagement.module.css'
+import { Button, buttonDangerClass } from './ui/button'
+import { Eyebrow } from './ui/pill'
+import { EmptyState } from './ui/empty-state'
+import { cn } from '../lib/cn'
+import { textButtonClass } from '../lib/form'
 
 interface HistoryPageProps {
   records: SessionRecord[]; activeSessionId: string; activeSessionLocked: boolean
@@ -26,22 +29,37 @@ export default function HistoryPage({ records, activeSessionId, activeSessionLoc
   function handleDeleteRequest(record: SessionRecord) { setNotice(''); setPendingDelete(record) }
   function locked(id: string) { return activeSessionLocked && id === activeSessionId }
   const lockedHint = '请先停止当前会话的转写或回答，再删除记录。'
-  return <section className={styles.historyPage} aria-labelledby="history-title">
-    <header className={styles.pageHeading}><div><span className={styles.eyebrow}>回看每一次表达</span><h1 ref={heading} id="history-title" tabIndex={-1}>会话记录</h1><p>保存在本机，随时回顾或导出。</p></div><span className={styles.historyCount}>{records.length} 场会话</span></header>
-    {notice && <p className={historyStyles.notice} role="status">{notice}</p>}
-    {selected ? <div className={styles.historyDetail}><div className={styles.historyDetailHeader}><button className={styles.textButton} onClick={() => setSelectedId(null)}><ArrowLeft size={17} />返回记录</button>
-      <div className={historyStyles.actions}><button className={styles.secondaryButton} onClick={() => void onExport(selected)}><DownloadSimple size={17} weight="bold" />导出 Markdown</button>
-        <button type="button" className={historyStyles.deleteButton} disabled={locked(selected.id)} title={locked(selected.id) ? lockedHint : undefined} onClick={() => handleDeleteRequest(selected)}><Trash size={16} aria-hidden="true" />删除会话</button></div></div>
-      <h2>{selected.title}</h2><p className={styles.meta}>{formatDate(selected.createdAt)} · {selected.answers.length} 个回答</p>
+  return <section className="flex-1 p-8 max-[820px]:p-5" aria-labelledby="history-title">
+    <header className="mb-8 flex items-center justify-between gap-5 max-[820px]:items-start max-[560px]:flex-wrap"><div><Eyebrow>回看每一次表达</Eyebrow><h1 ref={heading} id="history-title" tabIndex={-1} className="mb-2 text-[28px] leading-[1.3] font-semibold tracking-[-0.04em] max-[820px]:text-2xl">会话记录</h1><p className="text-xs text-text-muted">保存在本机，随时回顾或导出。</p></div><span className="rounded-chip border border-border bg-card px-3 py-2 text-xs text-text-secondary">{records.length} 场会话</span></header>
+    {notice && <p className="mb-4 text-xs text-success [overflow-wrap:anywhere]" role="status">{notice}</p>}
+    {selected ? <div className="rounded-card border border-border bg-card p-6"><div className="mb-6 flex items-center justify-between gap-4"><button className={textButtonClass} onClick={() => setSelectedId(null)}><ArrowLeft size={17} />返回记录</button>
+      <div className="flex flex-wrap items-center justify-end gap-3"><Button onClick={() => void onExport(selected)}><DownloadSimple size={17} aria-hidden="true" />导出 Markdown</Button>
+        <Button variant="default" size="sm" className={cn(buttonDangerClass, 'text-danger')} disabled={locked(selected.id)} title={locked(selected.id) ? lockedHint : undefined} onClick={() => handleDeleteRequest(selected)}><Trash aria-hidden="true" />删除会话</Button></div></div>
+      <h2 className="mb-2 text-xl">{selected.title}</h2><p className="mb-5 text-xs text-text-muted">{formatDate(selected.createdAt)} · {selected.answers.length} 个回答</p>
       <SessionContextDetails record={selected} />
-      {selected.segments.length > 0 && <details className={styles.historyTranscript}><summary><TextAlignLeft size={17} />查看转写全文</summary><div>{selected.segments.map(segment => <p key={segment.id}>{segment.text}</p>)}</div></details>}
+      {selected.segments.length > 0 && <details className="my-5 rounded-chip border border-border p-4 text-xs"><summary className="cursor-pointer [&_svg]:mr-2 [&_svg]:align-middle"><TextAlignLeft size={17} />查看转写全文</summary><div>{selected.segments.map(segment => <p key={segment.id} className="mt-3 whitespace-pre-wrap">{segment.text}</p>)}</div></details>}
       {selected.answers.map((answer, index) => <AnswerCard key={answer.id} answer={answer.status === 'streaming' && selected.id !== activeSessionId ? { ...answer, status: 'cancelled' } : answer} index={index + 1} />)}</div>
-      : records.length ? <div className={styles.historyList}>{records.map(record => <div key={record.id} className={styles.historyItem}>
-        <button type="button" className={historyStyles.openButton} onClick={() => { setNotice(''); setSelectedId(record.id) }}>
-          <div className={styles.historyItemIcon}><ClockCounterClockwise size={22} weight="bold" /></div><div className={historyStyles.identity}><h2>{record.title}</h2><p>{formatDate(record.createdAt)}<span>·</span>{record.segments.length} 段转写<span>·</span>{record.answers.length} 个回答</p>{record.interviewEnvironment && <p>面试环境：{record.interviewEnvironment.name}</p>}</div><ArrowLeft className={styles.historyArrow} size={19} /></button>
-        <button type="button" className={historyStyles.deleteButton} aria-label={`删除会话：${record.title}`} disabled={locked(record.id)} title={locked(record.id) ? lockedHint : '删除会话'} onClick={() => handleDeleteRequest(record)}><Trash size={16} aria-hidden="true" />删除</button>
-      </div>)}</div>
-        : <div className={styles.historyEmpty}><ClockCounterClockwise size={42} weight="duotone" /><h2>你的第一场会话，即将开始</h2><p>结束转写或完成回答后，会话会自动保存在这里。</p></div>}
+      : records.length ? <div className="overflow-hidden rounded-card border border-border bg-card">
+        {/* v30 表格卡:表头行(面试/会话|时间|转写|回答|操作) + grid 列行;≤560px 收为「标题 + 删除」两列 */}
+        <div className="grid grid-cols-[minmax(0,2.2fr)_minmax(120px,1fr)_minmax(72px,0.7fr)_minmax(72px,0.7fr)_minmax(168px,1fr)] gap-4 border-b border-border bg-subtle px-6 py-3 text-xs text-text-muted max-[820px]:px-5 max-[560px]:hidden">
+          <span>面试 / 会话</span><span>时间</span><span>转写</span><span>回答</span><span className="text-right">操作</span>
+        </div>
+        {records.map(record => {
+          /* 占位标题降级为灰斜体;有环境时环境名升为主行,提高无题记录的辨识度(纯展示调整) */
+          const unnamed = record.title === '未命名会话'
+          return <div key={record.id} className="grid grid-cols-[minmax(0,2.2fr)_minmax(120px,1fr)_minmax(72px,0.7fr)_minmax(72px,0.7fr)_minmax(168px,1fr)] items-center gap-4 border-b border-border px-6 py-5 last:border-b-0 hover:bg-subtle max-[820px]:px-5 max-[560px]:grid-cols-[minmax(0,1fr)_auto] max-[560px]:gap-3 max-[560px]:px-4">
+          <button type="button" className="flex min-w-0 items-center gap-3 bg-transparent text-left text-inherit" onClick={() => { setNotice(''); setSelectedId(record.id) }}>
+            <span className="min-w-0 flex-1"><h2 className={cn('truncate text-sm font-medium', unnamed && 'font-normal italic text-text-muted')}>{unnamed && record.interviewEnvironment ? record.interviewEnvironment.name : record.title}</h2>{unnamed ? record.interviewEnvironment && <p className="mt-1 truncate text-xs font-normal italic text-text-muted">未命名会话</p> : record.interviewEnvironment && <p className="mt-1 truncate text-xs text-text-muted">面试环境：{record.interviewEnvironment.name}</p>}</span></button>
+          <span className="text-xs text-text-secondary max-[560px]:hidden">{formatDate(record.createdAt)}</span>
+          <span className="text-xs text-text-secondary max-[560px]:hidden">{record.segments.length} 段</span>
+          <span className="text-xs text-text-secondary max-[560px]:hidden">{record.answers.length} 个</span>
+          <div className="flex items-center justify-end gap-2">
+            <Button size="sm" aria-label={`查看详情：${record.title}`} onClick={() => { setNotice(''); setSelectedId(record.id) }}>查看详情</Button>
+            <Button variant="default" size="sm" className={cn(buttonDangerClass, 'text-danger')} aria-label={`删除会话：${record.title}`} disabled={locked(record.id)} title={locked(record.id) ? lockedHint : '删除会话'} onClick={() => handleDeleteRequest(record)}><Trash aria-hidden="true" />删除</Button>
+          </div>
+        </div> })}
+      </div>
+        : <EmptyState icon={<ClockCounterClockwise weight="duotone" />} title="你的第一场会话，即将开始" description="结束转写或完成回答后，会话会自动保存在这里。" className="min-h-[400px] justify-center rounded-card border border-dashed border-border-strong" />}
     {pendingDelete && <DeleteSessionDialog record={pendingDelete} isCurrent={pendingDelete.id === activeSessionId} locked={locked(pendingDelete.id)} onDelete={onDelete} onClose={() => setPendingDelete(null)} onDeleted={handleDeleted} />}
   </section>
 }

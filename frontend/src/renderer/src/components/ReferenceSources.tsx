@@ -1,28 +1,31 @@
 import { Books, FileText } from '@phosphor-icons/react'
 import type { ReferenceExcerpt, RetrievalContext } from '../../../shared/types'
-import styles from '../styles/App.module.css'
+import { cn } from '../lib/cn'
+import { formNoteClass } from '../lib/form'
+import { Collapse } from './ui/collapsible'
 
 interface ReferenceSourcesProps { retrieval: RetrievalContext }
 function excerptLocation(excerpt: ReferenceExcerpt): string {
   if (excerpt.pageStart === undefined) return '文字片段'
   return excerpt.pageEnd !== undefined && excerpt.pageEnd !== excerpt.pageStart ? `第 ${excerpt.pageStart}–${excerpt.pageEnd} 页` : `第 ${excerpt.pageStart} 页`
 }
+const degradedClass = 'rounded-chip bg-accent-subtle px-3 py-2 text-accent-text'
+const degradedBadgeClass = 'ml-2 rounded-chip bg-accent-subtle px-2 text-[10px] text-accent-text'
 export default function ReferenceSources({ retrieval }: ReferenceSourcesProps) {
   const remote = retrieval.remote
   if (retrieval.status === 'disabled' && !remote) return null
   const degraded = retrieval.status === 'degraded' || remote?.status === 'degraded'
   const remoteStatus = remote?.status === 'ready' ? '已检索' : remote?.status === 'empty' ? '未找到相关内容' : '检索暂不可用'
-  const remoteNote = remote && <p className={`${styles.formNote} ${remote.status === 'degraded' ? styles.retrievalDegraded : ''}`}>百炼远程知识库 · {remoteStatus}<br />Agent ID：{remote.agentId}{remote.message && <><br />{remote.message}</>}</p>
-  if (!retrieval.excerpts.length) return <div><p className={`${styles.retrievalNote} ${degraded ? styles.retrievalDegraded : ''}`}><Books size={14} aria-hidden="true" />{retrieval.message || (degraded ? '资料检索暂不可用，本次未提供参考片段。' : '本次未找到相关资料。')}</p>{remoteNote}</div>
-  return <details className={styles.referenceSources}>
-    <summary><Books size={15} aria-hidden="true" /><span>本次检索资料</span><span className={styles.sourceCount}>{retrieval.excerpts.length} 个片段</span>{remote && <span className={styles.sourceCount}>百炼：{remoteStatus}</span>}{degraded && <span className={styles.retrievalBadge}>{remote ? '部分检索降级' : '关键词匹配'}</span>}</summary>
-    <p className={styles.sourceExplanation}>以下片段提供给了本次回答模型，不代表逐句引用或事实核验。复制回答时不会包含这些资料。</p>
+  const remoteNote = remote && <p className={cn(formNoteClass, remote.status === 'degraded' && degradedClass)}>百炼远程知识库 · {remoteStatus}<br />Agent ID：{remote.agentId}{remote.message && <><br />{remote.message}</>}</p>
+  if (!retrieval.excerpts.length) return <div><p className={cn('mt-4 flex items-start gap-2 text-xs leading-[1.8] text-text-secondary [&_svg]:mt-[3px] [&_svg]:shrink-0', degraded && degradedClass)}><Books size={14} aria-hidden="true" />{retrieval.message || (degraded ? '资料检索暂不可用，本次未提供参考片段。' : '本次未找到相关资料。')}</p>{remoteNote}</div>
+  return <Collapse className="mt-5" summary={<><Books size={15} aria-hidden="true" /><span>本次检索资料</span><span className="ml-2 text-text-muted">{retrieval.excerpts.length} 个片段</span>{remote && <span className="ml-2 text-text-muted">百炼：{remoteStatus}</span>}{degraded && <span className={degradedBadgeClass}>{remote ? '部分检索降级' : '关键词匹配'}</span>}</>}>
+    <p className="my-3 leading-[1.8] text-text-secondary">以下片段提供给了本次回答模型，不代表逐句引用或事实核验。复制回答时不会包含这些资料。</p>
     {remoteNote}
-    {retrieval.message && <p className={styles.retrievalNote}>{retrieval.message}</p>}
-    {degraded && !retrieval.message && <p className={styles.retrievalNote}>{remote ? '部分资料检索暂不可用，本次回答使用已取得的内容。' : '语义检索暂不可用，本次使用平台关键词匹配。'}</p>}
-    <ol className={styles.sourceList}>{retrieval.excerpts.map(excerpt => <li key={`${excerpt.source ?? 'local'}:${excerpt.documentId}:${excerpt.revision}:${excerpt.chunkId}`} className={styles.sourceItem}>
-      <header><FileText size={15} aria-hidden="true" /><strong>{excerpt.name}</strong><span>{excerptLocation(excerpt)}{excerpt.source !== 'bailian' && ` · 版本 ${excerpt.revision}`}</span></header>
-      <span className={styles.sourceKind}>{excerpt.source === 'bailian' ? '百炼远程知识库 · 技术参考' : excerpt.kind === 'personal' ? '我的项目经历' : '技术参考'}</span><p>{excerpt.text}</p>
+    {retrieval.message && <p className="mt-4 flex items-start gap-2 leading-[1.8] [&_svg]:mt-[3px] [&_svg]:shrink-0">{retrieval.message}</p>}
+    {degraded && !retrieval.message && <p className="mt-4">{remote ? '部分资料检索暂不可用，本次回答使用已取得的内容。' : '语义检索暂不可用，本次使用平台关键词匹配。'}</p>}
+    <ol className="m-0 flex list-none flex-col gap-3 p-0">{retrieval.excerpts.map(excerpt => <li key={`${excerpt.source ?? 'local'}:${excerpt.documentId}:${excerpt.revision}:${excerpt.chunkId}`} className="rounded-chip border border-border bg-subtle p-3">
+      <header className="mb-2 flex flex-wrap items-center gap-2"><FileText size={15} aria-hidden="true" className="shrink-0" /><strong className="text-xs font-medium [overflow-wrap:anywhere]">{excerpt.name}</strong><span className="text-[10px] text-text-muted">{excerptLocation(excerpt)}{excerpt.source !== 'bailian' && ` · 版本 ${excerpt.revision}`}</span></header>
+      <span className="text-[10px] text-success">{excerpt.source === 'bailian' ? '百炼远程知识库 · 技术参考' : excerpt.kind === 'personal' ? '我的项目经历' : '技术参考'}</span><p className="mt-2 mb-0 leading-[1.85] whitespace-pre-wrap text-text-secondary [overflow-wrap:anywhere]">{excerpt.text}</p>
     </li>)}</ol>
-  </details>
+  </Collapse>
 }

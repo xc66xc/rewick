@@ -1,5 +1,5 @@
+import { CaretDown } from '@phosphor-icons/react'
 import type { InterviewEnvironmentSnapshot, InterviewTarget, SessionRecord, Settings } from '../../../shared/types'
-import styles from '../styles/SessionContext.module.css'
 
 interface SessionContextDetailsProps {
   record: Pick<SessionRecord, 'answers' | 'interviewEnvironment'>
@@ -41,24 +41,28 @@ export default function SessionContextDetails({ record, current }: SessionContex
   const groups = collectContexts(record, current)
   const hasAnswers = record.answers.length > 0
   const description = hasAnswers ? '以下为回答使用的面试信息。' : current ? '当前配置，将用于接下来的回答。' : '这场会话保存的面试环境。'
-  return <details className={styles.context} aria-label="面试信息">
-    <summary className={styles.summary}>面试信息<span className={styles.label}>{groups.length > 1 ? `${groups.length} 组回答记录` : contextLabel(groups[0])}</span></summary>
-    <div className={styles.body} role="region" aria-label="面试环境与目标详情" tabIndex={0}>
-      <p className={styles.description}>{description}</p>
-      {groups.map(group => <section key={group.key} className={styles.group}>
-        {groups.length > 1 && <p className={styles.questions}>用于 {group.questions.join('、')}</p>}
+  return <details className="group min-w-0 shrink-0 border-b border-border bg-subtle text-xs text-text-secondary" aria-label="面试信息">
+    <summary className="flex cursor-pointer list-none items-center gap-1.5 px-5 py-3 font-medium text-text-secondary transition-colors hover:text-text-primary [&::-webkit-details-marker]:hidden">
+      <CaretDown size={13} weight="bold" aria-hidden="true" className="shrink-0 text-text-muted transition-transform duration-200 group-open:rotate-180" />
+      面试信息
+      <span className="ml-2 min-w-0 truncate text-accent-text">{groups.length > 1 ? `${groups.length} 组回答记录` : contextLabel(groups[0])}</span>
+    </summary>
+    <div className="flex max-h-[min(280px,28vh)] flex-col gap-4 overflow-y-auto px-5 pb-4" role="region" aria-label="面试环境与目标详情" tabIndex={0}>
+      <p className="text-text-muted">{description}</p>
+      {groups.map(group => <section key={group.key} className="min-w-0">
+        {groups.length > 1 && <p className="mb-2 font-mono text-success [overflow-wrap:anywhere]">用于 {group.questions.join('、')}</p>}
         {group.environment || group.target ? <>
-          <dl className={styles.fields}>
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 m-0">
             {group.environment && <>
-              <dt>面试环境</dt><dd>{group.environment.name}</dd>
-              <dt>使用简历</dt><dd>{group.environment.resumeName || '未选择'}</dd>
-              <dt>目标岗位</dt><dd>{group.environment.targetName || '未选择'}</dd>
-              <dt>参考资料</dt><dd>已选择 {group.environment.referenceIds.length} 份</dd>
+              <dt className="text-text-muted">面试环境</dt><dd className="m-0 text-text-primary [overflow-wrap:anywhere]">{group.environment.name}</dd>
+              <dt className="text-text-muted">使用简历</dt><dd className="m-0 text-text-primary [overflow-wrap:anywhere]">{group.environment.resumeName || '未选择'}</dd>
+              <dt className="text-text-muted">目标岗位</dt><dd className="m-0 text-text-primary [overflow-wrap:anywhere]">{group.environment.targetName || '未选择'}</dd>
+              <dt className="text-text-muted">参考资料</dt><dd className="m-0 text-text-primary [overflow-wrap:anywhere]">已选择 {group.environment.referenceIds.length} 份</dd>
             </>}
-            {group.target && <><dt>面试公司</dt><dd>{group.target.companyName || '未填写'}</dd><dt>岗位名称</dt><dd>{group.target.roleName || '未填写'}</dd></>}
+            {group.target && <><dt className="text-text-muted">面试公司</dt><dd className="m-0 text-text-primary [overflow-wrap:anywhere]">{group.target.companyName || '未填写'}</dd><dt className="text-text-muted">岗位名称</dt><dd className="m-0 text-text-primary [overflow-wrap:anywhere]">{group.target.roleName || '未填写'}</dd></>}
           </dl>
-          {group.target && <div className={styles.job}><strong className={styles.jobTitle}>岗位 JD</strong><p className={styles.jobText}>{group.target.jobDescription || '未填写岗位 JD。'}</p></div>}
-        </> : <p className={styles.description}>{hasAnswers ? '这组回答未记录面试信息，可查看各回答的本次发送内容。' : '尚未设置面试环境或目标。'}</p>}
+          {group.target && <div className="mt-3"><strong className="font-medium text-text-primary">岗位 JD</strong><p className="mt-1 whitespace-pre-wrap leading-[1.85] [overflow-wrap:anywhere]">{group.target.jobDescription || '未填写岗位 JD。'}</p></div>}
+        </> : <p className="text-text-muted">{hasAnswers ? '这组回答未记录面试信息，可查看各回答的本次发送内容。' : '尚未设置面试环境或目标。'}</p>}
       </section>)}
     </div>
   </details>

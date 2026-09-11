@@ -1,5 +1,6 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'node:path'
 
 const platformUrl = process.env.COPILOT_PLATFORM_URL?.trim() || 'http://127.0.0.1:8080'
@@ -14,5 +15,5 @@ export default defineConfig({
     output: { entryFileNames: (entry) => entry.name.endsWith('-worker') ? '[name].mjs' : '[name].js' },
   } } },
   preload: { plugins: [externalizeDepsPlugin()], build: { rollupOptions: { output: { format: 'cjs', entryFileNames: '[name].cjs' } } } },
-  renderer: { define, plugins: [react()], server: { host: '127.0.0.1' } }
+  renderer: { define, plugins: [react(), tailwindcss()], server: { host: '127.0.0.1' } }
 })

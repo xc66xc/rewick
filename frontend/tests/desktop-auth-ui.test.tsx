@@ -100,12 +100,13 @@ describe('desktop account gate', () => {
     await login(user)
     await user.click(await screen.findByRole('button', { name: '开始面试' }))
     expect((await screen.findByRole('textbox', { name: '当前问题' }) as HTMLTextAreaElement).value).toBe('')
-    expect(screen.getByRole('button', { name: '当前账号：second@example.test' })).toBeTruthy()
+    expect(screen.getByText('second@example.test')).toBeTruthy()
   })
   it('stops recording and cancels the answer before logout, without silently revalidating the account', async () => {
     const { mount, user, platformLogout, stopAsr, cancelAnswer, refreshPlatform } = setup(account())
     mount()
-    await user.click(await screen.findByRole('button', { name: '退出登录' }))
+    await user.click(await screen.findByRole('button', { name: '打开设置' }))
+    await user.click(screen.getByRole('button', { name: '退出登录' }))
     expect(await screen.findByRole('heading', { name: '登录面试工作台' })).toBeTruthy()
     expect(stopAsr.mock.invocationCallOrder[0]).toBeLessThan(platformLogout.mock.invocationCallOrder[0])
     expect(cancelAnswer.mock.invocationCallOrder[0]).toBeLessThan(platformLogout.mock.invocationCallOrder[0])
@@ -118,7 +119,7 @@ describe('desktop account gate', () => {
     await user.click(await screen.findByRole('button', { name: '紧凑模式' }))
     await user.click(screen.getByRole('button', { name: '窗口置顶' }))
     expect(nativeWindow).toEqual({ compact: true, pinned: true })
-    if (outcome === 'logout') await user.click(screen.getByRole('button', { name: '退出登录' }))
+    if (outcome === 'logout') { await user.click(screen.getByRole('button', { name: '打开设置' })); await user.click(screen.getByRole('button', { name: '退出登录' })) }
     else { const expired = account(); expired.platform.expiresAt = new Date(Date.now() - 1).toISOString(); change(expired) }
     await screen.findByRole('heading', { name: '登录面试工作台' })
     await waitFor(() => expect(nativeWindow).toEqual({ compact: false, pinned: false }))

@@ -1,7 +1,8 @@
 import { useId } from 'react'
 import type { CustomServiceProfile, ServiceKind, ServiceSelection, Settings } from '../../../shared/types'
 import { platformChoices, serviceLabels } from '../hooks/serviceChoices'
-import styles from '../styles/App.module.css'
+import { Button } from './ui/button'
+import { fieldClass, inlineErrorClass } from '../lib/form'
 
 interface ServiceSelectorProps {
   kind: ServiceKind; settings: Settings; selection?: ServiceSelection
@@ -15,7 +16,7 @@ export default function ServiceSelector({ kind, settings, selection, onChange, o
   const available = selection?.source === 'platform' ? platform.some(item => item.id === selection.id) : Boolean(profile)
   const value = selection ? `${selection.source}:${selection.id}` : ''
   return <div>
-    <label className={styles.field} htmlFor={id}>{serviceLabels[kind]}<select id={id} value={value} aria-describedby={`${id}-note`}
+    <label className={fieldClass} htmlFor={id}>{serviceLabels[kind]}<select id={id} value={value} aria-describedby={`${id}-note`}
       onChange={event => {
         if (event.target.value === 'new') { onCustom(); return }
         const [source, ...parts] = event.target.value.split(':')
@@ -27,11 +28,11 @@ export default function ServiceSelector({ kind, settings, selection, onChange, o
       <optgroup label="我的自定义">{custom.length ? custom.map(item => <option key={item.id} value={`custom:${item.id}`}>{item.name}</option>) : <option disabled value="custom-empty">尚无自定义服务</option>}</optgroup>
       <option value="new">+ 自定义模型/服务…</option>
     </select></label>
-    <p id={`${id}-note`} className={selection && !available ? styles.inlineError : styles.fieldHint} role={selection && !available ? 'alert' : undefined}>
+    <p id={`${id}-note`} className={selection && !available ? inlineErrorClass : '-mt-2 mb-4 text-xs leading-[1.8] text-text-muted'} role={selection && !available ? 'alert' : undefined}>
       {selection && !available ? '原服务已删除或下架，请明确选择其他服务后保存。' : '按所选服务连接；平台配置由管理员维护。'}</p>
-    {profile && <div className={styles.platformActions}>
-      <button type="button" className={styles.secondaryButton} onClick={() => onCustom(profile)}>编辑{serviceLabels[kind]}</button>
-      <button type="button" className={styles.textButton} onClick={() => onRemove(profile)}>删除{serviceLabels[kind]}</button>
+    {profile && <div className="mb-4 flex flex-wrap gap-2">
+      <Button size="sm" onClick={() => onCustom(profile)}>编辑{serviceLabels[kind]}</Button>
+      <Button size="sm" variant="quiet" onClick={() => onRemove(profile)}>删除{serviceLabels[kind]}</Button>
     </div>}
   </div>
 }

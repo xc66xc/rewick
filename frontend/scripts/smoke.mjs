@@ -313,12 +313,19 @@ try {
     report.simulatedAudioCaptureTested = true
   })
 
+  // v30 speech-actions: 历史转写条的操作按钮默认收起，需先悬停所在条目展开再点击。
+  async function answerSentence(label) {
+    const button = page.getByRole('button', { name: label, exact: true })
+    await button.locator('xpath=ancestor::li[1]').hover()
+    await button.click()
+  }
+
   await checkpoint('answering a transcript sentence uses that sentence and preserves the manual draft', async () => {
     const sentence = '请介绍你做过的项目。'
     const draft = '完全无关的草稿：请解释浏览器的 CSS 层叠规则。'
     const previousRequests = mock.requests.length
     await page.getByLabel('当前问题', { exact: false }).fill(draft)
-    await page.getByRole('button', { name: `回答这句：${sentence}`, exact: true }).click()
+    await answerSentence(`回答这句：${sentence}`)
     const answer = page.getByRole('article', { name: '回答 1', exact: true })
     await checked(answer.getByRole('heading', { name: sentence, exact: true })).toBeVisible()
     await checked(answer.getByText('已完成', { exact: true })).toBeVisible()
@@ -346,14 +353,14 @@ try {
     const secondSentence = '你如何排查慢查询？'
     const draft = await page.getByLabel('当前问题', { exact: false }).inputValue()
     await settingsPatch({ llm: { model: 'mock-slow' } })
-    await page.getByRole('button', { name: `回答这句：${firstSentence}`, exact: true }).click()
+    await answerSentence(`回答这句：${firstSentence}`)
     const previousAnswer = page.getByRole('article', { name: '回答 2', exact: true })
     await checked(previousAnswer.getByText(/先确认性能瓶颈/)).toBeVisible()
     const previousRequest = mock.requests.at(-1)
     assert.equal(previousRequest.body.model, 'mock-slow')
     const previousCancellations = mock.stats.cancelledStreams
     await settingsPatch({ llm: { model: 'mock-ui' } })
-    await page.getByRole('button', { name: `回答这句：${secondSentence}`, exact: true }).click()
+    await answerSentence(`回答这句：${secondSentence}`)
     const nextAnswer = page.getByRole('article', { name: '回答 3', exact: true })
     await checked(nextAnswer.getByRole('heading', { name: secondSentence, exact: true })).toBeVisible()
     await checked(nextAnswer.getByText('已完成', { exact: true })).toBeVisible()
@@ -388,6 +395,7 @@ try {
     await checked(first).toHaveValue(visibleText)
     await checked(first).toBeFocused()
     const previousRequests = mock.requests.length
+    await page.getByRole('listitem').filter({ has: first }).hover()
     await page.getByRole('listitem').filter({ has: first }).getByRole('button', { name: /回答这句/ }).click()
     const answer = page.getByRole('article', { name: '回答 1', exact: true })
     await checked(answer.getByRole('heading')).toHaveText(visibleText)
@@ -478,6 +486,7 @@ try {
       const records = await window.copilot.getHistory()
       return records.some((record) => record.segments.some((segment) => segment.text === text && segment.isEdited && segment.isFinal && segment.endMs === 1800))
     }, editedTranscriptText)).toBe(true)
+    await firstRow.hover()
     await firstRow.getByRole('button', { name: /回答这句/ }).click()
     const answer = page.getByRole('article', { name: '回答 1', exact: true })
     await checked(answer.getByRole('heading')).toHaveText(editedTranscriptText)

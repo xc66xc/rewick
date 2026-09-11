@@ -59,7 +59,9 @@ describe('adding a transcript sentence to the question', () => {
     const button = screen.getByRole('button', { name: '加入问题：临时字幕' })
     await user.click(button)
     expect(events).toEqual(['转写文字 1', 'blur'])
-    expect(document.activeElement).toBe(button)
+    // 鼠标点击后按钮随即释放焦点(v30 操作行须随鼠标移开收起),且绝不能聚焦问题输入框。
+    expect(document.activeElement).not.toBe(screen.getByRole('textbox', { name: '当前问题' }))
+    expect(document.activeElement).toBe(document.body)
   })
 
   it('does not show success or lock the button when adding was rejected', async () => {

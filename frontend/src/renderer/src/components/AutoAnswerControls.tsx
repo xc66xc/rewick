@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import type { SessionController } from '../hooks/useSession'
 import { errorMessage } from '../hooks/useSettings'
-import styles from '../styles/App.module.css'
+import { ToggleSwitch } from './ui/switch'
+import { cn } from '../lib/cn'
+import { inlineErrorClass } from '../lib/form'
 
 interface AutoAnswerControlsProps { session: SessionController; compact?: boolean }
 interface AutoAnswerPreference { enabled: boolean; pauseMs: number }
@@ -26,6 +28,7 @@ function statusMessage(session: SessionController, enabled: boolean): string {
   return stateLabels[session.autoAnswerState]
 }
 
+/* v30 ctx-note 式单行:开关 + 状态注(单行截断) + 等待停顿文本展示(修改入口在「模型与设置」) */
 export default function AutoAnswerControls({ session, compact = false }: AutoAnswerControlsProps) {
   const [pending, setPending] = useState<AutoAnswerPreference | null>(null)
   const [error, setError] = useState('')
@@ -38,21 +41,16 @@ export default function AutoAnswerControls({ session, compact = false }: AutoAns
     catch (reason) { setError(errorMessage(reason)) }
     finally { setPending(null) }
   }
-  return <section className={`${styles.autoAnswerControls} ${compact ? styles.autoAnswerControlsCompact : ''}`} aria-label="自动回答设置" aria-busy={busy}>
-    <div className={styles.autoAnswerRow}>
-      <label className={styles.autoAnswerToggle}>
-        <input type="checkbox" role="switch" aria-label="自动回答" checked={preference.enabled} disabled={busy || !session.desktop}
-          onChange={event => void handleChange({ ...preference, enabled: event.target.checked })} />
-        <span className={styles.autoAnswerSwitch} aria-hidden="true" /><span>自动回答</span>
-      </label>
-      <label className={styles.autoAnswerDelay}>等待停顿
-        <select value={preference.pauseMs} disabled={busy || !session.desktop}
-          onChange={event => void handleChange({ ...preference, pauseMs: Number(event.target.value) })}>
-          <option value={1000}>1 秒</option><option value={1500}>1.5 秒</option><option value={2500}>2.5 秒</option>
-        </select>
-      </label>
+  const message = busy ? '正在保存自动回答设置…' : statusMessage(session, preference.enabled)
+  return <section className={cn(compact ? 'm-0 shrink-0 bg-subtle px-4 py-3' : 'border-b border-border px-5 py-2')} aria-label="自动回答设置" aria-busy={busy}>
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <ToggleSwitch size="sm" label="自动回答" checked={preference.enabled} disabled={busy || !session.desktop}
+          onCheckedChange={checked => void handleChange({ ...preference, enabled: checked })} />
+        <p className="m-0 min-w-0 truncate text-[10.5px] text-text-muted" role="status" title={message}>{message}</p>
+      </div>
+      <span className="shrink-0 text-[10.5px] text-text-muted">等待停顿 {preference.pauseMs / 1000} 秒</span>
     </div>
-    <p className={styles.autoAnswerStatus} role="status">{busy ? '正在保存自动回答设置…' : statusMessage(session, preference.enabled)}</p>
-    {error && <p className={styles.inlineError} role="alert">{error}</p>}
+    {error && <p className={inlineErrorClass} role="alert">{error}</p>}
   </section>
 }

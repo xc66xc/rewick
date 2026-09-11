@@ -1,0 +1,7 @@
+/*
+ * playground 专用入口 CSS:引入真实令牌层,并显式声明组件目录为扫描源。
+ * vite root = playground/,Tailwind 自动内容发现不会越出本目录,
+ * 组件类名须经 @source 显式纳入(常驻预览站:与主应用各自独立构建,本文件长期保留)。
+ */
+@import "../src/renderer/src/styles/tokens.css";
+@source "../src/renderer/src";

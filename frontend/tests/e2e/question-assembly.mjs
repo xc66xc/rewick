@@ -54,6 +54,8 @@ export async function checkQuestionAssembly({ app, page, mock, checked, checkpoi
     await checked(editor(index)).toHaveValue(text)
   }
   async function joined(index, expected) {
+    // v30 speech-actions: 历史条操作按钮默认收起，先悬停所在行展开。
+    await row(index).hover()
     await joinButton(index).click()
     await checked(composer).toHaveValue(expected)
     await checked(assembling).toBeVisible()
@@ -240,6 +242,7 @@ export async function checkQuestionAssembly({ app, page, mock, checked, checkpoi
       await checked(composer).toHaveValue(draft)
       await checked(assembling).toBeVisible()
       await quiet(pausedCounts, 'finishing the old stream must not drain an assembly-era queued question')
+      await row(2).hover()
       await row(2).getByRole('button', { name: /^回答这句：/ }).click()
       const manual = await oneRequest(pausedCounts, selected, { held: true })
       await checked(composer).toHaveValue(draft)

@@ -66,6 +66,15 @@ Use MyBatis-Plus for database access through concrete `*Mapper` interfaces in `m
 
 Use `*Request`, `*Response`/`*VO`, `*Service`, `*ServiceImpl`, and `*Mapper` naming patterns.
 
+## Frontend UI Constraints
+
+- Build renderer UI from the library in `frontend/src/renderer/src/components/ui/` — `Button`/`IconButton`/`LinkButton`/`TextButton`, `TextField`/`TextareaField`/`FieldRow`, `AppSelect`, `Segmented`, `ToggleSwitch`, `CheckRow`/`ChoiceRow`, `TabBar`, `Table*` family, `Modal`/`ConfirmModal`, `DropdownMenu`, `Tooltip`, `Collapse`, `EmptyState`, `Pill`/`StatusPill`/`Eyebrow`, `Badge`, `Avatar`, `Skeleton`, `Divider`, `Kbd`, `LevelMeter`, plus `toast()` for notifications.
+- Do not hand-roll raw equivalents: no native `<details>`/`<summary>` (use `Collapse`), no ad-hoc styled `<button>` (use `Button` variants/sizes), no `<select>` (use `AppSelect`), no custom dialogs (use `Modal`) or inline notification banners (use `toast()`).
+- When the library almost fits, extend the component (new variant/size/prop) instead of copying it into page code; page-level one-off looks go through the sanctioned override props (e.g. `TextareaField.controlClassName`).
+- `components/ui/` and `lib/` use semantic Tailwind tokens only (`bg-card`, `text-text-secondary`, `border-border`…). Literal colors, gradients, and keyframes live only in `src/renderer/src/styles/tokens.css` (`@theme`) — enforced by `tests/ui/no-literal-colors.test.ts`.
+- Register new or changed library components in `playground/registry.ts` (sync enforced by `tests/ui/registry-drift.test.ts`) and cover them in `tests/ui/`.
+- Icons come from `@phosphor-icons/react`; keep content pages full-width without `max-w-*` centering caps.
+
 ## Testing Guidelines
 
 Use Vitest/Testing Library (`*.test.ts`, `*.test.tsx`), Playwright, and JUnit 5/Mockito (`*Test.java`), with Testcontainers for integration. No coverage threshold. Cover changed behavior, failures, authorization, and cancellation. Use isolated data and mock suppliers, never real credentials or recordings.

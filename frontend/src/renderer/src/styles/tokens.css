@@ -1,0 +1,213 @@
+@import "tailwindcss";
+
+/*
+ * v30 设计令牌层(design-spec-v30.md §17.1)
+ * 阶段 1 落地;等待期仅供 playground 使用,主应用尚未引入(引入前必须先完成旧令牌隔离,见 refactor-plan.md 阶段 1)。
+ * 纪律:组件只用这里的语义类,禁止字面色。
+ */
+@theme {
+  /* ── 颜色:面 ── */
+  --color-page: #ffffff;
+  --color-canvas: #f2f5fa;
+  --color-card: #ffffff;
+  --color-subtle: #f7f8fa;
+
+  /* ── 颜色:线 ── */
+  --color-border: #ebecf0;
+  --color-border-strong: #e0e0e0;
+  --color-border-hover: #dfe1e6;
+  --color-border-dashed: #d5d9e0;
+  --color-border-selected: #d8e3f7;
+
+  /* ── 颜色:品牌蓝 ── */
+  --color-accent: #134cff;
+  --color-accent-hover: #406eff;
+  --color-accent-active: #0035e5;
+  --color-accent-text: #2454ff;
+  --color-accent-subtle: #eaf2ff;
+  --color-accent-line: #cedcf5;
+
+  /* ── 颜色:副色 ── */
+  --color-violet: #8337ff;
+  --color-success: #06bf7f;
+  --color-success-subtle: #e9f9f3;
+  --color-success-line: #c9ecdd;
+  --color-danger: #f1343a;
+  --color-danger-subtle: #fef0f1;
+  --color-danger-line: #f6c6c8;
+
+  /* ── 颜色:文字 ── */
+  --color-text-primary: #131212;
+  --color-text-heading: #2a2a2e;
+  --color-text-regular: #484a58;
+  --color-text-secondary: #767680;
+  --color-text-muted: #8d8e99;
+  /* 实底上的文字(primary 按钮/toast/tooltip 白字;2026-09-11 增补,消灭 text-white 字面色) */
+  --color-text-on-fill: #ffffff;
+
+  /* ── 颜色:杂项面 ── */
+  --color-overlay: rgba(26, 32, 41, 0.98); /* toast/tooltip 深底 */
+  --color-led-idle: #dfe3ea;               /* 电平条未亮 */
+  --color-track-idle: #dcdfe6;             /* switch 关态轨道 */
+  --color-scrim: rgb(0 0 0 / 0.45);        /* 弹窗遮罩(spec §8 ::backdrop;2026-09-11 增补) */
+
+  /* ── 阴影 ── */
+  --shadow-card: 0 2px 12px 0 rgb(0 0 0 / 0.04);
+  --shadow-pop: 0 15px 35px -2px rgb(0 0 0 / 0.05), 0 5px 15px 0 rgb(0 0 0 / 0.03);
+  --shadow-focus-ring: 0 0 0 3px rgb(19 76 255 / 0.12); /* 输入类聚焦光环 */
+
+  /* ── 圆角 ── */
+  --radius-card: 12px;
+  --radius-control: 8px;
+  --radius-chip: 6px;
+
+  /* ── 字体 ── */
+  --font-sans: 'MiSans', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei',
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+
+  /* ── 动效 ── */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --animate-pulse-dot: pulse-dot 1.6s var(--ease-standard) infinite;
+  --animate-fade-in: fade-in 0.25s var(--ease-standard) both;
+
+  @keyframes pulse-dot {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* ── 断点(设计四档,spec §16)── */
+  --breakpoint-phone: 730px;
+  --breakpoint-narrow: 950px;
+  --breakpoint-laptop: 1180px;
+  --breakpoint-wide: 1600px;
+}
+
+/* v30 合成值类(色彩令牌无法表达的渐变;spec §1/§5.4) */
+@layer components {
+  /* 品牌渐变:spec 规定仅 brand-logo / ctx-tile / 选中环境卡字母标 三处使用 */
+  .brand-gradient {
+    background-image: linear-gradient(356deg, #134cff 0%, #8337ff 103.24%);
+  }
+
+  /* 选中环境卡面:纵向浅蓝渐变叠双角部光晕(spec §5.4 一次性值,不拆令牌);描边用 --color-border-selected */
+  .env-card-selected {
+    border-color: var(--color-border-selected);
+    background:
+      radial-gradient(110% 85% at 100% 0%, rgb(131 55 255 / 0.1) 0%, transparent 48%),
+      radial-gradient(85% 70% at 0% 0%, rgb(19 76 255 / 0.13) 0%, transparent 44%),
+      linear-gradient(180deg, #f8faff, #eef4ff);
+  }
+}
+
+/* 全局基线(设计 §1.4/§1.5):按钮通用动效与焦点、勾选配色、滚动条、选区、减动效 */
+@layer base {
+  html {
+    font-family: var(--font-sans);
+  }
+
+  body {
+    font-size: 14px;
+    font-synthesis: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: var(--color-accent-subtle);
+  }
+
+  button {
+    transition:
+      color 150ms var(--ease-standard),
+      background-color 150ms var(--ease-standard),
+      border-color 150ms var(--ease-standard),
+      box-shadow 150ms var(--ease-standard);
+  }
+
+  /* 顶栏 drag 区域内的可交互元素必须可点(global.css legacy 层同款规则,防止登录页解锁删层后丢失) */
+  button,
+  a,
+  input,
+  textarea,
+  select,
+  summary {
+    -webkit-app-region: no-drag;
+  }
+
+  button:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* 按钮/summary 类:focus-visible = 2px 实心光环,无 outline(spec §1.4) */
+  button:focus-visible,
+  summary:focus-visible {
+    box-shadow: 0 0 2px 2px var(--color-accent);
+    outline: none;
+  }
+
+  /* Tailwind v4 preflight 把 button 光标重置为 default,恢复 web 惯例 pointer(2026-09-11 用户确认);
+     覆盖 Base UI 内部渲染的 Trigger/Switch/Tab/Toggle 等;禁用态不在此列(组件各自设 not-allowed) */
+  button:not(:disabled):not([data-disabled]),
+  summary:not(:disabled),
+  [role='button']:not(:disabled):not([data-disabled]),
+  [role='switch']:not(:disabled):not([data-disabled]),
+  [role='tab']:not(:disabled):not([data-disabled]) {
+    cursor: pointer;
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: var(--color-accent);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-hover) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border-hover);
+    border-radius: 4px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+
+    button:active:not(:disabled) {
+      transform: none;
+    }
+  }
+}

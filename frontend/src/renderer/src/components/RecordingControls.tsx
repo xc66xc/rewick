@@ -1,29 +1,22 @@
-import { Microphone, Monitor, Play, Stop, Waveform } from '@phosphor-icons/react'
+import { Microphone, Monitor, Play, Stop } from '@phosphor-icons/react'
 import type { SessionController } from '../hooks/useSession'
-import { formatTime } from '../hooks/sessionHelpers'
 import AutoAnswerControls from './AutoAnswerControls'
-import styles from '../styles/App.module.css'
+import { Button } from './ui/button'
+import { Segmented } from './ui/segmented'
 
 interface RecordingControlsProps { session: SessionController }
-const statusLabels = { idle: '尚未开始', connecting: '正在连接', listening: '正在转写', stopping: '正在结束', error: '连接已中断' }
-const meterBars = Array.from({ length: 18 }, (_, index) => index)
+/* v30 panel-controls:来源切换 + 录音按钮合成一行;状态/电平/计时已上移面板头 */
 export default function RecordingControls({ session }: RecordingControlsProps) {
   const active = ['connecting', 'listening', 'stopping'].includes(session.status)
-  return <section className={styles.recordingControls} aria-label="音频控制">
-    <div className={styles.recordingHeader}><div className={styles.recordingLabel}><span className={`${styles.statusDot} ${session.status === 'listening' ? styles.statusDotLive : ''}`} />
-      <span role="status">{statusLabels[session.status]}</span></div><span className={styles.timer}>{formatTime(session.elapsed)}</span></div>
-    <div className={styles.audioSource} role="group" aria-label="音频来源">
-      <button className={`${styles.sourceButton} ${session.source === 'system' ? styles.sourceButtonActive : ''}`} disabled={active}
-        aria-pressed={session.source === 'system'} onClick={() => session.setSource('system')}><Monitor size={16} weight="bold" />系统音频</button>
-      <button className={`${styles.sourceButton} ${session.source === 'microphone' ? styles.sourceButtonActive : ''}`} disabled={active}
-        aria-pressed={session.source === 'microphone'} onClick={() => session.setSource('microphone')}><Microphone size={16} weight="bold" />麦克风</button>
-    </div>
-    <div className={styles.recordingBottom}>
-      <div className={styles.levelMeter} role="meter" aria-label="输入音量" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(session.level * 100)}>
-        <Waveform size={17} weight="bold" />{meterBars.map(index => <span key={index} className={`${styles.meterBar} ${session.level * 18 > index ? styles.meterBarActive : ''}`} />)}
-      </div>
-      <button className={active ? styles.stopRecordingButton : styles.primaryButton} disabled={!session.desktop || session.status === 'stopping'}
-        onClick={() => void (active ? session.stop() : session.start())}>{active ? <Stop size={14} weight="fill" /> : <Play size={14} weight="fill" />}{active ? '停止转写' : '开始转写'}</button>
+  return <section className="shrink-0" aria-label="音频控制">
+    <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-2">
+      <Segmented aria-label="音频来源" value={session.source} disabled={active} onValueChange={value => session.setSource(value as SessionController['source'])}
+        options={[{ value: 'system', label: '系统音频', icon: <Monitor aria-hidden="true" /> }, { value: 'microphone', label: '麦克风', icon: <Microphone aria-hidden="true" /> }]} />
+      {active
+        ? <Button size="xs" className="border-danger-line bg-danger-subtle text-danger hover:border-danger-line hover:bg-danger-subtle hover:text-danger" disabled={!session.desktop || session.status === 'stopping'}
+          onClick={() => void session.stop()}><Stop aria-hidden="true" />停止转写</Button>
+        : <Button variant="primary" size="xs" disabled={!session.desktop || session.status === 'stopping'}
+          onClick={() => void session.start()}><Play aria-hidden="true" />开始转写</Button>}
     </div>
     <AutoAnswerControls session={session} />
   </section>

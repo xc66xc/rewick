@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { X } from '@phosphor-icons/react'
 import type { CustomServiceInput, CustomServiceProfile, DesktopBridge, ServiceKind, Settings } from '../../../shared/types'
 import { errorMessage } from '../hooks/useSettings'
 import { serviceLabels } from '../hooks/serviceChoices'
 import CustomServiceFields from './CustomServiceFields'
-import IconButton from './IconButton'
-import styles from '../styles/App.module.css'
+import { Button } from './ui/button'
+import { Modal } from './ui/dialog'
+import { formNoteClass, inlineErrorClass, successNoticeClass } from '../lib/form'
 
 interface CustomServiceDialogProps { kind: ServiceKind; profile?: CustomServiceProfile; settings: Settings; bridge: DesktopBridge; onSaved: (value: Settings) => void; onClose: () => void }
+const eyebrowClass = 'mb-2 block text-xs font-medium leading-[1.5] tracking-[0.09em] text-text-secondary'
 function initial(kind: ServiceKind, settings: Settings, profile?: CustomServiceProfile): CustomServiceInput {
   if (profile) { const { hasApiKey: _hasApiKey, ...input } = profile; return input }
   if (kind === 'llm') return { kind, name: '', url: settings.llm.baseUrl, model: settings.llm.model }
@@ -15,17 +16,16 @@ function initial(kind: ServiceKind, settings: Settings, profile?: CustomServiceP
   return { kind, name: '', url: settings.remoteKnowledge.url, agentId: settings.remoteKnowledge.agentId }
 }
 export default function CustomServiceDialog({ kind, profile, settings, bridge, onSaved, onClose }: CustomServiceDialogProps) {
-  const dialog = useRef<HTMLDialogElement>(null)
   const form = useRef<HTMLFormElement>(null)
   const inFlight = useRef(false)
+  const returnFocus = useRef(document.activeElement)
   const [draft, setDraft] = useState(() => initial(kind, settings, profile))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   useEffect(() => {
-    const element = dialog.current, previous = document.activeElement
-    element?.showModal()
-    return () => { element?.close(); if (previous instanceof HTMLElement && previous.isConnected) previous.focus() }
+    const previouslyFocused = returnFocus.current
+    return () => { if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) previouslyFocused.focus() }
   }, [])
   async function submit(test: boolean) {
     if (inFlight.current || !form.current?.reportValidity()) return
@@ -37,14 +37,18 @@ export default function CustomServiceDialog({ kind, profile, settings, bridge, o
     } catch (reason) { setError(errorMessage(reason)) }
     finally { inFlight.current = false; setBusy(false) }
   }
-  return <dialog ref={dialog} className={styles.settingsDialog} aria-labelledby="custom-service-title" aria-busy={busy} onCancel={event => { event.preventDefault(); if (!inFlight.current) onClose() }}>
-    <header className={styles.dialogHeader}><div><span className={styles.eyebrow}>我的自定义</span><h2 id="custom-service-title">{profile ? '编辑' : '添加'}{serviceLabels[kind]}</h2></div><IconButton label="关闭自定义服务" disabled={busy} onClick={onClose}><X size={20} /></IconButton></header>
+  function requestClose() { if (!inFlight.current) onClose() }
+  return <Modal open onOpenChange={nextOpen => { if (!nextOpen) requestClose() }}
+    title={<><span aria-hidden="true" className={eyebrowClass}>我的自定义</span>{profile ? '编辑' : '添加'}{serviceLabels[kind]}</>}
+    footer={<>
+      <Button variant="quiet" disabled={busy} onClick={requestClose}>取消</Button>
+      <Button disabled={busy} onClick={() => void submit(true)}>测试连接</Button>
+      <Button variant="primary" disabled={busy} onClick={() => void submit(false)}>{busy ? '处理中…' : '保存并选用'}</Button>
+    </>}>
     <form ref={form} onSubmit={event => { event.preventDefault(); void submit(false) }}>
-      <div className={styles.dialogBody}><fieldset className={styles.settingsFields} disabled={busy}><CustomServiceFields draft={draft} saved={profile} onChange={setDraft} /></fieldset>
-        <p className={styles.formNote}>测试只使用当前草稿。保存后选用此服务，API Key 加密保存在本机。</p>
-        {notice && <p className={styles.successNotice} role="status">{notice}</p>}{error && <p className={styles.inlineError} role="alert">{error}</p>}
-      </div>
-      <footer className={styles.dialogFooter}><button type="button" className={styles.textButton} disabled={busy} onClick={onClose}>取消</button><button type="button" className={styles.secondaryButton} disabled={busy} onClick={() => void submit(true)}>测试连接</button><button type="submit" className={styles.primaryButton} disabled={busy}>{busy ? '处理中…' : '保存并选用'}</button></footer>
+      <fieldset className="m-0 min-w-0 border-0 p-0" disabled={busy}><CustomServiceFields draft={draft} saved={profile} onChange={setDraft} /></fieldset>
+      <p className={formNoteClass}>测试只使用当前草稿。保存后选用此服务，API Key 加密保存在本机。</p>
+      {notice && <p className={successNoticeClass} role="status">{notice}</p>}{error && <p className={inlineErrorClass} role="alert">{error}</p>}
     </form>
-  </dialog>
+  </Modal>
 }
