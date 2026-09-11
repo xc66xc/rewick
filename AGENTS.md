@@ -66,7 +66,7 @@ Use MyBatis-Plus for database access through concrete `*Mapper` interfaces in `m
 
 Use `*Request`, `*Response`/`*VO`, `*Service`, `*ServiceImpl`, and `*Mapper` naming patterns.
 
-## Frontend UI Constraints
+## Frontend UI Constraints (desktop `frontend/` only; `admin/` is not bound by these)
 
 - Build renderer UI from the library in `frontend/src/renderer/src/components/ui/` — `Button`/`IconButton`/`LinkButton`/`TextButton`, `TextField`/`TextareaField`/`FieldRow`, `AppSelect`, `Segmented`, `ToggleSwitch`, `CheckRow`/`ChoiceRow`, `TabBar`, `Table*` family, `Modal`/`ConfirmModal`, `DropdownMenu`, `Tooltip`, `Collapse`, `EmptyState`, `Pill`/`StatusPill`/`Eyebrow`, `Badge`, `Avatar`, `Skeleton`, `Divider`, `Kbd`, `LevelMeter`, plus `toast()` for notifications.
 - Do not hand-roll raw equivalents: no native `<details>`/`<summary>` (use `Collapse`), no ad-hoc styled `<button>` (use `Button` variants/sizes), no `<select>` (use `AppSelect`), no custom dialogs (use `Modal`) or inline notification banners (use `toast()`).
