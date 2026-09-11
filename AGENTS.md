@@ -25,7 +25,46 @@ Database tests: `node scripts/backend.mjs verify -Pintegration`; prepare Docker/
 
 ## Coding Style & Naming Conventions
 
-Use two-space indentation, single quotes, and no semicolons in TypeScript; four spaces in Java. Keep TypeScript strict. Components/classes use `PascalCase`, hooks `useSomething`, services kebab-case. Reuse CSS Modules/tokens. No formatter or lint command; match surrounding code.
+
+Use two-space indentation, single quotes, and no semicolons in TypeScript. Keep TypeScript strict. Components/classes use `PascalCase`, hooks `useSomething`, services kebab-case. Reuse CSS Modules/tokens. No formatter or lint command; match surrounding code.
+
+### backend
+
+Use four-space Java indentation and constructor injection. Base packages must use `com.interview.copilot`; organize by responsibility, never a flat domain package such as `auth`.
+
+```text
+controller  HTTP endpoints          service                 use-case interfaces
+service/impl use-case implementations mapper                 MyBatis-Plus database access
+entity      database mappings       model                   domain models
+dto         transfer objects        vo                      view objects
+request     request bodies          response                response bodies
+config      configuration           security                authentication and authorization
+exception   exceptions/advice       util                    utilities
+constant    constants/enums         converter               object conversions
+validation  custom validation       job                     scheduled tasks
+event       events/listeners        common                  shared base components
+```
+
+Under each responsibility package, group business-specific classes into module subpackages rather than accumulating them directly in the responsibility package. Use the same lowercase module name across layers. For example, a user module uses:
+
+```text
+com.interview.copilot
+├── controller/user/UserController.java
+├── service/user/UserService.java
+├── service/impl/user/UserServiceImpl.java
+├── mapper/user/UserMapper.java
+├── entity/user/User.java
+├── request/user/CreateUserRequest.java
+└── response/user/UserResponse.java
+```
+
+Apply this structure to other business-specific packages such as `model`, `dto`, `vo`, `converter`, `validation`, `job`, and `event` when needed. Create only packages required by the module; do not scaffold empty packages. Shared infrastructure packages such as `common`, `util`, and `config` do not require business-module subpackages. Keep the utility package named `util` consistently; do not introduce a parallel `utils` package.
+
+Controllers validate HTTP input, invoke service interfaces, and return `response`/`vo`; they must not contain business logic or access persistence directly. Put service interfaces in `service/<module>` and their concrete business implementations in `service/impl/<module>`, named `*ServiceImpl`. The `impl` package is a subpackage of `service`, not a separate top-level `serviceimpl` package. Controllers depend on `*Service` interfaces through constructor injection, never on their concrete implementations.
+
+Use MyBatis-Plus for database access through concrete `*Mapper` interfaces in `mapper`. Service implementations invoke these Mappers; do not introduce JPA repositories, JDBC/JdbcTemplate access, or SQL in controllers. Entities must never be API payloads. Put global exception handling in `exception` and security/session code in `security`.
+
+Use `*Request`, `*Response`/`*VO`, `*Service`, `*ServiceImpl`, and `*Mapper` naming patterns.
 
 ## Testing Guidelines
 
