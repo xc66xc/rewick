@@ -11,13 +11,12 @@ interface TranscriptSegmentEditorProps {
   onFinish: (id: string) => void
 }
 
-/* v30 .speech p:行内无框编辑面(透明边/底、hover 浅底、聚焦浅底 + 蓝描边)。
-   经组件库 TextareaField.controlClassName 覆盖表单默认规格(base 的 outline-none
-   需 focus:outline-solid 才能在聚焦时重新显形)。 */
+/* v30 .speech p:行内无框编辑面(透明边/底、hover 浅底、聚焦浅底 + 12% 软蓝环 focus-ring)。
+   经组件库 TextareaField.controlClassName 覆盖表单默认规格。 */
 const inlineControlClass = cn(
   'cursor-text resize-none overflow-hidden whitespace-pre-wrap [overflow-wrap:anywhere] leading-[1.85]',
   'border-transparent bg-transparent px-0 py-0 hover:bg-subtle',
-  'focus:border-transparent focus:bg-subtle focus:shadow-none focus:outline-solid focus:outline-2 focus:outline-offset-[3px] focus:outline-accent',
+  'focus:border-transparent focus:bg-subtle focus:shadow-focus-ring',
 )
 
 export default function TranscriptSegmentEditor({ segment, index, onBegin, onChange, onFinish }: TranscriptSegmentEditorProps) {

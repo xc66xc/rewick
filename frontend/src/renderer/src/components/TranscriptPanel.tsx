@@ -38,7 +38,7 @@ export default function TranscriptPanel({ session }: TranscriptPanelProps) {
         return <li className={cn('group grid grid-cols-[38px_minmax(0,1fr)] gap-3 rounded-chip p-2.5 inset-ring-1 inset-ring-transparent transition-[background-color,box-shadow] duration-150 ease-standard',
           current && 'bg-accent-subtle inset-ring-accent-line')} key={segment.id}>
         <span className="pt-[3px] font-mono text-[10px] text-text-muted">{formatTime(segment.startMs)}</span>
-        <div className="flex min-w-0 flex-col items-stretch gap-1">
+        <div className="flex min-w-0 flex-col items-stretch gap-2">
           <TranscriptSegmentEditor segment={segment} index={index} onBegin={session.beginSegmentEdit} onChange={session.editSegment} onFinish={session.finishSegmentEdit} />
           <div className="flex flex-wrap items-center justify-end gap-2">{segment.isEdited && <span className="mr-auto text-xs text-text-muted">已修改</span>}
             {/* v30 .speech-actions:历史条操作默认收起(max-h-0/透明),悬停本条或条内聚焦 150ms 展开;最新一条常显 */}
