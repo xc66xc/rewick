@@ -1,5 +1,6 @@
 import { useMemo, useEffect, useRef, useState } from 'react'
 import { ArrowRight, FileText, WarningCircle, X } from '@phosphor-icons/react'
+import RefreshTimeButton from './components/RefreshTimeButton'
 import InterviewPreparation from './components/InterviewPreparation'
 import { useInterviewTime, formatDuration } from './hooks/useInterviewTime'
 import AnswerPanel from './components/AnswerPanel'
@@ -79,7 +80,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
     <div className={styles.appBody} inert={leaving}>{!compact && <Sidebar page={page} onChange={navigate} onNew={() => setPage(timer.active ? 'workspace' : 'preparation')} canReset={!timer.busy} />}
       <main className={styles.main} ref={main}>
         {error && <div className={styles.errorBanner} role="alert"><WarningCircle size={19} weight="fill" /><span>{error}</span><IconButton label="关闭提示" onClick={() => { session.clearError(); setWindowError('') }}><X size={17} /></IconButton></div>}
-        {timer.active && <div className={styles.environmentBar}><span>面试进行中 · 已用 {formatDuration(timer.used)} · 可用 {formatDuration(timer.remaining)}</span><button className={styles.primaryButton} disabled={timer.busy} onClick={() => void handleEnd()}>结束面试</button></div>}
+        {timer.active && <div className={styles.environmentBar}><div><span>面试进行中 · 已用 {formatDuration(timer.used)} · 可用 {formatDuration(timer.remaining)}</span><RefreshTimeButton refreshing={timer.refreshing} onRefresh={timer.refresh} /></div><button className={styles.primaryButton} disabled={timer.busy} onClick={() => void handleEnd()}>结束面试</button></div>}
         {timer.warning && timer.active && <p className={styles.formNote} role="status">{timer.warning}</p>}
         {page === 'preparation' && !timer.active && <InterviewPreparation bridge={bridge} settings={config.settings} timer={timer} onPrepare={handlePrepare} onStarted={() => setPage('workspace')} onContext={handleContext} onSettings={handleSettings} />}
         {page === 'preparation' && timer.active && <button className={styles.primaryButton} onClick={() => setPage('workspace')}>返回正在进行的面试</button>}

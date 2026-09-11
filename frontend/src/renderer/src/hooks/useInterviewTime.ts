@@ -10,6 +10,8 @@ export function useInterviewTime(bridge: DesktopBridge) {
   const [wallet, setWallet] = useState<WalletState | null>(null)
   const [active, setActive] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const refreshPending = useRef(false)
   const [error, setError] = useState('')
   const [elapsed, setElapsed] = useState(0)
   const [warning, setWarning] = useState('')
@@ -52,6 +54,13 @@ export function useInterviewTime(bridge: DesktopBridge) {
     catch (reason) { setError(`${errorMessage(reason)} 本机已停止使用，服务端最迟将在连接有效期结束时停止计时。`) }
     finally { setBusy(false) }
   }
-  async function refresh() { try { accept(await bridge.getWallet()); setError('') } catch (reason) { setError(errorMessage(reason)) } }
-  return { wallet, active, busy, error, warning, remaining, used: (wallet?.session?.usedSeconds ?? 0) + (active ? elapsed : 0), start, end, refresh }
+  async function refresh() {
+    if (refreshPending.current) return
+    refreshPending.current = true
+    setRefreshing(true)
+    try { accept(await bridge.getWallet()); setError('') }
+    catch (reason) { setError(errorMessage(reason)) }
+    finally { refreshPending.current = false; setRefreshing(false) }
+  }
+  return { wallet, active, busy, refreshing, error, warning, remaining, used: (wallet?.session?.usedSeconds ?? 0) + (active ? elapsed : 0), start, end, refresh }
 }

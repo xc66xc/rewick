@@ -13,7 +13,7 @@ function setup(resumeId: string | null = 'resume', availableSeconds = 600) {
   const start = vi.fn(async () => undefined)
   const onPrepare = vi.fn(async (_input: EnvironmentInput) => undefined)
   const onStarted = vi.fn()
-  const timer = { wallet: { availableSeconds, version: 0, serverTime: new Date().toISOString(), session: null }, active: false, busy: false, error: '', warning: '', remaining: availableSeconds, used: 0, start, end: vi.fn(async () => undefined), refresh: vi.fn(async () => undefined) }
+  const timer = { wallet: { availableSeconds, version: 0, serverTime: new Date().toISOString(), session: null }, active: false, busy: false, refreshing: false, error: '', warning: '', remaining: availableSeconds, used: 0, start, end: vi.fn(async () => undefined), refresh: vi.fn(async () => undefined) }
   render(<InterviewPreparation bridge={bridge} settings={defaultSettings} timer={timer} onPrepare={onPrepare} onStarted={onStarted} onContext={vi.fn()} onSettings={vi.fn()} />)
   return { actor: userEvent.setup(), start, onPrepare, onStarted }
 }

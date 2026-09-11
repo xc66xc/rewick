@@ -4,6 +4,7 @@ import type { useInterviewTime } from '../hooks/useInterviewTime'
 import { formatDuration } from '../hooks/useInterviewTime'
 import useInterviewLibrary from '../hooks/useInterviewLibrary'
 import { errorMessage } from '../hooks/useSettings'
+import RefreshTimeButton from './RefreshTimeButton'
 import EnvironmentReferencePicker from './EnvironmentReferencePicker'
 import styles from '../styles/App.module.css'
 import libraryStyles from '../styles/InterviewLibrary.module.css'
@@ -30,7 +31,7 @@ export default function InterviewPreparation({ bridge, settings, timer, onPrepar
   const resume = data.library?.resumes.find(item => item.id === draft?.resumeId)
   const ready = Boolean(resume?.text.trim())
   return <section className={styles.contextPage}>
-    <header className={styles.pageHeading}><div><span className={styles.eyebrow}>准备好之后再开始计时</span><h1 tabIndex={-1}>准备面试</h1><p>简历必填，岗位 JD 和参考资料选填。</p></div><div><strong>可用时长 {formatDuration(timer.remaining)}</strong><button className={styles.textButton} onClick={() => void timer.refresh()}>刷新时长</button></div></header>
+    <header className={styles.pageHeading}><div><span className={styles.eyebrow}>准备好之后再开始计时</span><h1 tabIndex={-1}>准备面试</h1><p>简历必填，岗位 JD 和参考资料选填。</p></div><div><strong>可用时长 {formatDuration(timer.remaining)}</strong><RefreshTimeButton refreshing={timer.refreshing} onRefresh={timer.refresh} /></div></header>
     {timer.wallet?.session?.status === 'ended' && <p className={styles.successNotice}>上次面试已结束 · 使用 {formatDuration(timer.wallet.session.usedSeconds)}。可前往会话记录查看回答。</p>}
     {(error || timer.error || data.error) && <p className={styles.inlineError} role="alert">{error || timer.error || data.error}</p>}
     {timer.wallet?.session?.status === 'active' && !timer.active && <p className={styles.formNote}>该账号已有正在进行的面试，请先在原窗口结束；异常关闭后最多等待 30 秒再开始。</p>}
