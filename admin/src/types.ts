@@ -2,10 +2,10 @@ import { z } from 'zod'
 export const adminSchema = z.object({ id: z.string(), displayName: z.string(), role: z.string() })
 export type Admin = z.infer<typeof adminSchema>
 export const loginSchema = z.object({ accessToken: z.string().min(1), expiresAt: z.string(), user: z.object({ id: z.string(), displayName: z.string() }) })
-export const userSchema = adminSchema.extend({ enabled: z.boolean(), dailyAnswers: z.number().int(), dailyKnowledgeQueries: z.number().int(), createdAt: z.string() })
+export const userSchema = adminSchema.extend({ enabled: z.boolean(), availableSeconds: z.number().int().nonnegative(), walletVersion: z.number().int().nonnegative(), createdAt: z.string() })
 export type User = z.infer<typeof userSchema>
-export interface NewUser { identifier: string; password: string; dailyAnswers: number; dailyKnowledgeQueries: number }
-export interface UserUpdate { enabled: boolean; dailyAnswers: number; dailyKnowledgeQueries: number }
+export interface NewUser { identifier: string; password: string; availableSeconds: number }
+export interface UserUpdate { enabled: boolean }
 export const usageSchema = z.object({ id: z.string(), userId: z.string(), displayName: z.string(), requestId: z.string(), capability: z.string(), model: z.string().nullable(), status: z.string(), createdAt: z.string(), finishedAt: z.string().nullable() })
 export const auditSchema = z.object({ id: z.string(), actorId: z.string(), actorDisplayName: z.string(), action: z.string(), target: z.string(), createdAt: z.string() })
 export function pageSchema<T extends z.ZodType>(item: T) { return z.object({ items: z.array(item), total: z.number(), page: z.number(), size: z.number() }) }

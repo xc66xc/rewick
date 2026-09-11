@@ -43,8 +43,7 @@ export async function runAdminSmoke({ baseUrl, username, password, output = 'adm
     const create = page.getByRole('dialog', { name: '创建用户', exact: true })
     await create.getByLabel('登录账号', { exact: true }).fill(testUsername)
     await create.getByLabel('初始密码', { exact: true }).fill(testPassword)
-    await create.getByLabel('每日回答次数', { exact: true }).fill('15')
-    await create.getByLabel('每日知识检索次数', { exact: true }).fill('12')
+    await create.getByLabel('小时', { exact: true }).fill('1')
     const creation = page.waitForResponse(response => response.url().endsWith('/api/v1/admin/users') && response.request().method() === 'POST')
     await create.getByRole('button', { name: '创建用户', exact: true }).click()
     const created = await (await creation).json()
@@ -53,9 +52,20 @@ export async function runAdminSmoke({ baseUrl, username, password, output = 'adm
     await expect(create).not.toBeVisible()
     await page.getByLabel('邮箱或显示名称', { exact: true }).fill(testUsername)
     await page.getByRole('button', { name: '搜索', exact: true }).click()
+    await page.getByRole('button', { name: `调整时长 ${testUsername}`, exact: true }).click()
+    const durationDialog = page.getByRole('dialog', { name: `调整可用时长 · ${testUsername}`, exact: true })
+    await durationDialog.getByLabel('分钟', { exact: true }).fill('30')
+    await durationDialog.getByLabel('调整原因', { exact: true }).fill('隔离验收增加30分钟')
+    await durationDialog.getByRole('button', { name: '保存时长', exact: true }).click()
+    await expect(durationDialog).not.toBeVisible()
+    const wallet = await api(`/admin/users/${createdUserId}/wallet`)
+    expect(wallet.availableSeconds).toBe(5400)
+    await page.getByRole('button', { name: `时长记录 ${testUsername}`, exact: true }).click()
+    const historyDialog = page.getByRole('dialog', { name: `时长记录 · ${testUsername}`, exact: true })
+    await expect(historyDialog.getByRole('cell', { name: /^隔离验收增加30分钟/ })).toBeVisible()
+    await historyDialog.getByRole('button', { name: '关闭时长记录 · ' + testUsername, exact: true }).click()
     await page.getByRole('button', { name: `编辑 ${testUsername}`, exact: true }).click()
     const edit = page.getByRole('dialog', { name: `编辑用户 · ${testUsername}`, exact: true })
-    await edit.getByLabel('每日回答次数', { exact: true }).fill('0')
     await edit.getByLabel('启用账号', { exact: true }).uncheck()
     await edit.getByRole('button', { name: '保存用户', exact: true }).click()
     const disable = page.getByRole('dialog', { name: `停用 ${testUsername}`, exact: true })
@@ -65,7 +75,7 @@ export async function runAdminSmoke({ baseUrl, username, password, output = 'adm
     await page.getByRole('dialog', { name: `停用 ${testUsername}`, exact: true }).getByRole('button', { name: '确认停用', exact: true }).click()
     await expect(edit).not.toBeVisible()
     const user = await api(`/admin/users?query=${encodeURIComponent(testUsername)}&page=1&size=20`)
-    expect(user.items[0]).toMatchObject({ enabled: false, dailyAnswers: 0 })
+    expect(user.items[0]).toMatchObject({ enabled: false, availableSeconds: 5400 })
     await page.getByRole('button', { name: `编辑 ${testUsername}`, exact: true }).click()
     await page.getByRole('dialog').getByLabel('启用账号', { exact: true }).check()
     await page.getByRole('dialog').getByRole('button', { name: '保存用户', exact: true }).click()
@@ -77,7 +87,7 @@ export async function runAdminSmoke({ baseUrl, username, password, output = 'adm
     await page.getByRole('button', { name: `撤销登录 ${testUsername}`, exact: true }).click()
     await page.getByRole('dialog').getByRole('button', { name: '撤销全部登录', exact: true }).click()
     await expect(page.getByRole('dialog')).toHaveCount(0)
-    passed.push('用户创建、搜索、额度、启停、密码重置和撤销')
+    passed.push('用户创建、搜索、时长、启停、密码重置和撤销')
     await page.screenshot({ path: resolve(output, 'users.png'), fullPage: true })
 
     await page.getByRole('button', { name: '平台配置', exact: true }).click()
@@ -125,7 +135,7 @@ export async function runAdminSmoke({ baseUrl, username, password, output = 'adm
     const current = await api('/admin/config')
     await api('/admin/config', 'PUT', { ...configBody(initialConfig), version: current.version })
     initialConfig = undefined
-    if (createdUserId) await api(`/admin/users/${createdUserId}`, 'PUT', { enabled: false, dailyAnswers: 0, dailyKnowledgeQueries: 0 })
+    if (createdUserId) await api(`/admin/users/${createdUserId}`, 'PUT', { enabled: false })
     createdUserId = undefined
     await page.getByRole('button', { name: '退出登录', exact: true }).click()
     await expect(page.getByRole('heading', { name: '登录管理后台', exact: true })).toBeVisible()
@@ -142,7 +152,7 @@ export async function runAdminSmoke({ baseUrl, username, password, output = 'adm
   } finally {
     if (token) {
       try { if (initialConfig) { const current = await api('/admin/config'); await api('/admin/config', 'PUT', { ...configBody(initialConfig), version: current.version }) } } catch { /* Report the original failure; isolated backend owns cleanup. */ }
-      try { if (createdUserId) await api(`/admin/users/${createdUserId}`, 'PUT', { enabled: false, dailyAnswers: 0, dailyKnowledgeQueries: 0 }) } catch { /* Same isolated-fixture cleanup. */ }
+      try { if (createdUserId) await api(`/admin/users/${createdUserId}`, 'PUT', { enabled: false }) } catch { /* Same isolated-fixture cleanup. */ }
     }
     await browser.close()
   }

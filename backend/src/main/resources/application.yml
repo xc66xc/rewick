@@ -63,6 +63,4 @@ copilot:
     bootstrap-username: ${COPILOT_BOOTSTRAP_USERNAME:}
     bootstrap-password: ${COPILOT_BOOTSTRAP_PASSWORD:}
   limits:
-    daily-answers: ${COPILOT_DAILY_ANSWERS:100}
-    daily-knowledge-queries: ${COPILOT_DAILY_KNOWLEDGE_QUERIES:300}
     max-asr-session-seconds: ${COPILOT_MAX_ASR_SESSION_SECONDS:3600}

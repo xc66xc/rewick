@@ -33,8 +33,6 @@ FROM pg_extension WHERE extname = 'vector';
 | `COPILOT_BOOTSTRAP_USERNAME` / `COPILOT_BOOTSTRAP_PASSWORD` | 可选首次创建用户，必须一起设置；用户名 3–64 个字母、数字或 `_.@-`，密码至少 12 字符且最多 72 个 UTF-8 字节 |
 | `COPILOT_TOKEN_HOURS` | 业务 token 有效小时数，24 |
 | `COPILOT_LOGIN_BURST` / `COPILOT_LOGIN_WINDOW_SECONDS` | 每用户名窗口内登录尝试数 / 窗口秒数，10 / 60；同来源地址最多十倍次数 |
-| `COPILOT_DAILY_ANSWERS` | 每用户每天平台回答请求上限，100 |
-| `COPILOT_DAILY_KNOWLEDGE_QUERIES` | 每用户每天平台检索请求上限，300 |
 | `COPILOT_MAX_ASR_SESSION_SECONDS` | 单场平台转写最长秒数，3600；同用户最多一场 |
 | `COPILOT_ADMIN_BOOTSTRAP_USERNAME` / `COPILOT_ADMIN_BOOTSTRAP_PASSWORD` | 首次管理员；不要与已有普通用户同名，创建后移除 |
 | `COPILOT_PLATFORM_MASTER_KEY` | Base64 编码的 32 随机字节，加密数据库中的平台 Key 与 SMTP 密码，无默认值 |
@@ -97,15 +95,15 @@ HTTP 请求正文最多 1 MiB，同时验证 Content-Length 和实际读取字�
 
 邮件配置为 `{version,enabled,host,port,username,from,startTls,ssl}`，读取额外返回 `hasPassword`，写入可带 `password`。同一连接省略或空密码表示保留；修改主机、端口或用户名且继续认证时必须重新填写密码。用户名留空明确选择无认证 SMTP，保存时清除旧密码；此时密码也必须为空。STARTTLS 与 SSL 互斥，远程 SMTP 必须启用其中一种，仅本机回环允许明文。邮件测试提交完整草稿并校验版本，失败不更改已发布服务，也不回显供应商异常正文。
 
-用户额度可设为 0；未设置覆盖值的历史用户继续使用部署默认。密码重置、停用会撤销已有 token，已建立的流式会话仍允许结束。首版角色由部署 bootstrap 创建，不提供网页提升普通用户为管理员的入口，也不提供用户密码或平台 Key 明文查询。
+可用时长默认 0，由管理员分配。密码重置、停用和撤销登录会结束面试并撤销 token。首版角色由部署 bootstrap 创建，不提供网页提升普通用户为管理员的入口，也不提供用户密码或平台 Key 明文查询。
 
 ## 用量记录
 
 `UsageService.start(userId, requestId, capability)` 返回 `UsageLease`，上游成功、失败或取消分别调用 `complete()`、`fail()`、`cancel()`；未终态关闭 lease 记录为取消。状态更新幂等。`requestId` 为 1–128 位字母、数字或 `._:-`。
 
-预占用 PostgreSQL 用户行锁、每日计数和唯一约束完成，跨线程/进程都不能突破单用户次数上限。相同用户、能力与请求 ID 重复提交返回 409，不再次调用供应商；不同用户隔离。按北京时间（Asia/Shanghai）日期计数，成功预占后的失败和取消仍计入资源请求次数，不自动退款。ASR 并发也在数据库校验；意外终止的预占到期后可回收，连接仍由平台会话时长限制结束。
+面试可用时长通过 PostgreSQL 用户行锁、秒数余额、幂等请求和结算流水维护。旧每日回答/检索配额已删除。开始面试后平台与自带 Key 均消耗时长，10 秒心跳、30 秒有效期；断线超时按原到期时刻结束，按累计经过时间向下取整结算，不能重复扣减或使余额为负。ASR 并发保护和请求去重保留。
 
-这里的每日请求数是防滥用限额，`usage_events` 是执行状态记录，**不是供应商金额、充值余额或正式收费账本**。当前没有支付、套餐收费、退款、短信注册或云端简历同步。没有从未知的供应商输出推算费用。
+`usage_events` 仍为模型调用执行记录。时长流水在 `time_wallet_transactions`，不包含金额；没有充值、支付或暂停。管理员增减/设定时长需原因和请求 UUID。钱包 `version` 仅随管理员调整递增，正常面试扣时不会制造编辑冲突；调整时先结算已用时间，再原子修改余额。
 
 MyBatis-Plus 用于实体映射和常规 CRUD；额度、请求去重等并发操作用绑定参数 SQL。只在预占阶段持有短事务，整个模型流式输出或语音连接不持有数据库事务。
 
@@ -120,7 +118,7 @@ docker build -t interview-copilot-postgres:15.19-pgvector0.8.6 ../deploy/postgre
 ./mvnw clean verify -Pintegration
 ```
 
-默认运行单元测试。`integration` 额外使用 Testcontainers 启动独立 `interview-copilot-postgres:15.19-pgvector0.8.6` 容器，在启动 Spring 上下文前通过 `psql` 单次事务显式执行 `sql/` 的八份脚本，验证真实初始化、精确数据库/扩展版本、向量距离与 HNSW，以及 token 摘要/过期/撤销、HTTP 鉴权、并发限额、重复请求和用户隔离。需要可用 Docker 且已构建上述镜像；测试不使用真实账号或云端供应商。Docker Desktop 若未自动发现 socket，可设置 `DOCKER_HOST` 为实际 Docker socket。数据库容器由测试管理，不连接桌面应用的真实资料或会话记录。Mac Apple Silicon 开发环境额外激活 `macos-arm64` profile，加载匹配架构的 Netty DNS 模块；生产 Linux 容器不使用这个依赖。
+默认运行单元测试。`integration` 额外使用 Testcontainers 启动独立 `interview-copilot-postgres:15.19-pgvector0.8.6` 容器，在启动 Spring 上下文前通过 `psql` 单次事务显式执行 `sql/` 的十份脚本，验证真实初始化、精确数据库/扩展版本、向量距离与 HNSW，以及 token 摘要/过期/撤销、HTTP 鉴权、并发限额、重复请求和用户隔离。需要可用 Docker 且已构建上述镜像；测试不使用真实账号或云端供应商。Docker Desktop 若未自动发现 socket，可设置 `DOCKER_HOST` 为实际 Docker socket。数据库容器由测试管理，不连接桌面应用的真实资料或会话记录。Mac Apple Silicon 开发环境额外激活 `macos-arm64` profile，加载匹配架构的 Netty DNS 模块；生产 Linux 容器不使用这个依赖。
 
 ## 发布边界
 
@@ -140,7 +138,7 @@ ASR 连接测试会等待 `task-started`，发送半秒合成静音 PCM（16 kHz
 
 第一版每次向量请求（包括建立资料索引的批次和问题向量）占用一次现有“知识检索”日额度，记录所用模型；并发上限为 8。额度用完返回 429，不调用上游；无需额外 SQL 变更。连接测试也验证返回向量维度，但不占用户日额度。
 
-管理台用户列表和调用记录均支持 `query` 参数按显示名称或邮箱搜索（最长 254 字符）。创建账号使用 `{identifier,password,dailyAnswers,dailyKnowledgeQueries}`，建立 `account` 身份并把账号标识作为初始显示名称；登录标识和显示名称是不同职责。
+管理台用户列表和调用记录均支持 `query` 参数按显示名称或邮箱搜索（最长 254 字符）。创建账号使用 `{identifier,password,availableSeconds}`，建立 `account` 身份并把账号标识作为初始显示名称；登录标识和显示名称是不同职责。
 
 ## 邮箱找回密码
 
@@ -148,6 +146,12 @@ ASR 连接测试会等待 `task-started`，发送半秒合成静音 PCM（16 kHz
 
 ## 服务器本地时间
 
-数据库时间列统一为 `TIMESTAMP(6) WITHOUT TIME ZONE`，保存北京时间，Java 数据库读写使用 `LocalDateTime` 并按微秒截断。应用与数据库会话固定 `Asia/Shanghai`，不依赖客户端时区。每日额度在北京零点重置；接口仍返回带明确时区的时间，避免客户端误判过期。
+数据库时间列统一为 `TIMESTAMP(6) WITHOUT TIME ZONE`，保存北京时间，Java 数据库读写使用 `LocalDateTime` 并按微秒截断。应用与数据库会话固定 `Asia/Shanghai`，不依赖客户端时区。接口仍返回带明确时区的时间，避免客户端误判过期。
 
 已完成 01–07 的开发数据库停止后端后，直接事务执行 `sql/08_server_local_time.sql`（本次不备份），随后更新并重启后端。已有时刻按北京时区转换，空值与微秒精度保留；旧 `usage_day` 计数日期保持原值。仅改变当前业务数据库的默认时区。
+
+## 面试时长升级
+
+已完成 01–09 的数据库停后端后手动执行 `sql/10_time_wallet.sql`。它删除每日额度字段与旧计数，新增 `time_wallets`、`interview_sessions`、`time_wallet_transactions`，已有用户初始为 0 秒。赋予应用账号新表 CRUD 和序列使用权限，再同步发布后端、管理端和桌面端。
+
+桌面登录后进入准备页，简历必填、JD 和资料选填。确认开始后扣时，停止转写不停止扣时，结束面试才停止。上传、索引和历史浏览不扣时。

@@ -13,11 +13,13 @@ public class EmailPasswordReset {
     private final EmailCodeStore codes;
     private final UserMapper users;
     private final TokenMapper tokens;
+    private final com.interview.copilot.wallet.WalletService wallets;
 
-    public EmailPasswordReset(EmailCodeStore codes, UserMapper users, TokenMapper tokens) {
+    public EmailPasswordReset(EmailCodeStore codes, UserMapper users, TokenMapper tokens, com.interview.copilot.wallet.WalletService wallets) {
         this.codes = codes;
         this.users = users;
         this.tokens = tokens;
+        this.wallets = wallets;
     }
 
     @Transactional(noRollbackFor = EmailErrors.InvalidCode.class)
@@ -31,5 +33,6 @@ public class EmailPasswordReset {
         }
         users.updatePassword(user.getId(), passwordHash);
         tokens.revokeAll(user.getId());
+        wallets.endCurrent(user.getId());
     }
 }

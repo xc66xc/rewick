@@ -10,6 +10,9 @@ function createBridge(accountScope?: string): DesktopBridge {
   }
   return {
   withAccountScope: scope => createBridge(scope),
+  getWallet: () => invoke('wallet:get'),
+  startInterview: requestId => invoke('interview:start', requestId),
+  endInterview: () => invoke('interview:end'),
   getCaptureError: () => invoke('audio:capture-error'),
   getSettings: () => invoke('settings:get'),
   platformLogin: input => invoke('platform:login', input),

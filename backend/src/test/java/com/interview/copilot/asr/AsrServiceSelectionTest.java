@@ -61,7 +61,7 @@ class AsrServiceSelectionTest {
         settings.getAsr().setUrl("ws://127.0.0.1:" + server.port() + "/asr?mode=manual");
         settings.getAsr().setApiKey("fixture-secret");
         settings.getAsr().setModel("fixture-transcriber");
-        proxy = new AsrProxy(settings, json, usage, new PlatformLimitsProperties(100, 300, 3600));
+        proxy = new AsrProxy(settings, json, usage, new PlatformLimitsProperties(3600));
     }
 
     @AfterEach void close() {

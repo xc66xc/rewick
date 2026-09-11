@@ -56,6 +56,7 @@ async function port() {
 }
 async function check(name, operation) {
   await operation()
+  if (page) await page.evaluate(() => window.copilot.endInterview()).catch(() => undefined)
   report.checks.push(name)
   process.stdout.write(`PASS ${name}\n`)
 }
@@ -68,7 +69,11 @@ async function request(baseUrl, path, body, token) {
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(15000) })
 }
+async function beginDesktop() {
+  await page.evaluate(async () => { const wallet = await window.copilot.getWallet(); if (wallet.session?.status !== 'active') await window.copilot.startInterview(crypto.randomUUID()) })
+}
 async function answer(question) {
+  await beginDesktop()
   const requestId = `answer-${randomBytes(8).toString('hex')}`
   await page.evaluate(async ({ requestId, question }) => {
     await window.copilot.generateAnswer({ requestId, question, transcript: question })
@@ -78,6 +83,7 @@ async function answer(question) {
   const events = await page.evaluate(id => window.__platformEvents.filter(event => event.requestId === id), requestId)
   const error = events.find(event => event.kind === 'answer-error')
   assert.equal(error, undefined, JSON.stringify(error))
+  await page.evaluate(() => window.copilot.endInterview())
   return events
 }
 
@@ -100,7 +106,7 @@ try {
   await execute('docker', ['exec', container, 'psql', '-X', '-U', 'copilot_test', '-d', 'copilot_test',
     '-v', 'ON_ERROR_STOP=1', '--single-transaction',
     '-f', '/tmp/copilot-sql/01_schema.sql', '-f', '/tmp/copilot-sql/02_pgvector.sql',
-    '-f', '/tmp/copilot-sql/03_admin_users.sql', '-f', '/tmp/copilot-sql/04_platform_config.sql', '-f', '/tmp/copilot-sql/05_email_auth.sql', '-f', '/tmp/copilot-sql/06_display_name.sql', '-f', '/tmp/copilot-sql/07_email_code_purpose.sql', '-f', '/tmp/copilot-sql/08_server_local_time.sql', '-f', '/tmp/copilot-sql/09_pg_references.sql'])
+    '-f', '/tmp/copilot-sql/03_admin_users.sql', '-f', '/tmp/copilot-sql/04_platform_config.sql', '-f', '/tmp/copilot-sql/05_email_auth.sql', '-f', '/tmp/copilot-sql/06_display_name.sql', '-f', '/tmp/copilot-sql/07_email_code_purpose.sql', '-f', '/tmp/copilot-sql/08_server_local_time.sql', '-f', '/tmp/copilot-sql/09_pg_references.sql', '-f', '/tmp/copilot-sql/10_time_wallet.sql'])
   const mapping = (await execute('docker', ['port', container, '5432/tcp'])).stdout.trim()
   const databasePort = mapping.slice(mapping.lastIndexOf(':') + 1)
   const backendPort = await port()
@@ -169,6 +175,8 @@ try {
   const loginResponse = await request(baseUrl, '/api/v1/auth/login', { identifier: 'platform-test', password })
   assert.equal(loginResponse.status, 200)
   const { accessToken } = await loginResponse.json()
+  await execute('docker', ['exec', container, 'psql', '-U', 'copilot_test', '-d', 'copilot_test', '-c', "INSERT INTO time_wallets(app_users_id,available_seconds) SELECT id,7200 FROM app_users ON CONFLICT(app_users_id) DO UPDATE SET available_seconds=7200"])
+  let directSession = (await (await request(baseUrl, '/api/v1/interview-sessions/start', { requestId: crypto.randomUUID() }, accessToken)).json()).session.id
   await check('metadata contains public capabilities without platform secrets', async () => {
     const response = await request(baseUrl, '/api/v1/platform', undefined, accessToken)
     assert.equal(response.status, 200)
@@ -208,6 +216,7 @@ try {
     assert.equal(repeated.status, 409)
   })
 
+  await request(baseUrl, `/api/v1/interview-sessions/${directSession}/end`, {}, accessToken)
   const environment = { ...process.env, COPILOT_USER_DATA: userData }
   delete environment.ELECTRON_RUN_AS_NODE
   application = await _electron.launch({ executablePath: process.env.COPILOT_TEST_APP_PATH ? join(process.env.COPILOT_TEST_APP_PATH, 'Contents/MacOS/Interview Copilot') : electronPath, args: process.env.COPILOT_TEST_APP_PATH ? [] : ['.'], cwd: frontend, env: environment, timeout: 45000 })
@@ -240,13 +249,25 @@ try {
     assert.equal(JSON.stringify(settings).includes(accessToken), false)
     assert.equal(JSON.stringify(settings).includes(password), false)
     noSecrets(settings)
+    await expect(page.getByRole('heading', { name: '准备面试', exact: true })).toBeVisible()
+    await assert.rejects(page.evaluate(() => window.copilot.startInterview(crypto.randomUUID())), /简历/)
+    await assert.rejects(page.evaluate(() => window.copilot.startAsr()), /请先开始面试/)
+    await assert.rejects(page.evaluate(() => window.copilot.generateAnswer({ requestId: 'before-start', question: 'test', transcript: '' })), /请先开始面试/)
     await page.screenshot({ path: join(output, 'platform-settings.png') })
     report.screenshots.push('platform-settings.png')
   })
 
+  await execute('docker', ['exec', container, 'psql', '-U', 'copilot_test', '-d', 'copilot_test', '-c', "INSERT INTO time_wallets(app_users_id,available_seconds) SELECT id,7200 FROM app_users ON CONFLICT(app_users_id) DO UPDATE SET available_seconds=7200"])
+  await page.evaluate(async () => {
+    const library = await window.copilot.saveResume({ name: '验证简历', text: '我是后端工程师，熟悉 Java 与数据库。' })
+    const resume = library.resumes.find(item => item.name === '验证简历')
+    await window.copilot.saveEnvironment({ ...library.environments.find(item => item.id === library.activeEnvironmentId), resumeId: resume.id })
+  })
   await checkServiceSelectors({ page, mock, knowledge, check })
 
   await check('Electron question produces streamed answer through Java with server-owned Key', async () => {
+    await page.getByRole('button', { name: '刷新时长', exact: true }).click()
+    await page.getByRole('button', { name: '开始面试', exact: true }).click()
     await page.getByRole('textbox', { name: '当前问题' }).fill('请介绍一下数据库索引。')
     await page.getByRole('button', { name: '生成回答', exact: true }).click()
     await expect(page.getByText('已完成', { exact: true }).last()).toBeVisible({ timeout: 20000 })
@@ -292,10 +313,12 @@ try {
     assert.ok(preview.text.includes(marker))
     const isolated = await request(baseUrl, '/api/v1/references', undefined, accessToken)
     assert.deepEqual(await isolated.json(), [])
+    directSession = (await (await request(baseUrl, '/api/v1/interview-sessions/start', { requestId: crypto.randomUUID() }, accessToken)).json()).session.id
     const forbidden = await request(baseUrl, '/api/v1/references/search', { query: 'Redis', referenceIds: [id] }, accessToken)
     assert.equal(forbidden.status, 404)
+    await request(baseUrl, `/api/v1/interview-sessions/${directSession}/end`, {}, accessToken)
     await page.evaluate(async id => {
-      const library = await window.copilot.saveEnvironment({ name: 'PG 检索验证', resumeId: null, targetId: null, referenceIds: [id] })
+      const library = await window.copilot.saveEnvironment({ name: 'PG 检索验证', resumeId: (await window.copilot.getInterviewLibrary()).resumes[0].id, targetId: null, referenceIds: [id] })
       const environment = library.environments.find(value => value.name === 'PG 检索验证')
       await window.copilot.activateEnvironment(environment.id)
       const settings = await window.copilot.getSettings()
@@ -323,6 +346,7 @@ try {
       await window.copilot.saveSettings({ ...settings, remoteKnowledge: { ...settings.remoteKnowledge, enabled: false } })
     })
     await page.evaluate(id => window.copilot.updateReference(id, { enabled: false }), id)
+    await page.evaluate(async () => { const library = await window.copilot.getInterviewLibrary(); await window.copilot.saveEnvironment({ ...library.environments.find(item => item.id === library.activeEnvironmentId), referenceIds: [] }) })
     await answer('Redis 缓存一致性怎么保证？')
     assert.equal(JSON.stringify(mock.requests.at(-1).body).includes(marker), false)
     await page.evaluate(id => window.copilot.removeReference(id), id)
@@ -355,6 +379,7 @@ try {
   })
 
   await check('PCM and final transcript cross the authenticated Java WebSocket relay', async () => {
+    await beginDesktop()
     const { sessionId } = await page.evaluate(() => window.copilot.startAsr())
     await page.evaluate(id => window.copilot.sendAudio(id, new Uint8Array([1, 0, 2, 0]).buffer), sessionId)
     await until(() => mock.asrConnections.length > 0 && mock.asrConnections.at(-1).audioBytes === 4, 'Audio did not reach fake supplier')
@@ -366,13 +391,18 @@ try {
     await until(() => mock.asrConnections.at(-1).closed, 'Upstream ASR connection did not close')
   })
 
-  await runAdminPlatformChecks({ baseUrl, password, keys, page, mock, knowledge, answer, until, check, noSecrets })
+  await runAdminPlatformChecks({ baseUrl, password, keys, page, mock, knowledge, answer, begin: beginDesktop, until, check, noSecrets })
 
   await check('personal credentials take precedence without sending a platform Key to their endpoint', async () => {
     await page.evaluate(async baseUrl => {
       await window.copilot.saveCustomService({ name: '我的模型', kind: 'llm', url: baseUrl, model: 'mock-fast', apiKey: 'personal-test-key' })
     }, mock.llmBaseUrl)
+    await beginDesktop()
+    const beforeTime = await page.evaluate(() => window.copilot.getWallet())
+    await pause(1200)
     await answer('用自带模型回答。')
+    const afterTime = await page.evaluate(() => window.copilot.getWallet())
+    assert.ok(afterTime.availableSeconds <= beforeTime.availableSeconds - 1, 'BYOK must consume interview time')
     assert.equal(mock.requests.at(-1).authorization, 'Bearer personal-test-key')
     await page.evaluate(async () => {
       const settings = await window.copilot.getSettings()
@@ -386,6 +416,7 @@ try {
   })
 
   await check('logout revokes the business token', async () => {
+    await beginDesktop()
     await page.evaluate(() => window.copilot.startAsr())
     const active = mock.asrConnections.at(-1)
     await page.evaluate(() => window.copilot.platformLogout())

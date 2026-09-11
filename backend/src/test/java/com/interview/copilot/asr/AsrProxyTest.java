@@ -63,7 +63,7 @@ class AsrProxyTest {
         settings.getAsr().setUrl("ws://127.0.0.1:" + server.port() + "/asr");
         settings.getAsr().setApiKey("server-secret");
         settings.getAsr().setModel("server-asr-model");
-        proxy = new AsrProxy(settings, json, usage, new PlatformLimitsProperties(100, 300, 3600));
+        proxy = new AsrProxy(settings, json, usage, new PlatformLimitsProperties(3600));
         session = session("first");
         proxy.afterConnectionEstablished(session);
     }

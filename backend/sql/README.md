@@ -12,15 +12,15 @@ PostgreSQL 15.19 / pgvector 0.8.6。脚本手动按编号执行；后端不使�
 | `06_display_name.sql` | 删除 username，添加 display_name 与 account 登录身份 |
 | `07_email_code_purpose.sql` | 隔离注册与重置密码验证码用途 |
 | `08_server_local_time.sql` | 全部时间列改为北京时间无时区微秒值，设置当前业务库时区 |
-
 | `09_pg_references.sql` | 用户资料、1024维向量、持久索引任务与上传配额 |
+| `10_time_wallet.sql` | 可用秒数、面试计时会话、时长流水；删除每日配额 |
 
 ## 初始化空数据库
 
 从 backend 目录执行，密码通过交互提示或本机凭据提供：
 
 ```sh
-psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f sql/01_schema.sql -f sql/02_pgvector.sql -f sql/03_admin_users.sql -f sql/04_platform_config.sql -f sql/05_email_auth.sql -f sql/06_display_name.sql -f sql/07_email_code_purpose.sql -f sql/08_server_local_time.sql -f sql/09_pg_references.sql
+psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f sql/01_schema.sql -f sql/02_pgvector.sql -f sql/03_admin_users.sql -f sql/04_platform_config.sql -f sql/05_email_auth.sql -f sql/06_display_name.sql -f sql/07_email_code_purpose.sql -f sql/08_server_local_time.sql -f sql/09_pg_references.sql -f sql/10_time_wallet.sql
 ```
 
 使用 Compose 时，从仓库根目录执行：
@@ -58,3 +58,7 @@ psql -X -h 127.0.0.1 -U postgres -d interview_copilot -v ON_ERROR_STOP=1 --singl
 ```
 
 原文件必须挂载持久卷 `/app/data/references`，容器用户 copilot 需要写权限。Nginx 上传上限11MB，后端单文件10MB。管理员在平台配置启用支持1024维的向量服务；旧本地资料不迁移，需用户重新上传。
+
+## 面试时长升级
+
+已执行 01–09 的开发库停止后端后只执行 `10_time_wallet.sql`，不重复执行。脚本自身包含事务，不做数据库备份。为应用账号授予三个新表的 SELECT/INSERT/UPDATE/DELETE 和两个新序列的 USAGE/SELECT。原有用户可用时长初始化为 0；更新后在用户管理中分配。表中钱包版本用于管理员并发调整，心跳结算不递增该版本。

@@ -1,5 +1,7 @@
 import { useMemo, useEffect, useRef, useState } from 'react'
 import { ArrowRight, FileText, WarningCircle, X } from '@phosphor-icons/react'
+import InterviewPreparation from './components/InterviewPreparation'
+import { useInterviewTime, formatDuration } from './hooks/useInterviewTime'
 import AnswerPanel from './components/AnswerPanel'
 import AutoAnswerControls from './components/AutoAnswerControls'
 import ContextPage from './components/ContextPage'
@@ -20,8 +22,9 @@ import styles from './styles/App.module.css'
 interface WorkbenchProps { bridge: DesktopBridge; config: ReturnType<typeof useSettings>; onLogout: () => Promise<void> }
 export default function Workbench({ bridge: unscopedBridge, config, onLogout }: WorkbenchProps) {
   const bridge = useMemo(() => unscopedBridge.withAccountScope?.(config.settings.accountScope ?? '') ?? unscopedBridge, [unscopedBridge, config.settings.accountScope])
+  const timer = useInterviewTime(bridge)
   const session = useSession(bridge, config.settings, config.save, config.apply)
-  const [page, setPage] = useState<Page>('workspace')
+  const [page, setPage] = useState<Page>('preparation')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [compact, setCompact] = useState(false)
   const [pinned, setPinned] = useState(false)
@@ -32,7 +35,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
   async function handleLogout() {
     if (loggingOut.current) return
     loggingOut.current = true; setLeaving(true)
-    try { await session.stop(); await session.cancel(); await onLogout() }
+    try { await Promise.all([timer.end(), session.stop(), session.cancel()]); await onLogout() }
     finally { loggingOut.current = false; setLeaving(false) }
   }
   useEffect(() => { main.current?.querySelector<HTMLElement>('h1')?.focus() }, [page])
@@ -42,6 +45,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
     void bridge.setAlwaysOnTop(false).catch(() => undefined)
   }, [bridge])
   async function handleCompact() {
+    if (!timer.active) return
     try { await bridge?.setCompact(!compact); setCompact(!compact); setPage('workspace') }
     catch (reason) { setWindowError(errorMessage(reason)) }
   }
@@ -51,17 +55,35 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
   }
   function handleSettings() { setSettingsOpen(true) }
   function handleContext() { setPage('context') }
-  async function handleEnvironment(id: string) { await session.activateEnvironment(id); setPage('workspace') }
-  const error = session.error || config.error || windowError
+  async function handleEnvironment(id: string) { await session.activateEnvironment(id); setPage('preparation') }
+  async function handleEnd() {
+    await Promise.all([timer.end(), session.stop(), session.cancel()])
+    await session.saveHistory().catch(reason => setWindowError(`面试已停止计时，但会话保存失败：${errorMessage(reason)}`))
+    setPage('preparation')
+    if (compact) { await bridge.setCompact(false); setCompact(false) }
+  }
+  async function handlePrepare(input: Parameters<typeof session.saveEnvironment>[0]) {
+    await session.saveEnvironment(input)
+    if (input.id) await session.activateEnvironment(input.id)
+  }
+  function navigate(next: Page) { setPage(next === 'workspace' && !timer.active ? 'preparation' : next) }
+  useEffect(() => {
+    if (!timer.active && page === 'workspace') setPage('preparation')
+  }, [timer.active, page])
+  const error = timer.error || session.error || config.error || windowError
   const targetLabel = [config.settings.interviewTarget.companyName, config.settings.interviewTarget.roleName].filter(Boolean).join(' · ')
   const environment = config.settings.interviewEnvironment
   const environmentSummary = environment ? `${environment.resumeName || '未选简历'} · ${environment.targetName || '未选岗位'} · ${environment.referenceIds.length} 份参考资料` : ''
   return <ErrorBoundary><div className={`${styles.app} ${compact ? styles.appCompact : ''}`}>
     <Topbar compact={compact} pinned={pinned} onCompact={() => void handleCompact()} onPin={() => void handlePin()} onSettings={handleSettings} desktop={Boolean(bridge)} account={config.settings.platform?.user?.displayName} onLogout={() => void handleLogout()} loggingOut={leaving} />
-    <div className={styles.appBody} inert={leaving}>{!compact && <Sidebar page={page} onChange={setPage} onNew={() => { void session.reset(); setPage('workspace') }} canReset={!session.busy && ['idle', 'error'].includes(session.status)} />}
+    <div className={styles.appBody} inert={leaving}>{!compact && <Sidebar page={page} onChange={navigate} onNew={() => setPage(timer.active ? 'workspace' : 'preparation')} canReset={!timer.busy} />}
       <main className={styles.main} ref={main}>
         {error && <div className={styles.errorBanner} role="alert"><WarningCircle size={19} weight="fill" /><span>{error}</span><IconButton label="关闭提示" onClick={() => { session.clearError(); setWindowError('') }}><X size={17} /></IconButton></div>}
-        {page === 'workspace' && <div className={styles.workspace}>
+        {timer.active && <div className={styles.environmentBar}><span>面试进行中 · 已用 {formatDuration(timer.used)} · 可用 {formatDuration(timer.remaining)}</span><button className={styles.primaryButton} disabled={timer.busy} onClick={() => void handleEnd()}>结束面试</button></div>}
+        {timer.warning && timer.active && <p className={styles.formNote} role="status">{timer.warning}</p>}
+        {page === 'preparation' && !timer.active && <InterviewPreparation bridge={bridge} settings={config.settings} timer={timer} onPrepare={handlePrepare} onStarted={() => setPage('workspace')} onContext={handleContext} onSettings={handleSettings} />}
+        {page === 'preparation' && timer.active && <button className={styles.primaryButton} onClick={() => setPage('workspace')}>返回正在进行的面试</button>}
+        {page === 'workspace' && timer.active && <div className={styles.workspace}>
           {!compact && <header className={styles.workspaceHeading}><div className={styles.workspaceIdentity}><h1 className={styles.workspaceTitle} tabIndex={-1}>面试工作台</h1><span className={styles.workspaceTarget} title={targetLabel || undefined}>{targetLabel || '为下一句，准备好思路'}</span></div><div className={`${styles.contextStatus} ${styles.workspaceContextStatus}`}><FileText size={16} weight="bold" />{config.settings.context.text ? '个人背景已就绪' : '尚未添加个人背景'}<button onClick={handleContext} aria-label="编辑个人背景"><ArrowRight size={16} /></button></div></header>}
           {!compact && environment && <div className={styles.environmentBar}><div><strong title={environment.name}>{environment.name}</strong><span title={environmentSummary}>{environmentSummary}</span></div><button className={styles.textButton} onClick={() => setPage('environments')}>选择面试环境<ArrowRight size={16} /></button></div>}
           {!compact && !config.loading && !isAsrReady(config.settings) && <div className={styles.setupBanner}><div><span className={styles.setupDot} /><span>准备开始？先连接转写服务和回答模型。</span></div><button onClick={handleSettings}>完成配置<ArrowRight size={16} /></button></div>}
@@ -72,9 +94,9 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
           <div className={styles.workspacePanels}>{!compact && <TranscriptPanel session={session} />}<AnswerPanel session={session} settings={config.settings} onSettings={handleSettings} onContext={handleContext} compact={compact} /></div>
           {!compact && <footer className={styles.workspaceFooter}><span>声音不落盘 · 会话保存在本机</span><span>系统音频可自动回答，也可随时手动生成</span></footer>}
         </div>}
-        {page === 'environments' && <InterviewEnvironmentsPage settings={config.settings} bridge={bridge} isSessionActive={session.busy || !['idle', 'error'].includes(session.status)} onActivate={handleEnvironment} onSave={session.saveEnvironment} />}
+        {page === 'environments' && <InterviewEnvironmentsPage settings={config.settings} bridge={bridge} isSessionActive={timer.active || session.busy || !['idle', 'error'].includes(session.status)} onActivate={handleEnvironment} onSave={session.saveEnvironment} />}
         {page === 'context' && <ContextPage settings={config.settings} bridge={bridge} onSave={config.save} />}
-        {page === 'history' && <HistoryPage records={session.history} activeSessionId={session.record.id} activeSessionLocked={session.busy || !['idle', 'error'].includes(session.status)} onExport={session.exportRecord} onDelete={session.removeSession} />}
+        {page === 'history' && <HistoryPage records={session.history} activeSessionId={session.record.id} activeSessionLocked={timer.active || session.busy || !['idle', 'error'].includes(session.status)} onExport={session.exportRecord} onDelete={session.removeSession} />}
       </main>
     </div>
     {settingsOpen && <SettingsDialog settings={config.settings} bridge={bridge} onSave={config.save} onApply={config.apply} onLogout={handleLogout} onClose={() => setSettingsOpen(false)} />}

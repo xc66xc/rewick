@@ -9,7 +9,7 @@ class UsageLeaseTest {
     @Test
     void close_completedLease_doesNotOverwriteCompletion() {
         UsageService service = mock(UsageService.class);
-        UsageLease lease = new UsageLease(service, 9L, "request-1", "llm");
+        UsageLease lease = new UsageLease(service, 9L, "request-1", "llm", "session-1");
 
         lease.complete();
         lease.cancel();
@@ -23,7 +23,7 @@ class UsageLeaseTest {
     void close_unfinishedLease_marksCancelled() {
         UsageService service = mock(UsageService.class);
 
-        new UsageLease(service, 9L, "request-1", "llm").close();
+        new UsageLease(service, 9L, "request-1", "llm", "session-1").close();
 
         verify(service).finish(9L, "request-1", "llm", "cancelled");
     }

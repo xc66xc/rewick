@@ -31,6 +31,7 @@ final class LlmStreamSession {
     }
 
     SseEmitter start(Flux<String> source) {
+        lease.watch(() -> terminate("cancel"));
         Flux<String> heartbeats = Flux.interval(Duration.ofSeconds(5)).map(sequence -> HEARTBEAT);
         Disposable active = source.mergeWith(heartbeats).takeUntil("[DONE]"::equals)
                 .publishOn(Schedulers.boundedElastic(), 8).subscribe(this::send, this::fail, this::complete);

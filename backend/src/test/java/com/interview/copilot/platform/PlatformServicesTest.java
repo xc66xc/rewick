@@ -12,7 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.interview.copilot.auth.UserPrincipal;
 import com.interview.copilot.common.ApiException;
 import com.interview.copilot.config.PlatformController;
-import com.interview.copilot.usage.UserLimitsService;
+import com.interview.copilot.config.PlatformLimitsProperties;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
@@ -30,8 +30,7 @@ class PlatformServicesTest {
 
     @Test void platform_activeBindings_exposesOnlyPublicServiceChoicesAndPreservesExistingFields() throws Exception {
         PlatformSnapshot snapshot = snapshot(Availability.ENABLED);
-        UserLimitsService limits = mock(UserLimitsService.class);
-        when(limits.effective(1)).thenReturn(new UserLimitsService.EffectiveLimits(100, 300, 3600));
+        var limits = new PlatformLimitsProperties(3600);
         UserPrincipal user = new UserPrincipal(1, "fixture-user", "USER", "fixture@example.invalid");
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(user, null, List.of()));
         MockMvc mvc = MockMvcBuilders.standaloneSetup(new PlatformController(() -> snapshot, limits))

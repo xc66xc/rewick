@@ -41,6 +41,6 @@ Keep database credentials, the platform master key, and the email-code secret in
 
 For incorrect configuration (such as a missing endpoint path), explain the exact correction to the user. Do not add automatic completion, fallback, or compatibility behavior to accommodate configuration mistakes unless explicitly requested.
 
-Persist business times as Beijing `TIMESTAMP(6) WITHOUT TIME ZONE` with `LocalDateTime`; use the shared `ServerTime` helper and `Asia/Shanghai` database sessions. Preserve explicit timezone information in API expiry timestamps. Daily quotas follow the Beijing calendar date.
+Persist business times as Beijing `TIMESTAMP(6) WITHOUT TIME ZONE` with `LocalDateTime`; use the shared `ServerTime` helper and `Asia/Shanghai` database sessions. Preserve explicit timezone information in API expiry timestamps. Interview duration is stored in whole seconds and settled using authoritative server time.
 
 Reference RAG uses server PostgreSQL/pgvector with fixed `vector(1024)` and platform-owned embedding credentials for both indexing and queries. Keep embedding settings in admin only; never reintroduce desktop embedding keys or SQLite reference retrieval. Preserve tenant/environment filters and exclusive Bailian routing. Mount `/app/data/references` persistently when deploying. Old local documents require explicit user re-upload.

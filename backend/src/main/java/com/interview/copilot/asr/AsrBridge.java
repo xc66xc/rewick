@@ -73,6 +73,7 @@ final class AsrBridge {
         clientId = taskId;
         String requestId = requestId();
         lease = resources.usage().start(user.id(), requestId, "asr");
+        lease.watch(() -> close("cancel"));
         resources.usage().describeModel(user.id(), requestId, "asr", config.getModel());
         if (ended.get()) { lease.cancel(); return; }
         phase = "connecting";

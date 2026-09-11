@@ -31,7 +31,13 @@ function setup(initial = structuredClone(defaultSettings), strict = false) {
   const setAlwaysOnTop = vi.fn(async (value: boolean) => { nativeWindow.pinned = value; return value })
   const stopAsr = vi.fn(async () => undefined)
   const cancelAnswer = vi.fn(async () => undefined)
+  const library = { resumes: [{ id: 'resume', name: '测试简历', text: '测试候选人简历', createdAt: '', updatedAt: '' }], targets: [], environments: [{ id: 'env', name: '默认环境', resumeId: 'resume', targetId: null, referenceIds: [], createdAt: '', updatedAt: '' }], activeEnvironmentId: 'env' }
+  const wallet = { availableSeconds: 3600, version: 0, serverTime: new Date().toISOString(), session: null }
+  const getWallet = vi.fn(async () => wallet)
+  const startInterview = vi.fn(async () => ({ ...wallet, session: { id: 'session', status: 'active', startedAt: wallet.serverTime, expiresAt: new Date(Date.now() + 30000).toISOString(), endedAt: null, usedSeconds: 0, endReason: null } }))
+  const endInterview = vi.fn(async () => wallet)
   const bridge = { getSettings, saveSettings, platformLogin, platformLogout, platformRegister, refreshPlatform, requestEmailCode, requestPasswordResetCode, resetPassword,
+    getWallet, startInterview, endInterview, getInterviewLibrary: vi.fn(async () => library), listReferences: vi.fn(async () => []), saveEnvironment: vi.fn(async () => library), activateEnvironment: vi.fn(async () => current),
     getHistory, stopAsr, cancelAnswer, setCompact, setAlwaysOnTop, saveSession: vi.fn(async () => undefined),
     onEvent: (listener: (event: AppEvent) => void) => { listeners.add(listener); return () => { listeners.delete(listener) } },
   } as unknown as DesktopBridge
@@ -55,7 +61,7 @@ describe('desktop account gate', () => {
     expect(screen.queryByText('平台连接设置')).toBeNull()
     expect(getHistory).not.toHaveBeenCalled()
     await login(user)
-    expect(await screen.findByRole('heading', { name: '面试工作台' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '准备面试' })).toBeTruthy()
     expect(platformLogin).toHaveBeenCalledWith({ identifier: 'first@example.test', password: 'valid-test-password' })
     expect(saveSettings.mock.calls[0][0].platform).toEqual({ enabled: true, baseUrl: 'http://127.0.0.1:8080' })
     expect(JSON.stringify(saveSettings.mock.calls)).not.toContain('valid-test-password')
@@ -68,9 +74,9 @@ describe('desktop account gate', () => {
     mount()
     await waitFor(() => expect(refreshPlatform).toHaveBeenCalled())
     expect(getHistory).not.toHaveBeenCalled()
-    expect(screen.queryByRole('heading', { name: '面试工作台' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: '准备面试' })).toBeNull()
     await act(async () => finish(account()))
-    expect(await screen.findByRole('heading', { name: '面试工作台' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '准备面试' })).toBeTruthy()
   })
   it('keeps the gate closed on startup refresh failure and allows explicit verification retry', async () => {
     const { mount, refreshPlatform, user, getHistory } = setup(account())
@@ -79,18 +85,20 @@ describe('desktop account gate', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('平台连接暂时不可用')
     expect(getHistory).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: '重新验证登录' }))
-    expect(await screen.findByRole('heading', { name: '面试工作台' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '准备面试' })).toBeTruthy()
   })
   it('returns to the gate on settings authentication loss and clears the previous account question after another login', async () => {
     const { mount, user, change, platformLogin } = setup(account())
     mount()
+    await user.click(await screen.findByRole('button', { name: '开始面试' }))
     const question = await screen.findByRole('textbox', { name: '当前问题' })
     await user.type(question, '上一账号尚未提交的问题')
     const loggedOut = account(); if (loggedOut.platform) loggedOut.platform.authenticated = false
     change(loggedOut)
     expect(await screen.findByRole('heading', { name: '登录面试工作台' })).toBeTruthy()
-    platformLogin.mockResolvedValueOnce(account('second'))
+    platformLogin.mockImplementationOnce(async () => { const next = account('second'); change(next); return next })
     await login(user)
+    await user.click(await screen.findByRole('button', { name: '开始面试' }))
     expect((await screen.findByRole('textbox', { name: '当前问题' }) as HTMLTextAreaElement).value).toBe('')
     expect(screen.getByRole('button', { name: '当前账号：second@example.test' })).toBeTruthy()
   })
@@ -106,6 +114,7 @@ describe('desktop account gate', () => {
   it.each(['logout', 'expiry'] as const)('resets native compact/pinned state on %s before another account workbench mounts', async outcome => {
     const { mount, user, change, nativeWindow } = setup(account())
     mount()
+    await user.click(await screen.findByRole('button', { name: '开始面试' }))
     await user.click(await screen.findByRole('button', { name: '紧凑模式' }))
     await user.click(screen.getByRole('button', { name: '窗口置顶' }))
     expect(nativeWindow).toEqual({ compact: true, pinned: true })
@@ -114,7 +123,7 @@ describe('desktop account gate', () => {
     await screen.findByRole('heading', { name: '登录面试工作台' })
     await waitFor(() => expect(nativeWindow).toEqual({ compact: false, pinned: false }))
     await login(user)
-    expect(await screen.findByRole('heading', { name: '面试工作台' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '准备面试' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '窗口置顶' }).getAttribute('aria-pressed')).toBe('false')
     expect(screen.getByRole('button', { name: '紧凑模式' })).toBeTruthy()
     expect(nativeWindow).toEqual({ compact: false, pinned: false })
@@ -122,7 +131,7 @@ describe('desktop account gate', () => {
   it('returns to login when the public token expiry passes', async () => {
     const { mount, change, platformLogout } = setup(account())
     mount()
-    await screen.findByRole('heading', { name: '面试工作台' })
+    await screen.findByRole('heading', { name: '准备面试' })
     const expired = account(); if (expired.platform) expired.platform.expiresAt = new Date(Date.now() - 1).toISOString()
     change(expired)
     expect(await screen.findByRole('heading', { name: '登录面试工作台' })).toBeTruthy()
@@ -133,11 +142,11 @@ describe('desktop account gate', () => {
     vi.useFakeTimers()
     mount()
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
-    expect(screen.getByRole('heading', { name: '面试工作台' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '准备面试' })).toBeTruthy()
     refreshPlatform.mockRejectedValueOnce(new Error('temporary network failure'))
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000) })
     expect(refreshPlatform).toHaveBeenCalledTimes(2)
-    expect(screen.getByRole('heading', { name: '面试工作台' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '准备面试' })).toBeTruthy()
   })
   it('sends an email verification code with a retry countdown, then registers without storing password/code in settings', async () => {
     const { mount, user, requestEmailCode, platformRegister, saveSettings, getHistory } = setup()
@@ -151,7 +160,7 @@ describe('desktop account gate', () => {
     await user.type(screen.getByLabelText('密码', { exact: true }), 'register-test-password')
     await user.type(screen.getByRole('textbox', { name: '邮箱验证码' }), '123456')
     await user.click(screen.getByRole('button', { name: '注册并登录' }))
-    expect(await screen.findByRole('heading', { name: '面试工作台' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '准备面试' })).toBeTruthy()
     expect(platformRegister).toHaveBeenCalledWith({ email: 'new@example.test', password: 'register-test-password', code: '123456' })
     expect(JSON.stringify(saveSettings.mock.calls)).not.toMatch(/register-test-password|123456/)
   })

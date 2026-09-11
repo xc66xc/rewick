@@ -11,7 +11,7 @@ import { testCustomService } from '../../src/main/services/custom-service-test'
 
 const crypto = { isEncryptionAvailable: () => true, encryptString: (value: string) => Buffer.from(value.split('').reverse().join('')), decryptString: (value: Buffer) => value.toString().split('').reverse().join('') }
 const draft = { name: '我的回答', kind: 'llm' as const, url: 'https://models.example/v1', model: 'own-model', apiKey: 'private-api-key' }
-const info: PlatformInfo = { user: { id: '1', displayName: 'u_demo', email: 'demo@example.com' }, capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'fast', asr: 'asr-model', available: [{ id: 'fast', name: '平台快速' }] }, services: { asr: [{ id: 'asr-one', name: '平台语音' }], knowledge: [{ id: 'knowledge-one', name: '平台知识库' }] }, limits: { dailyAnswers: 10, dailyKnowledgeQueries: 10, maxAsrSessionSeconds: 600 } }
+const info: PlatformInfo = { user: { id: '1', displayName: 'u_demo', email: 'demo@example.com' }, capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'fast', asr: 'asr-model', available: [{ id: 'fast', name: '平台快速' }] }, services: { asr: [{ id: 'asr-one', name: '平台语音' }], knowledge: [{ id: 'knowledge-one', name: '平台知识库' }] }, limits: { maxAsrSessionSeconds: 600 } }
 let directory: string
 let store: SettingsStore
 beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'copilot-custom-')); store = new SettingsStore(directory, crypto) })

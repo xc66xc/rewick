@@ -26,27 +26,26 @@ public interface AdminUserMapper {
 
     @Select("""
             SELECT id::text, display_name, role, is_enabled AS enabled,
-                COALESCE(daily_answers, #{defaultAnswers}) AS daily_answers,
-                COALESCE(daily_knowledge_queries, #{defaultKnowledge}) AS daily_knowledge_queries,
+                COALESCE((SELECT available_seconds FROM time_wallets w WHERE w.app_users_id=app_users.id),0) AS available_seconds,
+                COALESCE((SELECT version FROM time_wallets w WHERE w.app_users_id=app_users.id),0) AS wallet_version,
                 created_at AT TIME ZONE 'Asia/Shanghai' AS created_at
             FROM app_users WHERE #{query} = '' OR (strpos(lower(display_name), lower(#{query})) > 0 OR EXISTS(SELECT 1 FROM auth_identities i WHERE i.app_users_id=app_users.id AND i.identity_type='email' AND strpos(lower(i.identifier), lower(#{query})) > 0))
             ORDER BY id DESC LIMIT #{size} OFFSET #{offset}
             """)
-    List<UserView> page(@Param("query") String query, @Param("size") int size, @Param("offset") int offset,
-            @Param("defaultAnswers") int defaultAnswers, @Param("defaultKnowledge") int defaultKnowledge);
+    List<UserView> page(@Param("query") String query, @Param("size") int size, @Param("offset") int offset);
 
     @Select("""
             SELECT id::text, display_name, role, is_enabled AS enabled,
-                COALESCE(daily_answers, #{defaultAnswers}) AS daily_answers,
-                COALESCE(daily_knowledge_queries, #{defaultKnowledge}) AS daily_knowledge_queries,
+                COALESCE((SELECT available_seconds FROM time_wallets w WHERE w.app_users_id=app_users.id),0) AS available_seconds,
+                COALESCE((SELECT version FROM time_wallets w WHERE w.app_users_id=app_users.id),0) AS wallet_version,
                 created_at AT TIME ZONE 'Asia/Shanghai' AS created_at
             FROM app_users WHERE id = #{id}
             """)
-    UserView view(@Param("id") long id, @Param("defaultAnswers") int defaultAnswers, @Param("defaultKnowledge") int defaultKnowledge);
+    UserView view(@Param("id") long id);
 
     @Insert("""
-            INSERT INTO app_users(display_name, password_hash, role, daily_answers, daily_knowledge_queries)
-            VALUES(#{displayName}, #{passwordHash}, 'USER', #{dailyAnswers}, #{dailyKnowledgeQueries})
+            INSERT INTO app_users(display_name, password_hash, role)
+            VALUES(#{displayName}, #{passwordHash}, 'USER')
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "id")
     void create(UserEntity user);
@@ -55,11 +54,9 @@ public interface AdminUserMapper {
     void createAccountIdentity(@Param("id") long id, @Param("identifier") String identifier);
 
     @Update("""
-            UPDATE app_users SET is_enabled = #{enabled}, daily_answers = #{answers},
-                daily_knowledge_queries = #{knowledge}, updated_at = LOCALTIMESTAMP(6) WHERE id = #{id}
+            UPDATE app_users SET is_enabled = #{enabled}, updated_at = LOCALTIMESTAMP(6) WHERE id = #{id}
             """)
-    void update(@Param("id") long id, @Param("enabled") boolean enabled,
-            @Param("answers") int answers, @Param("knowledge") int knowledge);
+    void update(@Param("id") long id, @Param("enabled") boolean enabled);
 
     @Update("UPDATE app_users SET password_hash = #{hash}, updated_at = LOCALTIMESTAMP(6) WHERE id = #{id}")
     void resetPassword(@Param("id") long id, @Param("hash") String hash);

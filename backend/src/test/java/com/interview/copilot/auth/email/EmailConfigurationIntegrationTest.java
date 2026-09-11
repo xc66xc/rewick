@@ -63,7 +63,7 @@ class EmailConfigurationIntegrationTest {
     }
 
     @BeforeEach void resetDatabase() {
-        jdbc.execute("TRUNCATE email_verifications, auth_identities, auth_tokens, usage_daily, usage_events, audit_events, app_users RESTART IDENTITY CASCADE");
+        jdbc.execute("TRUNCATE email_verifications, auth_identities, auth_tokens, usage_events, audit_events, app_users RESTART IDENTITY CASCADE");
         jdbc.execute("UPDATE email_config SET version=0, is_enabled=FALSE, host='', port=587, username='', encrypted_password='', from_address='', is_start_tls=TRUE, is_ssl=FALSE");
         admin = account("administrator", "ADMIN");
         member = account("member", "USER");

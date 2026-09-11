@@ -194,6 +194,10 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
     } catch (reason) { setError(errorMessage(reason)) }
   }
   function handleEvent(event: AppEvent) {
+    if (event.kind === 'wallet-changed') {
+      if (event.wallet.session?.status !== 'active') { void stop(); void cancel(); void persist(true).catch(reason => setError(errorMessage(reason))) }
+      return
+    }
     if (event.kind === 'documents-changed' || event.kind === 'interviews-changed' || event.kind === 'settings-changed') return
     if (event.kind === 'documents-error') { setReferenceError(event.message); return }
     if (event.kind === 'shortcut') { void generate(); return }
@@ -348,7 +352,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
     autoAnswer: settings.autoAnswer, autoAnswerState: automatic.state, autoAnswerSaving: automatic.saving,
     setAutoAnswer: automatic.setPreferences, autoAnswerModelReady: isAnswerModelReady(settings),
     history, elapsed, busy, start, stop, generate, answerSegment, beginSegmentEdit, editSegment, finishSegmentEdit,
-    cancel, reset, activateEnvironment, saveEnvironment, exportRecord, removeSession, desktop: Boolean(bridge) }
+    saveHistory: () => persist(true), cancel, reset, activateEnvironment, saveEnvironment, exportRecord, removeSession, desktop: Boolean(bridge) }
 }
 
 export type SessionController = ReturnType<typeof useSession>

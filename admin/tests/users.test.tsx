@@ -13,28 +13,28 @@ describe('user management', () => {
     await screen.findByText('candidate'); await actor.click(screen.getByRole('button', { name: '创建用户' }))
     const dialog = screen.getByRole('dialog', { name: '创建用户' })
     await actor.type(within(dialog).getByLabelText('登录账号'), 'new-user'); await actor.type(within(dialog).getByLabelText('初始密码'), 'first-password-123')
-    await actor.clear(within(dialog).getByLabelText('每日回答次数')); await actor.type(within(dialog).getByLabelText('每日回答次数'), '0')
+    await actor.clear(within(dialog).getByLabelText('小时')); await actor.type(within(dialog).getByLabelText('小时'), '0')
     await actor.click(within(dialog).getByRole('button', { name: '创建用户' }))
     await within(dialog).findByRole('alert')
     expect(within(dialog).getByLabelText('登录账号')).toHaveProperty('value', 'new-user')
     expect(within(dialog).getByLabelText('初始密码')).toHaveProperty('value', '')
     await actor.type(within(dialog).getByLabelText('初始密码'), 'second-password-123'); await actor.click(within(dialog).getByRole('button', { name: '创建用户' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(created).toHaveLength(2); expect(created[1]).toMatchObject({ identifier: 'new-user', password: 'second-password-123', dailyAnswers: 0 })
+    expect(created).toHaveLength(2); expect(created[1]).toMatchObject({ identifier: 'new-user', password: 'second-password-123', availableSeconds: 0 })
   })
-  it('requires explicit confirmation to disable a user and supports zero quotas', async () => {
+  it('requires explicit confirmation to disable a user without changing the time balance', async () => {
     const updates: Record<string, unknown>[] = []
     vi.stubGlobal('fetch', vi.fn(async (_url: string, options: RequestInit) => { if (options.method === 'PUT') { updates.push(data(options)); return response({ ...user, ...data(options) }) } return response(page([user])) }))
     const actor = userEvent.setup(); render(<UsersPage api={new ApiClient('token')} />)
     await actor.click(await screen.findByRole('button', { name: '编辑 candidate' }))
     const dialog = screen.getByRole('dialog', { name: '编辑用户 · candidate' })
-    await actor.click(within(dialog).getByLabelText('启用账号')); await actor.clear(within(dialog).getByLabelText('每日知识检索次数')); await actor.type(within(dialog).getByLabelText('每日知识检索次数'), '0')
+    await actor.click(within(dialog).getByLabelText('启用账号'))
     await actor.click(within(dialog).getByRole('button', { name: '保存用户' }))
     expect(updates).toHaveLength(0)
     const confirm = screen.getByRole('dialog', { name: '停用 candidate' })
     await actor.click(within(confirm).getByRole('button', { name: '确认停用' }))
     await waitFor(() => expect(updates).toHaveLength(1))
-    expect(updates[0]).toMatchObject({ enabled: false, dailyKnowledgeQueries: 0 })
+    expect(updates[0]).toMatchObject({ enabled: false })
   })
   it('searches and paginates via the server, and cancelling token revocation sends no mutation', async () => {
     const calls: string[] = []

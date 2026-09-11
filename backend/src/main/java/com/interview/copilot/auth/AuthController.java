@@ -16,10 +16,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
     private final AuthService auth;
     private final LoginRateLimiter limiter;
+    private final com.interview.copilot.wallet.WalletService wallets;
 
-    public AuthController(AuthService auth, LoginRateLimiter limiter) {
+    public AuthController(AuthService auth, LoginRateLimiter limiter, com.interview.copilot.wallet.WalletService wallets) {
         this.auth = auth;
         this.limiter = limiter;
+        this.wallets = wallets;
     }
 
     @PostMapping("/login")
@@ -30,6 +32,7 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(HttpServletRequest request) {
+        auth.authenticate(request.getHeader(HttpHeaders.AUTHORIZATION).substring(7)).ifPresent(user -> wallets.endCurrent(user.id()));
         auth.logout(request.getHeader(HttpHeaders.AUTHORIZATION).substring(7));
         return ResponseEntity.noContent().build();
     }

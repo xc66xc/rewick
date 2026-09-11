@@ -7,7 +7,8 @@ import com.interview.copilot.auth.PasswordRules;
 import com.interview.copilot.auth.TokenMapper;
 import com.interview.copilot.auth.UserEntity;
 import com.interview.copilot.common.ApiException;
-import com.interview.copilot.config.PlatformLimitsProperties;
+import com.interview.copilot.wallet.WalletAdminService;
+import java.util.UUID;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -20,52 +21,49 @@ public class AdminUserService {
     private final PasswordEncoder passwords;
     private final TokenMapper tokens;
     private final AuditService audit;
-    private final PlatformLimitsProperties defaults;
+    private final WalletAdminService wallets;
 
     public AdminUserService(AdminUserMapper mapper, PasswordEncoder passwords, TokenMapper tokens,
-            AuditService audit, PlatformLimitsProperties defaults) {
+            AuditService audit, WalletAdminService wallets) {
         this.mapper = mapper;
         this.passwords = passwords;
         this.tokens = tokens;
         this.audit = audit;
-        this.defaults = defaults;
+        this.wallets = wallets;
     }
 
     public Page<UserView> list(String query, AdminInput.Paging paging) {
         AdminInput.bounded(query, 254);
-        return new Page<>(mapper.page(query, paging.size(), paging.offset(), defaults.dailyAnswers(),
-                defaults.dailyKnowledgeQueries()), mapper.count(query), paging.page(), paging.size());
+        return new Page<>(mapper.page(query, paging.size(), paging.offset()), mapper.count(query), paging.page(), paging.size());
     }
 
     @Transactional
-    public UserView create(long actorId, String identifier, String password, int answers, int knowledge) {
-        validateQuotas(answers, knowledge);
+    public UserView create(long actorId, String identifier, String password, long availableSeconds) {
+        if (availableSeconds < 0 || availableSeconds > 315360000L) throw AdminInput.invalid();
         if (identifier == null || !identifier.matches("[A-Za-z0-9_.@-]{3,64}")) throw AdminInput.invalid();
         String hash = encode(password);
         authorize(actorId);
         UserEntity user = new UserEntity();
         user.setDisplayName(identifier);
         user.setPasswordHash(hash);
-        user.setDailyAnswers(answers);
-        user.setDailyKnowledgeQueries(knowledge);
         try {
             mapper.create(user);
             mapper.createAccountIdentity(user.getId(), identifier);
         } catch (DuplicateKeyException error) {
             throw new ApiException(HttpStatus.CONFLICT, "identifier_exists", "登录账号已存在。");
         }
+        wallets.adjust(actorId, user.getId(), new WalletAdminService.Adjustment(UUID.randomUUID().toString(), "set", availableSeconds, 0L, "创建用户初始时长"));
         audit.record(actorId, "user.create", target(user.getId()));
         return view(user.getId());
     }
 
     @Transactional
-    public UserView update(long actorId, long userId, boolean enabled, int answers, int knowledge) {
-        validateQuotas(answers, knowledge);
+    public UserView update(long actorId, long userId, boolean enabled) {
         authorize(actorId);
         AdminUserMapper.Account account = requireAccount(userId);
         if (!enabled) protectAdministrators(actorId, account);
-        mapper.update(userId, enabled, answers, knowledge);
-        if (!enabled) tokens.revokeAll(userId);
+        mapper.update(userId, enabled);
+        if (!enabled) { tokens.revokeAll(userId); wallets.endCurrent(userId); }
         audit.record(actorId, "user.update", target(userId));
         return view(userId);
     }
@@ -77,6 +75,7 @@ public class AdminUserService {
         requireAccount(userId);
         mapper.resetPassword(userId, hash);
         tokens.revokeAll(userId);
+        wallets.endCurrent(userId);
         audit.record(actorId, "user.password_reset", target(userId));
     }
 
@@ -85,6 +84,7 @@ public class AdminUserService {
         authorize(actorId);
         requireAccount(userId);
         tokens.revokeAll(userId);
+        wallets.endCurrent(userId);
         audit.record(actorId, "user.tokens_revoke", target(userId));
     }
 
@@ -110,11 +110,7 @@ public class AdminUserService {
     }
 
     private UserView view(long userId) {
-        return mapper.view(userId, defaults.dailyAnswers(), defaults.dailyKnowledgeQueries());
-    }
-
-    private void validateQuotas(int answers, int knowledge) {
-        if (answers < 0 || answers > 1000000 || knowledge < 0 || knowledge > 1000000) throw AdminInput.invalid();
+        return mapper.view(userId);
     }
 
     private String encode(String password) {

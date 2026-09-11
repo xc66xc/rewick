@@ -1,3 +1,4 @@
+import { InterviewTimer } from './services/interview-timer'
 import { AccountWorkspaces } from './services/account-workspace'
 import { platformBaseUrl } from '../shared/defaults'
 import { app, BrowserWindow, Menu, dialog, globalShortcut, ipcMain, safeStorage, session, systemPreferences, desktopCapturer } from 'electron'
@@ -65,9 +66,15 @@ const accounts = new AccountWorkspaces(app.getPath('userData'), secretStorage, (
   await syncAccount()
   emit({ kind: 'settings-changed' })
 })
+const interviewTimer = new InterviewTimer(wallet => emit({ kind: 'wallet-changed', wallet }), () => disposeWork())
+async function walletConnection() {
+  const snapshot = await authSettings.getConnectionSnapshot()
+  if (!snapshot.settings.platform?.authenticated || !snapshot.secrets.platformAccessToken) throw new Error('请先登录。')
+  return { baseUrl: snapshot.settings.platform.baseUrl, token: snapshot.secrets.platformAccessToken }
+}
 async function syncAccount() {
   const authenticated = await authSettings.getSettings()
-  if (accounts.identity(authenticated) !== accounts.active?.id) disposeWork()
+  if (accounts.identity(authenticated) !== accounts.active?.id) { interviewTimer.dispose(); disposeWork() }
   return accounts.activate(authenticated)
 }
 const settings = new Proxy(authSettings, {
@@ -171,10 +178,12 @@ async function effectiveSettings() {
   return accounts.active ? interviews.resolve(value) : value
 }
 function assertInterviewIdle() {
+  if (interviewTimer.active) throw new Error('请先结束面试，再修改本次面试内容。')
   if (startingAsr || activeAsrId || pendingAnswerId || activeAnswerId) throw new Error('请先停止转写和回答，再切换或修改当前面试环境。')
 }
 function mutateInterviews<T>(operation: () => Promise<T>): Promise<T> {
   return interviewMutations.run(async () => {
+    assertInterviewIdle()
     changingEnvironment = true
     try {
       const result = await operation()
@@ -239,6 +248,19 @@ function registerHandlers(): void {
       return result
     })
   }
+  handle('wallet:get', async () => interviewTimer.read(await walletConnection()))
+  handle('interview:start', input => interviewMutations.run(async () => {
+    const requestId = parseInput(z.string().uuid(), input)
+    const config = await effectiveSettings()
+    if (!config.context.text.trim() || !config.interviewEnvironment?.resumeId) throw new Error('开始面试前必须选择并填写简历。')
+    if (!config.remoteKnowledge.enabled && config.retrieval.enabled) {
+      const documents = await references.list()
+      const selected = config.interviewEnvironment.referenceIds
+      if (selected.some(id => !documents.some(item => item.id === id && item.status === 'ready' && item.enabled))) throw new Error('所选资料尚未准备完成，请等待索引完成或取消选择。')
+    }
+    return interviewTimer.start(await walletConnection(), requestId)
+  }))
+  handle('interview:end', () => interviewTimer.end())
   handle('settings:get', () => effectiveSettings())
   handle('platform:login', input => {
     return mutatePlatform(async () => { disposeWork(); await platform.login(input); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings() })
@@ -250,7 +272,7 @@ function registerHandlers(): void {
     disposeWork(); await platform.register(input); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings()
   }))
   handle('platform:logout', () => {
-    return mutatePlatform(async () => { disposeWork(); await platform.logout(); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings() })
+    return mutatePlatform(async () => { await interviewTimer.end().catch(() => undefined); disposeWork(); await platform.logout(); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings() })
   })
   handle('platform:refresh', () => {
     const controller = new AbortController()
@@ -268,6 +290,10 @@ function registerHandlers(): void {
   handle('settings:save', async input => {
     let parsed = parseInput(settingsInputSchema, input)
     const previous = await settings.getSettings()
+    if (interviewTimer.active) {
+      const before = parseInput(settingsInputSchema, previous)
+      if (JSON.stringify({ ...parsed, autoAnswer: before.autoAnswer }) !== JSON.stringify(before)) throw new Error('请先结束面试，再修改模型与设置。')
+    }
     if (!previous.platform?.authenticated) parsed = { ...parseInput(settingsInputSchema, previous), platform: parsed.platform }
     parsed.platform.enabled = true
     // Backgrounds belong to the interview library; stale settings dialogs cannot overwrite them.
@@ -287,12 +313,14 @@ function registerHandlers(): void {
     finally { serviceTests.delete(controller) }
   })
   handle('services:save', async input => {
+    assertInterviewIdle()
     const profile = parseInput(customServiceSchema, input)
     await settings.saveCustomService(profile)
     emit({ kind: 'settings-changed' })
     return effectiveSettings()
   })
   handle('services:remove', async input => {
+    assertInterviewIdle()
     await settings.removeCustomService(parseInput(z.string().min(1).max(128), input))
     emit({ kind: 'settings-changed' })
     return effectiveSettings()
@@ -353,6 +381,7 @@ function registerHandlers(): void {
   handle('references:remove', id => references.remove(parseInput(documentId, id)))
   handle('references:reindex', id => references.reindex(parseInput(documentId, id)))
   handle('asr:start', async () => {
+    interviewTimer.assertActive()
     if (changingEnvironment) throw new Error('正在保存面试环境，请稍后开始转写。')
     if (startingAsr) throw new Error('正在连接转写服务，请稍候。')
     startingAsr = true
@@ -376,6 +405,7 @@ function registerHandlers(): void {
       }
       const connection = await serviceConnection(snapshot, 'asr', controller.signal)
       if (epoch !== asrEpoch) throw new Error('转写连接已取消。')
+      interviewTimer.assertActive()
       ownedAsr = asr = new AsrClient(connection.settings.asr, connection.apiKey, emit)
       return await ownedAsr.start()
     } catch (error) {
@@ -388,10 +418,11 @@ function registerHandlers(): void {
     if (!accounts.active || accountScope !== accounts.active.id) return
     if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) return
     if (typeof sessionId !== 'string' || !(audio instanceof ArrayBuffer) || audio.byteLength > 64000 || audio.byteLength % 2 !== 0) return
-    asr?.sendAudio(sessionId, audio)
+    if (interviewTimer.active) asr?.sendAudio(sessionId, audio)
   })
   handle('asr:stop', () => { asrEpoch++; startingAsr = false; return asr?.stop() })
   handle('answer:generate', async input => {
+    interviewTimer.assertActive()
     if (changingEnvironment) throw new Error('正在保存面试环境，请稍后生成回答。')
     const request = parseInput(answerRequestSchema, input)
     cancelAnswerWork()
@@ -416,6 +447,7 @@ function registerHandlers(): void {
         : await references.retrieve(request.question, request.transcript, config, controller.signal)
       if (epoch !== answerEpoch || controller.signal.aborted) return
       emit({ kind: 'answer-context', requestId: request.requestId, interviewTarget: config.interviewTarget, retrieval, interviewEnvironment: config.interviewEnvironment })
+      interviewTimer.assertActive()
       pendingAnswerId = null
       activeAnswerId = request.requestId
       llm = new LlmClient(connection.settings, connection.apiKey, emit, connection.platform)
@@ -474,7 +506,7 @@ async function createWindow(): Promise<void> {
   })
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', event => event.preventDefault())
-  window.on('closed', () => { disposeWork(); window = null; compact = false; fullBounds = null })
+  window.on('closed', () => { interviewTimer.dispose(); disposeWork(); window = null; compact = false; fullBounds = null })
   window.once('ready-to-show', () => window?.show())
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) await window.loadURL(process.env.ELECTRON_RENDERER_URL)
   else await window.loadFile(join(directory, '../renderer/index.html'))
@@ -514,5 +546,5 @@ if (hasInstanceLock) app.whenReady().then(async () => {
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) void createWindow() })
 }).catch(error => { dialog.showErrorBox('启动失败', error instanceof Error ? error.message : '无法启动应用'); app.quit() })
 
-app.on('before-quit', () => { disposeWork(); accounts.dispose(); globalShortcut.unregisterAll() })
+app.on('before-quit', () => { interviewTimer.dispose(); disposeWork(); accounts.dispose(); globalShortcut.unregisterAll() })
 app.on('window-all-closed', () => app.quit())

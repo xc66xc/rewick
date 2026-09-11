@@ -61,7 +61,7 @@ class EmailAuthIntegrationTest {
 
     @BeforeEach void resetDatabase() {
         jdbc.execute("ALTER TABLE auth_tokens DROP CONSTRAINT IF EXISTS email_test_reject_token");
-        jdbc.execute("TRUNCATE email_verifications, auth_identities, auth_tokens, usage_daily, usage_events, audit_events, app_users RESTART IDENTITY CASCADE");
+        jdbc.execute("TRUNCATE email_verifications, auth_identities, auth_tokens, usage_events, audit_events, app_users RESTART IDENTITY CASCADE");
         mailbox.clear();
         reset(mail);
         doAnswer(invocation -> { mailbox.put(invocation.getArgument(0), invocation.getArgument(1)); return null; })

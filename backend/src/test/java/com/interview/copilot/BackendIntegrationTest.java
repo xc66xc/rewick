@@ -43,8 +43,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @Tag("integration")
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-        "copilot.auth.bootstrap-username=", "copilot.auth.bootstrap-password=",
-        "copilot.limits.daily-answers=2", "copilot.limits.daily-knowledge-queries=3"})
+        "copilot.auth.bootstrap-username=", "copilot.auth.bootstrap-password="})
 class BackendIntegrationTest {
     @Container
     static final PostgreSQLContainer<?> POSTGRES = new SqlInitializedPostgres();
@@ -59,15 +58,22 @@ class BackendIntegrationTest {
     @Autowired TestRestTemplate http;
     @Autowired UserMapper users;
     @Autowired UsageService usage;
+    @Autowired com.interview.copilot.wallet.WalletService wallets;
     @Autowired JdbcTemplate jdbc;
     @Autowired PasswordEncoder passwords;
     @Autowired PlatformTransactionManager transactionManager;
+    private void beginInterview(long userId) {
+        wallets.state(userId);
+        jdbc.update("UPDATE time_wallets SET available_seconds=3600 WHERE app_users_id=?", userId);
+        wallets.start(userId, java.util.UUID.randomUUID().toString());
+    }
+
     private long alice;
     private long bob;
 
     @BeforeEach
     void resetDatabase() {
-        jdbc.execute("TRUNCATE auth_tokens, usage_daily, usage_events, app_users RESTART IDENTITY CASCADE");
+        jdbc.execute("TRUNCATE auth_tokens, usage_events, app_users RESTART IDENTITY CASCADE");
         alice = createUser("alice");
         bob = createUser("bob");
     }
@@ -166,7 +172,9 @@ class BackendIntegrationTest {
     }
 
     @Test
-    void usage_concurrentStarts_cannotExceedDailyLimit() throws Exception {
+    void usage_concurrentStarts_recordsAllWithoutDailyQuota() throws Exception {
+        beginInterview(alice);
+        beginInterview(bob);
         CountDownLatch start = new CountDownLatch(1);
         List<Callable<Boolean>> tasks = new ArrayList<>();
         for (int index = 0; index < 12; index++) {
@@ -178,26 +186,28 @@ class BackendIntegrationTest {
             start.countDown();
             int successful = 0;
             for (var future : futures) if (future.get()) successful++;
-            assertThat(successful).isEqualTo(2);
+            assertThat(successful).isEqualTo(12);
         }
-        assertThat(jdbc.queryForObject("SELECT used_count FROM usage_daily WHERE app_users_id = ?", Integer.class, alice)).isEqualTo(2);
-        assertThat(jdbc.queryForObject("SELECT COUNT(id) FROM usage_events WHERE status = 'complete'", Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(id) FROM usage_events WHERE status = 'complete'", Integer.class)).isEqualTo(12);
     }
 
     @Test
     void usage_duplicateRequest_doesNotReserveTwiceAndOtherUserIsIndependent() {
+        beginInterview(alice);
+        beginInterview(bob);
         usage.start(alice, "same-request", "llm").complete();
 
         assertThatThrownBy(() -> usage.start(alice, "same-request", "llm"))
                 .isInstanceOf(ApiException.class).extracting("code").isEqualTo("duplicate_request");
         usage.start(bob, "same-request", "llm").fail();
 
-        assertThat(jdbc.queryForList("SELECT used_count FROM usage_daily ORDER BY app_users_id", Integer.class)).containsExactly(1, 1);
         assertThat(jdbc.queryForList("SELECT status FROM usage_events ORDER BY app_users_id", String.class)).containsExactly("complete", "failed");
     }
 
     @Test
     void usage_asrReservation_isPerUserAndCancellationReleasesIt() {
+        beginInterview(alice);
+        beginInterview(bob);
         UsageLease first = usage.start(alice, "asr-1", "asr");
         usage.start(bob, "asr-1", "asr").complete();
         assertThatThrownBy(() -> usage.start(alice, "asr-2", "asr"))
@@ -212,6 +222,8 @@ class BackendIntegrationTest {
 
     @Test
     void usage_expiredReservation_doesNotPermanentlyLockAccount() {
+        beginInterview(alice);
+        beginInterview(bob);
         usage.start(alice, "old-asr", "asr");
         jdbc.update("UPDATE usage_events SET expires_at = CURRENT_TIMESTAMP - INTERVAL '1 second'");
 
@@ -286,6 +298,7 @@ class BackendIntegrationTest {
             withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "07_email_code_purpose.sql")), "/tmp/07_email_code_purpose.sql");
             withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "08_server_local_time.sql")), "/tmp/08_server_local_time.sql");
             withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "09_pg_references.sql")), "/tmp/09_pg_references.sql");
+            withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "10_time_wallet.sql")), "/tmp/10_time_wallet.sql");
         }
 
         @Override
@@ -299,7 +312,7 @@ class BackendIntegrationTest {
                 var result = execInContainer("psql", "-X", "-v", "ON_ERROR_STOP=1", "--single-transaction",
                         "--username", getUsername(), "--dbname", getDatabaseName(),
                         "-f", "/tmp/01_schema.sql", "-f", "/tmp/02_pgvector.sql",
-                        "-f", "/tmp/03_admin_users.sql", "-f", "/tmp/04_platform_config.sql", "-f", "/tmp/05_email_auth.sql", "-f", "/tmp/06_display_name.sql", "-f", "/tmp/07_email_code_purpose.sql", "-f", "/tmp/08_server_local_time.sql", "-f", "/tmp/09_pg_references.sql");
+                        "-f", "/tmp/03_admin_users.sql", "-f", "/tmp/04_platform_config.sql", "-f", "/tmp/05_email_auth.sql", "-f", "/tmp/06_display_name.sql", "-f", "/tmp/07_email_code_purpose.sql", "-f", "/tmp/08_server_local_time.sql", "-f", "/tmp/09_pg_references.sql", "-f", "/tmp/10_time_wallet.sql");
                 if (result.getExitCode() != 0) {
                     throw new IllegalStateException("Database SQL initialization failed: " + result.getStderr());
                 }

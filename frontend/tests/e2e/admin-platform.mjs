@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { expect } from '@playwright/test'
 
 /** Runs only against the isolated SQL database and loopback providers owned by smoke-platform. */
-export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mock, knowledge, answer, until, check, noSecrets }) {
+export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mock, knowledge, answer, begin, until, check, noSecrets }) {
   async function request(path, method = 'GET', body, token = adminToken) {
     return fetch(`${baseUrl}/api/v1/${path}`, { method,
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -12,6 +12,16 @@ export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mo
   const login = await request('auth/login', 'POST', { identifier: 'admin-test', password })
   assert.equal(login.status, 200)
   adminToken = (await login.json()).accessToken
+  const administrator = await (await request('admin/me')).json()
+  const adminWallet = await (await request(`admin/users/${administrator.id}/wallet`)).json()
+  assert.equal((await request(`admin/users/${administrator.id}/wallet/adjust`, 'POST', {
+    requestId: crypto.randomUUID(), operation: 'add', seconds: 3600, expectedVersion: adminWallet.version, reason: 'isolated admin provider verification',
+  })).status, 200)
+  const start = await request('interview-sessions/start', 'POST', { requestId: crypto.randomUUID() })
+  assert.equal(start.status, 200)
+  const adminSession = (await start.json()).session.id
+  const heartbeat = setInterval(() => void request(`interview-sessions/${adminSession}/heartbeat`, 'POST', {}).catch(() => undefined), 10000)
+  try {
   let config = await (await request('admin/config')).json()
 
   await check('admin APIs require administrator authority and configuration never returns a supplier secret', async () => {
@@ -94,7 +104,7 @@ export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mo
     assert.equal(mock.requests.at(-1).body.model, 'mock-second')
     assert.equal(mock.requests.at(-1).authorization, `Bearer ${keys.llm}`)
     assert.equal(events.find(event => event.kind === 'answer-request').modelInput.model, 'answer-careful')
-    await expect(page.getByText('深度回答', { exact: true })).toBeVisible()
+    assert.equal((await page.evaluate(() => window.copilot.getSettings())).serviceSelections.llm.id, 'answer-careful')
   })
 
   await check('publishing during a streamed answer preserves the running request snapshot', async () => {
@@ -122,6 +132,7 @@ export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mo
   })
 
   await check('active ASR survives publication while the next ASR session uses the new model', async () => {
+    await begin()
     const { sessionId } = await page.evaluate(() => window.copilot.startAsr())
     await until(() => mock.asrConnections.at(-1)?.commands.some(command => command.header.action === 'run-task'), 'ASR did not start')
     const active = mock.asrConnections.at(-1)
@@ -166,23 +177,25 @@ export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mo
     assert.equal(mock.requests.at(-1).body.model, 'mock-fast')
   })
 
-  await check('user creation, quota edits, password reset and disabling take effect through server authorization', async () => {
-    const created = await request('admin/users', 'POST', { identifier: 'managed-test', password, dailyAnswers: 0, dailyKnowledgeQueries: 2 })
+  await check('user creation, time adjustments, password reset and disabling take effect through server authorization', async () => {
+    const created = await request('admin/users', 'POST', { identifier: 'managed-test', password, availableSeconds: 0 })
     assert.equal(created.status, 201)
     const user = await created.json()
     assert.equal(user.role, 'USER')
     const loginUser = await request('auth/login', 'POST', { identifier: 'managed-test', password })
     const token = (await loginUser.json()).accessToken
-    const completion = { model: 'answer-fast', messages: [{ role: 'user', content: 'zero quota' }], stream: false }
-    assert.equal((await request('llm/chat/completions', 'POST', completion, token)).status, 429)
-    const edited = await request(`admin/users/${user.id}`, 'PUT', { enabled: true, dailyAnswers: 2, dailyKnowledgeQueries: 2 })
+    const completion = { model: 'answer-fast', messages: [{ role: 'user', content: 'metered answer' }], stream: false }
+    const noTime = await request('interview-sessions/start', 'POST', { requestId: crypto.randomUUID() }, token)
+    assert.equal(noTime.ok, false)
+    const edited = await request(`admin/users/${user.id}/wallet/adjust`, 'POST', { requestId: crypto.randomUUID(), operation: 'add', seconds: 120, expectedVersion: user.walletVersion, reason: 'isolated smoke test' })
     assert.equal(edited.status, 200)
+    assert.equal((await request('interview-sessions/start', 'POST', { requestId: crypto.randomUUID() }, token)).status, 200)
     assert.equal((await request('llm/chat/completions', 'POST', completion, token)).status, 200)
     assert.equal((await request(`admin/users/${user.id}/password`, 'POST', { password: `${password.slice(0, 30)}changed` })).status, 204)
     assert.equal((await request('platform', 'GET', undefined, token)).status, 401)
     const newLogin = await request('auth/login', 'POST', { identifier: 'managed-test', password: `${password.slice(0, 30)}changed` })
     const newToken = (await newLogin.json()).accessToken
-    assert.equal((await request(`admin/users/${user.id}`, 'PUT', { enabled: false, dailyAnswers: 2, dailyKnowledgeQueries: 2 })).status, 200)
+    assert.equal((await request(`admin/users/${user.id}`, 'PUT', { enabled: false })).status, 200)
     assert.equal((await request('platform', 'GET', undefined, newToken)).status, 401)
   })
 
@@ -197,4 +210,23 @@ export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mo
     assert.equal(serialized.includes(password), false)
     assert.equal(serialized.includes('选择平台列表中的深度回答模型'), false)
   })
+  await check('ending the interview cancels an already streaming server answer', async () => {
+    await publish({ ...config, models: config.models.map(model => model.id === 'answer-held' ? { ...model, model: 'mock-held' } : model) })
+    const response = await request('llm/chat/completions', 'POST', {
+      model: 'answer-held', messages: [{ role: 'user', content: 'cancel on interview end' }], stream: true,
+    })
+    assert.equal(response.status, 200)
+    const reader = response.body.getReader()
+    assert.equal((await reader.read()).done, false)
+    const index = mock.requests.length - 1
+    await until(() => mock.isStreamHeld(index), 'Stream did not wait')
+    assert.equal((await request(`interview-sessions/${adminSession}/end`, 'POST', {})).status, 200)
+    await until(() => mock.requests[index].cancelled, 'End interview did not close upstream answer', 5000)
+    await reader.cancel()
+  })
+  } finally {
+    clearInterval(heartbeat)
+    await request(`interview-sessions/${adminSession}/end`, 'POST', {}).catch(() => undefined)
+    await request('auth/logout', 'POST', {}).catch(() => undefined)
+  }
 }

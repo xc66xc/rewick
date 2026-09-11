@@ -45,13 +45,13 @@ public class AdminUserController {
     public ResponseEntity<UserView> create(@AuthenticationPrincipal UserPrincipal actor,
             @Valid @RequestBody CreateUser body) {
         return ResponseEntity.status(HttpStatus.CREATED).body(users.create(actor.id(), body.identifier(), body.password(),
-                body.dailyAnswers(), body.dailyKnowledgeQueries()));
+                body.availableSeconds()));
     }
 
     @PutMapping("/users/{id}")
     public UserView update(@AuthenticationPrincipal UserPrincipal actor, @PathVariable String id,
             @Valid @RequestBody UpdateUser body) {
-        return users.update(actor.id(), AdminInput.id(id), body.enabled(), body.dailyAnswers(), body.dailyKnowledgeQueries());
+        return users.update(actor.id(), AdminInput.id(id), body.enabled());
     }
 
     @PostMapping("/users/{id}/password")
@@ -70,14 +70,11 @@ public class AdminUserController {
     public record CreateUser(
             @NotBlank @Pattern(regexp = "[A-Za-z0-9_.@-]{3,64}") String identifier,
             @NotBlank @Size(max = 72) String password,
-            @NotNull @Min(0) @Max(1000000) Integer dailyAnswers,
-            @NotNull @Min(0) @Max(1000000) Integer dailyKnowledgeQueries) {
+            @NotNull @Min(0) @Max(315360000) Long availableSeconds) {
         @Override public String toString() { return "CreateUser[password=redacted]"; }
     }
 
-    public record UpdateUser(@NotNull Boolean enabled,
-            @NotNull @Min(0) @Max(1000000) Integer dailyAnswers,
-            @NotNull @Min(0) @Max(1000000) Integer dailyKnowledgeQueries) {}
+    public record UpdateUser(@NotNull Boolean enabled) {}
 
     public record ResetPassword(@NotBlank @Size(max = 72) String password) {
         @Override public String toString() { return "ResetPassword[password=redacted]"; }

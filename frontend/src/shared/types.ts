@@ -11,7 +11,7 @@ export interface PlatformInfo {
   capabilities: { llm: boolean; asr: boolean; knowledge: boolean }
   models: { llm: string; asr: string; available?: { id: string; name: string }[] }
   services?: PlatformServices
-  limits: { dailyAnswers: number; dailyKnowledgeQueries: number; maxAsrSessionSeconds: number }
+  limits: { maxAsrSessionSeconds: number }
 }
 export interface PlatformSettings {
   enabled: boolean
@@ -133,7 +133,14 @@ export interface SessionRecord {
 }
 export interface AnswerRequest { requestId: string; question: string; transcript: string; environmentId?: string }
 export type AsrStatus = 'connecting' | 'listening' | 'stopping' | 'idle' | 'error'
+export interface WalletState {
+  availableSeconds: number
+  version: number
+  serverTime: string
+  session: { id: string; status: 'active' | 'ended'; startedAt: string; expiresAt: string; endedAt: string | null; usedSeconds: number; endReason: string | null } | null
+}
 export type AppEvent =
+  | { kind: 'wallet-changed'; wallet: WalletState }
   | { kind: 'asr-status'; sessionId: string; status: AsrStatus; message?: string }
   | { kind: 'transcript'; sessionId: string; segment: TranscriptSegment }
   | { kind: 'documents-changed' }
@@ -148,6 +155,9 @@ export type AppEvent =
   | { kind: 'shortcut'; action: 'answer' }
 export interface DesktopBridge {
   withAccountScope?(scope: string): DesktopBridge
+  getWallet(): Promise<WalletState>
+  startInterview(requestId: string): Promise<WalletState>
+  endInterview(): Promise<WalletState | null>
   getCaptureError(): Promise<string | null>
   getSettings(): Promise<Settings>
   platformLogin(input: { identifier: string; password: string }): Promise<Settings>

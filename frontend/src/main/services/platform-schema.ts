@@ -8,7 +8,7 @@ export const platformInfoSchema = z.object({
   models: z.object({ llm: z.string().max(200), asr: z.string().max(200),
     available: z.array(z.object({ id: z.string().trim().min(1).max(200), name: z.string().trim().min(1).max(200) })).max(100).optional(),
   }),
-  limits: z.object({ dailyAnswers: z.number().int().nonnegative(), dailyKnowledgeQueries: z.number().int().nonnegative(), maxAsrSessionSeconds: z.number().int().nonnegative() }),
+  limits: z.object({ maxAsrSessionSeconds: z.number().int().nonnegative() }),
 }).superRefine((value, context) => {
   const available = value.models.available
   if (available && new Set(available.map(model => model.id)).size !== available.length) {

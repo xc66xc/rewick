@@ -45,12 +45,19 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         "copilot.auth.bootstrap-username=", "copilot.auth.bootstrap-password=",
         "copilot.auth.admin.bootstrap-username=", "copilot.auth.admin.bootstrap-password=", "copilot.auth.login-burst=1000"})
 class AdminIntegrationTest {
+    private void beginInterview(long userId) {
+        wallets.state(userId);
+        jdbc.update("UPDATE time_wallets SET available_seconds=3600 WHERE app_users_id=?", userId);
+        wallets.start(userId, java.util.UUID.randomUUID().toString());
+    }
+
     private static final String PASSWORD = "test-only-password-2026";
     @Container static final PostgreSQLContainer<?> POSTGRES = new AdminPostgres();
     @Autowired TestRestTemplate http;
     @Autowired JdbcTemplate jdbc;
     @Autowired PasswordEncoder passwords;
     @Autowired UsageService usage;
+    @Autowired com.interview.copilot.wallet.WalletService wallets;
     private long administrator;
     private long member;
     private String adminToken;
@@ -64,7 +71,7 @@ class AdminIntegrationTest {
 
     @BeforeEach
     void reset() {
-        jdbc.execute("TRUNCATE auth_tokens, usage_daily, usage_events, audit_events, app_users RESTART IDENTITY CASCADE");
+        jdbc.execute("TRUNCATE auth_tokens, usage_events, audit_events, app_users RESTART IDENTITY CASCADE");
         administrator = account("administrator", "ADMIN");
         member = account("member", "USER");
         adminToken = login("administrator", PASSWORD);
@@ -94,7 +101,7 @@ class AdminIntegrationTest {
         var created = call(HttpMethod.POST, "/api/v1/admin/users", adminToken, createBody("new_member"));
         assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(created.getBody().path("role").asText()).isEqualTo("USER");
-        assertThat(created.getBody().path("dailyAnswers").asInt()).isZero();
+        assertThat(created.getBody().path("availableSeconds").asInt()).isZero();
         assertThat(created.getBody().path("id").isTextual()).isTrue();
         JsonNode page = call(HttpMethod.GET, "/api/v1/admin/users?query=new_mem&page=1&size=1", adminToken, null).getBody();
         assertThat(page.path("total").asInt()).isEqualTo(1);
@@ -118,7 +125,7 @@ class AdminIntegrationTest {
     @Test
     void users_duplicateAndInvalidInputs_returnSafeErrorsWithoutCreation() {
         assertThat(call(HttpMethod.POST, "/api/v1/admin/users", adminToken, createBody("member")).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        var invalid = Map.of("identifier", "unicode", "password", "汉".repeat(25), "dailyAnswers", 1, "dailyKnowledgeQueries", 1);
+        var invalid = Map.of("identifier", "unicode", "password", "汉".repeat(25), "availableSeconds", 1);
         assertThat(call(HttpMethod.POST, "/api/v1/admin/users", adminToken, invalid).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(call(HttpMethod.GET, "/api/v1/admin/users?page=0", adminToken, null).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(call(HttpMethod.PUT, "/api/v1/admin/users/9223372036854775808", adminToken, updateBody(true, 1)).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
@@ -174,36 +181,9 @@ class AdminIntegrationTest {
     }
 
     @Test
-    void limits_zeroAndUpdatedOverrides_takeEffectForPlatformAndNextRequest() {
-        String memberToken = login("member", PASSWORD);
-        call(HttpMethod.PUT, userPath(member), adminToken, updateBody(true, 0));
-        assertThat(call(HttpMethod.GET, "/api/v1/platform", memberToken, null).getBody().at("/limits/dailyAnswers").asInt()).isZero();
-        assertThatThrownBy(() -> usage.start(member, "denied", "llm")).isInstanceOf(ApiException.class).extracting("code").isEqualTo("quota_exceeded");
-        call(HttpMethod.PUT, userPath(member), adminToken, updateBody(true, 1));
-        usage.start(member, "accepted", "llm").complete();
-        assertThatThrownBy(() -> usage.start(member, "denied-again", "llm")).isInstanceOf(ApiException.class);
-    }
-
-    @Test
-    void limits_concurrentRequests_cannotExceedUserOverride() throws Exception {
-        call(HttpMethod.PUT, userPath(member), adminToken, updateBody(true, 2));
-        CountDownLatch start = new CountDownLatch(1);
-        List<Callable<Boolean>> calls = new ArrayList<>();
-        for (int index = 0; index < 12; index++) {
-            String request = "parallel-" + index;
-            calls.add(() -> { start.await(); return reserve(request); });
-        }
-        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            var futures = calls.stream().map(executor::submit).toList();
-            start.countDown();
-            int accepted = 0;
-            for (var future : futures) if (future.get()) accepted++;
-            assertThat(accepted).isEqualTo(2);
-        }
-    }
-
-    @Test
     void usage_filtersAndModelUpdates_areScopedToUserAndContainNoContent() {
+        beginInterview(member);
+        beginInterview(administrator);
         var lease = usage.start(member, "record", "llm");
         usage.describeModel(administrator, "record", "llm", "wrong-owner");
         usage.describeModel(member, "record", "llm", "provider-model");
@@ -236,11 +216,6 @@ class AdminIntegrationTest {
         }
     }
 
-    private boolean reserve(String request) {
-        try (var lease = usage.start(member, request, "llm")) { lease.complete(); return true; }
-        catch (ApiException error) { assertThat(error.code()).isEqualTo("quota_exceeded"); return false; }
-    }
-
     private long account(String displayName, String role) {
         long id = jdbc.queryForObject("INSERT INTO app_users(display_name, password_hash, role) VALUES(?, ?, ?) RETURNING id",
                 Long.class, displayName, passwords.encode(PASSWORD), role);
@@ -261,8 +236,8 @@ class AdminIntegrationTest {
     }
 
     private String userPath(long id) { return "/api/v1/admin/users/" + id; }
-    private Map<String, Object> createBody(String displayName) { return Map.of("identifier", displayName, "password", PASSWORD, "dailyAnswers", 0, "dailyKnowledgeQueries", 3); }
-    private Map<String, Object> updateBody(boolean enabled, int answers) { return Map.of("enabled", enabled, "dailyAnswers", answers, "dailyKnowledgeQueries", 3); }
+    private Map<String, Object> createBody(String displayName) { return Map.of("identifier", displayName, "password", PASSWORD, "availableSeconds", 0); }
+    private Map<String, Object> updateBody(boolean enabled, int answers) { return Map.of("enabled", enabled); }
 
     @TestConfiguration
     static class FastPasswords {
@@ -272,7 +247,7 @@ class AdminIntegrationTest {
     private static final class AdminPostgres extends PostgreSQLContainer<AdminPostgres> {
         private AdminPostgres() {
             super(DockerImageName.parse("interview-copilot-postgres:15.19-pgvector0.8.6").asCompatibleSubstituteFor("postgres"));
-            for (String name : List.of("01_schema.sql", "02_pgvector.sql", "03_admin_users.sql", "04_platform_config.sql", "05_email_auth.sql", "06_display_name.sql", "07_email_code_purpose.sql", "08_server_local_time.sql", "09_pg_references.sql")) {
+            for (String name : List.of("01_schema.sql", "02_pgvector.sql", "03_admin_users.sql", "04_platform_config.sql", "05_email_auth.sql", "06_display_name.sql", "07_email_code_purpose.sql", "08_server_local_time.sql", "09_pg_references.sql", "10_time_wallet.sql")) {
                 withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", name)), "/tmp/" + name);
             }
         }
@@ -282,7 +257,7 @@ class AdminIntegrationTest {
             super.containerIsStarted(info);
             try {
                 var result = execInContainer("psql", "-X", "-v", "ON_ERROR_STOP=1", "--single-transaction", "-U", getUsername(), "-d", getDatabaseName(),
-                        "-f", "/tmp/01_schema.sql", "-f", "/tmp/02_pgvector.sql", "-f", "/tmp/03_admin_users.sql", "-f", "/tmp/04_platform_config.sql", "-f", "/tmp/05_email_auth.sql", "-f", "/tmp/06_display_name.sql", "-f", "/tmp/07_email_code_purpose.sql", "-f", "/tmp/08_server_local_time.sql", "-f", "/tmp/09_pg_references.sql");
+                        "-f", "/tmp/01_schema.sql", "-f", "/tmp/02_pgvector.sql", "-f", "/tmp/03_admin_users.sql", "-f", "/tmp/04_platform_config.sql", "-f", "/tmp/05_email_auth.sql", "-f", "/tmp/06_display_name.sql", "-f", "/tmp/07_email_code_purpose.sql", "-f", "/tmp/08_server_local_time.sql", "-f", "/tmp/09_pg_references.sql", "-f", "/tmp/10_time_wallet.sql");
                 if (result.getExitCode() != 0) throw new IllegalStateException("Admin test SQL initialization failed");
             } catch (IOException error) {
                 throw new IllegalStateException("Admin test SQL execution failed", error);
