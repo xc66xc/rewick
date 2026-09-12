@@ -10,4 +10,5 @@ public record PaymentResultDTO(
         String state,
         String currency,
         int totalCents,
-        Instant paidAt) {}
+        Instant paidAt,
+        String paymentMethod) {}

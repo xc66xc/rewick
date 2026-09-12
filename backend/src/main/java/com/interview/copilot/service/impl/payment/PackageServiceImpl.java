@@ -8,7 +8,7 @@ import com.interview.copilot.response.payment.PackageCatalogResponse;
 import com.interview.copilot.response.payment.TimePackageResponse;
 import com.interview.copilot.service.audit.AuditService;
 import com.interview.copilot.service.payment.PackageService;
-import com.interview.copilot.service.payment.PaymentConfigService;
+import com.interview.copilot.service.payment.PaymentProviderService;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,19 +18,22 @@ import java.util.List;
 @Service
 public class PackageServiceImpl implements PackageService {
     private final TimePackageMapper mapper;
-    private final PaymentConfigService configs;
+    private final PaymentProviderService configs;
     private final AuditService audit;
 
     public PackageServiceImpl(
-            TimePackageMapper mapper, PaymentConfigService configs, AuditService audit) {
+            TimePackageMapper mapper, PaymentProviderService configs, AuditService audit) {
         this.mapper = mapper;
         this.configs = configs;
         this.audit = audit;
     }
 
     public PackageCatalogResponse catalog() {
+        var methods = configs.availableMethods();
         return new PackageCatalogResponse(
-                configs.available(), list().stream().filter(TimePackageResponse::enabled).toList());
+                !methods.isEmpty(),
+                list().stream().filter(TimePackageResponse::enabled).toList(),
+                methods);
     }
 
     public List<TimePackageResponse> list() {

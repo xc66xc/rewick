@@ -14,17 +14,24 @@ public interface PaymentConfigMapper {
             "id,is_enabled AS"
                 + " enabled,mch_id,app_id,merchant_serial,wechat_public_key_id,notify_url,merchant_private_key,api_v3_key,wechat_public_key";
 
-    @Select("SELECT " + COLUMNS + " FROM payment_config_versions ORDER BY id DESC LIMIT 1")
+    @Select(
+            "SELECT "
+                    + COLUMNS
+                    + " FROM payment_config_versions WHERE payment_method='wechat' ORDER BY id DESC"
+                    + " LIMIT 1")
     PaymentConfigEntity latest();
 
-    @Select("SELECT " + COLUMNS + " FROM payment_config_versions WHERE id=#{id}")
+    @Select(
+            "SELECT "
+                    + COLUMNS
+                    + " FROM payment_config_versions WHERE id=#{id} AND payment_method='wechat'")
     PaymentConfigEntity find(long id);
 
     @Select(
             "SELECT "
                     + COLUMNS
-                    + " FROM payment_config_versions WHERE wechat_public_key_id=#{serial} ORDER BY"
-                    + " id DESC")
+                    + " FROM payment_config_versions WHERE payment_method='wechat' AND"
+                    + " wechat_public_key_id=#{serial} ORDER BY id DESC")
     List<PaymentConfigEntity> bySerial(String serial);
 
     @Select("SELECT 1 FROM pg_advisory_xact_lock(724661991)")

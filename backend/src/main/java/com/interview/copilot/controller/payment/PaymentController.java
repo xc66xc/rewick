@@ -44,7 +44,11 @@ public class PaymentController {
             @AuthenticationPrincipal UserPrincipal user,
             @Valid @RequestBody CreatePaymentOrderRequest p) {
         return orders.create(
-                user.id(), p.packageId(), p.packageVersion(), p.requestId().toString());
+                user.id(),
+                p.packageId(),
+                p.packageVersion(),
+                p.requestId().toString(),
+                p.paymentMethod());
     }
 
     @GetMapping("/payment-orders")

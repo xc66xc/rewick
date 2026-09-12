@@ -34,8 +34,13 @@ public class PaymentOrderServiceImpl implements PaymentOrderService {
     }
 
     public PaymentOrderResponse create(
-            long userId, long packageId, long packageVersion, String requestId) {
-        var order = reservations.reserve(userId, packageId, packageVersion, requestId);
+            long userId,
+            long packageId,
+            long packageVersion,
+            String requestId,
+            String paymentMethod) {
+        var order =
+                reservations.reserve(userId, packageId, packageVersion, requestId, paymentMethod);
         return refresh(userId, order.id());
     }
 

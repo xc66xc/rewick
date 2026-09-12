@@ -16,4 +16,5 @@ public record PaymentOrderResponse(
         Instant expiresAt,
         Instant paidAt,
         int refundedCents,
-        long deductedSeconds) {}
+        long deductedSeconds,
+        String paymentMethod) {}

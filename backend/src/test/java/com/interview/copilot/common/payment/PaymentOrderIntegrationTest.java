@@ -81,7 +81,7 @@ class PaymentOrderIntegrationTest extends PaymentGatewayFixture {
             PaymentConfigDTO config = call.getArgument(0);
             PaymentOrderDTO payment = call.getArgument(1);
             return new PaymentResultDTO(payment.id(), config.mchId(), config.appId(), "invalid-amount",
-                    "SUCCESS", "CNY", 1, Instant.now());
+                    "SUCCESS", "CNY", 1, Instant.now(), "wechat");
         }).when(gateway).query(any(), any());
 
         var result = call(HttpMethod.POST, "/payment-orders/" + order.path("id").asText() + "/refresh", aliceToken, null);

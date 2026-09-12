@@ -17,6 +17,8 @@ import com.interview.copilot.entity.payment.PaymentOrderEntity;
 import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.mapper.payment.PaymentOrderMapper;
 import com.interview.copilot.service.payment.PaymentConfigService;
+import com.interview.copilot.service.payment.AlipayConfigService;
+import com.interview.copilot.service.payment.AlipayPaymentService;
 import com.interview.copilot.service.payment.PaymentFulfillmentService;
 import com.interview.copilot.service.payment.WechatPaymentService;
 import com.interview.copilot.util.ServerTime;
@@ -35,7 +37,7 @@ class PaymentSyncServiceTest {
     private final WechatPaymentService wechat = mock(WechatPaymentService.class);
     private final PaymentFulfillmentService fulfillment = mock(PaymentFulfillmentService.class);
     private final PaymentSyncServiceImpl service =
-            new PaymentSyncServiceImpl(orders, configs, wechat, fulfillment, clock);
+            new PaymentSyncServiceImpl(orders, new PaymentProviderServiceImpl(configs, mock(AlipayConfigService.class), wechat, mock(AlipayPaymentService.class)), fulfillment, clock);
     private final PaymentConfigDTO config =
             new PaymentConfigDTO(
                     1,
@@ -66,7 +68,7 @@ class PaymentSyncServiceTest {
         when(wechat.query(eq(config), any()))
                 .thenReturn(
                         new PaymentResultDTO(
-                                "order", "wrong", "app", null, "CLOSED", null, 0, null));
+                                "order", "wrong", "app", null, "CLOSED", null, 0, null, "wechat"));
 
         assertThatThrownBy(() -> service.sync("order")).isInstanceOf(ApiException.class);
 
@@ -146,7 +148,7 @@ class PaymentSyncServiceTest {
                         expired ? now.minusSeconds(1) : now.plusMinutes(10),
                         null,
                         0,
-                        0);
+                        0, "wechat");
         when(orders.claimQuery(eq("order"), any(), any())).thenReturn(1);
         when(orders.find("order")).thenReturn(order);
         when(configs.forOrder(1)).thenReturn(config);
@@ -154,6 +156,6 @@ class PaymentSyncServiceTest {
 
     private PaymentResultDTO result(String orderId, String state) {
         return new PaymentResultDTO(
-                orderId, "merchant", "app", "transaction", state, "CNY", 100, clock.instant());
+                orderId, "merchant", "app", "transaction", state, "CNY", 100, clock.instant(), "wechat");
     }
 }

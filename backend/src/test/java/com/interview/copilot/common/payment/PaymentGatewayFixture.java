@@ -33,7 +33,7 @@ abstract class PaymentGatewayFixture extends PaymentHttpFixture {
 
     PaymentResultDTO result(PaymentConfigDTO config, PaymentOrderDTO order, String state) {
         return new PaymentResultDTO(order.id(), config.mchId(), config.appId(),
-                "fixture-" + order.id(), state, "CNY", order.totalCents(), Instant.now());
+                "fixture-" + order.id(), state, "CNY", order.totalCents(), Instant.now(), "wechat");
     }
 
     void paid() {

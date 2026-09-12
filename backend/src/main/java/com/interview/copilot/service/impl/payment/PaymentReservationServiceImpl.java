@@ -7,7 +7,7 @@ import com.interview.copilot.mapper.payment.PaymentOrderMapper;
 import com.interview.copilot.mapper.payment.TimePackageMapper;
 import com.interview.copilot.mapper.wallet.WalletMapper;
 import com.interview.copilot.response.payment.PaymentOrderResponse;
-import com.interview.copilot.service.payment.PaymentConfigService;
+import com.interview.copilot.service.payment.PaymentProviderService;
 import com.interview.copilot.service.payment.PaymentReservationService;
 import com.interview.copilot.util.ServerTime;
 
@@ -22,14 +22,14 @@ public class PaymentReservationServiceImpl implements PaymentReservationService 
     private final PaymentOrderMapper orders;
     private final TimePackageMapper packages;
     private final WalletMapper wallets;
-    private final PaymentConfigService configs;
+    private final PaymentProviderService configs;
     private final Clock clock;
 
     public PaymentReservationServiceImpl(
             PaymentOrderMapper orders,
             TimePackageMapper packages,
             WalletMapper wallets,
-            PaymentConfigService configs,
+            PaymentProviderService configs,
             Clock clock) {
         this.orders = orders;
         this.packages = packages;
@@ -40,17 +40,22 @@ public class PaymentReservationServiceImpl implements PaymentReservationService 
 
     @Transactional
     public PaymentOrderResponse reserve(
-            long userId, long packageId, long packageVersion, String requestId) {
+            long userId,
+            long packageId,
+            long packageVersion,
+            String requestId,
+            String paymentMethod) {
         if (wallets.lockUser(userId) == null || !wallets.enabled(userId))
             throw PaymentErrors.missing();
         var previous = orders.byRequest(userId, requestId);
         if (previous != null) {
-            if (previous.packageId() != packageId || previous.packageVersion() != packageVersion)
+            if (previous.packageId() != packageId
+                    || previous.packageVersion() != packageVersion
+                    || !previous.paymentMethod().equals(paymentMethod))
                 throw PaymentErrors.conflict("PAYMENT_REQUEST_REUSED", "请求标识已用于其他套餐");
             return PaymentConverter.orderResponse(previous, true);
         }
-        var config = configs.read();
-        if (!config.enabled() || !config.configured()) throw PaymentErrors.unavailable();
+        long configVersion = configs.activeVersion(paymentMethod);
         var p = packages.lock(packageId);
         if (p == null || !p.enabled()) throw PaymentErrors.missing();
         if (p.version() != packageVersion)
@@ -68,7 +73,7 @@ public class PaymentReservationServiceImpl implements PaymentReservationService 
                         p.name(),
                         p.durationSeconds(),
                         p.priceCents(),
-                        config.version(),
+                        configVersion,
                         "creating",
                         false,
                         null,
@@ -77,7 +82,8 @@ public class PaymentReservationServiceImpl implements PaymentReservationService 
                         now.plusMinutes(15),
                         null,
                         0,
-                        0);
+                        0,
+                        paymentMethod);
         orders.create(order, requestId);
         return PaymentConverter.orderResponse(orders.find(id), true);
     }

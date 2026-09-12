@@ -21,4 +21,5 @@ public record PaymentOrderEntity(
         LocalDateTime expiresAt,
         LocalDateTime paidAt,
         int refundedCents,
-        long deductedSeconds) {}
+        long deductedSeconds,
+        String paymentMethod) {}

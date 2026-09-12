@@ -34,7 +34,7 @@ class PaymentCallbackIntegrationTest extends PaymentGatewayFixture {
         var order = pendingOrder();
         when(gateway.notification(any(), any(), any())).thenReturn(new PaymentResultDTO(
                 order.path("id").asText(), "1900000001", "wx1234567890123456", "wx-transaction-fixture",
-                "SUCCESS", "CNY", 1599, Instant.now()));
+                "SUCCESS", "CNY", 1599, Instant.now(), "wechat"));
         var start = new CountDownLatch(1);
         try (var workers = Executors.newVirtualThreadPerTaskExecutor()) {
             var tasks = List.of(1, 2, 3).stream().map(index -> workers.submit(() -> {
@@ -62,7 +62,7 @@ class PaymentCallbackIntegrationTest extends PaymentGatewayFixture {
         var order = pendingOrder();
         when(gateway.notification(any(), any(), any())).thenReturn(new PaymentResultDTO(
                 order.path("id").asText(), "wrong-merchant", "wx1234567890123456", "wx-wrong-fixture",
-                "SUCCESS", "CNY", 1599, Instant.now()));
+                "SUCCESS", "CNY", 1599, Instant.now(), "wechat"));
 
         assertThat(callback(Instant.now().getEpochSecond()).getStatusCode().isError()).isTrue();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM time_wallet_transactions", Long.class)).isZero();

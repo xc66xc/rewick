@@ -20,28 +20,30 @@ const packages = [
 ]
 const orders = []
 let available = false
-let credited = false
+const paidOrders = new Set()
 const calls = []
 const server = http.createServer(async (request, response) => {
   const reply = value => { response.writeHead(200, { 'Content-Type': 'application/json' }); response.end(JSON.stringify(value)) }
   calls.push({ method: request.method, path: request.url })
-  if (request.url === '/api/v1/wallet') return reply({ availableSeconds: credited ? 7200 : 3600, version: credited ? 1 : 0, serverTime: new Date().toISOString(), session: null })
-  if (request.url === '/api/v1/packages') return reply({ paymentAvailable: available, packages })
+  if (request.url === '/api/v1/wallet') return reply({ availableSeconds: 3600 + orders.filter(order => order.credited).reduce((sum, order) => sum + order.durationSeconds, 0), version: paidOrders.size, serverTime: new Date().toISOString(), session: null })
+  if (request.url === '/api/v1/packages') return reply({ paymentAvailable: available, paymentMethods: available ? ['wechat', 'alipay'] : [], packages })
   if (request.url === '/api/v1/payment-orders' && request.method === 'GET') return reply(orders)
   if (request.url === '/api/v1/payment-orders' && request.method === 'POST') {
     let raw = ''; for await (const chunk of request) raw += chunk
     const input = JSON.parse(raw)
-    assert.deepEqual(Object.keys(input).sort(), ['packageId', 'packageVersion', 'requestId'])
+    assert.deepEqual(Object.keys(input).sort(), ['packageId', 'packageVersion', 'paymentMethod', 'requestId'])
     const item = packages.find(item => item.id === input.packageId)
-    const order = { id: 'isolated-test-order', userId: 1, displayName: 'smoke-user', packageName: item.name,
+    assert.ok(['wechat', 'alipay'].includes(input.paymentMethod))
+    const order = { id: `isolated-${input.paymentMethod}-order`, paymentMethod: input.paymentMethod, userId: 1, displayName: 'smoke-user', packageName: item.name,
       durationSeconds: item.durationSeconds, totalCents: item.priceCents, status: 'pending', credited: false,
-      codeUrl: 'weixin://wxpay/bizpayurl?pr=isolated-test-do-not-pay', createdAt: new Date().toISOString(),
+      codeUrl: input.paymentMethod === 'wechat' ? 'weixin://wxpay/bizpayurl?pr=isolated-test-do-not-pay' : 'https://qr.alipay.com/isolated-test-do-not-pay', createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 900000).toISOString(), paidAt: null, refundedCents: 0, deductedSeconds: 0 }
     orders.push(order); return reply(order)
   }
-  if (request.url === '/api/v1/payment-orders/isolated-test-order/refresh') {
-    if (credited) Object.assign(orders[0], { credited: true, status: 'paid', paidAt: new Date().toISOString() })
-    return reply(orders[0])
+  if (/^\/api\/v1\/payment-orders\/isolated-(wechat|alipay)-order\/refresh$/.test(request.url)) {
+    const order = orders.find(order => request.url.includes(order.id))
+    if (paidOrders.has(order.id)) Object.assign(order, { credited: true, status: 'paid', paidAt: new Date().toISOString() })
+    return reply(order)
   }
   if (await auth(request, response)) return
   response.writeHead(404).end()
@@ -74,15 +76,28 @@ try {
   await page.getByRole('button', { name: '查看订单', exact: true }).click()
   await expect(page.getByRole('img', { name: '使用手机微信扫描此二维码支付' })).toBeVisible()
   await page.screenshot({ path: join(output, 'payment-resumed.png'), animations: 'disabled' })
-  credited = true
+  paidOrders.add('isolated-wechat-order')
   await page.getByRole('button', { name: '查看支付结果' }).click()
   await expect(page.getByRole('dialog').getByText('支付成功 · 时长已到账')).toBeVisible()
   await page.getByRole('button', { name: '关闭', exact: true }).last().click()
   await expect(page.getByText('可用时长 02:00:00 · 购买时长长期有效，重复购买可累加。')).toBeVisible()
+  await page.getByRole('button', { name: '支付宝支付', exact: true }).click()
+  await page.getByRole('button', { name: '购买 从容应对' }).click()
+  await expect(page.getByRole('dialog', { name: '支付宝扫码购买时长' })).toBeVisible()
+  await expect(page.getByRole('img', { name: '使用手机支付宝扫描此二维码支付' })).toBeVisible()
+  await page.screenshot({ path: join(output, 'payment-alipay-qr.png'), animations: 'disabled' })
+  await page.getByRole('button', { name: '关闭', exact: true }).last().click()
+  await page.getByRole('button', { name: '微信支付', exact: true }).click()
+  await page.getByRole('listitem').filter({ hasText: '支付宝支付' }).getByRole('button', { name: '查看订单' }).click()
+  await expect(page.getByRole('img', { name: '使用手机支付宝扫描此二维码支付' })).toBeVisible()
+  await page.getByRole('button', { name: '关闭', exact: true }).last().click()
+  await page.screenshot({ path: join(output, 'payment-both-methods-history.png'), animations: 'disabled' })
+  assert.equal(orders[0].paymentMethod, 'wechat')
+  assert.equal(orders[1].paymentMethod, 'alipay')
   assert.equal(calls.some(call => call.path.includes('/interview-sessions')), false)
-  const report = { realPayments: false, realUserData: false, platform: 'loopback-only test double', checks: ['unconfigured disables purchase', 'enabled packages show', 'order request contains server-price identifiers only', 'QR renders', 'close preserves order', 'history resumes QR', 'confirmed credit refreshes wallet without starting interview'], screenshots: ['payment-unavailable.png', 'payment-packages.png', 'payment-qr.png', 'payment-order-history.png', 'payment-resumed.png'] }
+  const report = { realPayments: false, realUserData: false, platform: 'loopback-only test double', checks: ['unconfigured disables purchase', 'enabled packages show', 'order request contains server-price identifiers only', 'QR renders', 'close preserves order', 'history resumes QR', 'confirmed credit refreshes wallet without starting interview', 'explicit Alipay method creates Alipay order', 'existing order preserves its method after selector changes'], screenshots: ['payment-unavailable.png', 'payment-packages.png', 'payment-qr.png', 'payment-order-history.png', 'payment-resumed.png', 'payment-alipay-qr.png', 'payment-both-methods-history.png'] }
   await writeFile(join(output, 'payment-smoke-report.json'), JSON.stringify(report, null, 2))
-  process.stdout.write('PASS isolated payment smoke: 8 checks, 5 screenshots\n')
+  process.stdout.write('PASS isolated payment smoke: 10 checks, 7 screenshots\n')
 } finally {
   await application?.close()
   await new Promise(resolve => server.close(resolve))

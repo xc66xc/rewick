@@ -1,8 +1,10 @@
 package com.interview.copilot.converter.payment;
 
+import com.interview.copilot.dto.payment.AlipayConfigDTO;
 import com.interview.copilot.dto.payment.ManualRefundDTO;
 import com.interview.copilot.dto.payment.PackageInputDTO;
 import com.interview.copilot.dto.payment.PaymentConfigDTO;
+import com.interview.copilot.request.payment.AlipayConfigRequest;
 import com.interview.copilot.request.payment.ManualRefundRequest;
 import com.interview.copilot.request.payment.PackageRequest;
 import com.interview.copilot.request.payment.PaymentConfigRequest;
@@ -34,6 +36,18 @@ public final class PaymentInputConverter {
                 p.merchantPrivateKey(),
                 p.apiV3Key(),
                 p.wechatPublicKey());
+    }
+
+    public static AlipayConfigDTO alipayConfigDTO(AlipayConfigRequest p) {
+        return new AlipayConfigDTO(
+                p.version(),
+                p.enabled(),
+                p.appId(),
+                p.sellerId(),
+                p.gatewayUrl(),
+                p.notifyUrl(),
+                p.appPrivateKey(),
+                p.alipayPublicKey());
     }
 
     public static ManualRefundDTO refundDTO(ManualRefundRequest p) {

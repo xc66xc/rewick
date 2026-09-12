@@ -95,7 +95,7 @@ abstract class PaymentHttpFixture {
 
     Map<String, Object> orderBody(JsonNode plan) {
         return new LinkedHashMap<>(Map.of("packageId", plan.path("id").asLong(),
-                "packageVersion", plan.path("version").asLong(), "requestId", UUID.randomUUID().toString()));
+                "packageVersion", plan.path("version").asLong(), "requestId", UUID.randomUUID().toString(), "paymentMethod", "wechat"));
     }
 
     @TestConfiguration

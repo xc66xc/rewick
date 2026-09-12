@@ -7,7 +7,12 @@ import com.interview.copilot.response.payment.PaymentOrderResponse;
 import java.util.List;
 
 public interface PaymentOrderService {
-    PaymentOrderResponse create(long userId, long packageId, long packageVersion, String requestId);
+    PaymentOrderResponse create(
+            long userId,
+            long packageId,
+            long packageVersion,
+            String requestId,
+            String paymentMethod);
 
     PaymentOrderResponse read(Long userId, String id);
 

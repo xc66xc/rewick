@@ -42,7 +42,9 @@ public class SecurityConfiguration {
                                                 "/api/v1/auth/password-reset")
                                         .permitAll()
                                         .requestMatchers(
-                                                HttpMethod.POST, "/api/v1/payments/wechat/notify")
+                                                HttpMethod.POST,
+                                                "/api/v1/payments/wechat/notify",
+                                                "/api/v1/payments/alipay/notify")
                                         .permitAll()
                                         .requestMatchers("/api/v1/admin/**")
                                         .hasRole("ADMIN")

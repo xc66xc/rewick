@@ -1,0 +1,18 @@
+BEGIN;
+ALTER TABLE payment_config_versions ADD COLUMN IF NOT EXISTS payment_method VARCHAR(16) NOT NULL DEFAULT 'wechat';
+ALTER TABLE payment_config_versions ADD COLUMN IF NOT EXISTS seller_id VARCHAR(64) NOT NULL DEFAULT '';
+ALTER TABLE payment_config_versions ADD COLUMN IF NOT EXISTS gateway_url VARCHAR(1000) NOT NULL DEFAULT '';
+ALTER TABLE payment_config_versions ADD COLUMN IF NOT EXISTS app_private_key VARCHAR(16000) NOT NULL DEFAULT '';
+ALTER TABLE payment_config_versions ADD COLUMN IF NOT EXISTS alipay_public_key VARCHAR(16000) NOT NULL DEFAULT '';
+CREATE UNIQUE INDEX IF NOT EXISTS payment_config_channel_idx ON payment_config_versions(id,payment_method);
+ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS payment_method VARCHAR(16) NOT NULL DEFAULT 'wechat';
+ALTER TABLE payment_orders DROP CONSTRAINT IF EXISTS payment_orders_transaction_id_key;
+CREATE UNIQUE INDEX IF NOT EXISTS payment_order_transaction_idx ON payment_orders(payment_method,transaction_id);
+ALTER TABLE payment_orders DROP CONSTRAINT IF EXISTS payment_orders_channel_check;
+ALTER TABLE payment_orders ADD CONSTRAINT payment_orders_channel_check CHECK(payment_method IN ('wechat','alipay'));
+ALTER TABLE payment_orders DROP CONSTRAINT IF EXISTS payment_orders_config_channel_fk;
+ALTER TABLE payment_orders ADD CONSTRAINT payment_orders_config_channel_fk FOREIGN KEY(payment_config_versions_id,payment_method) REFERENCES payment_config_versions(id,payment_method);
+ALTER TABLE payment_manual_refunds ADD COLUMN IF NOT EXISTS payment_method VARCHAR(16) NOT NULL DEFAULT 'wechat';
+ALTER TABLE payment_manual_refunds DROP CONSTRAINT IF EXISTS payment_manual_refunds_reference_key;
+CREATE UNIQUE INDEX IF NOT EXISTS payment_refund_reference_idx ON payment_manual_refunds(payment_method,reference);
+COMMIT;

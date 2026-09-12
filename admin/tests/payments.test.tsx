@@ -10,7 +10,7 @@ import { data, response } from './fixtures'
 
 const item = { id: 1, version: 1, name: '标准套餐', description: '', durationSeconds: 3600, originalPriceCents: 1000, discountBps: 8000, priceCents: 800, sortOrder: 0, enabled: true }
 const config = { version: 2, enabled: false, configured: false, mchId: '', appId: '', merchantSerial: '', wechatPublicKeyId: '', notifyUrl: '', hasMerchantPrivateKey: false, hasApiV3Key: false, hasWechatPublicKey: false }
-const order = { id: 'order-test', userId: 4, displayName: 'test@example.com', packageName: item.name, durationSeconds: 3600, totalCents: 800, status: 'paid', credited: true, codeUrl: null, createdAt: '2026-09-12T00:00:00Z', expiresAt: '2026-09-12T00:15:00Z', paidAt: '2026-09-12T00:01:00Z', refundedCents: 0, deductedSeconds: 0 }
+const order = { id: 'order-test', paymentMethod: 'wechat' as const, userId: 4, displayName: 'test@example.com', packageName: item.name, durationSeconds: 3600, totalCents: 800, status: 'paid', credited: true, codeUrl: null, createdAt: '2026-09-12T00:00:00Z', expiresAt: '2026-09-12T00:15:00Z', paidAt: '2026-09-12T00:01:00Z', refundedCents: 0, deductedSeconds: 0 }
 describe('payment management', () => {
   it('saves one package using cents and basis points without submitting its estimated price', async () => {
     const writes: Record<string, unknown>[] = []
@@ -83,4 +83,69 @@ describe('payment management', () => {
     expect(attempts[0]).toEqual(attempts[1])
     expect(attempts[0]).toMatchObject({ refundCents: 800, deductSeconds: 3600, reference: 'refund-123', reason: '用户申请' })
   })
+})
+
+const alipayConfig = { version: 1, enabled: false, configured: false, appId: '', sellerId: '', gatewayUrl: 'https://openapi.alipay.com/gateway.do', notifyUrl: '', hasAppPrivateKey: false, hasAlipayPublicKey: false }
+describe('Alipay management', () => {
+  it('saves Alipay independently with an explicit gateway and clears its secrets', async () => {
+    const writes: Record<string, unknown>[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+      if (!url.endsWith('/alipay')) return response(config)
+      if (options.method === 'PUT') { writes.push(data(options)); return response({ ...alipayConfig, version: 2, hasAppPrivateKey: true }) }
+      return response(alipayConfig)
+    }))
+    const actor = userEvent.setup()
+    render(<PaymentConfigPage api={new ApiClient('token')} />)
+    await actor.click(screen.getByRole('button', { name: '支付宝支付' }))
+    await actor.type(await screen.findByLabelText('支付宝 AppID'), 'app-test')
+    await actor.type(screen.getByLabelText('应用私钥（PKCS#8）'), 'private-test')
+    await actor.selectOptions(screen.getByLabelText('支付环境'), 'https://openapi-sandbox.dl.alipaydev.com/gateway.do')
+    expect(screen.getByText(/沙箱环境仅用于测试/)).toBeTruthy()
+    await actor.click(screen.getByRole('button', { name: '保存支付宝设置' }))
+    await screen.findByText('支付宝设置已保存。')
+    expect(writes[0]).toMatchObject({ appId: 'app-test', appPrivateKey: 'private-test', gatewayUrl: 'https://openapi-sandbox.dl.alipaydev.com/gateway.do', enabled: false })
+    expect(writes[0]).not.toHaveProperty('mchId')
+    expect((await screen.findByLabelText('应用私钥（PKCS#8）') as HTMLTextAreaElement).value).toBe('')
+  })
+  it('discards unsaved secrets when switching payment channels', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => response(url.endsWith('/alipay') ? alipayConfig : config)))
+    const actor = userEvent.setup()
+    render(<PaymentConfigPage api={new ApiClient('token')} />)
+    await actor.type(await screen.findByLabelText('API v3 密钥'), 'wechat-draft')
+    await actor.click(screen.getByRole('button', { name: '支付宝支付' }))
+    await actor.type(await screen.findByLabelText('应用私钥（PKCS#8）'), 'alipay-draft')
+    await actor.click(screen.getByRole('button', { name: '微信支付' }))
+    expect((await screen.findByLabelText('API v3 密钥') as HTMLInputElement).value).toBe('')
+    await actor.click(screen.getByRole('button', { name: '支付宝支付' }))
+    expect((await screen.findByLabelText('应用私钥（PKCS#8）') as HTMLTextAreaElement).value).toBe('')
+  })
+  it('identifies Alipay orders and requires confirmation of the matching external refund', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => response([{ ...order, paymentMethod: 'alipay' }])))
+    const actor = userEvent.setup()
+    render(<PaymentOrdersPage api={new ApiClient('token')} />)
+    expect(await screen.findByText('支付宝支付')).toBeTruthy()
+    await actor.click(screen.getByRole('button', { name: '登记人工退款' }))
+    expect(screen.getByText(/本操作不会调用支付宝退款/)).toBeTruthy()
+    expect(screen.getByLabelText('支付宝退款单号／凭证')).toBeTruthy()
+    expect(screen.getByLabelText('我已在支付宝商户平台完成实际退款')).toBeTruthy()
+    expect(screen.queryByLabelText('我已在微信商户平台完成实际退款')).toBeNull()
+  })
+})
+
+
+it('selects the production gateway explicitly for an empty Alipay configuration', async () => {
+  const writes: Record<string, unknown>[] = []
+  vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+    if (!url.endsWith('/alipay')) return response(config)
+    if (options.method === 'PUT') { writes.push(data(options)); return response({ ...alipayConfig, version: 2 }) }
+    return response({ ...alipayConfig, gatewayUrl: '' })
+  }))
+  const actor = userEvent.setup()
+  render(<PaymentConfigPage api={new ApiClient('token')} />)
+  await actor.click(screen.getByRole('button', { name: '支付宝支付' }))
+  await actor.type(await screen.findByLabelText('支付宝 AppID'), 'new-app')
+  expect((screen.getByLabelText('支付环境') as HTMLSelectElement).value).toBe('https://openapi.alipay.com/gateway.do')
+  await actor.click(screen.getByRole('button', { name: '保存支付宝设置' }))
+  await screen.findByText('支付宝设置已保存。')
+  expect(writes[0]).toMatchObject({ appId: 'new-app', gatewayUrl: 'https://openapi.alipay.com/gateway.do' })
 })

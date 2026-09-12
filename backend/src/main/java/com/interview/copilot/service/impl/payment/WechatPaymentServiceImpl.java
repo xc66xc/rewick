@@ -68,7 +68,7 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
         } catch (ServiceException e) {
             if ("ORDER_NOT_EXIST".equals(e.getErrorCode()))
                 return new PaymentResultDTO(
-                        o.id(), c.mchId(), c.appId(), null, "NOTFOUND", null, 0, null);
+                        o.id(), c.mchId(), c.appId(), null, "NOTFOUND", null, 0, null, "wechat");
             throw upstream(o.id(), e);
         } catch (WechatPayException e) {
             throw upstream(o.id(), e);
@@ -135,7 +135,8 @@ public class WechatPaymentServiceImpl implements WechatPaymentService {
                 t.getTradeState() == null ? "UNKNOWN" : t.getTradeState().name(),
                 amount == null ? null : amount.getCurrency(),
                 amount == null || amount.getTotal() == null ? 0 : amount.getTotal(),
-                t.getSuccessTime() == null ? null : Instant.parse(t.getSuccessTime()));
+                t.getSuccessTime() == null ? null : Instant.parse(t.getSuccessTime()),
+                "wechat");
     }
 
     private RuntimeException upstream(String orderId, WechatPayException e) {

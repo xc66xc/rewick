@@ -9,7 +9,7 @@ vi.mock('../src/renderer/src/components/ui/toast', () => ({ toast: { show: vi.fn
 afterEach(() => { cleanup(); vi.clearAllMocks() })
 it('reports a polling failure once while retaining retries', async () => {
   const refreshPaymentOrder = vi.fn(async () => { throw new Error('网络中断') })
-  const bridge = { getPackageCatalog: async () => ({ paymentAvailable: true, packages: [] }), getPaymentOrders: async () => [], refreshPaymentOrder } as unknown as DesktopBridge
+  const bridge = { getPackageCatalog: async () => ({ paymentAvailable: true, paymentMethods: ['wechat'], packages: [] }), getPaymentOrders: async () => [], refreshPaymentOrder } as unknown as DesktopBridge
   const { result } = renderHook(() => usePayments(bridge, 'account-one', async () => undefined))
   await waitFor(() => expect(result.current.loading).toBe(false))
   const order = { id: 'order-1' } as PaymentOrder

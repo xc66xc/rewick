@@ -6,8 +6,8 @@ import com.interview.copilot.entity.payment.PaymentOrderEntity;
 import com.interview.copilot.exception.payment.PaymentErrors;
 import com.interview.copilot.mapper.payment.PaymentOrderMapper;
 import com.interview.copilot.mapper.wallet.WalletMapper;
-import com.interview.copilot.service.payment.PaymentConfigService;
 import com.interview.copilot.service.payment.PaymentFulfillmentService;
+import com.interview.copilot.service.payment.PaymentProviderService;
 import com.interview.copilot.service.wallet.WalletService;
 import com.interview.copilot.util.ServerTime;
 
@@ -22,14 +22,14 @@ public class PaymentFulfillmentServiceImpl implements PaymentFulfillmentService 
     private final PaymentOrderMapper orders;
     private final WalletMapper mapper;
     private final WalletService wallets;
-    private final PaymentConfigService configs;
+    private final PaymentProviderService configs;
     private final Clock clock;
 
     public PaymentFulfillmentServiceImpl(
             PaymentOrderMapper orders,
             WalletMapper mapper,
             WalletService wallets,
-            PaymentConfigService configs,
+            PaymentProviderService configs,
             Clock clock) {
         this.orders = orders;
         this.mapper = mapper;
@@ -65,7 +65,8 @@ public class PaymentFulfillmentServiceImpl implements PaymentFulfillmentService 
     public void refund(long actorId, String orderId, ManualRefundDTO p) {
         var order = lock(orderId);
         var previous = orders.refund(p.requestId());
-        if (previous == null) previous = orders.refundByReference(p.reference());
+        if (previous == null)
+            previous = orders.refundByReference(p.reference(), order.paymentMethod());
         if (previous != null) {
             if (previous.orderId() != order.databaseId()
                     || previous.refundCents() != p.refundCents()
@@ -88,7 +89,8 @@ public class PaymentFulfillmentServiceImpl implements PaymentFulfillmentService 
                 p.deductSeconds(),
                 p.reference(),
                 p.reason(),
-                actorId);
+                actorId,
+                order.paymentMethod());
         orders.ledger(
                 order.userId(), order.databaseId(), "refund", before, after, p.reason(), actorId);
         orders.refunded(order.databaseId(), p.refundCents(), p.deductSeconds());
@@ -106,14 +108,12 @@ public class PaymentFulfillmentServiceImpl implements PaymentFulfillmentService 
     }
 
     private void validate(PaymentOrderEntity o, PaymentResultDTO r) {
-        var config = configs.forOrder(o.configVersion());
+        configs.validateIdentity(o.paymentMethod(), o.configVersion(), r);
         boolean valid =
                 "SUCCESS".equals(r.state())
                         && "CNY".equals(r.currency())
                         && o.totalCents() == r.totalCents()
                         && o.id().equals(r.orderId())
-                        && config.mchId().equals(r.mchId())
-                        && config.appId().equals(r.appId())
                         && r.transactionId() != null
                         && !r.transactionId().isBlank()
                         && r.paidAt() != null;

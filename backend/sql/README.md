@@ -15,20 +15,21 @@ PostgreSQL 15.19 / pgvector 0.8.6。脚本手动按编号执行；后端不使�
 | `09_pg_references.sql` | 用户资料、1024维向量、持久索引任务与上传配额 |
 | `10_time_wallet.sql` | 可用秒数、面试计时会话、时长流水；删除每日配额 |
 | `11_payment_packages.sql` | 时长套餐、版本化支付配置、订单、人工退款记录与购买流水关联 |
+| `12_alipay_payments.sql` | 支付宝配置、订单渠道绑定、按支付渠道隔离交易号与退款凭据 |
 
 ## 初始化空数据库
 
 从 backend 目录执行，密码通过交互提示或本机凭据提供：
 
 ```sh
-psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f sql/01_schema.sql -f sql/02_pgvector.sql -f sql/03_admin_users.sql -f sql/04_platform_config.sql -f sql/05_email_auth.sql -f sql/06_display_name.sql -f sql/07_email_code_purpose.sql -f sql/08_server_local_time.sql -f sql/09_pg_references.sql -f sql/10_time_wallet.sql -f sql/11_payment_packages.sql
+psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f sql/01_schema.sql -f sql/02_pgvector.sql -f sql/03_admin_users.sql -f sql/04_platform_config.sql -f sql/05_email_auth.sql -f sql/06_display_name.sql -f sql/07_email_code_purpose.sql -f sql/08_server_local_time.sql -f sql/09_pg_references.sql -f sql/10_time_wallet.sql -f sql/11_payment_packages.sql -f sql/12_alipay_payments.sql
 ```
 
 使用 Compose 时，从仓库根目录执行：
 
 ```sh
 docker compose up -d --build --wait database
-docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql -f /opt/copilot/sql/06_display_name.sql -f /opt/copilot/sql/07_email_code_purpose.sql -f /opt/copilot/sql/08_server_local_time.sql -f /opt/copilot/sql/09_pg_references.sql -f /opt/copilot/sql/10_time_wallet.sql -f /opt/copilot/sql/11_payment_packages.sql
+docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql -f /opt/copilot/sql/06_display_name.sql -f /opt/copilot/sql/07_email_code_purpose.sql -f /opt/copilot/sql/08_server_local_time.sql -f /opt/copilot/sql/09_pg_references.sql -f /opt/copilot/sql/10_time_wallet.sql -f /opt/copilot/sql/11_payment_packages.sql -f /opt/copilot/sql/12_alipay_payments.sql
 docker compose up -d --build backend admin
 ```
 
@@ -82,3 +83,15 @@ GRANT USAGE, SELECT ON SEQUENCE time_packages_id_seq, payment_config_versions_id
 ```
 
 更新服务端、管理端和桌面端。未配置商户资料时不开放支付；凭据通过管理端保存，不添加到 YML。正式使用前建议 HTTPS，并确保 `/api/v1/payments/wechat/notify` 能从公网 POST 到达后端；回调的真实性由微信签名和解密校验。禁用支付不删除历史配置，已有订单仍需查询和入账。人工退款先在微信商户平台完成，再在后台登记，不会自动向微信退款。
+
+## 支付宝扫码支付升级
+
+已执行 01–11 的库停止后端后执行以下脚本，再更新后端、管理端与桌面端：
+
+```sh
+psql -X -h 127.0.0.1 -U postgres -d interview_copilot -v ON_ERROR_STOP=1 -f sql/12_alipay_payments.sql
+```
+
+12 只扩展已有支付表，不新增数据库或重建钱包。已有订单和配置标记为 `wechat`；支付宝订单绑定自己的配置版本。现有整表授权继续有效，无需新增序列授权。交易号和人工退款凭据按渠道去重。不要只换 JAR 而漏执行脚本。
+
+管理员在“支付设置 → 支付宝支付”填写应用资料并启用。公网必须允许表单 POST 到 `/api/v1/payments/alipay/notify`；服务端在 RSA2 验签、身份及金额校验和持久化完成后返回纯文本 `success`。测试环境使用官方沙箱网关和沙箱资料，正式收款需切换正式资料。退款先在支付宝商家平台人工处理，再登记金额、凭据和扣回时长。

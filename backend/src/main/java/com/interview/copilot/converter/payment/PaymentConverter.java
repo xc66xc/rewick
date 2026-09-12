@@ -49,6 +49,7 @@ public final class PaymentConverter {
                 ServerTime.instant(p.expiresAt()),
                 p.paidAt() == null ? null : ServerTime.instant(p.paidAt()),
                 p.refundedCents(),
-                p.deductedSeconds());
+                p.deductedSeconds(),
+                p.paymentMethod());
     }
 }

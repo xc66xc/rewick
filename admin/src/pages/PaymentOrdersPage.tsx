@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { type ApiClient, message } from '../api'
 import { duration } from '../duration'
 import { dateTime } from '../types'
-import { money, paymentOrdersSchema, paymentOrderSchema, paymentStatus, type PaymentOrder } from '../payments'
+import { money, paymentOrdersSchema, paymentOrderSchema, paymentStatus, paymentMethodName, type PaymentOrder } from '../payments'
 import { useResource } from '../hooks/useResource'
 import LoadState from '../components/LoadState'
 import PaymentRefundDialog from '../components/PaymentRefundDialog'
@@ -26,7 +26,7 @@ export default function PaymentOrdersPage({ api }: PaymentOrdersPageProps) {
     {error && <p className={styles.error} role="alert">{error}</p>}{notice && <p className={styles.notice} role="status">{notice}</p>}
     {state.kind === 'loading' ? <LoadState /> : state.kind === 'error' ? <LoadState error={state.error} onRetry={reload} /> : orders.length ? <div className={styles.tableScroll}><table><caption className={styles.srOnly}>支付订单列表</caption><thead><tr><th>用户 / 订单</th><th>套餐</th><th>金额 / 时长</th><th>状态 / 退款</th><th>时间</th><th>操作</th></tr></thead><tbody>{orders.map(order => <tr key={order.id}>
       <th scope="row">{order.displayName}<span className={styles.tableDetail}>用户 ID {order.userId}</span><span className={styles.tableDetail}>{order.id}</span></th>
-      <td>{order.packageName}</td><td className={styles.numeric}>{money(order.totalCents)}<span className={styles.tableDetail}>{duration(order.durationSeconds)}</span></td>
+      <td>{order.packageName}<span className={styles.tableDetail}>{paymentMethodName(order.paymentMethod)}支付</span></td><td className={styles.numeric}>{money(order.totalCents)}<span className={styles.tableDetail}>{duration(order.durationSeconds)}</span></td>
       <td>{paymentStatus(order)}{order.refundedCents > 0 && <span className={styles.tableDetail}>已登记退款 {money(order.refundedCents)}<br />已扣回 {duration(order.deductedSeconds)}</span>}</td>
       <td>{dateTime(order.createdAt)}<span className={styles.tableDetail}>{order.paidAt ? `支付：${dateTime(order.paidAt)}` : `过期：${dateTime(order.expiresAt)}`}</span></td>
       <td><div className={styles.rowActions}><button className={styles.secondaryButton} disabled={busy !== null} onClick={() => void refresh(order)}>{busy === order.id ? '查询中…' : order.status === 'paid' && !order.credited ? '重试时长到账' : '查询支付结果'}</button>{order.status === 'paid' && order.credited && order.refundedCents < order.totalCents && <button className={styles.linkDanger} disabled={busy !== null} onClick={() => setRefunding(order)}>登记人工退款</button>}</div></td>

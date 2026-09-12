@@ -19,7 +19,7 @@ public interface PaymentOrderMapper {
                 + " user_id,u.display_name,o.time_packages_id AS"
                 + " package_id,o.package_version,o.package_name,o.duration_seconds,o.total_cents,o.payment_config_versions_id"
                 + " AS config_version,o.status,o.is_credited AS"
-                + " credited,o.code_url,o.transaction_id,o.created_at,o.expires_at,o.paid_at,o.refunded_cents,o.deducted_seconds";
+                + " credited,o.code_url,o.transaction_id,o.created_at,o.expires_at,o.paid_at,o.refunded_cents,o.deducted_seconds,o.payment_method";
     String JOIN = " FROM payment_orders o JOIN app_users u ON u.id=o.app_users_id ";
 
     @Insert(
@@ -51,8 +51,8 @@ public interface PaymentOrderMapper {
 
     @Insert(
             "INSERT INTO"
-                + " payment_orders(order_id,app_users_id,request_id,time_packages_id,package_version,package_name,duration_seconds,total_cents,payment_config_versions_id,expires_at,created_at,updated_at)"
-                + " VALUES(#{o.id},#{o.userId},#{requestId},#{o.packageId},#{o.packageVersion},#{o.packageName},#{o.durationSeconds},#{o.totalCents},#{o.configVersion},#{o.expiresAt},#{o.createdAt},#{o.createdAt})")
+                + " payment_orders(order_id,app_users_id,request_id,time_packages_id,package_version,package_name,duration_seconds,total_cents,payment_config_versions_id,expires_at,created_at,updated_at,payment_method)"
+                + " VALUES(#{o.id},#{o.userId},#{requestId},#{o.packageId},#{o.packageVersion},#{o.packageName},#{o.durationSeconds},#{o.totalCents},#{o.configVersion},#{o.expiresAt},#{o.createdAt},#{o.createdAt},#{o.paymentMethod})")
     void create(@Param("o") PaymentOrderEntity o, @Param("requestId") String requestId);
 
     @Update(
@@ -109,13 +109,15 @@ public interface PaymentOrderMapper {
 
     @Select(
             "SELECT payment_orders_id AS order_id,refund_cents,deduct_seconds,reference,reason FROM"
-                    + " payment_manual_refunds WHERE reference=#{reference}")
-    ManualRefundEntity refundByReference(String reference);
+                    + " payment_manual_refunds WHERE reference=#{reference} AND"
+                    + " payment_method=#{paymentMethod}")
+    ManualRefundEntity refundByReference(
+            @Param("reference") String reference, @Param("paymentMethod") String paymentMethod);
 
     @Insert(
             "INSERT INTO"
-                + " payment_manual_refunds(payment_orders_id,request_id,refund_cents,deduct_seconds,reference,reason,actor_id)"
-                + " VALUES(#{orderId},#{requestId},#{cents},#{seconds},#{reference},#{reason},#{actor})")
+                + " payment_manual_refunds(payment_orders_id,request_id,refund_cents,deduct_seconds,reference,reason,actor_id,payment_method)"
+                + " VALUES(#{orderId},#{requestId},#{cents},#{seconds},#{reference},#{reason},#{actor},#{paymentMethod})")
     void insertRefund(
             @Param("orderId") long orderId,
             @Param("requestId") String requestId,
@@ -123,7 +125,8 @@ public interface PaymentOrderMapper {
             @Param("seconds") long seconds,
             @Param("reference") String reference,
             @Param("reason") String reason,
-            @Param("actor") long actor);
+            @Param("actor") long actor,
+            @Param("paymentMethod") String paymentMethod);
 
     @Update(
             "UPDATE payment_orders SET"

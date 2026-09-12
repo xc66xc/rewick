@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import type { DesktopBridge } from '../../../shared/types'
-import type { PackageCatalog, PaymentOrder, TimePackage } from '../../../shared/payment'
+import type { PackageCatalog, PaymentMethod, PaymentOrder, TimePackage } from '../../../shared/payment'
 import { toast } from '../components/ui/toast'
 import { errorMessage } from './useSettings'
 
 export default function usePayments(bridge: DesktopBridge, scope: string, onCredited: () => Promise<void>) {
   const [catalog, setCatalog] = useState<PackageCatalog | null>(null)
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null)
+  const methodInitialized = useRef(false)
   const [orders, setOrders] = useState<PaymentOrder[]>([])
   const [selected, setSelected] = useState<PaymentOrder | null>(null)
   const [busy, setBusy] = useState(false)
@@ -32,6 +34,12 @@ export default function usePayments(bridge: DesktopBridge, scope: string, onCred
       const [nextCatalog, nextOrders] = await Promise.all([bridge.getPackageCatalog(), bridge.getPaymentOrders()])
       if (!live.current) return
       setCatalog(nextCatalog); setOrders(nextOrders)
+      if (!methodInitialized.current && nextCatalog.paymentMethods.length) {
+        methodInitialized.current = true
+        setPaymentMethod(nextCatalog.paymentMethods.includes('wechat') ? 'wechat' : nextCatalog.paymentMethods[0])
+      } else {
+        setPaymentMethod(current => current && nextCatalog.paymentMethods.includes(current) ? current : null)
+      }
       const newCredits = nextOrders.filter(item => item.credited && !credited.current.has(item.id))
       newCredits.forEach(item => credited.current.add(item.id))
       if (newCredits.length) await onCredit.current()
@@ -46,12 +54,15 @@ export default function usePayments(bridge: DesktopBridge, scope: string, onCred
   }, [bridge])
   async function buy(item: TimePackage) {
     if (locked.current) return
+    if (!catalog?.paymentAvailable || !paymentMethod || !catalog.paymentMethods.includes(paymentMethod)) {
+      toast.show('请选择当前可用的支付方式。', { type: 'error' }); return
+    }
     locked.current = true; setBusy(true)
-    const storageKey = `payment-request:${scope}:${item.id}:${item.version}`
+    const storageKey = `payment-request:${scope}:${item.id}:${item.version}:${paymentMethod}`
     try {
       const requestId = sessionStorage.getItem(storageKey) ?? crypto.randomUUID()
       sessionStorage.setItem(storageKey, requestId)
-      const order = await bridge.createPaymentOrder({ packageId: item.id, packageVersion: item.version, requestId })
+      const order = await bridge.createPaymentOrder({ packageId: item.id, packageVersion: item.version, paymentMethod, requestId })
       if (!live.current) return
       sessionStorage.removeItem(storageKey)
       setSelected(order); await accept(order)
@@ -77,5 +88,5 @@ export default function usePayments(bridge: DesktopBridge, scope: string, onCred
     const timer = setInterval(() => { if (selected) void refresh(selected, true) }, 5000)
     return () => clearInterval(timer)
   }, [selectedId, settled])
-  return { catalog, orders, selected, setSelected, busy, loading, reload, buy, refresh }
+  return { catalog, paymentMethod, setPaymentMethod, orders, selected, setSelected, busy, loading, reload, buy, refresh }
 }

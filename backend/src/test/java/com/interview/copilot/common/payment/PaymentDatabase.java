@@ -23,7 +23,7 @@ final class PaymentDatabase extends PostgreSQLContainer<PaymentDatabase> {
         for (String script : List.of("01_schema.sql", "02_pgvector.sql", "03_admin_users.sql",
                 "04_platform_config.sql", "05_email_auth.sql", "06_display_name.sql",
                 "07_email_code_purpose.sql", "08_server_local_time.sql", "09_pg_references.sql",
-                "10_time_wallet.sql", "11_payment_packages.sql")) {
+                "10_time_wallet.sql", "11_payment_packages.sql", "12_alipay_payments.sql")) {
             command.add("-f");
             command.add("/tmp/sql/" + script);
         }

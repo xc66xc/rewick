@@ -20,7 +20,7 @@ public final class PaymentErrors {
     }
 
     public static ApiException upstream() {
-        return new ApiException(HttpStatus.BAD_GATEWAY, "PAYMENT_UPSTREAM", "微信支付暂时不可用，请稍后查看订单状态");
+        return new ApiException(HttpStatus.BAD_GATEWAY, "PAYMENT_UPSTREAM", "支付服务暂时不可用，请稍后查看订单状态");
     }
 
     public static ApiException missing() {

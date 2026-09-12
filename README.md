@@ -6,13 +6,15 @@
 
 管理员在用户管理中增加、扣除或设定可用时长，并填写调整原因。初始时长为 0；用户也可购买管理员启用的时长套餐，购买时长长期有效。不提供暂停功能。已完成 01–09 的数据库需先执行 `backend/sql/10_time_wallet.sql`，购买套餐还需执行 `backend/sql/11_payment_packages.sql`，随后同步更新服务端与桌面端。
 
-## 购买时长与微信支付
+## 购买时长与扫码支付
 
-管理端的“套餐管理”按条保存价格、折扣、时长和启用状态；“支付设置”保存 Native 商户号、AppID、签名密钥、公钥及回调地址；“支付订单”查询支付状态并登记已在微信商户平台完成的人工退款。支付凭据加密入库，客户端无法读取。商户资料未配置时，桌面显示“支付暂未开放”。
+管理端的“套餐管理”按条保存价格、折扣、时长和启用状态；“支付设置”分别配置、启用微信 Native 与支付宝当面付；“支付订单”显示支付渠道并登记已在对应商户平台完成的人工退款。支付凭据加密入库，客户端无法读取。没有可用渠道时，桌面显示“支付暂未开放”。
 
-桌面侧边栏与准备页提供购买入口。订单保存下单时的价格和时长，扫码支付后由后端验签、核对金额并幂等增加时长；关闭二维码窗口不取消订单。买时长不会启动或恢复面试，也不会延长已有心跳许可。人工退款登记只扣回明确填写的时长，不自动执行微信资金退款。
+桌面侧边栏与准备页提供购买入口，只显示管理员已启用的支付方式。订单保存下单时的渠道、价格和时长，扫码支付后由后端验签、核对金额并幂等增加时长；关闭二维码窗口不取消订单。停用渠道不影响旧订单处理。买时长不会启动或恢复面试，也不会延长已有心跳许可。人工退款登记只扣回明确填写的时长，不自动执行资金退款。
 
-实现与接口见 [支付设计](backend/docs/design-payments.md)、[支付接口](backend/docs/payment-contract.md)。真实收款前需要取得 Native 支付权限和绑定的 AppID，配置公网可达回调并完成实际支付验收。
+支付宝配置包括 AppID、收款商家 PID、官方正式／沙箱网关、应用私钥（PKCS8）、支付宝公钥和通知地址 `/api/v1/payments/alipay/notify`，使用 RSA2 签名。微信继续使用 `/api/v1/payments/wechat/notify`。真实收款前需取得对应产品权限、配置公网可达回调并完成实际支付验收。支付宝沙箱使用沙箱应用资料。
+
+升级支付宝前手动执行 `backend/sql/12_alipay_payments.sql`，然后同步更新服务端、管理端与桌面端；创建订单现在必传 `paymentMethod`（`wechat` 或 `alipay`）。详细步骤见 [SQL 说明](backend/sql/README.md)。
 
 实时面试辅助桌面应用、Web 管理后台与独立 Java 平台服务。桌面端位于 `frontend/`，管理端位于 `admin/`，服务端位于 `backend/`，分别维护依赖、构建与测试。
 
@@ -77,7 +79,7 @@ cp .env.example .env
 # 编辑 .env，设置数据库密码、首次管理员账号、加密主密钥及验证码密钥
 docker compose up -d --build --wait database
 # 仅首次初始化空库时执行
-docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql -f /opt/copilot/sql/06_display_name.sql -f /opt/copilot/sql/07_email_code_purpose.sql -f /opt/copilot/sql/08_server_local_time.sql -f /opt/copilot/sql/09_pg_references.sql -f /opt/copilot/sql/10_time_wallet.sql -f /opt/copilot/sql/11_payment_packages.sql
+docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql -f /opt/copilot/sql/06_display_name.sql -f /opt/copilot/sql/07_email_code_purpose.sql -f /opt/copilot/sql/08_server_local_time.sql -f /opt/copilot/sql/09_pg_references.sql -f /opt/copilot/sql/10_time_wallet.sql -f /opt/copilot/sql/11_payment_packages.sql -f /opt/copilot/sql/12_alipay_payments.sql
 docker compose up -d --build backend admin
 ```
 
