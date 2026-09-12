@@ -16,20 +16,22 @@ PostgreSQL 15.19 / pgvector 0.8.6。脚本手动按编号执行；后端不使�
 | `10_time_wallet.sql` | 可用秒数、面试计时会话、时长流水；删除每日配额 |
 | `11_payment_packages.sql` | 时长套餐、版本化支付配置、订单、人工退款记录与购买流水关联 |
 | `12_alipay_payments.sql` | 支付宝配置、订单渠道绑定、按支付渠道隔离交易号与退款凭据 |
+| `13_session_records.sql` | 服务器会话历史、版本与删除标记 |
+| `14_server_background.sql` | 简历、JD、环境、默认选择及计时会话背景快照 |
 
 ## 初始化空数据库
 
 从 backend 目录执行，密码通过交互提示或本机凭据提供：
 
 ```sh
-psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f sql/01_schema.sql -f sql/02_pgvector.sql -f sql/03_admin_users.sql -f sql/04_platform_config.sql -f sql/05_email_auth.sql -f sql/06_display_name.sql -f sql/07_email_code_purpose.sql -f sql/08_server_local_time.sql -f sql/09_pg_references.sql -f sql/10_time_wallet.sql -f sql/11_payment_packages.sql -f sql/12_alipay_payments.sql
+psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f sql/01_schema.sql -f sql/02_pgvector.sql -f sql/03_admin_users.sql -f sql/04_platform_config.sql -f sql/05_email_auth.sql -f sql/06_display_name.sql -f sql/07_email_code_purpose.sql -f sql/08_server_local_time.sql -f sql/09_pg_references.sql -f sql/10_time_wallet.sql -f sql/11_payment_packages.sql -f sql/12_alipay_payments.sql -f sql/13_session_records.sql -f sql/14_server_background.sql
 ```
 
 使用 Compose 时，从仓库根目录执行：
 
 ```sh
 docker compose up -d --build --wait database
-docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql -f /opt/copilot/sql/06_display_name.sql -f /opt/copilot/sql/07_email_code_purpose.sql -f /opt/copilot/sql/08_server_local_time.sql -f /opt/copilot/sql/09_pg_references.sql -f /opt/copilot/sql/10_time_wallet.sql -f /opt/copilot/sql/11_payment_packages.sql -f /opt/copilot/sql/12_alipay_payments.sql
+docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql -f /opt/copilot/sql/06_display_name.sql -f /opt/copilot/sql/07_email_code_purpose.sql -f /opt/copilot/sql/08_server_local_time.sql -f /opt/copilot/sql/09_pg_references.sql -f /opt/copilot/sql/10_time_wallet.sql -f /opt/copilot/sql/11_payment_packages.sql -f /opt/copilot/sql/12_alipay_payments.sql -f /opt/copilot/sql/13_session_records.sql -f /opt/copilot/sql/14_server_background.sql
 docker compose up -d --build backend admin
 ```
 
@@ -95,3 +97,20 @@ psql -X -h 127.0.0.1 -U postgres -d interview_copilot -v ON_ERROR_STOP=1 -f sql/
 12 只扩展已有支付表，不新增数据库或重建钱包。已有订单和配置标记为 `wechat`；支付宝订单绑定自己的配置版本。现有整表授权继续有效，无需新增序列授权。交易号和人工退款凭据按渠道去重。不要只换 JAR 而漏执行脚本。
 
 管理员在“支付设置 → 支付宝支付”填写应用资料并启用。公网必须允许表单 POST 到 `/api/v1/payments/alipay/notify`；服务端在 RSA2 验签、身份及金额校验和持久化完成后返回纯文本 `success`。测试环境使用官方沙箱网关和沙箱资料，正式收款需切换正式资料。退款先在支付宝商家平台人工处理，再登记金额、凭据和扣回时长。
+
+## 个人背景升级
+
+已执行 01–13 的库只执行 14，不重复运行，不导入旧桌面数据：
+
+```sh
+psql -X -h 127.0.0.1 -U postgres -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f sql/14_server_background.sql
+```
+
+按实际应用角色授予新表权限（以下以 `copilot_backend` 为例）：
+
+```sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON user_resumes, job_targets,
+    interview_environments, environment_references, interview_preferences TO copilot_backend;
+```
+
+新表使用客户端生成的 UUID，无新增序列；已有 `interview_sessions` 表授权继续有效。部署时同步更新后端与桌面，开始面试接口现在要求 `environmentId`。不迁移本地 `interviews.json`，用户重新录入资料。原 PDF 不上传，简历不向量化。

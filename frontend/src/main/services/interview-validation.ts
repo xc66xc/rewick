@@ -5,23 +5,24 @@ const timestamp = z.string().datetime({ offset: true })
 const profileName = z.string().trim().min(1, '请填写名称。').max(255)
 const environmentName = z.string().trim().min(1, '请填写环境名称。').max(100)
 const referenceIds = z.array(id).transform(values => [...new Set(values)]).pipe(z.array(id).max(30, '每个环境最多选择 30 份参考资料。'))
+const revision = { version: z.number().int().positive().optional(), bodyLoaded: z.boolean().optional() }
 const targetFields = {
   companyName: z.string().trim().max(200),
   roleName: z.string().trim().max(200),
   jobDescription: z.string().max(12_000),
 }
 
-export const resumeInputSchema = z.object({ id: id.optional(), name: profileName, text: z.string().max(100_000) })
-export const targetInputSchema = z.object({ id: id.optional(), name: profileName, ...targetFields })
+export const resumeInputSchema = z.object({ ...revision, id: id.optional(), name: profileName, text: z.string().max(100_000) })
+export const targetInputSchema = z.object({ ...revision, id: id.optional(), name: profileName, ...targetFields })
 export const environmentInputSchema = z.object({
-  id: id.optional(), name: environmentName, resumeId: id.nullable(), targetId: id.nullable(), referenceIds,
+  ...revision, id: id.optional(), name: environmentName, resumeId: id.nullable(), targetId: id.nullable(), referenceIds,
 })
 export const environmentSnapshotSchema = z.object({
   id, name: environmentName, resumeId: id.nullable(), resumeName: z.string().max(255),
   targetId: id.nullable(), targetName: z.string().max(255), referenceIds,
 })
 
-const metadata = { id, createdAt: timestamp, updatedAt: timestamp }
+const metadata = { hasContent: z.boolean().optional(), id, createdAt: timestamp, updatedAt: timestamp }
 const resumeSchema = resumeInputSchema.extend(metadata)
 const targetSchema = targetInputSchema.extend(metadata)
 const environmentSchema = environmentInputSchema.extend(metadata)
@@ -49,5 +50,4 @@ export const interviewLibrarySchema = z.object({
   }
 })
 
-export const persistedInterviewLibrarySchema = z.object({ version: z.literal(1), library: interviewLibrarySchema })
 export const interviewIdSchema = id

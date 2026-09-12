@@ -21,7 +21,7 @@ interface Props {
   onStarted: () => void; onContext: () => void; onSettings: () => void; onPurchase?: () => void
 }
 const emptyEnvironment: EnvironmentInput = { name: '', resumeId: null, targetId: null, referenceIds: [] }
-function environmentInput({ id, name, resumeId, targetId, referenceIds }: InterviewEnvironment): EnvironmentInput { return { id, name, resumeId, targetId, referenceIds } }
+function environmentInput({ id, name, resumeId, targetId, referenceIds, version }: InterviewEnvironment): EnvironmentInput { return { id, name, resumeId, targetId, referenceIds, version } }
 /* v30 准备面试页:钱包页头 + 摘要卡 + 环境卡片网格,新建/编辑走弹窗(原「面试环境」页已并入) */
 export default function InterviewPreparation({ bridge, settings, timer, isSessionActive, onPrepare, onSave, onStarted, onContext, onSettings, onPurchase }: Props) {
   const data = useInterviewLibrary(bridge)
@@ -69,7 +69,7 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
   async function start(environment: InterviewEnvironment) {
     if (busy || timer.active) return
     setBusy(true); setError('')
-    try { await onPrepare(environmentInput(environment)); await timer.start(); onStarted() }
+    try { await onPrepare(environmentInput(environment)); await timer.start(environment.id); onStarted() }
     catch (reason) { setError(errorMessage(reason)) }
     finally { setBusy(false) }
   }
@@ -114,7 +114,7 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
       {data.library.environments.map(environment => {
         const resume = data.library?.resumes.find(item => item.id === environment.resumeId)
         const target = data.library?.targets.find(item => item.id === environment.targetId)
-        const resumeReady = Boolean(resume?.text.trim())
+        const resumeReady = Boolean(resume?.hasContent ?? resume?.text.trim())
         const startBlocked = !resumeReady ? ('resume' as const) : !timer.wallet || timer.remaining <= 0 ? ('wallet' as const) : false
         return <li key={environment.id} className="min-w-0">
           <EnvironmentCard environment={environment} resume={resume} target={target} current={environment.id === activeId}

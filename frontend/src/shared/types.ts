@@ -54,9 +54,10 @@ export interface SettingsInput {
   autoAnswer: Settings['autoAnswer']
 }
 export interface InterviewTarget { companyName: string; roleName: string; jobDescription: string }
-export interface ResumeProfile { id: string; name: string; text: string; createdAt: string; updatedAt: string }
-export interface TargetProfile extends InterviewTarget { id: string; name: string; createdAt: string; updatedAt: string }
+export interface ResumeProfile { hasContent?: boolean; version?: number; bodyLoaded?: boolean; id: string; name: string; text: string; createdAt: string; updatedAt: string }
+export interface TargetProfile extends InterviewTarget { version?: number; bodyLoaded?: boolean; id: string; name: string; createdAt: string; updatedAt: string }
 export interface InterviewEnvironment {
+  version?: number; bodyLoaded?: boolean
   id: string; name: string; resumeId: string | null; targetId: string | null; referenceIds: string[]; createdAt: string; updatedAt: string
 }
 export interface InterviewLibrary {
@@ -65,9 +66,9 @@ export interface InterviewLibrary {
 export interface InterviewEnvironmentSnapshot {
   id: string; name: string; resumeId: string | null; resumeName: string; targetId: string | null; targetName: string; referenceIds: string[]
 }
-export interface ResumeInput { id?: string; name: string; text: string }
-export interface TargetInput extends InterviewTarget { id?: string; name: string }
-export interface EnvironmentInput { id?: string; name: string; resumeId: string | null; targetId: string | null; referenceIds: string[] }
+export interface ResumeInput { version?: number; bodyLoaded?: boolean; id?: string; name: string; text: string }
+export interface TargetInput extends InterviewTarget { version?: number; bodyLoaded?: boolean; id?: string; name: string }
+export interface EnvironmentInput { version?: number; bodyLoaded?: boolean; id?: string; name: string; resumeId: string | null; targetId: string | null; referenceIds: string[] }
 export type ReferenceKind = 'technical' | 'personal'
 export interface ReferenceDocument {
   id: string
@@ -138,6 +139,7 @@ export interface SessionRecord {
 export interface AnswerRequest { requestId: string; question: string; transcript: string; environmentId?: string }
 export type AsrStatus = 'connecting' | 'listening' | 'stopping' | 'idle' | 'error'
 export interface WalletState {
+  background?: Pick<Settings, 'context' | 'interviewTarget' | 'interviewEnvironment'> | null
   availableSeconds: number
   version: number
   serverTime: string
@@ -165,7 +167,7 @@ export interface DesktopBridge {
   refreshPaymentOrder(id: string): Promise<PaymentOrder>
   cancelPaymentOrder(id: string): Promise<PaymentOrder>
   getWallet(): Promise<WalletState>
-  startInterview(requestId: string): Promise<WalletState>
+  startInterview(requestId: string, environmentId: string): Promise<WalletState>
   endInterview(): Promise<WalletState | null>
   getCaptureError(): Promise<string | null>
   getSettings(): Promise<Settings>
@@ -184,6 +186,8 @@ export interface DesktopBridge {
   testModel(): Promise<{ latencyMs: number; message: string }>
   importContext(): Promise<{ name: string; text: string } | null>
   importTarget(): Promise<{ name: string; text: string } | null>
+  getResume?(id: string): Promise<ResumeInput>
+  getTarget?(id: string): Promise<TargetInput>
   getInterviewLibrary(): Promise<InterviewLibrary>
   saveResume(input: ResumeInput): Promise<InterviewLibrary>
   removeResume(id: string): Promise<InterviewLibrary>

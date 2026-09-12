@@ -37,7 +37,12 @@ export class AccountWorkspaces {
         if (this.identity(auth.settings) !== id) throw new Error('账户已切换，请重新登录原账号同步。')
         return auth
       }),
-        interviews: new InterviewStore(id, async () => ({ settings: await privateSettings.getSettings(), referenceIds: [] })) }
+        interviews: new InterviewStore(async () => {
+          if (!this.authentication) throw new Error('请先登录账户。')
+          const auth = await this.authentication()
+          if (this.identity(auth.settings) !== id) throw new Error('账户已切换，请重试。')
+          return auth
+        }) }
       this.stores.set(id, stores)
     }
     const references = new ReferenceService(() => { if (this.active?.id === id) this.changed(id) }, async () => {

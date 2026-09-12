@@ -15,9 +15,10 @@ interface ResumeEditorProps { library: InterviewLibrary | null; bridge: DesktopB
 const emptyResume: ResumeInput = { name: '', text: '' }
 function formatUpdatedAt(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '' : `更新于 ${date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}` }
 export default function ResumeEditor({ library, bridge, onLibrary, preferredId }: ResumeEditorProps) {
-  const records = library?.resumes.map(({ id, name, text }) => ({ id, name, text })) ?? []
-  const editor = useLibraryDraft<ResumeInput>(records, emptyResume, Boolean(library), preferredId, 'resume-library')
-  const [busy, setBusy] = useState(false)
+  const records = library?.resumes.map(({ id, name, text, version, bodyLoaded }) => ({ id, name, text, version, bodyLoaded })) ?? []
+  const editor = useLibraryDraft<ResumeInput>(records, emptyResume, Boolean(library), preferredId, 'resume-library', bridge?.getResume)
+  const [saving, setBusy] = useState(false)
+  const busy = saving || editor.loading
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
@@ -41,8 +42,8 @@ export default function ResumeEditor({ library, bridge, onLibrary, preferredId }
       const next = await bridge.saveResume({ ...context, name: context.name.trim() })
       const saved = next.resumes.find(record => context.id ? record.id === context.id : !records.some(previous => previous.id === record.id))
       onLibrary(next)
-      if (saved) editor.replace({ id: saved.id, name: saved.name, text: saved.text })
-      setNotice('简历已保存。使用这份简历的环境会在下一次回答时采用新内容。')
+      if (saved) editor.replace({ id: saved.id, version: saved.version, bodyLoaded: true, name: saved.name, text: saved.text })
+      setNotice('简历已保存。使用这份简历的环境会在下一次开始面试时采用新内容。')
     } catch (reason) { setError(errorMessage(reason)) }
     finally { setBusy(false) }
   }
@@ -73,7 +74,7 @@ export default function ResumeEditor({ library, bridge, onLibrary, preferredId }
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <h2 id="resume-title" className="min-w-0 truncate text-base font-semibold tracking-[-0.01em]">{context.id ? context.name || '未命名简历' : '新简历草稿'}</h2>
-          <StatusPill status={editor.dirty ? 'busy' : context.id ? 'ready' : 'pending'}>{editor.dirty ? '尚未保存' : context.id ? '已同步' : '草稿'}</StatusPill>
+          <StatusPill status={editor.loading || editor.dirty ? 'busy' : context.id ? 'ready' : 'pending'}>{editor.loading ? '加载正文…' : editor.dirty ? '尚未保存' : context.id ? '已同步' : '草稿'}</StatusPill>
         </div>
         <Button onClick={() => editor.request(() => void handleImport())} disabled={!bridge || busy || !library}><FileArrowUp size={18} aria-hidden="true" />导入 PDF / TXT / MD</Button>
       </header>

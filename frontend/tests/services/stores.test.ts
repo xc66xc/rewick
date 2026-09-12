@@ -40,7 +40,7 @@ describe('SettingsStore', () => {
     expect(persisted).not.toContain('test-remote-secret')
     expect(visible.remoteKnowledge).toEqual({ enabled: true, url: config.remoteKnowledge.url, agentId: 'aid-test', hasApiKey: true })
     expect(await new SettingsStore(directory, crypto).getSecrets()).toEqual({ platformAccessToken: '', asrApiKey: 'test-asr-secret', llmApiKey: 'test-llm-secret', remoteKnowledgeApiKey: 'test-remote-secret' })
-    expect((await new SettingsStore(directory, crypto).getSettings()).interviewTarget).toEqual(config.interviewTarget)
+    expect((await new SettingsStore(directory, crypto).getSettings()).interviewTarget).toEqual(defaultSettings.interviewTarget)
     expect((await new SettingsStore(directory, crypto).getSettings()).autoAnswer).toEqual({ enabled: false, pauseMs: 2500 })
     expect((await stat(join(directory, 'settings.json'))).mode & 0o777).toBe(0o600)
     expect(await readdir(directory)).toEqual(['settings.json'])
@@ -57,7 +57,8 @@ describe('SettingsStore', () => {
     update.llm.apiKey = ''
     await store.saveSettings(update)
     expect(await store.getSecrets()).toEqual({ platformAccessToken: '', asrApiKey: 'first-secret', llmApiKey: '', remoteKnowledgeApiKey: '' })
-    expect((await store.getSettings()).context.text).toBe('后端工程师')
+    expect((await store.getSettings()).context.text).toBe('')
+    expect(await readFile(join(directory, 'settings.json'), 'utf8')).not.toContain('后端工程师')
   })
 
   it('serializes concurrent changes without losing an omitted secret', async () => {
@@ -66,21 +67,21 @@ describe('SettingsStore', () => {
     first.asr.apiKey = 'retained-secret'
     await Promise.all([store.saveSettings(first), ...Array.from({ length: 8 }, (_, i) => {
       const next = input()
-      next.context.text = String(i)
+      next.autoAnswer.pauseMs = 2000 + i
       return store.saveSettings(next)
     })])
     expect((await store.getSecrets()).asrApiKey).toBe('retained-secret')
-    expect((await store.getSettings()).context.text).toBe('7')
+    expect((await store.getSettings()).autoAnswer.pauseMs).toBe(2007)
   })
 
-  it('loads legacy settings without losing the resume or encrypted credentials', async () => {
+  it('does not reuse local resume text while preserving encrypted service credentials', async () => {
     const { interviewTarget: _target, retrieval: _retrieval, remoteKnowledge: _remote, ...legacy } = input()
     legacy.context.text = '旧版个人背景保持原样'
     await writeFile(join(directory, 'settings.json'), JSON.stringify({ version: 1, settings: legacy,
       secrets: { asr: crypto.encryptString('legacy-asr').toString('base64'), llm: crypto.encryptString('legacy-llm').toString('base64') } }))
     const store = new SettingsStore(directory, crypto)
     const loaded = await store.getSettings()
-    expect(loaded.context.text).toBe(legacy.context.text)
+    expect(loaded.context.text).toBe('')
     expect(loaded.interviewTarget).toEqual(defaultSettings.interviewTarget)
     expect(loaded.retrieval.enabled).toBe(false)
     expect(loaded.remoteKnowledge).toEqual(defaultSettings.remoteKnowledge)
@@ -149,13 +150,14 @@ describe('SettingsStore', () => {
     expect((await store.getSettings()).remoteKnowledge.url).toBe(second.remoteKnowledge.url)
   })
 
-  it('rejects an oversized JD without overwriting a saved target', async () => {
+  it('validates incoming JD but never persists server background in local settings', async () => {
     const store = new SettingsStore(directory, crypto)
     const saved = input()
     saved.interviewTarget = { companyName: '原公司', roleName: '原岗位', jobDescription: '原 JD' }
     await store.saveSettings(saved)
     await expect(store.saveSettings({ ...saved, interviewTarget: { ...saved.interviewTarget, jobDescription: '字'.repeat(12001) } })).rejects.toThrow('配置或输入无效')
-    expect((await store.getSettings()).interviewTarget).toEqual(saved.interviewTarget)
+    expect((await store.getSettings()).interviewTarget).toEqual(defaultSettings.interviewTarget)
+    expect(await readFile(join(directory, 'settings.json'), 'utf8')).not.toContain('原 JD')
   })
 
   it('does not write a key when secure storage is unavailable', async () => {

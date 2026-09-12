@@ -15,9 +15,10 @@ interface InterviewTargetEditorProps { library: InterviewLibrary | null; bridge:
 const emptyTarget: TargetInput = { name: '', companyName: '', roleName: '', jobDescription: '' }
 function formatUpdatedAt(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '' : `更新于 ${date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}` }
 export default function InterviewTargetEditor({ library, bridge, onLibrary, preferredId }: InterviewTargetEditorProps) {
-  const records = library?.targets.map(({ id, name, companyName, roleName, jobDescription }) => ({ id, name, companyName, roleName, jobDescription })) ?? []
-  const editor = useLibraryDraft<TargetInput>(records, emptyTarget, Boolean(library), preferredId, 'target-library')
-  const [busy, setBusy] = useState(false)
+  const records = library?.targets.map(({ id, name, companyName, roleName, jobDescription, version, bodyLoaded }) => ({ id, name, companyName, roleName, jobDescription, version, bodyLoaded })) ?? []
+  const editor = useLibraryDraft<TargetInput>(records, emptyTarget, Boolean(library), preferredId, 'target-library', bridge?.getTarget)
+  const [saving, setBusy] = useState(false)
+  const busy = saving || editor.loading
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
@@ -27,7 +28,7 @@ export default function InterviewTargetEditor({ library, bridge, onLibrary, pref
     const selected = records.find(record => record.id === id)
     editor.request(() => { editor.replace(selected ?? emptyTarget); setNotice(''); setError('') })
   }
-  function handleField(field: keyof Omit<TargetInput, 'id'>, value: string) { editor.setDraft({ ...target, [field]: value }); setNotice('') }
+  function handleField(field: keyof Omit<TargetInput, 'id' | 'version' | 'bodyLoaded'>, value: string) { editor.setDraft({ ...target, [field]: value }); setNotice('') }
   function handleNew() { editor.request(() => { editor.replace(emptyTarget); setNotice('命名并保存岗位，再到面试环境中选择。'); setError('') }) }
   async function handleImport() {
     if (!bridge || busy) return
@@ -43,8 +44,8 @@ export default function InterviewTargetEditor({ library, bridge, onLibrary, pref
       const next = await bridge.saveTarget({ ...target, name: target.name.trim(), companyName: target.companyName.trim(), roleName: target.roleName.trim() })
       const saved = next.targets.find(record => target.id ? record.id === target.id : !records.some(previous => previous.id === record.id))
       onLibrary(next)
-      if (saved) editor.replace({ id: saved.id, name: saved.name, companyName: saved.companyName, roleName: saved.roleName, jobDescription: saved.jobDescription })
-      setNotice('岗位 JD 已保存。使用这个岗位的环境会在下一次回答时采用新内容。')
+      if (saved) editor.replace({ id: saved.id, version: saved.version, bodyLoaded: true, name: saved.name, companyName: saved.companyName, roleName: saved.roleName, jobDescription: saved.jobDescription })
+      setNotice('岗位 JD 已保存。使用这个岗位的环境会在下一次开始面试时采用新内容。')
     } catch (reason) { setError(errorMessage(reason)) }
     finally { setBusy(false) }
   }
@@ -75,7 +76,7 @@ export default function InterviewTargetEditor({ library, bridge, onLibrary, pref
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <h2 id="target-title" className="min-w-0 truncate text-base font-semibold tracking-[-0.01em]">{target.id ? target.name || '未命名岗位' : '新岗位草稿'}</h2>
-          <StatusPill status={editor.dirty ? 'busy' : target.id ? 'ready' : 'pending'}>{editor.dirty ? '尚未保存' : target.id ? '已同步' : '草稿'}</StatusPill>
+          <StatusPill status={editor.loading || editor.dirty ? 'busy' : target.id ? 'ready' : 'pending'}>{editor.loading ? '加载正文…' : editor.dirty ? '尚未保存' : target.id ? '已同步' : '草稿'}</StatusPill>
         </div>
         <Button onClick={() => editor.request(() => void handleImport())} disabled={!bridge || busy || !library}><FileArrowUp size={18} aria-hidden="true" />导入岗位 JD</Button>
       </header>

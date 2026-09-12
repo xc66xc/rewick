@@ -55,6 +55,10 @@ export class PlatformClient {
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       })
       if (!response.ok) {
+        if (response.status === 400 && path.endsWith('/interview-sessions/start')) {
+          await response.body?.cancel().catch(() => undefined)
+          throw new PlatformRequestError('面试背景校验失败，请刷新简历、岗位和资料选择后重试。', response.status)
+        }
         await response.body?.cancel().catch(() => undefined)
         const message = response.status === 409 && path.startsWith('/api/v1/payment-orders') ? '套餐已变更或停用，请刷新套餐后重新确认购买。'
           : response.status === 503 && path.startsWith('/api/v1/payment-orders') ? '支付暂未开放，请稍后再试。'
@@ -84,7 +88,7 @@ export class PlatformClient {
           const chunk = await reader.read()
           if (chunk.done) break
           size += chunk.value.byteLength
-          if (size > MAX_BYTES) throw new PlatformRequestError('平台响应超过容量限制。')
+          if (size > (path.includes('/interview-sessions/') ? 1_048_576 : MAX_BYTES)) throw new PlatformRequestError('平台响应超过容量限制。')
           chunks.push(chunk.value)
         }
       } finally { await reader.cancel().catch(() => undefined); reader.releaseLock() }

@@ -178,7 +178,7 @@ const references = scopedStore('references')
 const interviews = scopedStore('interviews')
 async function effectiveSettings() {
   const value = await settings.getSettings()
-  return accounts.active ? interviews.resolve(value) : value
+  return interviewTimer.active && interviewTimer.background ? { ...value, ...interviewTimer.background } : accounts.active ? interviews.resolve(value) : value
 }
 function assertInterviewIdle() {
   if (interviewTimer.active) throw new Error('请先结束面试，再修改本次面试内容。')
@@ -266,15 +266,10 @@ function registerHandlers(): void {
   handle('payments:cancel', id => paymentRequest(client => client.cancel(id)))
   handle('wallet:get', async () => interviewTimer.read(await walletConnection()))
   handle('interview:start', input => interviewMutations.run(async () => {
-    const requestId = parseInput(z.string().uuid(), input)
-    const config = await effectiveSettings()
-    if (!config.context.text.trim() || !config.interviewEnvironment?.resumeId) throw new Error('开始面试前必须选择并填写简历。')
-    if (!config.remoteKnowledge.enabled && config.retrieval.enabled) {
-      const documents = await references.list()
-      const selected = config.interviewEnvironment.referenceIds
-      if (selected.some(id => !documents.some(item => item.id === id && item.status === 'ready' && item.enabled))) throw new Error('所选资料尚未准备完成，请等待索引完成或取消选择。')
-    }
-    return interviewTimer.start(await walletConnection(), requestId)
+    const { requestId, environmentId } = parseInput(z.object({ requestId: z.string().uuid(), environmentId: z.string().uuid() }), input)
+    const state = await interviewTimer.start(await walletConnection(), requestId, environmentId)
+    emit({ kind: 'settings-changed' })
+    return state
   }))
   handle('interview:end', () => interviewTimer.end())
   handle('settings:get', () => effectiveSettings())
@@ -362,19 +357,14 @@ function registerHandlers(): void {
     return { name: basename(path), text }
   })
   const profileId = z.string().min(1).max(128)
+  handle('resumes:get', input => interviews.resume(parseInput(profileId, input)))
+  handle('targets:get', input => interviews.target(parseInput(profileId, input)))
   handle('interviews:list', () => interviews.list())
   handle('resumes:save', input => mutateInterviews(() => interviews.saveResume(input as Parameters<InterviewStore['saveResume']>[0])))
   handle('resumes:remove', input => mutateInterviews(() => interviews.removeResume(parseInput(profileId, input))))
   handle('targets:save', input => mutateInterviews(() => interviews.saveTarget(input as Parameters<InterviewStore['saveTarget']>[0])))
   handle('targets:remove', input => mutateInterviews(() => interviews.removeTarget(parseInput(profileId, input))))
-  handle('environments:save', input => mutateInterviews(async () => {
-    const parsed = parseInput(environmentInputSchema, input)
-    const library = await interviews.list()
-    if (parsed.id === library.activeEnvironmentId) assertInterviewIdle()
-    const available = new Set((await references.list()).map(document => document.id))
-    if (parsed.referenceIds.some(id => !available.has(id))) throw new Error('部分参考资料已移除，请取消这些选择后保存。')
-    return interviews.saveEnvironment(parsed)
-  }))
+  handle('environments:save', input => mutateInterviews(() => interviews.saveEnvironment(parseInput(environmentInputSchema, input))))
   handle('environments:remove', input => mutateInterviews(() => interviews.removeEnvironment(parseInput(profileId, input))))
   handle('environments:activate', input => mutateInterviews(async () => {
     assertInterviewIdle()
@@ -450,7 +440,7 @@ function registerHandlers(): void {
     retrievalController = controller
     try {
       const snapshot = await settings.getConnectionSnapshot()
-      const config = await interviews.resolve(snapshot.settings)
+      const config = interviewTimer.background ? { ...snapshot.settings, ...interviewTimer.background } : await interviews.resolve(snapshot.settings)
       if (request.environmentId && request.environmentId !== config.interviewEnvironment?.id) throw new Error('面试环境已切换，请重新生成回答。')
       const secrets = snapshot.secrets
       if (epoch !== answerEpoch) return

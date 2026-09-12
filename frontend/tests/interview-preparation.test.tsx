@@ -7,8 +7,9 @@ import { defaultSettings } from '../src/shared/defaults'
 import type { DesktopBridge, EnvironmentInput, InterviewLibrary } from '../src/shared/types'
 
 afterEach(cleanup)
-function setup(resumeId: string | null = 'resume', availableSeconds = 600, secondEnvironment = false) {
+function setup(resumeId: string | null = 'resume', availableSeconds = 600, secondEnvironment = false, summaries = false) {
   const library: InterviewLibrary = { resumes: [{ id: 'resume', name: '开发简历', text: '开发工程师经历', createdAt: '', updatedAt: '' }], targets: [], environments: [{ id: 'env', name: '默认环境', resumeId, targetId: null, referenceIds: [], createdAt: '', updatedAt: '' }], activeEnvironmentId: 'env' }
+  if (summaries) library.resumes = library.resumes.map(record => ({ ...record, text: '', bodyLoaded: false, hasContent: true }))
   if (secondEnvironment) library.environments.push({ id: 'env-2', name: '备用环境', resumeId, targetId: null, referenceIds: [], createdAt: '', updatedAt: '' })
   const bridge = { getInterviewLibrary: vi.fn(async () => library), listReferences: vi.fn(async () => []), removeEnvironment: vi.fn(async (id: string) => ({ ...library, environments: library.environments.filter(record => record.id !== id) })), onEvent: () => () => undefined } as unknown as DesktopBridge
   const start = vi.fn(async () => undefined)
@@ -89,4 +90,13 @@ describe('interview preparation', () => {
     await actor.click(within(await screen.findByRole('dialog', { name: '删除环境' })).getByRole('button', { name: '确认删除' }))
     await waitFor(() => expect(bridge.removeEnvironment).toHaveBeenCalledWith('env-2'))
   })
+  it('starts the clicked environment with a resume summary without loading its body first', async () => {
+    const { actor, start } = setup('resume', 600, true, true)
+    const card = await screen.findByRole('article', { name: '面试环境 备用环境' })
+    const button = within(card).getByRole('button', { name: '开始面试' })
+    expect((button as HTMLButtonElement).disabled).toBe(false)
+    await actor.click(button)
+    await waitFor(() => expect(start).toHaveBeenCalledWith('env-2'))
+  })
+
 })

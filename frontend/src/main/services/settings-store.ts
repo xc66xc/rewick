@@ -137,7 +137,7 @@ export class SettingsStore {
       const { apiKey: remoteKnowledgeKey, ...remoteKnowledge } = parsed.remoteKnowledge
       const next: Persisted = {
         customServices: previous.customServices, serviceProfilesInitialized: previous.serviceProfilesInitialized,
-        version: 1, settings: { ...parsed, asr, llm, remoteKnowledge },
+        version: 1, settings: { ...parsed, asr, llm, remoteKnowledge, context: { name: '', text: '' }, interviewTarget: { companyName: '', roleName: '', jobDescription: '' } },
         rememberedLogin: parsed.platform.baseUrl === previous.settings.platform.baseUrl ? previous.rememberedLogin : undefined,
         platformSession: parsed.platform.baseUrl === previous.settings.platform.baseUrl ? previous.platformSession : undefined,
         secrets: {
@@ -208,7 +208,7 @@ export class SettingsStore {
   }
 
   private publicSettings(value: Persisted): Settings {
-    const { asr, llm, remoteKnowledge, context, interviewTarget, retrieval, answerStyle, autoAnswer } = value.settings
+    const { asr, llm, remoteKnowledge, retrieval, answerStyle, autoAnswer } = value.settings
     const authenticated = Boolean(value.secrets.platformAccessToken && value.platformSession && Date.parse(value.platformSession.expiresAt) > Date.now())
     const info = authenticated ? value.platformSession?.info : undefined
     let result: Settings = {
@@ -217,7 +217,7 @@ export class SettingsStore {
       asr: { url: asr.url, model: asr.model, silenceMs: asr.silenceMs, hasApiKey: Boolean(value.secrets.asr) },
       llm: { baseUrl: llm.baseUrl, model: llm.model, temperature: llm.temperature, hasApiKey: Boolean(value.secrets.llm) },
       remoteKnowledge: { ...remoteKnowledge, hasApiKey: Boolean(value.secrets.remoteKnowledge) },
-      context, interviewTarget, retrieval, answerStyle, autoAnswer,
+      context: { name: '', text: '' }, interviewTarget: { companyName: '', roleName: '', jobDescription: '' }, retrieval, answerStyle, autoAnswer,
     }
     for (const kind of serviceKinds) {
       const choice = value.settings.serviceSelections?.[kind]

@@ -165,3 +165,9 @@ ASR 连接测试会等待 `task-started`，发送半秒合成静音 PCM（16 kHz
 已完成 01–09 的数据库停后端后手动执行 `sql/10_time_wallet.sql`。它删除每日额度字段与旧计数，新增 `time_wallets`、`interview_sessions`、`time_wallet_transactions`，已有用户初始为 0 秒。赋予应用账号新表 CRUD 和序列使用权限，再同步发布后端、管理端和桌面端。
 
 桌面登录后进入准备页，简历必填、JD 和资料选填。确认开始后扣时，停止转写不停止扣时，结束面试才停止。上传、索引和历史浏览不扣时。
+
+## 个人背景与面试快照
+
+`/api/v1/background` 管理登录用户的简历、岗位 JD、环境与默认选择。正文和关联存 PostgreSQL，保存使用 `version` 和 `mutationId`；跨用户引用、覆盖旧版本、删除被引用资料均被拒绝。列表只携带默认环境所需正文，其他正文按需查询。
+
+`POST /api/v1/interview-sessions/start` 现在需要 `requestId` 和 `environmentId`。开始前验证非空简历、资料归属与就绪状态，随后在同一事务创建计时会话并保存背景快照，返回 `background`。重复请求返回原会话及原快照。升级执行 `sql/14_server_background.sql` 并更新桌面端；不导入旧桌面背景、不存原始简历文件、不向量化简历。

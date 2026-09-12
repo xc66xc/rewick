@@ -3,6 +3,7 @@ package com.interview.copilot.controller.wallet;
 import com.interview.copilot.request.wallet.StartInterviewRequest;
 import com.interview.copilot.response.wallet.WalletResponse;
 import com.interview.copilot.security.auth.UserPrincipal;
+import com.interview.copilot.service.background.BackgroundService;
 import com.interview.copilot.service.wallet.WalletService;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,8 +17,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class WalletController {
     private final WalletService service;
 
-    public WalletController(WalletService service) {
+    private final BackgroundService background;
+
+    public WalletController(WalletService service, BackgroundService background) {
         this.service = service;
+        this.background = background;
     }
 
     @GetMapping("/api/v1/wallet")
@@ -28,7 +32,7 @@ public class WalletController {
     @PostMapping("/api/v1/interview-sessions/start")
     public WalletResponse start(
             @AuthenticationPrincipal UserPrincipal user, @RequestBody StartInterviewRequest body) {
-        return service.start(user.id(), body.requestId());
+        return background.start(user.id(), body.requestId(), body.environmentId());
     }
 
     @PostMapping("/api/v1/interview-sessions/{id}/heartbeat")

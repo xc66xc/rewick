@@ -17,6 +17,7 @@ export function useInterviewTime(bridge: DesktopBridge) {
   const [warning, setWarning] = useState('')
   const received = useRef(performance.now())
   const warned = useRef(new Set<number>())
+  const startingEnvironment = useRef<string | null>(null)
   const requestId = useRef<string | null>(null)
   const accept = (value: WalletState) => { received.current = performance.now(); setElapsed(0); setWallet(value) }
   useEffect(() => {
@@ -41,10 +42,12 @@ export function useInterviewTime(bridge: DesktopBridge) {
       warned.current.add(threshold); setWarning(`可用面试时长不足 ${threshold / 60} 分钟。`)
     }
   }, [active, remaining])
-  async function start() {
+  async function start(environmentId: string) {
+    if (startingEnvironment.current !== environmentId) requestId.current = null
+    startingEnvironment.current = environmentId
     setBusy(true); setError('')
     requestId.current ??= crypto.randomUUID()
-    try { const value = await bridge.startInterview(requestId.current); accept(value); setActive(value.session?.status === 'active'); requestId.current = null; warned.current.clear(); setWarning('') }
+    try { const value = await bridge.startInterview(requestId.current, environmentId); accept(value); setActive(value.session?.status === 'active'); requestId.current = null; warned.current.clear(); setWarning('') }
     catch (reason) { setError(errorMessage(reason)); throw reason }
     finally { setBusy(false) }
   }
