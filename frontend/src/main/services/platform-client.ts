@@ -60,7 +60,9 @@ export class PlatformClient {
           throw new PlatformRequestError('面试背景校验失败，请刷新简历、岗位和资料选择后重试。', response.status)
         }
         await response.body?.cancel().catch(() => undefined)
-        const message = response.status === 409 && path.startsWith('/api/v1/payment-orders') ? '套餐已变更或停用，请刷新套餐后重新确认购买。'
+        const message = path === '/api/v1/user-preferences' && response.status === 409 ? '设置已被其他设备修改，当前草稿已保留。请重新读取服务器设置后再修改。'
+          : path === '/api/v1/user-preferences' && response.status === 400 ? '设置参数无效，或所选平台服务已下架，请刷新后重新选择。'
+          : response.status === 409 && path.startsWith('/api/v1/payment-orders') ? '套餐已变更或停用，请刷新套餐后重新确认购买。'
           : response.status === 503 && path.startsWith('/api/v1/payment-orders') ? '支付暂未开放，请稍后再试。'
           : response.status === 401 ? (path.endsWith('/login') ? '平台登录账号或密码错误。' : '平台登录已失效，请重新登录。')
           : response.status === 409 && path.includes('/interview-sessions/') ? '该账号已有一场进行中的面试，请先结束原面试。'

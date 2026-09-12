@@ -54,6 +54,7 @@ export const platformSettingsSchema = z.object({
   selectedModelId: z.string().trim().max(200).optional(),
 })
 export const settingsInputSchema = z.object({
+  preferencesVersion: z.number().int().nonnegative().optional(),
   serviceSelections: z.object({
     llm: z.object({ source: z.enum(['platform', 'custom']), id: z.string().max(200) }).optional(),
     asr: z.object({ source: z.enum(['platform', 'custom']), id: z.string().max(200) }).optional(),

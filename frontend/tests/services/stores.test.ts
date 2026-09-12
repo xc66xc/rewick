@@ -21,6 +21,24 @@ beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'copilot-store
 afterEach(async () => { vi.restoreAllMocks(); await rm(directory, { recursive: true, force: true }) })
 
 describe('SettingsStore', () => {
+  it('stores only local configuration for a cloud-managed account', async () => {
+    const store = new SettingsStore(directory, crypto, true)
+    await store.saveSettings({ ...input(), preferencesVersion: 7, answerStyle: 'detailed', serviceSelections: { llm: { source: 'platform', id: 'platform-model' } } })
+    const disk = JSON.parse(await readFile(join(directory, 'settings.json'), 'utf8'))
+    expect(disk.settings).not.toHaveProperty('answerStyle')
+    expect(disk.settings).not.toHaveProperty('autoAnswer')
+    expect(disk.settings).not.toHaveProperty('retrieval')
+    expect(disk.settings).not.toHaveProperty('preferencesVersion')
+    expect(disk.settings.asr).not.toHaveProperty('silenceMs')
+    expect(disk.settings.llm).not.toHaveProperty('temperature')
+    expect(disk.settings.serviceSelections).toEqual({})
+    await store.saveCustomService({ name: '我的模型', kind: 'llm', url: 'https://my-model.example/v1', model: 'test', apiKey: 'local-secret' })
+    const restarted = new SettingsStore(directory, crypto, true)
+    expect((await restarted.getSecrets()).llmApiKey).toBe('local-secret')
+    expect((await restarted.getSettings()).serviceSelections?.llm?.source).toBe('custom')
+    expect(await readFile(join(directory, 'settings.json'), 'utf8')).not.toContain('local-secret')
+  })
+
   it('persists encrypted keys across restarts without returning secrets to the renderer', async () => {
     const store = new SettingsStore(directory, crypto)
     expect(await store.getSettings()).toEqual(defaultSettings)

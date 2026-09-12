@@ -30,9 +30,9 @@ function setup(settings = platformSettings()) {
   const removeCustomService = vi.fn(async (id: string): Promise<Settings> => ({ ...settings, customServices: settings.customServices?.filter(value => value.id !== id) }))
   const onLogout = vi.fn(async () => undefined)
   const onApply = vi.fn()
-  const bridge = { testCustomService, saveCustomService, removeCustomService, refreshPlatform: vi.fn(async () => settings) } as unknown as DesktopBridge
-  render(<SettingsDialog settings={settings} bridge={bridge} onSave={onSave} onApply={onApply} onLogout={onLogout} onClose={vi.fn()} />)
-  return { onSave, onApply, testCustomService, saveCustomService, removeCustomService, onLogout, user: userEvent.setup() }
+  const bridge = { testCustomService, saveCustomService, removeCustomService, getSettings: vi.fn(async () => settings), refreshPlatform: vi.fn(async () => settings) } as unknown as DesktopBridge
+  const view = render(<SettingsDialog settings={settings} bridge={bridge} onSave={onSave} onApply={onApply} onLogout={onLogout} onClose={vi.fn()} />)
+  return { view, bridge, onSave, onApply, testCustomService, saveCustomService, removeCustomService, onLogout, user: userEvent.setup() }
 }
 async function openCustom(user: ReturnType<typeof userEvent.setup>) {
   await pickOption(user, '回答模型', '自定义模型/服务…')
@@ -47,6 +47,32 @@ async function pickOption(user: ReturnType<typeof userEvent.setup>, combobox: st
   await user.click(await screen.findByRole('option', { name: option }))
 }
 describe('grouped service settings', () => {
+  it('keeps the draft version when newer settings arrive and explicitly reloads on request', async () => {
+    const settings = { ...platformSettings(), preferencesVersion: 2 }
+    const { user, onSave, view, bridge, onApply } = setup(settings)
+    await pickOption(user, '回答风格', '展开口语')
+    const newer = { ...settings, preferencesVersion: 3 }
+    view.rerender(<SettingsDialog settings={newer} bridge={bridge} onSave={onSave} onApply={onApply} onClose={vi.fn()} />)
+    onSave.mockRejectedValueOnce(new Error('设置已被其他设备修改'))
+    await user.click(screen.getByRole('button', { name: '保存设置' }))
+    await screen.findByRole('alert')
+    expect(onSave.mock.calls[0][0].preferencesVersion).toBe(2)
+    expect(screen.getByRole('combobox', { name: '回答风格' }).textContent).toContain('展开口语')
+    vi.mocked(bridge.getSettings).mockResolvedValueOnce(newer)
+    await user.click(screen.getByRole('button', { name: '重新读取云端设置' }))
+    const dialog = within(await screen.findByRole('dialog', { name: '重新读取云端设置' }))
+    await user.click(dialog.getByRole('button', { name: '重新读取' }))
+    await waitFor(() => expect(onApply).toHaveBeenCalledWith(newer))
+    await user.click(screen.getByRole('button', { name: '保存设置' }))
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(2))
+    expect(onSave.mock.calls[1][0].preferencesVersion).toBe(3)
+  })
+  it('marks a server-invalidated selection even when the cached catalog still contains it', () => {
+    setup({ ...platformSettings(), preferencesVersion: 1, serviceSelections: { llm: { source: 'platform', id: 'fast' } }, unavailablePlatformSelections: { llm: 'fast' } })
+    expect(screen.getByRole('combobox', { name: '回答模型' }).getAttribute('aria-invalid')).toBe('true')
+    expect(screen.getByRole('alert').textContent).toContain('已删除或下架')
+  })
+
   it('groups platform/custom services and explicitly chooses platform despite an old saved Key', async () => {
     const settings = platformSettings(); settings.llm.hasApiKey = true
     const { user, onSave } = setup(settings)

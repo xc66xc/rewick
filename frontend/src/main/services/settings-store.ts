@@ -27,7 +27,7 @@ export interface ServiceSecrets { platformAccessToken: string; asrApiKey: string
 export class SettingsStore {
   private readonly path: string
   private readonly queue = new SerialQueue()
-  constructor(rootDir: string, private readonly crypto: SecretStorage) {
+  constructor(rootDir: string, private readonly crypto: SecretStorage, private readonly cloudManaged = false) {
     this.path = join(rootDir, 'settings.json')
   }
 
@@ -47,7 +47,7 @@ export class SettingsStore {
     return this.queue.run(async () => {
       const saved = await this.read()
       const rememberedLogin = credentials ? this.encrypt(JSON.stringify(credentials), '') : undefined
-      await writeJsonAtomic(this.path, { ...saved, rememberedLogin })
+      await this.write( { ...saved, rememberedLogin })
     })
   }
 
@@ -69,7 +69,7 @@ export class SettingsStore {
       saved.settings.serviceSelections = selections
       saved.settings.platform.enabled = true
       saved.serviceProfilesInitialized = true
-      await writeJsonAtomic(this.path, saved)
+      await this.write( saved)
     })
   }
 
@@ -82,7 +82,7 @@ export class SettingsStore {
       const profile = { ...parsed, id: previous?.id ?? randomUUID(), secret: this.encrypt(apiKey, previous?.secret ?? '') }
       saved.customServices = [...saved.customServices.filter(value => value.id !== profile.id), profile]
       saved.settings.serviceSelections = { ...saved.settings.serviceSelections, [profile.kind]: { source: 'custom', id: profile.id } }
-      await writeJsonAtomic(this.path, saved)
+      await this.write( saved)
       return this.publicSettings(saved)
     })
   }
@@ -104,7 +104,7 @@ export class SettingsStore {
       const legacySecret = { 'legacy-llm': 'llm', 'legacy-asr': 'asr', 'legacy-knowledge': 'remoteKnowledge' } as const
       if (id in legacySecret) saved.secrets[legacySecret[id as keyof typeof legacySecret]] = ''
       // Preserve a missing selection so removal never silently switches a paid provider.
-      await writeJsonAtomic(this.path, saved)
+      await this.write( saved)
       return this.publicSettings(saved)
     })
   }
@@ -149,7 +149,7 @@ export class SettingsStore {
       }
       if (remoteKnowledge.enabled && next.secrets.remoteKnowledge && parsed.serviceSelections?.knowledge?.source !== 'platform') parseInput(remoteKnowledgeSettingsSchema, remoteKnowledge)
       if (remoteKnowledge.enabled && !parsed.platform.enabled && !next.secrets.remoteKnowledge) throw new Error('启用远程知识库前请填写远程知识库 API Key。')
-      await writeJsonAtomic(this.path, next)
+      await this.write( next)
       return this.publicSettings(next)
     })
   }
@@ -163,7 +163,7 @@ export class SettingsStore {
       const platformSession = parseInput(platformSessionSchema, { expiresAt, info })
       if (Date.parse(expiresAt) <= Date.now()) throw new Error('平台登录已过期，请重新登录。')
       const next = { ...saved, platformSession, secrets: { ...saved.secrets, platformAccessToken: this.encrypt(accessToken, '') } }
-      await writeJsonAtomic(this.path, next)
+      await this.write( next)
       return this.publicSettings(next)
     })
   }
@@ -173,7 +173,7 @@ export class SettingsStore {
       const saved = await this.read()
       if (expectedToken !== undefined && this.decrypt(saved.secrets.platformAccessToken) !== expectedToken) return this.publicSettings(saved)
       const next = { ...saved, platformSession: undefined, secrets: { ...saved.secrets, platformAccessToken: '' } }
-      await writeJsonAtomic(this.path, next)
+      await this.write( next)
       return this.publicSettings(next)
     })
   }
@@ -198,13 +198,33 @@ export class SettingsStore {
     if (saved === undefined) {
       return { version: 1, customServices: [], serviceProfilesInitialized: false, settings: parseInput(settingsInputSchema, defaultSettings), secrets: { asr: '', llm: '', remoteKnowledge: '', platformAccessToken: '' } }
     }
-    const parsed = persistedSchema.safeParse(saved)
+    const local = this.cloudManaged ? saved as Record<string, unknown> : undefined
+    const settings = local?.settings as Record<string, unknown> | undefined
+    const restored = settings ? { ...local, settings: { ...settings, preferencesVersion: undefined,
+      answerStyle: defaultSettings.answerStyle, autoAnswer: defaultSettings.autoAnswer, retrieval: defaultSettings.retrieval,
+      asr: { ...settings.asr as object, silenceMs: defaultSettings.asr.silenceMs },
+      llm: { ...settings.llm as object, temperature: defaultSettings.llm.temperature },
+      remoteKnowledge: { ...settings.remoteKnowledge as object, enabled: false } } } : saved
+    const parsed = persistedSchema.safeParse(restored)
     if (!parsed.success) throw new Error('本地设置文件格式无效，请先备份后检查 settings.json。')
     // Never accept plaintext secrets from a manually altered settings file.
     delete parsed.data.settings.asr.apiKey
     delete parsed.data.settings.llm.apiKey
     delete parsed.data.settings.remoteKnowledge.apiKey
     return parsed.data
+  }
+
+  private async write(value: unknown): Promise<void> {
+    if (!this.cloudManaged) { await writeJsonAtomic(this.path, value); return }
+    const saved = structuredClone(value) as { settings: Record<string, unknown> }
+    const config = saved.settings
+    for (const key of ['preferencesVersion', 'answerStyle', 'autoAnswer', 'retrieval']) delete config[key]
+    delete (config.asr as Record<string, unknown>).silenceMs
+    delete (config.llm as Record<string, unknown>).temperature
+    delete (config.remoteKnowledge as Record<string, unknown>).enabled
+    delete (config.platform as Record<string, unknown>).selectedModelId
+    config.serviceSelections = Object.fromEntries(Object.entries(config.serviceSelections as Record<string, { source: string }> ?? {}).filter(([, selection]) => selection.source === 'custom'))
+    await writeJsonAtomic(this.path, saved)
   }
 
   private publicSettings(value: Persisted): Settings {

@@ -27,6 +27,8 @@ export interface PlatformSettings {
   limits?: PlatformInfo['limits']
 }
 export interface Settings {
+  preferencesVersion?: number
+  unavailablePlatformSelections?: Partial<Record<ServiceKind, string | null>>
   accountScope?: string
   customServices?: CustomServiceProfile[]
   serviceSelections?: Partial<Record<ServiceKind, ServiceSelection>>
@@ -42,6 +44,7 @@ export interface Settings {
   autoAnswer: { enabled: boolean; pauseMs: number }
 }
 export interface SettingsInput {
+  preferencesVersion?: number
   serviceSelections?: Settings['serviceSelections']
   platform?: Pick<PlatformSettings, 'enabled' | 'baseUrl' | 'selectedModelId'>
   asr: Omit<Settings['asr'], 'hasApiKey'> & { apiKey?: string }

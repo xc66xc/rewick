@@ -8,7 +8,7 @@ import RemoveServiceDialog from './RemoveServiceDialog'
 import ServicePreferences from './ServicePreferences'
 import ServiceSelector from './ServiceSelector'
 import { Button } from './ui/button'
-import { Modal } from './ui/dialog'
+import { Modal, ConfirmModal } from './ui/dialog'
 import { toast } from './ui/toast'
 import { formNoteClass, inlineErrorClass, successNoticeClass } from '../lib/form'
 
@@ -32,19 +32,21 @@ export default function SettingsDialog({ settings, bridge, onSave, onApply, onLo
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
+  const [reloadConfirm, setReloadConfirm] = useState(false)
   useEffect(() => {
     const previouslyFocused = returnFocus.current
     return () => { if (previouslyFocused instanceof HTMLElement && previouslyFocused.isConnected) previouslyFocused.focus() }
   }, [])
   useEffect(() => { setCatalog(settings) }, [settings])
-  async function perform(action: 'save' | 'refresh' | 'logout') {
+  async function perform(action: 'save' | 'refresh' | 'reload' | 'logout') {
     if (!bridge || inFlight.current || (action === 'save' && !form.current?.reportValidity())) return
     inFlight.current = true; setBusy(true); setError(''); setNotice('')
     try {
       if (action === 'logout') { if (onLogout) await onLogout(); else { const value = await bridge.platformLogout(); onApply?.(value); onClose() } }
+      else if (action === 'reload') { const value = await bridge.getSettings(); setCatalog(value); setDraft(initialDraft(value)); onApply?.(value); setNotice('已读取服务器设置，本机自定义服务选择仍保留。') }
       else if (action === 'refresh') { const value = await bridge.refreshPlatform(); setCatalog(value); onApply?.(value); setNotice('平台服务列表已刷新，未保存的选择已保留。') }
       else {
-        const value = await onSave({ ...settingsInput(settings), serviceSelections: draft.serviceSelections,
+        const value = await onSave({ ...settingsInput(settings), preferencesVersion: draft.preferencesVersion, serviceSelections: draft.serviceSelections,
           answerStyle: draft.answerStyle, llm: { ...settingsInput(settings).llm, temperature: draft.llm.temperature },
           asr: { ...settingsInput(settings).asr, silenceMs: draft.asr.silenceMs }, autoAnswer: draft.autoAnswer,
           retrieval: draft.retrieval, remoteKnowledge: { ...settingsInput(settings).remoteKnowledge, enabled: draft.remoteKnowledge.enabled } })
@@ -69,7 +71,7 @@ export default function SettingsDialog({ settings, bridge, onSave, onApply, onLo
       <form ref={form} onSubmit={event => { event.preventDefault(); void perform('save') }}>
         <fieldset className="m-0 min-w-0 border-0 p-0" disabled={busy || !bridge}>
           <section aria-label="当前账号" className={groupClass}><h3 className="mb-2 text-sm font-semibold">当前账号</h3><p className={formNoteClass}>{catalog.platform?.user?.displayName || '尚未登录'}</p>
-            <div className="mb-4 flex flex-wrap gap-2"><Button size="sm" onClick={() => void perform('refresh')}>刷新平台服务</Button><Button size="sm" variant="quiet" className="text-danger hover:bg-danger-subtle" onClick={() => void perform('logout')}>退出登录</Button></div></section>
+            <div className="mb-4 flex flex-wrap gap-2"><Button size="sm" onClick={() => void perform('refresh')}>刷新平台服务</Button><Button size="sm" onClick={() => setReloadConfirm(true)}>重新读取云端设置</Button><Button size="sm" variant="quiet" className="text-danger hover:bg-danger-subtle" onClick={() => void perform('logout')}>退出登录</Button></div></section>
           {kinds.map(kind => <fieldset className={groupClass} key={kind}><legend className="mb-4 w-full p-0 text-sm font-semibold">{serviceLabels[kind]}</legend>
             <ServiceSelector kind={kind} settings={catalog} selection={draft.serviceSelections?.[kind]}
               onChange={selection => setDraft(current => ({ ...current, serviceSelections: { ...current.serviceSelections, [kind]: selection } }))}
@@ -77,10 +79,11 @@ export default function SettingsDialog({ settings, bridge, onSave, onApply, onLo
             <ServicePreferences kind={kind} draft={draft} onChange={setDraft} />
           </fieldset>)}
         </fieldset>
-        <p className="flex items-start gap-2 text-xs leading-[1.8] text-text-muted [&_svg]:mt-0.5 [&_svg]:size-4 [&_svg]:shrink-0"><Key aria-hidden="true" />自定义 Key 和登录凭证加密保存在本机。平台服务由后端中转；音频、问题和参考内容发送到所选服务。</p>
+        <p className="flex items-start gap-2 text-xs leading-[1.8] text-text-muted [&_svg]:mt-0.5 [&_svg]:size-4 [&_svg]:shrink-0"><Key aria-hidden="true" />平台服务选择和使用偏好随账号同步，自定义服务选择仅在本机生效。自定义 Key 和登录凭证加密保存在本机。平台服务由后端中转；音频、问题和参考内容发送到所选服务。</p>
         {notice && <p className={successNoticeClass} role="status"><CheckCircle size={18} aria-hidden="true" />{notice}</p>}{error && <p className={inlineErrorClass} role="alert">{error}</p>}
       </form>
     </Modal>
+    <ConfirmModal open={reloadConfirm} onOpenChange={setReloadConfirm} title="重新读取云端设置" description="将替换本窗口尚未保存的设置草稿。已保存的本机自定义服务及 Key 不受影响。" confirmText="重新读取" onConfirm={() => { setReloadConfirm(false); void perform('reload') }} />
     {editor && bridge && <CustomServiceDialog kind={editor.kind} profile={editor.profile} settings={catalog} bridge={bridge} onSaved={value => applyCustom(value, editor.kind)} onClose={() => setEditor(undefined)} />}
     {removing && bridge && <RemoveServiceDialog profile={removing} bridge={bridge} onRemoved={value => applyCustom(value, removing.kind)} onClose={() => setRemoving(undefined)} />}
   </>

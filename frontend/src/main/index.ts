@@ -87,12 +87,23 @@ const settings = new Proxy(authSettings, {
       const own = accounts.context.getStore() ?? accounts.active
       if (own && accounts.identity(auth.settings) !== own.id) throw new Error('账户已切换，请重试。')
       const snapshot = own ? await own.settings.getConnectionSnapshot() : auth
-      const value = { settings: { ...snapshot.settings, platform: auth.settings.platform, accountScope: own?.id }, secrets: { ...snapshot.secrets, platformAccessToken: auth.secrets.platformAccessToken } }
+      const merged = own ? await own.preferences.merge(snapshot.settings) : snapshot.settings
+      const secrets = { ...snapshot.secrets }
+      if (own) for (const [kind, key] of [['llm', 'llmApiKey'], ['asr', 'asrApiKey'], ['knowledge', 'remoteKnowledgeApiKey']] as const) {
+        if (merged.serviceSelections?.[kind]?.source !== 'custom') secrets[key] = ''
+      }
+      const value = { settings: { ...merged, platform: auth.settings.platform, accountScope: own?.id }, secrets: { ...secrets, platformAccessToken: auth.secrets.platformAccessToken } }
       return property === 'getSettings' ? value.settings : property === 'getSecrets' ? value.secrets : value
     }
     if (property === 'saveSettings') return async (input: SettingsInput) => {
       const own = accounts.context.getStore() ?? accounts.active
-      if (own) return own.settings.saveSettings(input)
+      if (own) {
+        for (const [kind, selection] of Object.entries(input.serviceSelections ?? {})) {
+          if (selection?.source === 'custom' && !(await own.settings.getSettings()).customServices?.some(profile => profile.id === selection.id && profile.kind === kind)) throw new Error('所选自定义服务不存在，请重新选择。')
+        }
+        await own.preferences.save(input)
+        return own.settings.saveSettings(input)
+      }
       return authSettings.saveSettings(input)
     }
     const target = accounts.current().settings
@@ -110,6 +121,7 @@ function mutatePlatform<T>(operation: () => Promise<T>): Promise<T> {
 }
 async function serviceConnection(snapshot: { settings: Settings; secrets: ServiceSecrets }, capability: PlatformCapability, signal?: AbortSignal) {
   let config = snapshot.settings
+  if (config.preferencesVersion !== undefined && !config.serviceSelections?.[capability]) throw new Error('请先在模型与设置中明确选择服务。')
   if (needsPlatform(config, snapshot.secrets, capability)) {
     try { const refreshed = await platform.refreshSnapshot(snapshot, signal); config = { ...config, platform: refreshed.platform } }
     finally {
@@ -272,7 +284,7 @@ function registerHandlers(): void {
     return state
   }))
   handle('interview:end', () => interviewTimer.end())
-  handle('settings:get', () => effectiveSettings())
+  handle('settings:get', async () => { await accounts.active?.preferences.load(true); return effectiveSettings() })
   handle('platform:remembered-login', () => authSettings.getRememberedLogin())
   handle('platform:login', input => {
     return mutatePlatform(async () => { disposeWork(); await platform.login(input); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings() })
@@ -290,7 +302,7 @@ function registerHandlers(): void {
     const controller = new AbortController()
     const release = platformWork.track(platformWork.revision, () => controller.abort(new Error('平台连接已更改，状态刷新已取消。')))
     return platformMutations.run(async () => {
-      try { await platform.refresh(controller.signal); await syncAccount(); return await effectiveSettings() }
+      try { await platform.refresh(controller.signal); await syncAccount(); await accounts.active?.preferences.load(true); return await effectiveSettings() }
       finally {
         release()
         if (!(await settings.getSettings()).platform?.authenticated) disposeWork()
@@ -304,7 +316,7 @@ function registerHandlers(): void {
     const previous = await settings.getSettings()
     if (interviewTimer.active) {
       const before = parseInput(settingsInputSchema, previous)
-      if (JSON.stringify({ ...parsed, autoAnswer: before.autoAnswer }) !== JSON.stringify(before)) throw new Error('请先结束面试，再修改模型与设置。')
+      if (JSON.stringify({ ...parsed, preferencesVersion: before.preferencesVersion, context: before.context, interviewTarget: before.interviewTarget, autoAnswer: before.autoAnswer }) !== JSON.stringify(before)) throw new Error('请先结束面试，再修改模型与设置。')
     }
     if (!previous.platform?.authenticated) parsed = { ...parseInput(settingsInputSchema, previous), platform: parsed.platform }
     parsed.platform.enabled = true

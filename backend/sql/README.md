@@ -18,20 +18,21 @@ PostgreSQL 15.19 / pgvector 0.8.6。脚本手动按编号执行；后端不使�
 | `12_alipay_payments.sql` | 支付宝配置、订单渠道绑定、按支付渠道隔离交易号与退款凭据 |
 | `13_session_records.sql` | 服务器会话历史、版本与删除标记 |
 | `14_server_background.sql` | 简历、JD、环境、默认选择及计时会话背景快照 |
+| `15_user_preferences.sql` | 用户偏好、平台服务选择、版本和幂等标识 |
 
 ## 初始化空数据库
 
 从 backend 目录执行，密码通过交互提示或本机凭据提供：
 
 ```sh
-psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f sql/01_schema.sql -f sql/02_pgvector.sql -f sql/03_admin_users.sql -f sql/04_platform_config.sql -f sql/05_email_auth.sql -f sql/06_display_name.sql -f sql/07_email_code_purpose.sql -f sql/08_server_local_time.sql -f sql/09_pg_references.sql -f sql/10_time_wallet.sql -f sql/11_payment_packages.sql -f sql/12_alipay_payments.sql -f sql/13_session_records.sql -f sql/14_server_background.sql
+psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f sql/01_schema.sql -f sql/02_pgvector.sql -f sql/03_admin_users.sql -f sql/04_platform_config.sql -f sql/05_email_auth.sql -f sql/06_display_name.sql -f sql/07_email_code_purpose.sql -f sql/08_server_local_time.sql -f sql/09_pg_references.sql -f sql/10_time_wallet.sql -f sql/11_payment_packages.sql -f sql/12_alipay_payments.sql -f sql/13_session_records.sql -f sql/14_server_background.sql -f sql/15_user_preferences.sql
 ```
 
 使用 Compose 时，从仓库根目录执行：
 
 ```sh
 docker compose up -d --build --wait database
-docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql -f /opt/copilot/sql/06_display_name.sql -f /opt/copilot/sql/07_email_code_purpose.sql -f /opt/copilot/sql/08_server_local_time.sql -f /opt/copilot/sql/09_pg_references.sql -f /opt/copilot/sql/10_time_wallet.sql -f /opt/copilot/sql/11_payment_packages.sql -f /opt/copilot/sql/12_alipay_payments.sql -f /opt/copilot/sql/13_session_records.sql -f /opt/copilot/sql/14_server_background.sql
+docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql -f /opt/copilot/sql/06_display_name.sql -f /opt/copilot/sql/07_email_code_purpose.sql -f /opt/copilot/sql/08_server_local_time.sql -f /opt/copilot/sql/09_pg_references.sql -f /opt/copilot/sql/10_time_wallet.sql -f /opt/copilot/sql/11_payment_packages.sql -f /opt/copilot/sql/12_alipay_payments.sql -f /opt/copilot/sql/13_session_records.sql -f /opt/copilot/sql/14_server_background.sql -f /opt/copilot/sql/15_user_preferences.sql
 docker compose up -d --build backend admin
 ```
 
@@ -114,3 +115,20 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON user_resumes, job_targets,
 ```
 
 新表使用客户端生成的 UUID，无新增序列；已有 `interview_sessions` 表授权继续有效。部署时同步更新后端与桌面，开始面试接口现在要求 `environmentId`。不迁移本地 `interviews.json`，用户重新录入资料。原 PDF 不上传，简历不向量化。
+
+## 用户设置升级
+
+已有 01–14 的库只执行 15，不导入旧本机设置：
+
+```sh
+psql -X -h 127.0.0.1 -U postgres -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f sql/15_user_preferences.sql
+```
+
+按实际运行角色授权：
+
+```sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON user_preferences TO copilot_backend;
+GRANT USAGE, SELECT ON SEQUENCE user_preferences_id_seq TO copilot_backend;
+```
+
+同步更新后端与桌面。首次读取创建服务器默认偏好，平台选择为空，需明确选择后保存；不将某台电脑的旧设置或自定义服务上传作为默认值。
