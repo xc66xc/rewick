@@ -25,6 +25,21 @@ beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'copilot-platf
 afterEach(async () => { vi.unstubAllGlobals(); vi.restoreAllMocks(); await rm(directory, { recursive: true, force: true }) })
 
 describe('platform credentials and sessions', () => {
+  it('encrypts remembered credentials and preserves them across settings saves and restarts', async () => {
+    const credentials = { identifier: 'remember@example.test', password: 'remember-secret-password' }
+    await store.saveSettings(enabledInput())
+    await store.saveRememberedLogin(credentials)
+    await store.saveSettings(enabledInput())
+    const contents = await readFile(join(directory, 'settings.json'), 'utf8')
+    expect(contents).not.toContain(credentials.password)
+    expect(contents).not.toContain(credentials.identifier)
+    const restarted = new SettingsStore(directory, crypto)
+    expect(await restarted.getRememberedLogin()).toEqual(credentials)
+    await restarted.clearPlatformSession()
+    expect(await restarted.getRememberedLogin()).toEqual(credentials)
+    await restarted.saveRememberedLogin(null)
+    expect(await new SettingsStore(directory, crypto).getRememberedLogin()).toBeNull()
+  })
   it.each([
     ['emailCode', { email: 'test@example.com' }, '验证码发送过于频繁'],
     ['register', { email: 'test@example.com', password: 'test-password-123', code: '123456' }, '注册尝试过于频繁'],

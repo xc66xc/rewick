@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import type { PlatformInfo, Settings } from '../../shared/types'
 import { emailCodeResponseSchema, emailInputSchema, platformInfoSchema, platformLoginInputSchema, platformLoginResponseSchema, registerInputSchema } from './platform-schema'
 import { parseInput, platformSettingsSchema } from './validation'
@@ -102,12 +103,14 @@ export class PlatformClient {
 export class PlatformService {
   constructor(private readonly store: SettingsStore) {}
   async login(input: unknown): Promise<Settings> {
+    const { rememberMe, ...credentials } = parseInput(platformLoginInputSchema.extend({ rememberMe: z.boolean().default(false) }), input)
     const { settings } = await this.store.getConnectionSnapshot()
     if (!settings.platform?.enabled) throw new Error('请先启用平台服务。')
     const client = new PlatformClient(settings.platform.baseUrl)
-    const result = await client.login(input)
+    const result = await client.login(credentials)
     const info = await client.info(result.accessToken)
     if (info.user.id !== result.user.id) throw new Error('平台账号信息不一致，请重新登录。')
+    await this.store.saveRememberedLogin(rememberMe ? credentials : null)
     return this.store.savePlatformSession(client.baseUrl, result.accessToken, result.expiresAt, info)
   }
   async register(input: unknown): Promise<Settings> {

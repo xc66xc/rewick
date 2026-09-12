@@ -11,6 +11,7 @@ export function useEmailAuth({ settings, bridge, checking, onSave, onAuthenticat
   const [mode, setMode] = useState<'login' | 'register' | 'reset'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(false)
   const [confirmation, setConfirmation] = useState('')
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
@@ -27,6 +28,15 @@ export function useEmailAuth({ settings, bridge, checking, onSave, onAuthenticat
     const timer = window.setInterval(update, 1000)
     return () => window.clearInterval(timer)
   }, [retryAt])
+  useEffect(() => {
+    if (!bridge) return
+    let active = true
+    void bridge.getRememberedLogin().then(value => {
+      if (!active || !value) return
+      setEmail(value.identifier); setPassword(value.password); setRememberMe(true)
+    }).catch(reason => { if (active) setError(errorMessage(reason)) })
+    return () => { active = false }
+  }, [bridge])
   async function perform(action: 'code' | 'submit') {
     if (!bridge || inFlight.current || checking) return
     if (action === 'code' && !emailInput.current?.reportValidity()) return
@@ -47,7 +57,7 @@ export function useEmailAuth({ settings, bridge, checking, onSave, onAuthenticat
         changeMode('login')
         setNotice('密码修改成功，请使用新密码登录。')
       } else {
-        const value = mode === 'login' ? await bridge.platformLogin({ identifier: email.trim(), password })
+        const value = mode === 'login' ? await bridge.platformLogin({ identifier: email.trim(), password, rememberMe })
           : await bridge.platformRegister({ email: email.trim(), password, code: code.trim() })
         setPassword(''); setCode(''); onAuthenticated(value)
       }
@@ -58,5 +68,5 @@ export function useEmailAuth({ settings, bridge, checking, onSave, onAuthenticat
     setMode(value); setError(''); setNotice(''); setPassword(''); setConfirmation(''); setCode(''); setRetryAt(0)
     emailInput.current?.focus()
   }
-  return { mode, email, setEmail, password, setPassword, confirmation, setConfirmation, code, setCode, busy, error, notice, remaining, emailInput, perform, changeMode }
+  return { rememberMe, setRememberMe, mode, email, setEmail, password, setPassword, confirmation, setConfirmation, code, setCode, busy, error, notice, remaining, emailInput, perform, changeMode }
 }

@@ -226,7 +226,7 @@ function assertSender(event: IpcMainInvokeEvent): void {
 }
 
 function registerHandlers(): void {
-  const publicChannels = new Set(['settings:get', 'settings:save', 'platform:login', 'platform:register', 'platform:email-code', 'platform:password-reset-code', 'platform:password-reset', 'platform:logout', 'platform:refresh', 'asr:stop', 'answer:cancel', 'window:compact', 'window:pin'])
+  const publicChannels = new Set(['settings:get', 'settings:save', 'platform:remembered-login', 'platform:login', 'platform:register', 'platform:email-code', 'platform:password-reset-code', 'platform:password-reset', 'platform:logout', 'platform:refresh', 'asr:stop', 'answer:cancel', 'window:compact', 'window:pin'])
   const handle = (channel: string, callback: (arg: unknown) => unknown): void => {
     ipcMain.handle(channel, async (event, envelope: unknown) => {
       assertSender(event)
@@ -278,6 +278,7 @@ function registerHandlers(): void {
   }))
   handle('interview:end', () => interviewTimer.end())
   handle('settings:get', () => effectiveSettings())
+  handle('platform:remembered-login', () => authSettings.getRememberedLogin())
   handle('platform:login', input => {
     return mutatePlatform(async () => { disposeWork(); await platform.login(input); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings() })
   })

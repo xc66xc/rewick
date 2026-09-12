@@ -13,7 +13,7 @@ function account(id = 'first'): Settings & { platform: NonNullable<Settings['pla
     capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'fast', asr: 'asr' },
     services: { asr: [{ id: 'asr', name: '平台转写' }], knowledge: [{ id: 'rag', name: '平台知识库' }] } } }
 }
-function setup(initial = structuredClone(defaultSettings), strict = false) {
+function setup(initial = structuredClone(defaultSettings), strict = false, remembered: { identifier: string; password: string } | null = null) {
   let current = initial
   const listeners = new Set<(event: AppEvent) => void>()
   const getHistory = vi.fn(async () => [])
@@ -36,7 +36,7 @@ function setup(initial = structuredClone(defaultSettings), strict = false) {
   const getWallet = vi.fn(async () => wallet)
   const startInterview = vi.fn(async () => ({ ...wallet, session: { id: 'session', status: 'active', startedAt: wallet.serverTime, expiresAt: new Date(Date.now() + 30000).toISOString(), endedAt: null, usedSeconds: 0, endReason: null } }))
   const endInterview = vi.fn(async () => wallet)
-  const bridge = { getSettings, saveSettings, platformLogin, platformLogout, platformRegister, refreshPlatform, requestEmailCode, requestPasswordResetCode, resetPassword,
+  const bridge = { getRememberedLogin: vi.fn(async () => remembered), getSettings, saveSettings, platformLogin, platformLogout, platformRegister, refreshPlatform, requestEmailCode, requestPasswordResetCode, resetPassword,
     getWallet, startInterview, endInterview, getInterviewLibrary: vi.fn(async () => library), listReferences: vi.fn(async () => []), saveEnvironment: vi.fn(async () => library), activateEnvironment: vi.fn(async () => current),
     getHistory, stopAsr, cancelAnswer, setCompact, setAlwaysOnTop, saveSession: vi.fn(async () => undefined),
     onEvent: (listener: (event: AppEvent) => void) => { listeners.add(listener); return () => { listeners.delete(listener) } },
@@ -53,6 +53,18 @@ async function login(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('desktop account gate', () => {
+  it('prefills remembered credentials but waits for the user to log in', async () => {
+    const credentials = { identifier: 'remember@example.test', password: 'remember-password' }
+    const { mount, user, platformLogin } = setup(structuredClone(defaultSettings), false, credentials)
+    mount()
+    await waitFor(() => expect((screen.getByLabelText('密码', { exact: true }) as HTMLInputElement).value).toBe(credentials.password))
+    expect((screen.getByRole('textbox', { name: '邮箱' }) as HTMLInputElement).value).toBe(credentials.identifier)
+    expect((screen.getByRole('checkbox', { name: '记住我' }) as HTMLInputElement).checked).toBe(true)
+    expect(platformLogin).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: '登录' }))
+    await waitFor(() => expect(platformLogin).toHaveBeenCalledWith({ ...credentials, rememberMe: true }))
+  })
+
   it('loads no session data before login and saves only the public platform address before authentication', async () => {
     const { mount, user, getHistory, saveSettings, platformLogin } = setup()
     mount()
@@ -62,7 +74,7 @@ describe('desktop account gate', () => {
     expect(getHistory).not.toHaveBeenCalled()
     await login(user)
     expect(await screen.findByRole('heading', { name: '准备面试' })).toBeTruthy()
-    expect(platformLogin).toHaveBeenCalledWith({ identifier: 'first@example.test', password: 'valid-test-password' })
+    expect(platformLogin).toHaveBeenCalledWith({ identifier: 'first@example.test', password: 'valid-test-password', rememberMe: false })
     expect(saveSettings.mock.calls[0][0].platform).toEqual({ enabled: true, baseUrl: 'http://127.0.0.1:8080' })
     expect(JSON.stringify(saveSettings.mock.calls)).not.toContain('valid-test-password')
     expect(getHistory).toHaveBeenCalled()

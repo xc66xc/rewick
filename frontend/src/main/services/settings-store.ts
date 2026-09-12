@@ -18,6 +18,7 @@ const persistedSchema = z.object({
   customServices: z.array(storedCustomServiceSchema).max(100).default([]),
   serviceProfilesInitialized: z.boolean().default(false),
   platformSession: platformSessionSchema.optional(),
+  rememberedLogin: z.string().max(16_384).optional(),
   secrets: z.object({ asr: z.string().max(16_384), llm: z.string().max(16_384), remoteKnowledge: z.string().max(16_384).default(''), platformAccessToken: z.string().max(16_384).default('') }),
 })
 type Persisted = z.infer<typeof persistedSchema>
@@ -32,6 +33,22 @@ export class SettingsStore {
 
   getSettings(): Promise<Settings> {
     return this.queue.run(async () => this.publicSettings(await this.read()))
+  }
+
+  getRememberedLogin(): Promise<{ identifier: string; password: string } | null> {
+    return this.queue.run(async () => {
+      const saved = await this.read()
+      if (!saved.rememberedLogin) return null
+      return parseInput(z.object({ identifier: z.string(), password: z.string() }), JSON.parse(this.decrypt(saved.rememberedLogin)))
+    })
+  }
+
+  saveRememberedLogin(credentials: { identifier: string; password: string } | null): Promise<void> {
+    return this.queue.run(async () => {
+      const saved = await this.read()
+      const rememberedLogin = credentials ? this.encrypt(JSON.stringify(credentials), '') : undefined
+      await writeJsonAtomic(this.path, { ...saved, rememberedLogin })
+    })
   }
 
   initializeServices(): Promise<void> {
@@ -121,6 +138,7 @@ export class SettingsStore {
       const next: Persisted = {
         customServices: previous.customServices, serviceProfilesInitialized: previous.serviceProfilesInitialized,
         version: 1, settings: { ...parsed, asr, llm, remoteKnowledge },
+        rememberedLogin: parsed.platform.baseUrl === previous.settings.platform.baseUrl ? previous.rememberedLogin : undefined,
         platformSession: parsed.platform.baseUrl === previous.settings.platform.baseUrl ? previous.platformSession : undefined,
         secrets: {
           platformAccessToken: parsed.platform.baseUrl === previous.settings.platform.baseUrl ? previous.secrets.platformAccessToken : '',

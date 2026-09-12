@@ -166,7 +166,8 @@ export interface DesktopBridge {
   endInterview(): Promise<WalletState | null>
   getCaptureError(): Promise<string | null>
   getSettings(): Promise<Settings>
-  platformLogin(input: { identifier: string; password: string }): Promise<Settings>
+  getRememberedLogin(): Promise<{ identifier: string; password: string } | null>
+  platformLogin(input: { identifier: string; password: string; rememberMe?: boolean }): Promise<Settings>
   platformRegister(input: { email: string; password: string; code: string }): Promise<Settings>
   requestEmailCode(input: { email: string }): Promise<{ retryAfterSeconds: number; expiresInSeconds: number }>
   requestPasswordResetCode(input: { email: string }): Promise<{ retryAfterSeconds: number; expiresInSeconds: number }>
