@@ -349,14 +349,15 @@ export const componentDocs: ComponentDoc[] = [
     group: '表单',
     description: '表单选择器：Trigger 沿用输入框外观，分组下拉 + 可选“+ 自定义”入口；sm 行内规格用于资料行；选中态不带勾选符，贴合原生观感(spec §5/§8.1)。',
     props: [
-      { name: 'value / defaultValue', type: 'string', note: '受控 / 非受控' },
+      { name: 'value / defaultValue', type: 'string | null', note: '受控 / 非受控；value 传 null 显示占位符(服务选择空态)' },
       { name: 'onValueChange', type: '(value: string) => void', note: '单参回调' },
-      { name: 'options', type: '{ value: string; label: string; group?: string }[]', note: 'group 相同者归组渲染' },
+      { name: 'options', type: '{ value: string; label: string; group?: string; disabled?: boolean }[]', note: 'group 相同者归组渲染；disabled 为不可选占位项' },
       { name: 'newItem', type: '{ value: string; label: string }', note: '尾部分隔线 + “+ 自定义…”入口' },
       { name: 'size', type: "'lg' | 'md' | 'sm'", def: "'md'", note: 'lg = 页面级主选择器；sm = 11.5px 行内规格' },
       { name: 'placeholder', type: 'string', def: "'请选择'", note: '空值占位' },
       { name: 'disabled', type: 'boolean', note: '禁用整只选择器' },
       { name: 'aria-invalid', type: 'boolean', note: '校验失败标记：红边 + aria-invalid(引用失效场景)' },
+      { name: 'aria-describedby', type: 'string', note: '指向 Trigger 的说明/告警段落(服务选择)' },
     ],
     examples: [
       {

@@ -69,7 +69,7 @@ export default function SettingsDialog({ settings, bridge, onSave, onApply, onLo
       <form ref={form} onSubmit={event => { event.preventDefault(); void perform('save') }}>
         <fieldset className="m-0 min-w-0 border-0 p-0" disabled={busy || !bridge}>
           <section aria-label="当前账号" className={groupClass}><h3 className="mb-2 text-sm font-semibold">当前账号</h3><p className={formNoteClass}>{catalog.platform?.user?.displayName || '尚未登录'}</p>
-            <div className="mb-4 flex flex-wrap gap-2"><Button size="sm" onClick={() => void perform('refresh')}>刷新平台服务</Button><Button size="sm" variant="quiet" onClick={() => void perform('logout')}>退出登录</Button></div></section>
+            <div className="mb-4 flex flex-wrap gap-2"><Button size="sm" onClick={() => void perform('refresh')}>刷新平台服务</Button><Button size="sm" variant="quiet" className="text-danger hover:bg-danger-subtle" onClick={() => void perform('logout')}>退出登录</Button></div></section>
           {kinds.map(kind => <fieldset className={groupClass} key={kind}><legend className="mb-4 w-full p-0 text-sm font-semibold">{serviceLabels[kind]}</legend>
             <ServiceSelector kind={kind} settings={catalog} selection={draft.serviceSelections?.[kind]}
               onChange={selection => setDraft(current => ({ ...current, serviceSelections: { ...current.serviceSelections, [kind]: selection } }))}

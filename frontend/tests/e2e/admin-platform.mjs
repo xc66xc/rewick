@@ -94,9 +94,13 @@ export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mo
   await check('Electron selects a published display name and backend maps catalog ID to supplier model', async () => {
     await page.evaluate(() => window.copilot.refreshPlatform())
     await page.getByRole('button', { name: '打开设置', exact: true }).click()
-    await page.getByRole('combobox', { name: /^回答模型/ }).selectOption({ label: '深度回答' })
-    await page.getByRole('combobox', { name: /^实时语音转写/ }).selectOption('platform:asr-supplier')
-    await page.getByRole('combobox', { name: /^远程知识库/ }).selectOption('platform:knowledge-supplier')
+    // AppSelect 非 native select:点开触发器后点击门户内选项(下同)。
+    await page.getByRole('combobox', { name: /^回答模型/ }).click()
+    await page.getByRole('option', { name: '深度回答', exact: true }).click()
+    await page.getByRole('combobox', { name: /^实时语音转写/ }).click()
+    await page.getByRole('option', { name: '本机转写供应商', exact: true }).click()
+    await page.getByRole('combobox', { name: /^远程知识库/ }).click()
+    await page.getByRole('option', { name: '本机知识供应商', exact: true }).click()
     await page.getByRole('button', { name: '保存设置', exact: true }).click()
     await expect(page.getByRole('status').filter({ hasText: '设置已保存' })).toBeVisible()
     await page.getByRole('button', { name: '关闭设置', exact: true }).click()

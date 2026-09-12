@@ -8,10 +8,13 @@ export interface SelectOption {
   label: string
   /** 提供则按该值分组渲染(Select.Group + GroupLabel) */
   group?: string
+  /** 不可选占位项(如“平台暂未提供”) */
+  disabled?: boolean
 }
 
 export interface AppSelectProps {
-  value?: string
+  /** null = 未选择,触发器显示占位符(服务选择空态) */
+  value?: string | null
   defaultValue?: string
   onValueChange?: (value: string) => void
   options: SelectOption[]
@@ -26,6 +29,8 @@ export interface AppSelectProps {
   'aria-label'?: string
   /** 校验失败(如引用已失效):红边 + aria-invalid */
   'aria-invalid'?: boolean
+  /** 指向 Trigger 按钮(如服务选择下方的说明/告警段落) */
+  'aria-describedby'?: string
   /** 指向 Trigger 按钮 */
   ref?: Ref<HTMLButtonElement>
 }
@@ -57,6 +62,7 @@ export function AppSelect({
   className,
   'aria-label': ariaLabel,
   'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedby,
   ref,
 }: AppSelectProps) {
   const byValue = new Map(options.map((option) => [option.value, option.label]))
@@ -78,6 +84,7 @@ export function AppSelect({
         disabled={disabled}
         aria-label={ariaLabel}
         aria-invalid={ariaInvalid || undefined}
+        aria-describedby={ariaDescribedby}
         className={cn(
           'flex w-full items-center justify-between gap-2 rounded-chip border border-border-strong bg-card text-left text-text-primary outline-none transition-[border-color,box-shadow] focus:border-accent focus:shadow-focus-ring disabled:cursor-not-allowed disabled:opacity-45',
           ariaInvalid && 'border-danger focus:border-danger focus:shadow-none',
@@ -94,7 +101,7 @@ export function AppSelect({
         <Select.Positioner sideOffset={4} className="z-[80]">
           <Select.Popup className="max-h-72 min-w-(--anchor-width) overflow-auto rounded-control border border-border bg-card py-1 shadow-pop">
             {ungrouped.map((option) => (
-              <Select.Item key={option.value} value={option.value} className={itemsClass}>
+              <Select.Item key={option.value} value={option.value} disabled={option.disabled} className={itemsClass}>
                 <Select.ItemText>{option.label}</Select.ItemText>
               </Select.Item>
             ))}
@@ -106,7 +113,7 @@ export function AppSelect({
                 {options
                   .filter((option) => option.group === group)
                   .map((option) => (
-                    <Select.Item key={option.value} value={option.value} className={itemsClass}>
+                    <Select.Item key={option.value} value={option.value} disabled={option.disabled} className={itemsClass}>
                       <Select.ItemText>{option.label}</Select.ItemText>
                     </Select.Item>
                   ))}

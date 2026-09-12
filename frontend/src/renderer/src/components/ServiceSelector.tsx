@@ -2,6 +2,8 @@ import { useId } from 'react'
 import type { CustomServiceProfile, ServiceKind, ServiceSelection, Settings } from '../../../shared/types'
 import { platformChoices, serviceLabels } from '../hooks/serviceChoices'
 import { Button } from './ui/button'
+import { AppSelect } from './ui/select'
+import type { SelectOption } from './ui/select'
 import { fieldClass, inlineErrorClass } from '../lib/form'
 
 interface ServiceSelectorProps {
@@ -15,24 +17,30 @@ export default function ServiceSelector({ kind, settings, selection, onChange, o
   const profile = selection?.source === 'custom' ? custom.find(item => item.id === selection.id) : undefined
   const available = selection?.source === 'platform' ? platform.some(item => item.id === selection.id) : Boolean(profile)
   const value = selection ? `${selection.source}:${selection.id}` : ''
+  const invalid = Boolean(selection && !available)
+  // 分组顺序固定「平台提供 → 我的自定义」;空组保留一条禁用占位,失效选择以禁用项展示告警文案。
+  const platformOptions: SelectOption[] = platform.length
+    ? platform.map(item => ({ value: `platform:${item.id}`, label: item.name, group: '平台提供' }))
+    : [{ value: 'platform-unavailable', label: '平台暂未提供', group: '平台提供', disabled: true }]
+  const customOptions: SelectOption[] = custom.length
+    ? custom.map(item => ({ value: `custom:${item.id}`, label: item.name, group: '我的自定义' }))
+    : [{ value: 'custom-empty', label: '尚无自定义服务', group: '我的自定义', disabled: true }]
+  const options: SelectOption[] = invalid
+    ? [{ value, label: '所选服务已不可用，请重新选择', disabled: true }, ...platformOptions, ...customOptions]
+    : [...platformOptions, ...customOptions]
   return <div>
-    <label className={fieldClass} htmlFor={id}>{serviceLabels[kind]}<select id={id} value={value} aria-describedby={`${id}-note`}
-      onChange={event => {
-        if (event.target.value === 'new') { onCustom(); return }
-        const [source, ...parts] = event.target.value.split(':')
+    <label className={fieldClass} htmlFor={id}>{serviceLabels[kind]}<AppSelect id={id} value={value || null} placeholder="请选择服务" options={options}
+      newItem={{ value: 'new', label: '自定义模型/服务…' }} aria-describedby={`${id}-note`} aria-invalid={invalid || undefined}
+      onValueChange={next => {
+        if (next === 'new') { onCustom(); return }
+        const [source, ...parts] = next.split(':')
         if (source === 'platform' || source === 'custom') onChange({ source, id: parts.join(':') })
-      }}>
-      <option value="" disabled>请选择服务</option>
-      {selection && !available && <option value={value} disabled>所选服务已不可用，请重新选择</option>}
-      <optgroup label="平台提供">{platform.length ? platform.map(item => <option key={item.id} value={`platform:${item.id}`}>{item.name}</option>) : <option disabled value="platform-unavailable">平台暂未提供</option>}</optgroup>
-      <optgroup label="我的自定义">{custom.length ? custom.map(item => <option key={item.id} value={`custom:${item.id}`}>{item.name}</option>) : <option disabled value="custom-empty">尚无自定义服务</option>}</optgroup>
-      <option value="new">+ 自定义模型/服务…</option>
-    </select></label>
+      }} /></label>
     <p id={`${id}-note`} className={selection && !available ? inlineErrorClass : '-mt-2 mb-4 text-xs leading-[1.8] text-text-muted'} role={selection && !available ? 'alert' : undefined}>
       {selection && !available ? '原服务已删除或下架，请明确选择其他服务后保存。' : '按所选服务连接；平台配置由管理员维护。'}</p>
     {profile && <div className="mb-4 flex flex-wrap gap-2">
       <Button size="sm" onClick={() => onCustom(profile)}>编辑{serviceLabels[kind]}</Button>
-      <Button size="sm" variant="quiet" onClick={() => onRemove(profile)}>删除{serviceLabels[kind]}</Button>
+      <Button size="sm" variant="quiet" className="text-danger hover:bg-danger-subtle" onClick={() => onRemove(profile)}>删除{serviceLabels[kind]}</Button>
     </div>}
   </div>
 }

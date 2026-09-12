@@ -8,7 +8,6 @@ import { Modal } from './ui/dialog'
 import { formNoteClass, inlineErrorClass, successNoticeClass } from '../lib/form'
 
 interface CustomServiceDialogProps { kind: ServiceKind; profile?: CustomServiceProfile; settings: Settings; bridge: DesktopBridge; onSaved: (value: Settings) => void; onClose: () => void }
-const eyebrowClass = 'mb-2 block text-xs font-medium leading-[1.5] tracking-[0.09em] text-text-secondary'
 function initial(kind: ServiceKind, settings: Settings, profile?: CustomServiceProfile): CustomServiceInput {
   if (profile) { const { hasApiKey: _hasApiKey, ...input } = profile; return input }
   if (kind === 'llm') return { kind, name: '', url: settings.llm.baseUrl, model: settings.llm.model }
@@ -39,7 +38,7 @@ export default function CustomServiceDialog({ kind, profile, settings, bridge, o
   }
   function requestClose() { if (!inFlight.current) onClose() }
   return <Modal open onOpenChange={nextOpen => { if (!nextOpen) requestClose() }}
-    title={<><span aria-hidden="true" className={eyebrowClass}>我的自定义</span>{profile ? '编辑' : '添加'}{serviceLabels[kind]}</>}
+    title={<>{profile ? '编辑' : '添加'}{serviceLabels[kind]}</>}
     footer={<>
       <Button variant="quiet" disabled={busy} onClick={requestClose}>取消</Button>
       <Button disabled={busy} onClick={() => void submit(true)}>测试连接</Button>

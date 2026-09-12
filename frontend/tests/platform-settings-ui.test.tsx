@@ -35,22 +35,29 @@ function setup(settings = platformSettings()) {
   return { onSave, onApply, testCustomService, saveCustomService, removeCustomService, onLogout, user: userEvent.setup() }
 }
 async function openCustom(user: ReturnType<typeof userEvent.setup>) {
-  await user.selectOptions(screen.getByRole('combobox', { name: '回答模型' }), 'new')
+  await pickOption(user, '回答模型', '自定义模型/服务…')
   const dialog = within(screen.getByRole('dialog', { name: '添加回答模型' }))
   await user.type(dialog.getByRole('textbox', { name: '配置名称' }), '我的回答服务')
   await user.type(dialog.getByLabelText('API Key'), 'draft-key-test-only')
   return dialog
+}
+/** AppSelect 非 native select:点开触发器,再点门户内选项(selectOptions 不可用)。 */
+async function pickOption(user: ReturnType<typeof userEvent.setup>, combobox: string | RegExp, option: string | RegExp) {
+  await user.click(screen.getByRole('combobox', { name: combobox }))
+  await user.click(await screen.findByRole('option', { name: option }))
 }
 describe('grouped service settings', () => {
   it('groups platform/custom services and explicitly chooses platform despite an old saved Key', async () => {
     const settings = platformSettings(); settings.llm.hasApiKey = true
     const { user, onSave } = setup(settings)
     const select = screen.getByRole('combobox', { name: '回答模型' })
-    expect(within(select).getByRole('group', { name: '平台提供' })).toBeTruthy()
-    expect(within(select).getByRole('group', { name: '我的自定义' })).toBeTruthy()
+    await user.click(select)
+    const listbox = await screen.findByRole('listbox')
+    expect(within(listbox).getByRole('group', { name: '平台提供' })).toBeTruthy()
+    expect(within(listbox).getByRole('group', { name: '我的自定义' })).toBeTruthy()
     expect(screen.queryByRole('checkbox', { name: '启用平台服务' })).toBeNull()
     expect(screen.queryByRole('textbox', { name: '回答 API 地址' })).toBeNull()
-    await user.selectOptions(select, 'platform:careful')
+    await user.click(within(listbox).getByRole('option', { name: '深度回答' }))
     await user.click(screen.getByRole('button', { name: '保存设置' }))
     await waitFor(() => expect(onSave).toHaveBeenCalled())
     expect(onSave.mock.calls[0][0].serviceSelections?.llm).toEqual({ source: 'platform', id: 'careful' })
@@ -65,12 +72,12 @@ describe('grouped service settings', () => {
     expect(onSave).not.toHaveBeenCalled(); expect(saveCustomService).not.toHaveBeenCalled()
     expect((dialog.getByLabelText('API Key') as HTMLInputElement).value).toBe('draft-key-test-only')
     await user.click(dialog.getByRole('button', { name: '取消' }))
-    expect((screen.getByRole('combobox', { name: '回答模型' }) as HTMLSelectElement).value).toBe('platform:fast')
+    expect(screen.getByRole('combobox', { name: '回答模型' }).textContent).toContain('快速回答')
     expect(screen.queryByLabelText('API Key')).toBeNull()
   })
   it('preserves failed drafts for retry, then saves and selects the new custom profile without losing preference edits', async () => {
     const { user, onSave, saveCustomService } = setup()
-    await user.selectOptions(screen.getByRole('combobox', { name: '回答风格' }), 'detailed')
+    await pickOption(user, '回答风格', '展开口语')
     const dialog = await openCustom(user)
     saveCustomService.mockRejectedValueOnce(new Error('连接配置未保存，请重试'))
     await user.click(dialog.getByRole('button', { name: '保存并选用' }))
@@ -78,8 +85,8 @@ describe('grouped service settings', () => {
     expect((dialog.getByLabelText('API Key') as HTMLInputElement).value).toBe('draft-key-test-only')
     await user.click(dialog.getByRole('button', { name: '保存并选用' }))
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '添加回答模型' })).toBeNull())
-    expect((screen.getByRole('combobox', { name: '回答模型' }) as HTMLSelectElement).value).toBe('custom:new-service')
-    expect((screen.getByRole('combobox', { name: '回答风格' }) as HTMLSelectElement).value).toBe('detailed')
+    expect(screen.getByRole('combobox', { name: '回答模型' }).textContent).toContain('我的回答服务')
+    expect(screen.getByRole('combobox', { name: '回答风格' }).textContent).toContain('展开口语')
     expect(screen.getByRole('button', { name: '编辑回答模型' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: '保存设置' }))
     await waitFor(() => expect(onSave).toHaveBeenCalled())
@@ -99,7 +106,7 @@ describe('grouped service settings', () => {
     await user.click(screen.getByRole('button', { name: '删除回答模型' }))
     await user.click(screen.getByRole('button', { name: '确认删除' }))
     expect((await screen.findByRole('alert')).textContent).toContain('请明确选择')
-    expect((screen.getByRole('combobox', { name: '回答模型' }) as HTMLSelectElement).value).toBe('custom:own')
+    expect(screen.getByRole('combobox', { name: '回答模型' }).textContent).toContain('所选服务已不可用')
   })
   it('saves knowledge enablement without provider fields and exposes account logout', async () => {
     const { user, onSave, onLogout } = setup()

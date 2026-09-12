@@ -7,13 +7,15 @@ export async function checkServiceSelectors({ page, mock, knowledge, check }) {
     await expect(page.getByRole('checkbox', { name: '启用平台服务' })).toHaveCount(0)
     await expect(page.getByRole('combobox', { name: /^资料检索向量模型/ })).toHaveCount(0)
     const cases = [
-      { label: '回答模型', kind: 'llm', url: mock.llmBaseUrl, model: 'mock-fast', platformId: 'mock-fast' },
-      { label: '实时语音转写', kind: 'asr', url: `${mock.asrUrl}?mode=manual`, model: 'fun-asr-realtime', platformId: 'initial-asr' },
-      { label: '远程知识库', kind: 'knowledge', url: knowledge.url, agentId: 'aid-custom', platformId: 'initial-knowledge' },
+      { label: '回答模型', kind: 'llm', url: mock.llmBaseUrl, model: 'mock-fast', platformId: 'mock-fast', platformName: 'mock-fast' },
+      { label: '实时语音转写', kind: 'asr', url: `${mock.asrUrl}?mode=manual`, model: 'fun-asr-realtime', platformId: 'initial-asr', platformName: '平台转写' },
+      { label: '远程知识库', kind: 'knowledge', url: knowledge.url, agentId: 'aid-custom', platformId: 'initial-knowledge', platformName: '平台知识库' },
     ]
     for (const [index, item] of cases.entries()) {
       const select = page.getByRole('combobox', { name: new RegExp(`^${item.label}`) })
-      await select.selectOption('new')
+      // AppSelect 非 native select:点开触发器后点击门户内选项(下同)。
+      await select.click()
+      await page.getByRole('option', { name: '自定义模型/服务…', exact: true }).click()
       const modal = page.getByRole('dialog', { name: `添加${item.label}`, exact: true })
       await modal.getByLabel('配置名称', { exact: true }).fill(`自定义${item.label}`)
       await modal.getByLabel(item.kind === 'asr' ? 'WebSocket 地址' : 'API 地址', { exact: true }).fill(item.url)
@@ -30,7 +32,10 @@ export async function checkServiceSelectors({ page, mock, knowledge, check }) {
       assert.equal(saved.customServices.length, index + 1)
       assert.equal(saved.serviceSelections[item.kind].source, 'custom')
       assert.equal(JSON.stringify(saved).includes(`custom-${item.kind}-key`), false)
-      if (item.platformId) await select.selectOption(`platform:${item.platformId}`)
+      if (item.platformId) {
+        await select.click()
+        await page.getByRole('option', { name: item.platformName, exact: true }).click()
+      }
     }
     await page.getByRole('button', { name: '保存设置', exact: true }).click()
     await expect(page.getByRole('status').filter({ hasText: '设置已保存' })).toBeVisible()

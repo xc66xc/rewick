@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ClockCounterClockwise, DownloadSimple, TextAlignLeft, Trash } from '@phosphor-icons/react'
+import { ArrowLeft, ClockCounterClockwise, DownloadSimple, Eye, TextAlignLeft, Trash } from '@phosphor-icons/react'
 import type { SessionRecord } from '../../../shared/types'
 import AnswerCard from './AnswerCard'
 import SessionContextDetails from './SessionContextDetails'
@@ -42,7 +42,7 @@ export default function HistoryPage({ records, activeSessionId, activeSessionLoc
       : records.length ? <div className="overflow-hidden rounded-card border border-border bg-card">
         {/* v30 表格卡:表头行(面试/会话|时间|转写|回答|操作) + grid 列行;≤560px 收为「标题 + 删除」两列 */}
         <div className="grid grid-cols-[minmax(0,2.2fr)_minmax(120px,1fr)_minmax(72px,0.7fr)_minmax(72px,0.7fr)_minmax(168px,1fr)] gap-4 border-b border-border bg-subtle px-6 py-3 text-xs text-text-muted max-[820px]:px-5 max-[560px]:hidden">
-          <span>面试 / 会话</span><span>时间</span><span>转写</span><span>回答</span><span className="text-right">操作</span>
+          <span>面试 / 会话</span><span>时间</span><span>转写</span><span>回答</span><span>操作</span>
         </div>
         {records.map(record => {
           /* 占位标题降级为灰斜体;有环境时环境名升为主行,提高无题记录的辨识度(纯展示调整) */
@@ -53,8 +53,8 @@ export default function HistoryPage({ records, activeSessionId, activeSessionLoc
           <span className="text-xs text-text-secondary max-[560px]:hidden">{formatDate(record.createdAt)}</span>
           <span className="text-xs text-text-secondary max-[560px]:hidden">{record.segments.length} 段</span>
           <span className="text-xs text-text-secondary max-[560px]:hidden">{record.answers.length} 个</span>
-          <div className="flex items-center justify-end gap-2">
-            <Button size="sm" aria-label={`查看详情：${record.title}`} onClick={() => { setNotice(''); setSelectedId(record.id) }}>查看详情</Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" aria-label={`查看详情：${record.title}`} onClick={() => { setNotice(''); setSelectedId(record.id) }}><Eye aria-hidden="true" />查看详情</Button>
             <Button variant="default" size="sm" className={cn(buttonDangerClass, 'text-danger')} aria-label={`删除会话：${record.title}`} disabled={locked(record.id)} title={locked(record.id) ? lockedHint : '删除会话'} onClick={() => handleDeleteRequest(record)}><Trash aria-hidden="true" />删除</Button>
           </div>
         </div> })}

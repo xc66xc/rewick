@@ -77,8 +77,8 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
   const environment = config.settings.interviewEnvironment
   /* v30 骨架 §2:白色无缝 chrome(侧栏/顶栏无边框),主内容区是一张 12px 圆角 + 1px 边线的灰蓝画布卡,白卡浮在其上 */
   return <ErrorBoundary><div className="flex h-dvh min-h-[480px] flex-col overflow-hidden bg-page">
-    <Topbar page={page} compact={compact} pinned={pinned} onCompact={() => void handleCompact()} onPin={() => void handlePin()} onSettings={handleSettings} desktop={Boolean(bridge)} loggingOut={leaving} />
-    <div className="flex min-h-0 flex-1" inert={leaving}>{!compact && <Sidebar page={page} onChange={navigate} account={config.settings.platform?.user?.displayName} onSettings={handleSettings} />}
+    <Topbar compact={compact} pinned={pinned} onCompact={() => void handleCompact()} onPin={() => void handlePin()} onSettings={handleSettings} desktop={Boolean(bridge)} loggingOut={leaving} />
+    <div className="flex min-h-0 flex-1" inert={leaving}>{!compact && <Sidebar page={page} onChange={navigate} account={config.settings.platform?.user?.displayName} />}
       <main className="mb-3 mr-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-auto rounded-card border border-border bg-canvas" ref={main}>
         {error && <div className="flex shrink-0 items-center gap-2 border-b border-danger-line bg-danger-subtle px-5 py-2 text-sm text-danger" role="alert"><WarningCircle size={19} aria-hidden="true" /><span className="flex-1 [overflow-wrap:anywhere]">{error}</span><IconButton aria-label="关闭提示" title="关闭提示" onClick={() => { session.clearError(); setWindowError('') }}><X size={17} aria-hidden="true" /></IconButton></div>}
         {/* v30 session-bar:浅蓝底 + 蓝细边 + 蓝字,脉冲点,mono 时长(可用 ≤60s 转红),刷新钮移到右组 */}
