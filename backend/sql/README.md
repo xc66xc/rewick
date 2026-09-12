@@ -14,20 +14,21 @@ PostgreSQL 15.19 / pgvector 0.8.6。脚本手动按编号执行；后端不使�
 | `08_server_local_time.sql` | 全部时间列改为北京时间无时区微秒值，设置当前业务库时区 |
 | `09_pg_references.sql` | 用户资料、1024维向量、持久索引任务与上传配额 |
 | `10_time_wallet.sql` | 可用秒数、面试计时会话、时长流水；删除每日配额 |
+| `11_payment_packages.sql` | 时长套餐、版本化支付配置、订单、人工退款记录与购买流水关联 |
 
 ## 初始化空数据库
 
 从 backend 目录执行，密码通过交互提示或本机凭据提供：
 
 ```sh
-psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f sql/01_schema.sql -f sql/02_pgvector.sql -f sql/03_admin_users.sql -f sql/04_platform_config.sql -f sql/05_email_auth.sql -f sql/06_display_name.sql -f sql/07_email_code_purpose.sql -f sql/08_server_local_time.sql -f sql/09_pg_references.sql -f sql/10_time_wallet.sql
+psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f sql/01_schema.sql -f sql/02_pgvector.sql -f sql/03_admin_users.sql -f sql/04_platform_config.sql -f sql/05_email_auth.sql -f sql/06_display_name.sql -f sql/07_email_code_purpose.sql -f sql/08_server_local_time.sql -f sql/09_pg_references.sql -f sql/10_time_wallet.sql -f sql/11_payment_packages.sql
 ```
 
 使用 Compose 时，从仓库根目录执行：
 
 ```sh
 docker compose up -d --build --wait database
-docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql -f /opt/copilot/sql/06_display_name.sql -f /opt/copilot/sql/07_email_code_purpose.sql -f /opt/copilot/sql/08_server_local_time.sql -f /opt/copilot/sql/09_pg_references.sql
+docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql -f /opt/copilot/sql/06_display_name.sql -f /opt/copilot/sql/07_email_code_purpose.sql -f /opt/copilot/sql/08_server_local_time.sql -f /opt/copilot/sql/09_pg_references.sql -f /opt/copilot/sql/10_time_wallet.sql -f /opt/copilot/sql/11_payment_packages.sql
 docker compose up -d --build backend admin
 ```
 
@@ -62,3 +63,22 @@ psql -X -h 127.0.0.1 -U postgres -d interview_copilot -v ON_ERROR_STOP=1 --singl
 ## 面试时长升级
 
 已执行 01–09 的开发库停止后端后只执行 `10_time_wallet.sql`，不重复执行。脚本自身包含事务，不做数据库备份。为应用账号授予三个新表的 SELECT/INSERT/UPDATE/DELETE 和两个新序列的 USAGE/SELECT。原有用户可用时长初始化为 0；更新后在用户管理中分配。表中钱包版本用于管理员并发调整，心跳结算不递增该版本。
+
+## 微信支付套餐升级
+
+已执行 01–10 的库停止后端后只执行 `11_payment_packages.sql`。脚本自身包含事务；仍使用现有数据库版本、平台主密钥与资料持久卷，不重建已有钱包。以结构维护账号执行：
+
+```sh
+psql -X -h 127.0.0.1 -U postgres -d interview_copilot -v ON_ERROR_STOP=1 -f sql/11_payment_packages.sql
+```
+
+应用账号若为 `copilot_backend`，按实际账号执行以下授权（在目标数据库内）：
+
+```sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON time_packages, payment_config_versions,
+    payment_orders, payment_manual_refunds, payment_notifications TO copilot_backend;
+GRANT USAGE, SELECT ON SEQUENCE time_packages_id_seq, payment_config_versions_id_seq,
+    payment_orders_id_seq, payment_manual_refunds_id_seq, payment_notifications_id_seq TO copilot_backend;
+```
+
+更新服务端、管理端和桌面端。未配置商户资料时不开放支付；凭据通过管理端保存，不添加到 YML。正式使用前建议 HTTPS，并确保 `/api/v1/payments/wechat/notify` 能从公网 POST 到达后端；回调的真实性由微信签名和解密校验。禁用支付不删除历史配置，已有订单仍需查询和入账。人工退款先在微信商户平台完成，再在后台登记，不会自动向微信退款。

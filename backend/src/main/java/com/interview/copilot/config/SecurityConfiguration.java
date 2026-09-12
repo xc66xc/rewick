@@ -41,6 +41,9 @@ public class SecurityConfiguration {
                                                 "/api/v1/auth/password-reset/email-code",
                                                 "/api/v1/auth/password-reset")
                                         .permitAll()
+                                        .requestMatchers(
+                                                HttpMethod.POST, "/api/v1/payments/wechat/notify")
+                                        .permitAll()
                                         .requestMatchers("/api/v1/admin/**")
                                         .hasRole("ADMIN")
                                         .requestMatchers("/api/v1/**")

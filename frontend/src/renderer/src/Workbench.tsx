@@ -1,3 +1,4 @@
+import PurchasePage from './components/payment/PurchasePage'
 import { useMemo, useEffect, useRef, useState } from 'react'
 import { ArrowRight, Briefcase, FileText, Stack, WarningCircle, X } from '@phosphor-icons/react'
 import RefreshTimeButton from './components/RefreshTimeButton'
@@ -87,7 +88,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
           <div className="flex shrink-0 items-center gap-2.5"><RefreshTimeButton className="size-[30px] text-accent-text hover:bg-accent/10" refreshing={timer.refreshing} onRefresh={timer.refresh} /><Button variant="primary" size="sm" disabled={timer.busy} onClick={() => void handleEnd()}>结束面试</Button></div>
         </div>}
         {timer.warning && timer.active && <p className={cn(formNoteClass, 'px-8 pt-1 max-[820px]:px-5')} role="status">{timer.warning}</p>}
-        {page === 'preparation' && <InterviewPreparation bridge={bridge} settings={config.settings} timer={timer} isSessionActive={timer.active || session.busy || !['idle', 'error'].includes(session.status)} onPrepare={handlePrepare} onSave={session.saveEnvironment} onStarted={() => setPage('workspace')} onContext={handleContext} onSettings={handleSettings} />}
+        {page === 'preparation' && <InterviewPreparation bridge={bridge} settings={config.settings} timer={timer} isSessionActive={timer.active || session.busy || !['idle', 'error'].includes(session.status)} onPrepare={handlePrepare} onSave={session.saveEnvironment} onStarted={() => setPage('workspace')} onContext={handleContext} onSettings={handleSettings} onPurchase={() => setPage('purchase')} />}
         {page === 'workspace' && timer.active && <div className={cn('flex min-h-0 flex-1 flex-col', compact ? 'p-0' : 'px-8 pb-0')}>
           {/* v30 workspace-context:环境胶囊(渐变磁片+600 名称)+ 简历/岗位/资料胶囊;未选态虚线边 + muted */}
           {!compact && environment && <div className="mb-3 flex shrink-0 items-center justify-between gap-3 text-xs"><div className="flex min-w-0 flex-1 items-center gap-2">
@@ -107,6 +108,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
             compact && 'flex overflow-hidden')}>{!compact && <TranscriptPanel session={session} />}<AnswerPanel session={session} settings={config.settings} onSettings={handleSettings} onContext={handleContext} compact={compact} /></div>
           {!compact && <footer className="flex min-h-[42px] shrink-0 items-center justify-between gap-4 text-[10px] text-text-muted max-[560px]:[&>span:last-child]:hidden"><span>声音不落盘 · 会话保存在本机</span><span>系统音频可自动回答，也可随时手动生成</span></footer>}
         </div>}
+        {page === 'purchase' && <PurchasePage key={config.settings.accountScope} bridge={bridge} scope={config.settings.accountScope ?? ''} remaining={timer.remaining} onCredited={timer.refresh} />}
         {page === 'context' && <ContextPage settings={config.settings} bridge={bridge} onSave={config.save} />}
         {page === 'history' && <HistoryPage records={session.history} activeSessionId={session.record.id} activeSessionLocked={timer.active || session.busy || !['idle', 'error'].includes(session.status)} onExport={session.exportRecord} onDelete={session.removeSession} />}
       </main>

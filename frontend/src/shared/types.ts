@@ -1,3 +1,4 @@
+import type { PackageCatalog, PaymentOrder, CreatePaymentOrder } from './payment'
 export type ServiceKind = 'llm' | 'asr' | 'knowledge'
 export interface ServiceSelection { source: 'platform' | 'custom'; id: string }
 export interface CustomServiceInput {
@@ -155,6 +156,10 @@ export type AppEvent =
   | { kind: 'shortcut'; action: 'answer' }
 export interface DesktopBridge {
   withAccountScope?(scope: string): DesktopBridge
+  getPackageCatalog(): Promise<PackageCatalog>
+  getPaymentOrders(): Promise<PaymentOrder[]>
+  createPaymentOrder(input: CreatePaymentOrder): Promise<PaymentOrder>
+  refreshPaymentOrder(id: string): Promise<PaymentOrder>
   getWallet(): Promise<WalletState>
   startInterview(requestId: string): Promise<WalletState>
   endInterview(): Promise<WalletState | null>

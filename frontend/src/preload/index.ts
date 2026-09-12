@@ -10,6 +10,10 @@ function createBridge(accountScope?: string): DesktopBridge {
   }
   return {
   withAccountScope: scope => createBridge(scope),
+  getPackageCatalog: () => invoke('payments:catalog'),
+  getPaymentOrders: () => invoke('payments:list'),
+  createPaymentOrder: input => invoke('payments:create', input),
+  refreshPaymentOrder: id => invoke('payments:refresh', id),
   getWallet: () => invoke('wallet:get'),
   startInterview: requestId => invoke('interview:start', requestId),
   endInterview: () => invoke('interview:end'),

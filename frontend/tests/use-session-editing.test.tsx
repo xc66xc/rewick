@@ -33,6 +33,10 @@ function setup(fakeTimers = false) {
     { id: 'environment-two', name: '新环境', resumeId: null, targetId: null, referenceIds: [], createdAt, updatedAt: createdAt },
   ] }
   const bridge = {
+    getPackageCatalog: vi.fn(async () => ({ paymentAvailable: false, packages: [] })),
+    getPaymentOrders: vi.fn(async () => []),
+    createPaymentOrder: vi.fn(async () => { throw new Error('unused') }),
+    refreshPaymentOrder: vi.fn(async () => { throw new Error('unused') }),
     getWallet: vi.fn(async () => ({ availableSeconds: 3600, version: 0, serverTime: new Date().toISOString(), session: null })),
     startInterview: vi.fn(async () => ({ availableSeconds: 3600, version: 0, serverTime: new Date().toISOString(), session: null })),
     endInterview: vi.fn(async () => null),

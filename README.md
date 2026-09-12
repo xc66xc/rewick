@@ -4,7 +4,15 @@
 
 登录后先进入“准备面试”：简历必填，岗位 JD 和参考资料选填。点击“开始面试”并获得服务端确认后计时，平台模型和自带 Key 都消耗可用时长。停止转写不会暂停计时，点击“结束面试”才结束；断连超过 30 秒自动结束。
 
-管理员在用户管理中增加、扣除或设定可用时长，并填写调整原因。初始时长为 0；没有充值、支付或暂停功能。升级已完成 01–09 的数据库时，先停后端并手动执行 `backend/sql/10_time_wallet.sql`，随后同步更新服务端与桌面端。
+管理员在用户管理中增加、扣除或设定可用时长，并填写调整原因。初始时长为 0；用户也可购买管理员启用的时长套餐，购买时长长期有效。不提供暂停功能。已完成 01–09 的数据库需先执行 `backend/sql/10_time_wallet.sql`，购买套餐还需执行 `backend/sql/11_payment_packages.sql`，随后同步更新服务端与桌面端。
+
+## 购买时长与微信支付
+
+管理端的“套餐管理”按条保存价格、折扣、时长和启用状态；“支付设置”保存 Native 商户号、AppID、签名密钥、公钥及回调地址；“支付订单”查询支付状态并登记已在微信商户平台完成的人工退款。支付凭据加密入库，客户端无法读取。商户资料未配置时，桌面显示“支付暂未开放”。
+
+桌面侧边栏与准备页提供购买入口。订单保存下单时的价格和时长，扫码支付后由后端验签、核对金额并幂等增加时长；关闭二维码窗口不取消订单。买时长不会启动或恢复面试，也不会延长已有心跳许可。人工退款登记只扣回明确填写的时长，不自动执行微信资金退款。
+
+实现与接口见 [支付设计](backend/docs/design-payments.md)、[支付接口](backend/docs/payment-contract.md)。真实收款前需要取得 Native 支付权限和绑定的 AppID，配置公网可达回调并完成实际支付验收。
 
 实时面试辅助桌面应用、Web 管理后台与独立 Java 平台服务。桌面端位于 `frontend/`，管理端位于 `admin/`，服务端位于 `backend/`，分别维护依赖、构建与测试。
 
@@ -37,9 +45,9 @@ interview-copilot/
 
 桌面先登录再进入工作台，支持邮箱验证码注册、邮箱密码登录、找回密码与退出。注册发送验证码前检查邮箱是否已注册，已有邮箱提示直接登录或找回密码。找回密码填写邮箱、新密码与确认密码，接收并提交重置验证码后修改密码，成功后重新登录；注册和重置验证码分别校验，重置密码会撤销旧登录凭证。登录后按能力显式选择平台或自定义服务：回答模型、语音转写和远程知识库分别使用独立下拉框；向量服务仅由管理员配置。平台模型 HTTP/SSE、实时语音 WebSocket、向量接口和百炼正文检索经 Java 后端调用。
 
-平台供应商地址、Key、模型和知识库绑定由管理员在后台保存到数据库；SMTP 地址、发件人和认证信息也在后台管理。平台 Key 与 SMTP 密码加密存储，不返回客户端，也没有供应商环境变量回退。用户自定义服务的 Key 与业务登录凭证只在本机加密保存。平台按用户隔离请求与资源额度，记录调用状态；目前的次数限制用于资源保护，未实现支付和货币扣费。
+平台供应商地址、Key、模型和知识库绑定由管理员在后台保存到数据库；SMTP 地址、发件人和认证信息也在后台管理。平台 Key 与 SMTP 密码加密存储，不返回客户端，也没有供应商环境变量回退。用户自定义服务的 Key 与业务登录凭证只在本机加密保存。平台按用户隔离请求与资源，记录调用状态；面试消耗钱包时长，微信套餐购买增加时长，不维护可提现的货币余额。
 
-提示词、简历/JD 选择、本地资料与会话仍在客户端。资料云同步、短信/第三方登录、支付套餐、正式签名发布和生产部署留待后续明确产品流程。Intel Mac 与 Windows 的系统音频需要各自实机验证。
+提示词、简历/JD 选择与会话仍在客户端。短信/第三方登录、正式签名发布和生产部署留待后续明确产品流程。Intel Mac 与 Windows 的系统音频需要各自实机验证。
 
 ## 启动客户端
 
@@ -69,7 +77,7 @@ cp .env.example .env
 # 编辑 .env，设置数据库密码、首次管理员账号、加密主密钥及验证码密钥
 docker compose up -d --build --wait database
 # 仅首次初始化空库时执行
-docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql
+docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql -f /opt/copilot/sql/06_display_name.sql -f /opt/copilot/sql/07_email_code_purpose.sql -f /opt/copilot/sql/08_server_local_time.sql -f /opt/copilot/sql/09_pg_references.sql -f /opt/copilot/sql/10_time_wallet.sql -f /opt/copilot/sql/11_payment_packages.sql
 docker compose up -d --build backend admin
 ```
 

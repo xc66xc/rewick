@@ -40,6 +40,7 @@ export class PlatformClient {
   }
   async logout(token: string): Promise<void> { await this.request('/api/v1/auth/logout', token, {}) }
   async walletRequest(path: string, token: string, body?: unknown): Promise<unknown> { return this.request(path, token, body) }
+  async paymentRequest(path: string, token: string, body?: unknown, signal?: AbortSignal): Promise<unknown> { return this.request(path, token, body, signal) }
   private async request(path: string, token?: string, body?: unknown, signal?: AbortSignal): Promise<unknown> {
     const controller = new AbortController()
     const abort = () => controller.abort(signal?.reason)
@@ -54,7 +55,9 @@ export class PlatformClient {
       })
       if (!response.ok) {
         await response.body?.cancel().catch(() => undefined)
-        const message = response.status === 401 ? (path.endsWith('/login') ? '平台登录账号或密码错误。' : '平台登录已失效，请重新登录。')
+        const message = response.status === 409 && path.startsWith('/api/v1/payment-orders') ? '套餐已变更或停用，请刷新套餐后重新确认购买。'
+          : response.status === 503 && path.startsWith('/api/v1/payment-orders') ? '支付暂未开放，请稍后再试。'
+          : response.status === 401 ? (path.endsWith('/login') ? '平台登录账号或密码错误。' : '平台登录已失效，请重新登录。')
           : response.status === 409 && path.includes('/interview-sessions/') ? '该账号已有一场进行中的面试，请先结束原面试。'
           : response.status === 402 ? '可用面试时长不足，请联系管理员。'
           : response.status === 403 ? '平台账号没有此服务权限，请联系管理员。'

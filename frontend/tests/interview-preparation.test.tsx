@@ -58,7 +58,7 @@ describe('interview preparation', () => {
   it('keeps preparation accessible with zero available time', async () => {
     const { start } = setup('resume', 0)
     expect((await screen.findByRole('button', { name: '开始面试' }) as HTMLButtonElement).disabled).toBe(true)
-    expect(screen.getByText('暂无可用时长，请联系管理员分配。')).toBeTruthy()
+    expect(screen.getByText('暂无可用时长，可前往「购买时长」选择套餐。')).toBeTruthy()
     expect(screen.getByRole('heading', { name: '准备面试' })).toBeTruthy()
     expect(start).not.toHaveBeenCalled()
   })

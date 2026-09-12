@@ -1,3 +1,4 @@
+import { PaymentClient } from './services/payment-client'
 import { InterviewTimer } from './services/interview-timer'
 import { AccountWorkspaces } from './services/account-workspace'
 import { platformBaseUrl } from '../shared/defaults'
@@ -250,6 +251,18 @@ function registerHandlers(): void {
       return result
     })
   }
+  async function paymentRequest<T>(operation: (client: PaymentClient) => Promise<T>): Promise<T> {
+    const revision = platformWork.revision
+    const connection = await walletConnection()
+    const controller = new AbortController()
+    const release = platformWork.track(revision, () => controller.abort(new Error('账户已切换，支付请求已取消。')))
+    try { return await operation(new PaymentClient(connection, controller.signal)) }
+    finally { release() }
+  }
+  handle('payments:catalog', () => paymentRequest(client => client.catalog()))
+  handle('payments:list', () => paymentRequest(client => client.orders()))
+  handle('payments:create', input => paymentRequest(client => client.create(input)))
+  handle('payments:refresh', id => paymentRequest(client => client.refresh(id)))
   handle('wallet:get', async () => interviewTimer.read(await walletConnection()))
   handle('interview:start', input => interviewMutations.run(async () => {
     const requestId = parseInput(z.string().uuid(), input)

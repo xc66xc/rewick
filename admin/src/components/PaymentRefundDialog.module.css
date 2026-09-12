@@ -1,0 +1,4 @@
+.refundForm { display: flex; flex-direction: column; max-height: calc(100dvh - var(--space-12) - var(--space-16) - var(--space-5)); }
+.refundBody { min-height: 0; overflow-y: auto; }
+
+.refundActions { flex-shrink: 0; }

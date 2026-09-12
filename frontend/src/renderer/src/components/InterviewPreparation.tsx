@@ -18,12 +18,12 @@ import { cn } from '../lib/cn'
 interface Props {
   bridge: DesktopBridge; settings: Settings; timer: ReturnType<typeof useInterviewTime>; isSessionActive: boolean
   onPrepare: (input: EnvironmentInput) => Promise<void>; onSave: (input: EnvironmentInput) => Promise<void>
-  onStarted: () => void; onContext: () => void; onSettings: () => void
+  onStarted: () => void; onContext: () => void; onSettings: () => void; onPurchase?: () => void
 }
 const emptyEnvironment: EnvironmentInput = { name: '', resumeId: null, targetId: null, referenceIds: [] }
 function environmentInput({ id, name, resumeId, targetId, referenceIds }: InterviewEnvironment): EnvironmentInput { return { id, name, resumeId, targetId, referenceIds } }
 /* v30 准备面试页:钱包页头 + 摘要卡 + 环境卡片网格,新建/编辑走弹窗(原「面试环境」页已并入) */
-export default function InterviewPreparation({ bridge, settings, timer, isSessionActive, onPrepare, onSave, onStarted, onContext, onSettings }: Props) {
+export default function InterviewPreparation({ bridge, settings, timer, isSessionActive, onPrepare, onSave, onStarted, onContext, onSettings, onPurchase }: Props) {
   const data = useInterviewLibrary(bridge)
   const records = data.library?.environments.map(environmentInput) ?? []
   const editor = useLibraryDraft<EnvironmentInput>(records, emptyEnvironment, Boolean(data.library), settings.interviewEnvironment?.id, 'environment-library')
@@ -84,6 +84,7 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
       <div className="flex flex-col items-end gap-3 max-[560px]:items-start">
         {/* v30 .prep-wallet:标签次要小字,时长值 mono 蓝色强调(≤60s 转红),刷新钮 30px */}
         <div className="flex items-center gap-[9px]"><strong className="text-xs font-medium text-text-secondary">可用时长</strong><span className={cn('font-mono text-[13px] font-semibold tabular-nums text-accent-text', timer.remaining <= 60 && 'text-danger')}>{formatDuration(timer.remaining)}</span><RefreshTimeButton className="size-[30px] text-accent-text hover:bg-accent/10" refreshing={timer.refreshing} onRefresh={timer.refresh} /></div>
+        {onPurchase && <Button onClick={onPurchase}>购买时长</Button>}
         <Button variant="primary" disabled={!data.library || busy} onClick={requestNew}><Plus size={18} aria-hidden="true" />新建面试准备</Button>
       </div>
     </header>
@@ -93,7 +94,7 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
     {timer.wallet?.session?.status === 'active' && !timer.active && <p className={formNoteClass}>该账号已有正在进行的面试，请先在原窗口结束；异常关闭后最多等待 30 秒再开始。</p>}
     {isSessionActive && <p className="mb-5 rounded-chip border border-accent-line bg-accent-subtle px-4 py-3 text-xs leading-[1.8] text-text-secondary">正在转写或回答。停止后可进入其他环境或修改当前环境组合。</p>}
     {data.loading && <p className={formNoteClass} role="status">正在读取面试资料…</p>}
-    {timer.wallet && timer.remaining === 0 && <p className={formNoteClass}>暂无可用时长，请联系管理员分配。</p>}
+    {timer.wallet && timer.remaining === 0 && <p className={formNoteClass}>暂无可用时长，可前往「购买时长」选择套餐。</p>}
     <div className="flex flex-wrap items-center justify-between gap-4 rounded-card border border-border bg-card p-[18px] max-[820px]:flex-col max-[820px]:items-start">
       <div className="min-w-0">
         <h2 className="text-sm font-semibold text-text-heading">连接已就绪，随时可以开始</h2>
