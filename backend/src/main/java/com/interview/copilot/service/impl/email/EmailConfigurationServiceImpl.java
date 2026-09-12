@@ -2,6 +2,7 @@ package com.interview.copilot.service.impl.email;
 
 import com.interview.copilot.config.SmtpProperties;
 import com.interview.copilot.dto.email.EmailConfiguration;
+import com.interview.copilot.entity.email.StoredEmailConfiguration;
 import com.interview.copilot.exception.email.EmailErrors;
 import com.interview.copilot.mapper.email.EmailConfigurationMapper;
 import com.interview.copilot.security.email.EmailConfigurationRules;
@@ -43,7 +44,7 @@ public class EmailConfigurationServiceImpl implements EmailConfigurationService 
 
     public Prepared draft(EmailConfiguration input) {
         EmailConfiguration config = EmailConfigurationRules.normalize(input);
-        EmailConfigurationMapper.Stored previous = row();
+        StoredEmailConfiguration previous = row();
         if (config.version() != previous.version()) throw EmailConfigurationRules.conflict();
         String password = password(config, previous);
         SmtpProperties smtp = smtp(config, password);
@@ -52,14 +53,14 @@ public class EmailConfigurationServiceImpl implements EmailConfigurationService 
     }
 
     public Prepared snapshot() {
-        EmailConfigurationMapper.Stored stored = row();
+        StoredEmailConfiguration stored = row();
         EmailConfiguration config = view(stored);
         String password =
                 stored.enabled() ? cipher.decrypt(SECRET_PURPOSE, stored.encryptedPassword()) : "";
         return new Prepared(config, smtp(config, password));
     }
 
-    private String password(EmailConfiguration config, EmailConfigurationMapper.Stored previous) {
+    private String password(EmailConfiguration config, StoredEmailConfiguration previous) {
         String entered = config.password() == null ? "" : config.password();
         if (config.username().isBlank()) {
             if (!entered.isEmpty()) throw EmailConfigurationRules.invalid();
@@ -88,7 +89,7 @@ public class EmailConfigurationServiceImpl implements EmailConfigurationService 
                 5000);
     }
 
-    private EmailConfiguration view(EmailConfigurationMapper.Stored stored) {
+    private EmailConfiguration view(StoredEmailConfiguration stored) {
         return new EmailConfiguration(
                 stored.version(),
                 stored.enabled(),
@@ -102,8 +103,8 @@ public class EmailConfigurationServiceImpl implements EmailConfigurationService 
                 stored.ssl());
     }
 
-    private EmailConfigurationMapper.Stored row() {
-        EmailConfigurationMapper.Stored row = mapper.read();
+    private StoredEmailConfiguration row() {
+        StoredEmailConfiguration row = mapper.read();
         if (row == null) throw EmailErrors.unavailable();
         return row;
     }

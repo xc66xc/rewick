@@ -1,6 +1,7 @@
 package com.interview.copilot.service.impl.references;
 
 import com.interview.copilot.common.references.PlatformEmbeddingClient;
+import com.interview.copilot.converter.references.ReferenceExcerptConverter;
 import com.interview.copilot.mapper.references.ReferenceMapper;
 import com.interview.copilot.response.references.ReferenceExcerptResponse;
 import com.interview.copilot.response.references.ReferenceRetrievalResponse;
@@ -88,7 +89,9 @@ public class ReferenceSearchServiceImpl implements ReferenceSearchService {
                         user,
                         selection.fingerprint(),
                         ids.stream().map(UUID::toString).toList(),
-                        vector.toString());
+                        vector.toString()).stream()
+                        .map(ReferenceExcerptConverter::toResponse)
+                        .toList();
         return result(
                 excerpts.isEmpty() ? "empty" : "ready",
                 excerpts.isEmpty() ? "未找到相关资料；模型变更后请重建资料。" : "",
@@ -104,6 +107,7 @@ public class ReferenceSearchServiceImpl implements ReferenceSearchService {
         return mapper
                 .keywordCandidates(user, fingerprint, ids.stream().map(UUID::toString).toList())
                 .stream()
+                .map(ReferenceExcerptConverter::toResponse)
                 .map(excerpt -> new Scored(excerpt, score(excerpt.text(), terms)))
                 .filter(row -> row.score() > 0)
                 .sorted(Comparator.comparingDouble(Scored::score).reversed())

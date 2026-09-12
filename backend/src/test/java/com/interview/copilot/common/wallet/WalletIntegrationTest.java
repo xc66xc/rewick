@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.github.dockerjava.api.command.InspectContainerResponse;
 import com.interview.copilot.exception.ApiException;
-import com.interview.copilot.request.wallet.WalletAdjustmentRequest;
+import com.interview.copilot.dto.wallet.WalletAdjustment;
 import com.interview.copilot.service.usage.UsageService;
 import com.interview.copilot.service.wallet.WalletAdminService;
 import com.interview.copilot.service.wallet.WalletService;
@@ -249,7 +249,7 @@ public class WalletIntegrationTest {
     void adjust_sameRequest_isIdempotentAndRecordsActorAndReason() {
         grant(1, 120);
         var adjustment =
-                new WalletAdjustmentRequest(
+                new WalletAdjustment(
                         request(), "add", 60L, wallets.state(1).version(), "测试分配");
         admin.adjust(3, 1, adjustment);
         var retry = admin.adjust(3, 1, adjustment);
@@ -266,14 +266,14 @@ public class WalletIntegrationTest {
     void adjust_staleSetVersion_rejectsWithoutOverwritingNewBalance() {
         grant(1, 120);
         long version = wallets.state(1).version();
-        admin.adjust(3, 1, new WalletAdjustmentRequest(request(), "set", 240L, version, "first"));
+        admin.adjust(3, 1, new WalletAdjustment(request(), "set", 240L, version, "first"));
 
         assertThatThrownBy(
                         () ->
                                 admin.adjust(
                                         3,
                                         1,
-                                        new WalletAdjustmentRequest(
+                                        new WalletAdjustment(
                                                 request(), "set", 300L, version, "stale")))
                 .isInstanceOf(ApiException.class)
                 .extracting("code")
@@ -290,7 +290,7 @@ public class WalletIntegrationTest {
         long version = wallets.state(1).version();
         var adjusted =
                 admin.adjust(
-                        3, 1, new WalletAdjustmentRequest(request(), "set", 0L, version, "结束额度"));
+                        3, 1, new WalletAdjustment(request(), "set", 0L, version, "结束额度"));
 
         assertThat(adjusted.availableSeconds()).isZero();
         assertThat(adjusted.session().status()).isEqualTo("ended");
@@ -315,7 +315,7 @@ public class WalletIntegrationTest {
                                     admin.adjust(
                                             3,
                                             1,
-                                            new WalletAdjustmentRequest(
+                                            new WalletAdjustment(
                                                     request(), "add", 60L, 0L, "rollback")))
                     .isInstanceOf(org.springframework.dao.DataAccessException.class);
             assertThat(wallets.state(1).availableSeconds()).isEqualTo(120);
@@ -334,7 +334,7 @@ public class WalletIntegrationTest {
                                 admin.adjust(
                                         2,
                                         1,
-                                        new WalletAdjustmentRequest(
+                                        new WalletAdjustment(
                                                 request(), "add", 60L, 0L, "invalid actor")))
                 .isInstanceOf(ApiException.class)
                 .extracting("code")

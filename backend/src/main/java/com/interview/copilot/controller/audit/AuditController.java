@@ -1,6 +1,7 @@
 package com.interview.copilot.controller.audit;
 
 import com.interview.copilot.common.Page;
+import com.interview.copilot.converter.audit.AuditConverter;
 import com.interview.copilot.service.audit.AuditService;
 import com.interview.copilot.validation.admin.AdminInput;
 import com.interview.copilot.vo.audit.AuditVO;
@@ -23,6 +24,6 @@ public class AuditController {
     public Page<AuditVO> list(
             @RequestParam(defaultValue = "1") String page,
             @RequestParam(defaultValue = "20") String size) {
-        return audit.list(AdminInput.paging(page, size));
+        return audit.list(AdminInput.paging(page, size)).map(AuditConverter::toVO);
     }
 }

@@ -2,8 +2,8 @@ package com.interview.copilot.security.email;
 
 import com.interview.copilot.config.SmtpProperties;
 import com.interview.copilot.dto.email.EmailConfiguration;
+import com.interview.copilot.entity.email.StoredEmailConfiguration;
 import com.interview.copilot.exception.ApiException;
-import com.interview.copilot.mapper.email.EmailConfigurationMapper;
 
 import org.springframework.http.HttpStatus;
 
@@ -51,7 +51,7 @@ public final class EmailConfigurationRules {
     }
 
     public static boolean changed(
-            EmailConfiguration input, EmailConfigurationMapper.Stored previous) {
+            EmailConfiguration input, StoredEmailConfiguration previous) {
         return !input.host().equals(previous.host())
                 || input.port() != previous.port()
                 || !input.username().equals(previous.username());

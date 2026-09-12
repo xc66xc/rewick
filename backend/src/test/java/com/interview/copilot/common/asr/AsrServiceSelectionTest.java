@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.interview.copilot.common.platform.PlatformRuntimeFixture;
 import com.interview.copilot.common.usage.UsageLease;
 import com.interview.copilot.config.PlatformLimitsProperties;
 import com.interview.copilot.config.ProviderProperties;
@@ -33,18 +34,17 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
-
 import reactor.netty.DisposableServer;
 import reactor.netty.http.server.HttpServer;
 
 import java.net.URI;
-import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.Map;
 
 public class AsrServiceSelectionTest {
     private final ProviderJson json = new ProviderJson(new ObjectMapper());
@@ -79,7 +79,8 @@ public class AsrServiceSelectionTest {
         settings.getAsr().setUrl("ws://127.0.0.1:" + server.port() + "/asr?mode=manual");
         settings.getAsr().setApiKey("fixture-secret");
         settings.getAsr().setModel("fixture-transcriber");
-        proxy = new AsrProxy(settings, json, usage, new PlatformLimitsProperties(3600));
+        proxy = new AsrProxy(
+                new PlatformRuntimeFixture(settings), json, usage, new PlatformLimitsProperties(3600));
     }
 
     @AfterEach

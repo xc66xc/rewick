@@ -2,27 +2,25 @@ package com.interview.copilot.security.asr;
 
 import com.interview.copilot.config.PlatformLimitsProperties;
 import com.interview.copilot.config.ProviderProperties;
-import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.exception.ai.ProviderErrors;
+import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.security.auth.UserPrincipal;
-import com.interview.copilot.service.impl.platform.EnvironmentPlatformRuntimeServiceImpl;
 import com.interview.copilot.service.platform.PlatformRuntimeService;
 import com.interview.copilot.service.usage.UsageService;
 import com.interview.copilot.util.ai.ProviderJson;
 
 import jakarta.annotation.PreDestroy;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.BinaryMessage;
 import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.handler.AbstractWebSocketHandler;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
-import org.springframework.web.socket.handler.AbstractWebSocketHandler;
 
-import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.URI;
 import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -45,15 +43,6 @@ public class AsrProxy extends AbstractWebSocketHandler {
             Executors.newScheduledThreadPool(
                     2, Thread.ofPlatform().daemon().name("asr-deadline-", 0).factory());
 
-    public AsrProxy(
-            ProviderProperties properties,
-            ProviderJson json,
-            UsageService usage,
-            PlatformLimitsProperties limits) {
-        this(new EnvironmentPlatformRuntimeServiceImpl(properties), json, usage, limits);
-    }
-
-    @Autowired
     public AsrProxy(
             PlatformRuntimeService providers,
             ProviderJson json,

@@ -1,6 +1,7 @@
 package com.interview.copilot.controller.user;
 
 import com.interview.copilot.common.Page;
+import com.interview.copilot.converter.user.UserConverter;
 import com.interview.copilot.request.user.CreateUserRequest;
 import com.interview.copilot.request.user.ResetPasswordRequest;
 import com.interview.copilot.request.user.UpdateUserRequest;
@@ -43,7 +44,7 @@ public class AdminUserController {
             @RequestParam(defaultValue = "") String query,
             @RequestParam(defaultValue = "1") String page,
             @RequestParam(defaultValue = "20") String size) {
-        return users.list(query, AdminInput.paging(page, size));
+        return users.list(query, AdminInput.paging(page, size)).map(UserConverter::toVO);
     }
 
     @PostMapping("/users")
@@ -52,11 +53,12 @@ public class AdminUserController {
             @Valid @RequestBody CreateUserRequest body) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(
-                        users.create(
-                                actor.id(),
-                                body.identifier(),
-                                body.password(),
-                                body.availableSeconds()));
+                        UserConverter.toVO(
+                                users.create(
+                                        actor.id(),
+                                        body.identifier(),
+                                        body.password(),
+                                        body.availableSeconds())));
     }
 
     @PutMapping("/users/{id}")
@@ -64,7 +66,7 @@ public class AdminUserController {
             @AuthenticationPrincipal UserPrincipal actor,
             @PathVariable String id,
             @Valid @RequestBody UpdateUserRequest body) {
-        return users.update(actor.id(), AdminInput.id(id), body.enabled());
+        return UserConverter.toVO(users.update(actor.id(), AdminInput.id(id), body.enabled()));
     }
 
     @PostMapping("/users/{id}/password")

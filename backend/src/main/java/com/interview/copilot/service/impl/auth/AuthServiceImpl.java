@@ -87,7 +87,8 @@ public class AuthServiceImpl implements AuthService {
     public Optional<UserPrincipal> authenticate(String token) {
         if (token == null || !token.matches("[A-Za-z0-9_-]{43}")) return Optional.empty();
         return Optional.ofNullable(
-                tokens.authenticate(TokenSecrets.hash(token), ServerTime.now(clock)));
+                tokens.authenticate(TokenSecrets.hash(token), ServerTime.now(clock)))
+                .map(user -> new UserPrincipal(user.id(), user.displayName(), user.role(), user.email()));
     }
 
     public void logout(String token) {

@@ -1,6 +1,6 @@
 package com.interview.copilot.mapper.auth;
 
-import com.interview.copilot.security.auth.UserPrincipal;
+import com.interview.copilot.entity.auth.AuthenticatedUserEntity;
 
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -27,7 +27,7 @@ SELECT u.id, u.display_name, u.role,
 FROM auth_tokens t JOIN app_users u ON u.id = t.app_users_id
 WHERE t.token_hash = #{hash} AND t.is_revoked = FALSE AND t.expires_at > #{now} AND u.is_enabled = TRUE
 """)
-    UserPrincipal authenticate(@Param("hash") String hash, @Param("now") LocalDateTime now);
+    AuthenticatedUserEntity authenticate(@Param("hash") String hash, @Param("now") LocalDateTime now);
 
     @Update(
             "UPDATE auth_tokens SET is_revoked = TRUE, updated_at = LOCALTIMESTAMP(6) WHERE"

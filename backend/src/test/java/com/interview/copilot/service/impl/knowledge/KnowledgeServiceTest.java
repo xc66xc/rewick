@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.interview.copilot.common.platform.PlatformRuntimeFixture;
 import com.interview.copilot.common.usage.UsageLease;
 import com.interview.copilot.config.ProviderProperties;
 import com.interview.copilot.exception.ApiException;
@@ -24,15 +25,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatus;
-
 import reactor.core.publisher.Mono;
 import reactor.netty.DisposableServer;
 import reactor.netty.http.server.HttpServer;
 
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.List;
+import java.util.Map;
 
 public class KnowledgeServiceTest {
     private final ObjectMapper mapper = new ObjectMapper();
@@ -47,7 +47,8 @@ public class KnowledgeServiceTest {
         settings.getKnowledge().setApiKey("server-secret");
         settings.getKnowledge().setAgentId("server-agent");
         when(usage.start(anyLong(), anyString(), anyString())).thenReturn(lease);
-        proxy = new KnowledgeServiceImpl(settings, new ProviderHttpClient(), usage);
+        proxy = new KnowledgeServiceImpl(
+                new PlatformRuntimeFixture(settings), new ProviderHttpClient(), usage);
     }
 
     @AfterEach

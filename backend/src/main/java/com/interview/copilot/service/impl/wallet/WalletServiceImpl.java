@@ -1,10 +1,13 @@
 package com.interview.copilot.service.impl.wallet;
 
+import com.interview.copilot.entity.wallet.InterviewSessionEntity;
+import com.interview.copilot.entity.wallet.WalletEntity;
 import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.mapper.wallet.WalletMapper;
 import com.interview.copilot.response.wallet.WalletResponse;
 import com.interview.copilot.service.wallet.WalletService;
 import com.interview.copilot.util.ServerTime;
+import com.interview.copilot.validation.wallet.WalletInput;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -27,13 +30,13 @@ public class WalletServiceImpl implements WalletService {
     }
 
     public WalletResponse state(long userId) {
-        repository.lock(userId);
+        lockWallet(userId);
         return settle(userId, ServerTime.now(clock));
     }
 
     public WalletResponse start(long userId, String requestId) {
-        uuid(requestId);
-        repository.lock(userId);
+        WalletInput.uuid(requestId);
+        lockWallet(userId);
         LocalDateTime now = ServerTime.now(clock);
         WalletResponse current = settle(userId, now);
         var previous = repository.byRequest(userId, requestId);
@@ -56,13 +59,13 @@ public class WalletServiceImpl implements WalletService {
     }
 
     public WalletResponse heartbeat(long userId, String id) {
-        repository.lock(userId);
+        lockWallet(userId);
         LocalDateTime now = ServerTime.now(clock);
         requireSession(userId, id);
         settle(userId, now);
         var session = requireSession(userId, id);
         if ("active".equals(session.status())) {
-            long balance = repository.lock(userId).availableSeconds();
+            long balance = lockWallet(userId).availableSeconds();
             LocalDateTime exhaustion =
                     session.startedAt().plusSeconds(session.usedSeconds() + balance);
             session =
@@ -77,7 +80,7 @@ public class WalletServiceImpl implements WalletService {
     }
 
     public WalletResponse end(long userId, String id) {
-        repository.lock(userId);
+        lockWallet(userId);
         LocalDateTime now = ServerTime.now(clock);
         requireSession(userId, id);
         settle(userId, now);
@@ -108,7 +111,7 @@ public class WalletServiceImpl implements WalletService {
     }
 
     WalletResponse settle(long userId, LocalDateTime now) {
-        var wallet = repository.lock(userId);
+        var wallet = lockWallet(userId);
         var session = repository.latest(userId);
         if (session == null || !"active".equals(session.status()))
             return view(userId, session, now);
@@ -138,8 +141,8 @@ public class WalletServiceImpl implements WalletService {
         return view(userId, session, now);
     }
 
-    private WalletMapper.Session finishState(
-            WalletMapper.Session session,
+    private InterviewSessionEntity finishState(
+            InterviewSessionEntity session,
             LocalDateTime now,
             LocalDateTime cutoff,
             long used,
@@ -152,8 +155,8 @@ public class WalletServiceImpl implements WalletService {
         return session.update(session.expiresAt(), null, used, null);
     }
 
-    WalletResponse view(long userId, WalletMapper.Session session, LocalDateTime now) {
-        var wallet = repository.lock(userId);
+    WalletResponse view(long userId, InterviewSessionEntity session, LocalDateTime now) {
+        var wallet = lockWallet(userId);
         WalletResponse.SessionView value =
                 session == null
                         ? null
@@ -171,20 +174,12 @@ public class WalletServiceImpl implements WalletService {
                 wallet.availableSeconds(), wallet.version(), ServerTime.instant(now), value);
     }
 
-    private WalletMapper.Session requireSession(long userId, String id) {
-        uuid(id);
+    private InterviewSessionEntity requireSession(long userId, String id) {
+        WalletInput.uuid(id);
         var session = repository.byId(userId, id);
         if (session == null)
             throw new ApiException(HttpStatus.NOT_FOUND, "interview_not_found", "面试不存在。");
         return session;
-    }
-
-    static void uuid(String value) {
-        if (value == null
-                || !value.matches(
-                        "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "invalid_request", "请求标识无效。");
-        }
     }
 
     private LocalDateTime earlier(LocalDateTime first, LocalDateTime second) {
@@ -193,5 +188,13 @@ public class WalletServiceImpl implements WalletService {
 
     private ApiException inactive() {
         return new ApiException(HttpStatus.CONFLICT, "interview_required", "请先开始面试，可用时长不足或面试已结束。");
+    }
+
+    private WalletEntity lockWallet(long userId) {
+        if (repository.lockUser(userId) == null) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "user_not_found", "用户不存在。");
+        }
+        repository.ensureWallet(userId);
+        return repository.lockWallet(userId);
     }
 }

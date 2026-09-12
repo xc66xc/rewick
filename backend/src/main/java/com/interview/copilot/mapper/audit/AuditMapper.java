@@ -1,6 +1,6 @@
 package com.interview.copilot.mapper.audit;
 
-import com.interview.copilot.vo.audit.AuditVO;
+import com.interview.copilot.entity.audit.AuditEventEntity;
 
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -29,5 +29,5 @@ SELECT a.id::text, a.actor_app_users_id::text AS actor_id, u.display_name AS act
 FROM audit_events a JOIN app_users u ON u.id = a.actor_app_users_id
 ORDER BY a.id DESC LIMIT #{size} OFFSET #{offset}
 """)
-    List<AuditVO> page(@Param("size") int size, @Param("offset") int offset);
+    List<AuditEventEntity> page(@Param("size") int size, @Param("offset") int offset);
 }

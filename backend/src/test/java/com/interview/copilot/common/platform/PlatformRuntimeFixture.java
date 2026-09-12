@@ -1,10 +1,10 @@
-package com.interview.copilot.service.impl.platform;
+package com.interview.copilot.common.platform;
 
 import com.interview.copilot.config.ProviderProperties;
 import com.interview.copilot.model.platform.PlatformConfig;
+import com.interview.copilot.model.platform.PlatformPolicy;
 import com.interview.copilot.model.platform.PlatformSnapshot;
 import com.interview.copilot.service.platform.PlatformRuntimeService;
-import com.interview.copilot.util.platform.PlatformPolicy;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -15,11 +15,11 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 
-/** Compatibility source used only before the first database publication. */
-public final class EnvironmentPlatformRuntimeServiceImpl implements PlatformRuntimeService {
+/** Builds isolated supplier settings for tests without publishing database configuration. */
+public final class PlatformRuntimeFixture implements PlatformRuntimeService {
     private final ProviderProperties properties;
 
-    public EnvironmentPlatformRuntimeServiceImpl(ProviderProperties properties) {
+    public PlatformRuntimeFixture(ProviderProperties properties) {
         this.properties = properties;
     }
 

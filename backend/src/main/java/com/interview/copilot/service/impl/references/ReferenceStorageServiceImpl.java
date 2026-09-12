@@ -1,5 +1,6 @@
 package com.interview.copilot.service.impl.references;
 
+import com.interview.copilot.converter.references.ReferenceDocumentConverter;
 import com.interview.copilot.exception.references.ReferenceErrors;
 import com.interview.copilot.mapper.references.ReferenceMapper;
 import com.interview.copilot.response.references.ReferenceDocumentResponse;
@@ -19,7 +20,7 @@ public class ReferenceStorageServiceImpl implements ReferenceStorageService {
     }
 
     public List<ReferenceDocumentResponse> list(long user) {
-        return mapper.list(user);
+        return mapper.list(user).stream().map(ReferenceDocumentConverter::toResponse).toList();
     }
 
     public ReferenceDocumentResponse require(long user, String id) {
@@ -27,7 +28,7 @@ public class ReferenceStorageServiceImpl implements ReferenceStorageService {
         if (document == null) {
             throw ReferenceErrors.missing();
         }
-        return document;
+        return ReferenceDocumentConverter.toResponse(document);
     }
 
     public void lockUser(long user) {

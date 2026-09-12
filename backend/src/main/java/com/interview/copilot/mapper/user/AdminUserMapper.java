@@ -1,7 +1,8 @@
 package com.interview.copilot.mapper.user;
 
+import com.interview.copilot.entity.user.AdminUserEntity;
+import com.interview.copilot.entity.user.UserAccountEntity;
 import com.interview.copilot.entity.user.UserEntity;
-import com.interview.copilot.vo.user.UserVO;
 
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -22,7 +23,7 @@ public interface AdminUserMapper {
     @Select(
             "SELECT id, display_name, role, is_enabled AS enabled FROM app_users WHERE id = #{id}"
                     + " FOR UPDATE")
-    Account lockAccount(long id);
+    UserAccountEntity lockAccount(long id);
 
     @Select("SELECT COUNT(id) FROM app_users WHERE role = 'ADMIN' AND is_enabled = TRUE")
     int enabledAdministrators();
@@ -43,7 +44,7 @@ SELECT id::text, display_name, role, is_enabled AS enabled,
 FROM app_users WHERE #{query} = '' OR (strpos(lower(display_name), lower(#{query})) > 0 OR EXISTS(SELECT 1 FROM auth_identities i WHERE i.app_users_id=app_users.id AND i.identity_type='email' AND strpos(lower(i.identifier), lower(#{query})) > 0))
 ORDER BY id DESC LIMIT #{size} OFFSET #{offset}
 """)
-    List<UserVO> page(
+    List<AdminUserEntity> page(
             @Param("query") String query, @Param("size") int size, @Param("offset") int offset);
 
     @Select(
@@ -54,7 +55,7 @@ SELECT id::text, display_name, role, is_enabled AS enabled,
     created_at AT TIME ZONE 'Asia/Shanghai' AS created_at
 FROM app_users WHERE id = #{id}
 """)
-    UserVO view(@Param("id") long id);
+    AdminUserEntity view(@Param("id") long id);
 
     @Insert(
             """
@@ -79,6 +80,4 @@ UPDATE app_users SET is_enabled = #{enabled}, updated_at = LOCALTIMESTAMP(6) WHE
             "UPDATE app_users SET password_hash = #{hash}, updated_at = LOCALTIMESTAMP(6) WHERE id"
                     + " = #{id}")
     void resetPassword(@Param("id") long id, @Param("hash") String hash);
-
-    record Account(long id, String displayName, String role, boolean enabled) {}
 }

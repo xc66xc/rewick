@@ -1,5 +1,7 @@
 package com.interview.copilot.mapper.platform;
 
+import com.interview.copilot.entity.platform.PlatformConfigRow;
+
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -10,7 +12,7 @@ public interface PlatformConfigMapper {
     @Select(
             "SELECT version, is_published AS published, payload::text AS payload FROM"
                     + " platform_config WHERE id = 1")
-    Row read();
+    PlatformConfigRow read();
 
     @Update(
             """
@@ -19,11 +21,4 @@ public interface PlatformConfigMapper {
             WHERE id = 1 AND version = #{version}
             """)
     int publish(@Param("version") long version, @Param("payload") String payload);
-
-    record Row(long version, boolean published, String payload) {
-        @Override
-        public String toString() {
-            return "PlatformConfigRow[version=" + version + "]";
-        }
-    }
 }

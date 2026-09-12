@@ -1,13 +1,13 @@
 package com.interview.copilot.mapper.wallet;
 
-import com.interview.copilot.exception.ApiException;
+import com.interview.copilot.entity.wallet.InterviewSessionEntity;
+import com.interview.copilot.entity.wallet.WalletEntity;
 
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
-import org.springframework.http.HttpStatus;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -27,15 +27,7 @@ public interface WalletMapper {
     @Select(
             "SELECT available_seconds,version FROM time_wallets WHERE app_users_id=#{userId} FOR"
                     + " UPDATE")
-    Wallet lockWallet(long userId);
-
-    default Wallet lock(long userId) {
-        if (lockUser(userId) == null) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "user_not_found", "用户不存在。");
-        }
-        ensureWallet(userId);
-        return lockWallet(userId);
-    }
+    WalletEntity lockWallet(long userId);
 
     @Select("SELECT is_enabled FROM app_users WHERE id=#{userId}")
     boolean enabled(long userId);
@@ -54,20 +46,20 @@ public interface WalletMapper {
                     + SESSION_COLUMNS
                     + " FROM interview_sessions WHERE app_users_id=#{userId} ORDER BY"
                     + " interview_sessions.id DESC LIMIT 1")
-    Session latest(long userId);
+    InterviewSessionEntity latest(long userId);
 
     @Select(
             "SELECT "
                     + SESSION_COLUMNS
                     + " FROM interview_sessions WHERE app_users_id=#{userId} AND session_id=#{id}")
-    Session byId(@Param("userId") long userId, @Param("id") String id);
+    InterviewSessionEntity byId(@Param("userId") long userId, @Param("id") String id);
 
     @Select(
             "SELECT "
                     + SESSION_COLUMNS
                     + " FROM interview_sessions WHERE app_users_id=#{userId} AND"
                     + " request_id=#{requestId}")
-    Session byRequest(@Param("userId") long userId, @Param("requestId") String requestId);
+    InterviewSessionEntity byRequest(@Param("userId") long userId, @Param("requestId") String requestId);
 
     @Insert(
             "INSERT INTO"
@@ -84,7 +76,7 @@ public interface WalletMapper {
             "UPDATE interview_sessions SET"
                 + " status=#{session.status},expires_at=#{session.expiresAt},ended_at=#{session.endedAt},used_seconds=#{session.usedSeconds},end_reason=#{session.endReason},updated_at=#{now}"
                 + " WHERE session_id=#{session.id}")
-    void save(@Param("session") Session session, @Param("now") LocalDateTime now);
+    void save(@Param("session") InterviewSessionEntity session, @Param("now") LocalDateTime now);
 
     @Update(
             "UPDATE time_wallets SET available_seconds=#{seconds},updated_at=#{now} WHERE"
@@ -117,28 +109,4 @@ public interface WalletMapper {
                 + " s.status='active' AND s.expires_at>#{now} AND u.is_enabled)")
     boolean active(
             @Param("userId") long userId, @Param("id") String id, @Param("now") LocalDateTime now);
-
-    record Wallet(long availableSeconds, long version) {}
-
-    record Session(
-            String id,
-            long userId,
-            String status,
-            LocalDateTime startedAt,
-            LocalDateTime expiresAt,
-            LocalDateTime endedAt,
-            long usedSeconds,
-            String endReason) {
-        public Session update(LocalDateTime expiry, LocalDateTime end, long used, String reason) {
-            return new Session(
-                    id,
-                    userId,
-                    end == null ? "active" : "ended",
-                    startedAt,
-                    expiry,
-                    end,
-                    used,
-                    reason);
-        }
-    }
 }

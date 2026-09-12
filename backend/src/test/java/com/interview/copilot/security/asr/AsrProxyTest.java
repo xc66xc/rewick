@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.interview.copilot.common.platform.PlatformRuntimeFixture;
 import com.interview.copilot.common.usage.UsageLease;
 import com.interview.copilot.config.PlatformLimitsProperties;
 import com.interview.copilot.config.ProviderProperties;
@@ -19,7 +20,6 @@ import com.interview.copilot.security.auth.UserPrincipal;
 import com.interview.copilot.service.usage.UsageService;
 import com.interview.copilot.util.ai.ProviderJson;
 import com.interview.copilot.util.asr.AsrProtocol;
-
 import io.netty.handler.codec.http.websocketx.BinaryWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 
@@ -31,21 +31,20 @@ import org.springframework.web.socket.BinaryMessage;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
-
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 import reactor.netty.DisposableServer;
 import reactor.netty.http.server.HttpServer;
 
 import java.nio.ByteBuffer;
-import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.Map;
 
 public class AsrProxyTest {
     private final ObjectMapper mapper = new ObjectMapper();
@@ -69,7 +68,8 @@ public class AsrProxyTest {
         settings.getAsr().setUrl("ws://127.0.0.1:" + server.port() + "/asr");
         settings.getAsr().setApiKey("server-secret");
         settings.getAsr().setModel("server-asr-model");
-        proxy = new AsrProxy(settings, json, usage, new PlatformLimitsProperties(3600));
+        proxy = new AsrProxy(
+                new PlatformRuntimeFixture(settings), json, usage, new PlatformLimitsProperties(3600));
         session = session("first");
         proxy.afterConnectionEstablished(session);
     }

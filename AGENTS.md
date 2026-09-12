@@ -30,41 +30,16 @@ Use two-space indentation, single quotes, and no semicolons in TypeScript. Keep 
 
 ### backend
 
-Use four-space Java indentation and constructor injection. Base packages must use `com.interview.copilot`; organize by responsibility, never a flat domain package such as `auth`.
+Use four-space Java indentation and constructor injection.
 
-```text
-controller  HTTP endpoints          service                 use-case interfaces
-service/impl use-case implementations mapper                 MyBatis-Plus database access
-entity      database mappings       model                   domain models
-dto         transfer objects        vo                      view objects
-request     request bodies          response                response bodies
-config      configuration           security                authentication and authorization
-exception   exceptions/advice       util                    utilities
-constant    constants/enums         converter               object conversions
-validation  custom validation       job                     scheduled tasks
-event       events/listeners        common                  shared base components
-```
-
-Under each responsibility package, group business-specific classes into module subpackages rather than accumulating them directly in the responsibility package. Use the same lowercase module name across layers. For example, a user module uses:
-
-```text
-com.interview.copilot
-├── controller/user/UserController.java
-├── service/user/UserService.java
-├── service/impl/user/UserServiceImpl.java
-├── mapper/user/UserMapper.java
-├── entity/user/User.java
-├── request/user/CreateUserRequest.java
-└── response/user/UserResponse.java
-```
-
-Apply this structure to other business-specific packages such as `model`, `dto`, `vo`, `converter`, `validation`, `job`, and `event` when needed. Create only packages required by the module; do not scaffold empty packages. Shared infrastructure packages such as `common`, `util`, and `config` do not require business-module subpackages. Keep the utility package named `util` consistently; do not introduce a parallel `utils` package.
-
-Controllers validate HTTP input, invoke service interfaces, and return `response`/`vo`; they must not contain business logic or access persistence directly. Put service interfaces in `service/<module>` and their concrete business implementations in `service/impl/<module>`, named `*ServiceImpl`. The `impl` package is a subpackage of `service`, not a separate top-level `serviceimpl` package. Controllers depend on `*Service` interfaces through constructor injection, never on their concrete implementations.
-
-Use MyBatis-Plus for database access through concrete `*Mapper` interfaces in `mapper`. Service implementations invoke these Mappers; do not introduce JPA repositories, JDBC/JdbcTemplate access, or SQL in controllers. Entities must never be API payloads. Put global exception handling in `exception` and security/session code in `security`.
-
-Use `*Request`, `*Response`/`*VO`, `*Service`, `*ServiceImpl`, and `*Mapper` naming patterns.
+- **Packages:** Under `com.interview.copilot`, use `<responsibility>/<module>` with the same lowercase module name across layers; never a flat domain package. Interfaces: `service/<module>/*Service`; implementations: `service/impl/<module>/*ServiceImpl`. Create only needed packages. Shared `common`, `config`, and `util` need no module subpackage; use `util`, never `utils`.
+- **Layers:** Controllers validate HTTP input, call service interfaces, and return `*Response`/`*VO`; no business logic or persistence access. Services own business rules, orchestration, and transactions. Production consumers must not import `service.impl`. Jobs only trigger service interfaces.
+- **Persistence:** Use MyBatis-Plus through `mapper/<module>/*Mapper`; no JPA or JDBC/JdbcTemplate in production. Keep SQL in Mappers, with no nested records/classes or business default methods. Mappers must not depend on controllers, services, requests, responses, VOs, security, business exceptions, or HTTP types.
+- **Data:** Put database mappings/projections in `entity`, domain models/policies in `model`, transfer/query objects in `dto`, and HTTP inputs in `request` as `*Request`. Services convert entities to DTOs or independent responses; Controllers construct VOs through converters. No service dependency on `vo`, HTTP request objects in persistence, or entities in API payloads—even nested or paginated.
+- **Helpers:** Use `converter/<module>` for mappings without Mapper access and `Page.map` to preserve pagination metadata. Shared validation belongs in `validation/<module>`, not service implementation helpers. Keep global exceptions/advice in `exception` and security/session code in `security`.
+- **Transactions:** Preserve wallet lock order: user row → ensure wallet → wallet row. Service coordinates locking; expiry processing retains per-user transactions and failure isolation.
+- **Fixtures:** Test configuration sources belong only in `src/test/java`. Production uses database-backed platform configuration; do not add environment-backed runtime constructors for tests.
+- **Verification:** Maintain `BackendArchitectureTest`; structural refactors must pass unit/architecture tests. Persistence or transaction changes also require `./mvnw clean verify -Pintegration` from `backend/` with the existing PostgreSQL/pgvector image. Preserve API contracts, authorization, tenant isolation, time semantics, and transaction behavior.
 
 ## Frontend UI Constraints (desktop `frontend/` only; `admin/` is not bound by these)
 

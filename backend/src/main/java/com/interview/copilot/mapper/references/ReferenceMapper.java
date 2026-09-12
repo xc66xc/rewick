@@ -1,9 +1,10 @@
 package com.interview.copilot.mapper.references;
 
 import com.interview.copilot.dto.references.ReferencePolicy;
+import com.interview.copilot.entity.references.ReferenceDocumentEntity;
+import com.interview.copilot.entity.references.ReferenceExcerptEntity;
+import com.interview.copilot.entity.references.ReferenceTotals;
 import com.interview.copilot.model.references.ReferenceModels;
-import com.interview.copilot.response.references.ReferenceDocumentResponse;
-import com.interview.copilot.response.references.ReferenceExcerptResponse;
 
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
@@ -24,7 +25,7 @@ public interface ReferenceMapper {
                         + " created_at,to_char(updated_at, 'YYYY-MM-DD\"T\"HH24:MI:SS.US') ||"
                         + " '+08:00' AS updated_at,error,chunk_count FROM reference_documents WHERE"
                         + " app_users_id=#{user} ORDER BY created_at DESC")
-    List<ReferenceDocumentResponse> list(@Param("user") long user);
+    List<ReferenceDocumentEntity> list(@Param("user") long user);
 
     @Select(
             value =
@@ -34,7 +35,7 @@ public interface ReferenceMapper {
                         + " created_at,to_char(updated_at, 'YYYY-MM-DD\"T\"HH24:MI:SS.US') ||"
                         + " '+08:00' AS updated_at,error,chunk_count FROM reference_documents WHERE"
                         + " app_users_id=#{user} AND id=CAST(#{id} AS uuid)")
-    ReferenceDocumentResponse find(@Param("user") long user, @Param("id") String id);
+    ReferenceDocumentEntity find(@Param("user") long user, @Param("id") String id);
 
     @Select(value = "SELECT id FROM app_users WHERE id=#{user} FOR UPDATE")
     Long lockUser(@Param("user") long user);
@@ -46,7 +47,7 @@ public interface ReferenceMapper {
             value =
                     "SELECT count(*) AS files,COALESCE(sum(file_size),0)::bigint AS bytes FROM"
                             + " reference_documents WHERE app_users_id=#{user}")
-    Totals totals(@Param("user") long user);
+    ReferenceTotals totals(@Param("user") long user);
 
     @Insert(
             value =
@@ -220,7 +221,7 @@ public interface ReferenceMapper {
                         + " separator=\",\" close=\")\">CAST(#{id} AS uuid)</foreach> AND"
                         + " 1-(e.embedding &lt;=&gt; CAST(#{vector} AS vector)) &gt;= 0.55 ORDER BY"
                         + " e.embedding &lt;=&gt; CAST(#{vector} AS vector) LIMIT 20</script>")
-    List<ReferenceExcerptResponse> vectorSearch(
+    List<ReferenceExcerptEntity> vectorSearch(
             @Param("user") long user,
             @Param("fingerprint") String fingerprint,
             @Param("ids") List<String> ids,
@@ -239,10 +240,8 @@ public interface ReferenceMapper {
                         + " d.id IN <foreach collection=\"ids\" item=\"id\" open=\"(\""
                         + " separator=\",\" close=\")\">CAST(#{id} AS uuid)</foreach> LIMIT"
                         + " 50000</script>")
-    List<ReferenceExcerptResponse> keywordCandidates(
+    List<ReferenceExcerptEntity> keywordCandidates(
             @Param("user") long user,
             @Param("fingerprint") String fingerprint,
             @Param("ids") List<String> ids);
-
-    record Totals(long files, long bytes) {}
 }

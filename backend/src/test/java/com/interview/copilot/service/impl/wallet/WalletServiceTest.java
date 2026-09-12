@@ -1,0 +1,36 @@
+package com.interview.copilot.service.impl.wallet;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.interview.copilot.exception.ApiException;
+import com.interview.copilot.mapper.wallet.WalletMapper;
+import com.interview.copilot.util.ServerTime;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
+
+import java.time.Clock;
+
+class WalletServiceTest {
+    @Test
+    void state_missingUser_rejectsBeforeCreatingOrLockingWallet() {
+        WalletMapper mapper = mock(WalletMapper.class);
+        when(mapper.lockUser(7L)).thenReturn(null);
+        var service = new WalletServiceImpl(mapper, Clock.system(ServerTime.ZONE));
+
+        assertThatThrownBy(() -> service.state(7L))
+                .isInstanceOfSatisfying(ApiException.class, error -> {
+                    assertThat(error.status()).isEqualTo(HttpStatus.NOT_FOUND);
+                    assertThat(error.code()).isEqualTo("user_not_found");
+                });
+
+        verify(mapper, never()).ensureWallet(anyLong());
+        verify(mapper, never()).lockWallet(anyLong());
+    }
+}

@@ -4,22 +4,20 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.interview.copilot.common.usage.UsageLease;
 import com.interview.copilot.config.ProviderProperties;
 import com.interview.copilot.exception.ai.ProviderErrors;
-import com.interview.copilot.service.impl.platform.EnvironmentPlatformRuntimeServiceImpl;
 import com.interview.copilot.service.knowledge.KnowledgeService;
 import com.interview.copilot.service.platform.PlatformRuntimeService;
 import com.interview.copilot.service.usage.UsageService;
 import com.interview.copilot.util.ai.ProviderHttpClient;
 import com.interview.copilot.validation.ai.LlmRequestPolicy;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.concurrent.Semaphore;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Semaphore;
 
 @Service
 public class KnowledgeServiceImpl implements KnowledgeService {
@@ -28,12 +26,6 @@ public class KnowledgeServiceImpl implements KnowledgeService {
     private final UsageService usage;
     private final Semaphore capacity = new Semaphore(16);
 
-    public KnowledgeServiceImpl(
-            ProviderProperties properties, ProviderHttpClient http, UsageService usage) {
-        this(new EnvironmentPlatformRuntimeServiceImpl(properties), http, usage);
-    }
-
-    @Autowired
     public KnowledgeServiceImpl(
             PlatformRuntimeService providers, ProviderHttpClient http, UsageService usage) {
         this.providers = providers;

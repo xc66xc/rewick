@@ -1,10 +1,12 @@
 package com.interview.copilot.service.impl.usage;
 
 import com.interview.copilot.common.Page;
+import com.interview.copilot.converter.usage.UsageConverter;
+import com.interview.copilot.dto.usage.UsageDTO;
+import com.interview.copilot.dto.usage.UsageFilter;
 import com.interview.copilot.mapper.usage.AdminUsageMapper;
 import com.interview.copilot.service.usage.AdminUsageService;
 import com.interview.copilot.validation.admin.AdminInput;
-import com.interview.copilot.vo.usage.UsageVO;
 
 import org.springframework.stereotype.Service;
 
@@ -21,7 +23,7 @@ public class AdminUsageServiceImpl implements AdminUsageService {
         this.mapper = mapper;
     }
 
-    public Page<UsageVO> list(
+    public Page<UsageDTO> list(
             String userId,
             String query,
             String capability,
@@ -32,14 +34,16 @@ public class AdminUsageServiceImpl implements AdminUsageService {
             throw AdminInput.invalid();
         Long id = userId.isEmpty() ? null : AdminInput.id(userId);
         var filter =
-                new AdminUsageMapper.Filter(
+                new UsageFilter(
                         id,
                         capability,
                         status,
                         AdminInput.bounded(model, 256),
                         AdminInput.bounded(query, 254));
         return new Page<>(
-                mapper.page(filter, paging.size(), paging.offset()),
+                mapper.page(filter, paging.size(), paging.offset()).stream()
+                        .map(UsageConverter::toDTO)
+                        .toList(),
                 mapper.count(filter),
                 paging.page(),
                 paging.size());

@@ -1,6 +1,7 @@
 package com.interview.copilot.controller.wallet;
 
 import com.interview.copilot.common.Page;
+import com.interview.copilot.converter.wallet.WalletAdjustmentConverter;
 import com.interview.copilot.request.wallet.WalletAdjustmentRequest;
 import com.interview.copilot.response.wallet.WalletResponse;
 import com.interview.copilot.response.wallet.WalletTransactionResponse;
@@ -39,7 +40,7 @@ public class WalletAdminController {
             @AuthenticationPrincipal UserPrincipal actor,
             @PathVariable String id,
             @RequestBody WalletAdjustmentRequest input) {
-        return admin.adjust(actor.id(), AdminInput.id(id), input);
+        return admin.adjust(actor.id(), AdminInput.id(id), WalletAdjustmentConverter.toDTO(input));
     }
 
     @GetMapping("/transactions")

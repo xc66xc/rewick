@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.interview.copilot.common.platform.PlatformRuntimeFixture;
 import com.interview.copilot.common.usage.UsageLease;
 import com.interview.copilot.config.ProviderProperties;
 import com.interview.copilot.controller.ai.LlmController;
@@ -31,18 +32,17 @@ import org.springframework.security.web.method.annotation.AuthenticationPrincipa
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.DisposableServer;
 import reactor.netty.http.server.HttpServer;
 
 import java.time.Duration;
-import java.util.List;
-import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.List;
+import java.util.Map;
 
 public class LlmServiceTest {
     private final ObjectMapper mapper = new ObjectMapper();
@@ -59,7 +59,8 @@ public class LlmServiceTest {
         settings.getLlm().setModel("approved");
         proxy =
                 new LlmServiceImpl(
-                        settings, new ProviderHttpClient(), new ProviderJson(mapper), usage);
+                        new PlatformRuntimeFixture(settings),
+                        new ProviderHttpClient(), new ProviderJson(mapper), usage);
     }
 
     @AfterEach

@@ -1,6 +1,7 @@
 package com.interview.copilot.mapper.email;
 
-import com.interview.copilot.security.email.EmailCodeSecrets;
+import com.interview.copilot.entity.email.EmailCodeDigest;
+import com.interview.copilot.entity.email.EmailVerificationEntity;
 
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -27,7 +28,7 @@ public interface EmailCodeMapper {
 SELECT email, code_digest, nonce, status, expires_at, next_send_at, window_started_at, send_count, failed_attempts
 FROM email_verifications WHERE email = #{email} AND purpose = #{purpose} FOR UPDATE
 """)
-    Verification lock(@Param("email") String email, @Param("purpose") String purpose);
+    EmailVerificationEntity lock(@Param("email") String email, @Param("purpose") String purpose);
 
     @Update(
             """
@@ -38,7 +39,7 @@ UPDATE email_verifications SET code_digest = #{code.digest}, nonce = #{code.nonc
     void reserve(
             @Param("email") String email,
             @Param("purpose") String purpose,
-            @Param("code") EmailCodeSecrets.Code code,
+            @Param("code") EmailCodeDigest code,
             @Param("expires") LocalDateTime expires,
             @Param("next") LocalDateTime next,
             @Param("window") LocalDateTime window,
@@ -68,20 +69,4 @@ UPDATE email_verifications SET status = 'consumed', code_digest = '', nonce = ''
 WHERE email = #{email} AND purpose = #{purpose}
 """)
     void consume(@Param("email") String email, @Param("purpose") String purpose);
-
-    record Verification(
-            String email,
-            String codeDigest,
-            String nonce,
-            String status,
-            LocalDateTime expiresAt,
-            LocalDateTime nextSendAt,
-            LocalDateTime windowStartedAt,
-            int sendCount,
-            int failedAttempts) {
-        @Override
-        public String toString() {
-            return "Verification[redacted]";
-        }
-    }
 }

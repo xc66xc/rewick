@@ -1,6 +1,7 @@
 package com.interview.copilot.mapper.usage;
 
-import com.interview.copilot.vo.usage.UsageVO;
+import com.interview.copilot.dto.usage.UsageFilter;
+import com.interview.copilot.entity.usage.UsageEventEntity;
 
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -28,7 +29,7 @@ public interface AdminUsageMapper {
                     + " "
                     + FILTER
                     + "</script>")
-    long count(@Param("filter") Filter filter);
+    long count(@Param("filter") UsageFilter filter);
 
     @Select(
             """
@@ -39,8 +40,6 @@ FROM usage_events e JOIN app_users u ON u.id = e.app_users_id
 """
                     + FILTER
                     + " ORDER BY e.id DESC LIMIT #{size} OFFSET #{offset}</script>")
-    List<UsageVO> page(
-            @Param("filter") Filter filter, @Param("size") int size, @Param("offset") int offset);
-
-    record Filter(Long userId, String capability, String status, String model, String query) {}
+    List<UsageEventEntity> page(
+            @Param("filter") UsageFilter filter, @Param("size") int size, @Param("offset") int offset);
 }

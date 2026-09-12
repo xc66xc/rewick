@@ -1,4 +1,4 @@
-package com.interview.copilot.util.platform;
+package com.interview.copilot.model.platform;
 
 import com.interview.copilot.config.ProviderProperties;
 

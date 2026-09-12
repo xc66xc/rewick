@@ -1,6 +1,8 @@
 package com.interview.copilot.mapper.wallet;
 
-import com.interview.copilot.request.wallet.WalletAdjustmentRequest;
+import com.interview.copilot.dto.wallet.WalletAdjustment;
+import com.interview.copilot.entity.wallet.WalletAdjustmentEntity;
+import com.interview.copilot.entity.wallet.WalletTransactionEntity;
 
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -9,7 +11,6 @@ import org.apache.ibatis.annotations.Select;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 
 @Mapper
 public interface WalletAdminMapper {
@@ -17,7 +18,7 @@ public interface WalletAdminMapper {
             "SELECT operation,requested_seconds,expected_version,reason,actor_id FROM"
                     + " time_wallet_transactions WHERE app_users_id=#{userId} AND"
                     + " request_id=#{requestId}")
-    Map<String, Object> adjustment(
+    WalletAdjustmentEntity adjustment(
             @Param("userId") long userId, @Param("requestId") String requestId);
 
     @Insert(
@@ -26,7 +27,7 @@ public interface WalletAdminMapper {
                 + " VALUES(#{userId},#{input.requestId},#{input.operation},#{input.seconds},#{input.expectedVersion},#{after}-#{before},#{before},#{after},#{input.reason},#{actor},#{now})")
     void insertAdjustment(
             @Param("userId") long userId,
-            @Param("input") WalletAdjustmentRequest input,
+            @Param("input") WalletAdjustment input,
             @Param("before") long before,
             @Param("after") long after,
             @Param("actor") long actor,
@@ -38,7 +39,7 @@ public interface WalletAdminMapper {
                 + " AS actor_display_name,t.session_id,t.created_at FROM time_wallet_transactions t"
                 + " LEFT JOIN app_users u ON u.id=t.actor_id WHERE t.app_users_id=#{userId} ORDER"
                 + " BY t.id DESC LIMIT #{size} OFFSET #{offset}")
-    List<TransactionRow> transactions(
+    List<WalletTransactionEntity> transactions(
             @Param("userId") long userId, @Param("size") int size, @Param("offset") int offset);
 
     @Select("SELECT count(id) FROM time_wallet_transactions WHERE app_users_id=#{userId}")
@@ -48,14 +49,4 @@ public interface WalletAdminMapper {
             "SELECT EXISTS(SELECT 1 FROM app_users WHERE id=#{actor} AND role='ADMIN' AND"
                     + " is_enabled)")
     boolean authorized(long actor);
-
-    record TransactionRow(
-            String id,
-            long deltaSeconds,
-            long beforeSeconds,
-            long afterSeconds,
-            String reason,
-            String actorDisplayName,
-            String sessionId,
-            LocalDateTime createdAt) {}
 }

@@ -11,9 +11,9 @@ import com.interview.copilot.config.PlatformLimitsProperties;
 import com.interview.copilot.controller.platform.PlatformController;
 import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.model.platform.PlatformConfig;
+import com.interview.copilot.model.platform.PlatformPolicy;
 import com.interview.copilot.model.platform.PlatformSnapshot;
 import com.interview.copilot.security.auth.UserPrincipal;
-import com.interview.copilot.util.platform.PlatformPolicy;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

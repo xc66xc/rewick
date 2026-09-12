@@ -2,13 +2,13 @@ package com.interview.copilot.converter.platform;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.interview.copilot.entity.platform.PlatformConfigRow;
 import com.interview.copilot.entity.platform.StoredPlatformConfig;
 import com.interview.copilot.exception.platform.PlatformConfigErrors;
-import com.interview.copilot.mapper.platform.PlatformConfigMapper;
 import com.interview.copilot.model.platform.PlatformConfig;
+import com.interview.copilot.model.platform.PlatformPolicy;
 import com.interview.copilot.model.platform.PlatformSnapshot;
 import com.interview.copilot.security.platform.PlatformSecretCipher;
-import com.interview.copilot.util.platform.PlatformPolicy;
 
 import org.springframework.stereotype.Component;
 
@@ -58,7 +58,7 @@ public final class PlatformConfigCodec {
         }
     }
 
-    public PlatformConfig view(PlatformConfigMapper.Row row) {
+    public PlatformConfig view(PlatformConfigRow row) {
         StoredPlatformConfig config = decode(row.payload());
         List<PlatformConfig.Provider> providers =
                 config.providers().stream()
@@ -83,7 +83,7 @@ public final class PlatformConfigCodec {
                 config.embedding());
     }
 
-    public PlatformSnapshot snapshot(PlatformConfigMapper.Row row, PlatformPolicy policy) {
+    public PlatformSnapshot snapshot(PlatformConfigRow row, PlatformPolicy policy) {
         StoredPlatformConfig config = decode(row.payload());
         Map<String, String> keys = new HashMap<>();
         config.providers()

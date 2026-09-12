@@ -8,23 +8,20 @@ import com.interview.copilot.common.usage.UsageLease;
 import com.interview.copilot.config.ProviderProperties;
 import com.interview.copilot.exception.ai.ProviderErrors;
 import com.interview.copilot.service.ai.LlmService;
-import com.interview.copilot.service.impl.platform.EnvironmentPlatformRuntimeServiceImpl;
 import com.interview.copilot.service.platform.PlatformRuntimeService;
 import com.interview.copilot.service.usage.UsageService;
 import com.interview.copilot.util.ai.ProviderHttpClient;
 import com.interview.copilot.util.ai.ProviderJson;
 import com.interview.copilot.validation.ai.LlmRequestPolicy;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Map;
 
 @Service
 public class LlmServiceImpl implements LlmService {
@@ -34,15 +31,6 @@ public class LlmServiceImpl implements LlmService {
     private final UsageService usage;
     private final LlmConcurrency concurrency = new LlmConcurrency();
 
-    public LlmServiceImpl(
-            ProviderProperties properties,
-            ProviderHttpClient http,
-            ProviderJson json,
-            UsageService usage) {
-        this(new EnvironmentPlatformRuntimeServiceImpl(properties), http, json, usage);
-    }
-
-    @Autowired
     public LlmServiceImpl(
             PlatformRuntimeService providers,
             ProviderHttpClient http,

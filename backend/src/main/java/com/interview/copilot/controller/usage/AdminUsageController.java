@@ -1,6 +1,7 @@
 package com.interview.copilot.controller.usage;
 
 import com.interview.copilot.common.Page;
+import com.interview.copilot.converter.usage.UsageConverter;
 import com.interview.copilot.service.usage.AdminUsageService;
 import com.interview.copilot.validation.admin.AdminInput;
 import com.interview.copilot.vo.usage.UsageVO;
@@ -28,6 +29,7 @@ public class AdminUsageController {
             @RequestParam(defaultValue = "") String model,
             @RequestParam(defaultValue = "1") String page,
             @RequestParam(defaultValue = "20") String size) {
-        return usage.list(userId, query, capability, status, model, AdminInput.paging(page, size));
+        return usage.list(userId, query, capability, status, model, AdminInput.paging(page, size))
+                .map(UsageConverter::toVO);
     }
 }

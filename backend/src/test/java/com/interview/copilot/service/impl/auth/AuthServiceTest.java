@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.interview.copilot.config.AuthProperties;
+import com.interview.copilot.entity.auth.AuthenticatedUserEntity;
 import com.interview.copilot.entity.user.UserEntity;
 import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.mapper.auth.TokenMapper;
@@ -93,6 +94,25 @@ public class AuthServiceTest {
     void authenticate_malformedToken_doesNotQueryStorage() {
         assertThat(service.authenticate("not-an-opaque-token")).isEmpty();
         verify(tokens, never()).authenticate(any(), any());
+    }
+
+    @Test
+    void authenticate_validToken_preservesIdentityAndRoleInSecurityPrincipal() {
+        String token = TokenSecrets.create();
+        when(tokens.authenticate(TokenSecrets.hash(token), LocalDateTime.parse("2026-09-08T08:00:00")))
+                .thenReturn(new AuthenticatedUserEntity(7L, "Alice", "ADMIN", "alice@example.test"));
+
+        var principal = service.authenticate(token).orElseThrow();
+
+        assertThat(principal.id()).isEqualTo(7L);
+        assertThat(principal.getName()).isEqualTo("Alice");
+        assertThat(principal.role()).isEqualTo("ADMIN");
+        assertThat(principal.email()).isEqualTo("alice@example.test");
+    }
+
+    @Test
+    void authenticate_unknownOrExpiredToken_doesNotCreatePrincipal() {
+        assertThat(service.authenticate(TokenSecrets.create())).isEmpty();
     }
 
     @Test

@@ -1,6 +1,8 @@
 package com.interview.copilot.security.email;
 
 import com.interview.copilot.config.EmailAuthProperties;
+import com.interview.copilot.entity.email.EmailCodeDigest;
+import com.interview.copilot.entity.email.EmailVerificationEntity;
 import com.interview.copilot.exception.email.EmailErrors;
 import com.interview.copilot.mapper.email.EmailCodeMapper;
 import com.interview.copilot.util.ServerTime;
@@ -35,7 +37,7 @@ public class EmailCodeStore {
         // PostgreSQL timestamps use microseconds; rounding nanos up can reject the first send.
         LocalDateTime now = ServerTime.now(clock);
         codes.ensure(email, purpose, now);
-        EmailCodeMapper.Verification previous = codes.lock(email, purpose);
+        EmailVerificationEntity previous = codes.lock(email, purpose);
         if (previous.nextSendAt().isAfter(now)) throw EmailErrors.limited();
         boolean newWindow = !previous.windowStartedAt().plusSeconds(3600).isAfter(now);
         int count = newWindow ? 0 : previous.sendCount();
@@ -44,7 +46,7 @@ public class EmailCodeStore {
         codes.reserve(
                 email,
                 purpose,
-                code,
+                new EmailCodeDigest(code.digest(), code.nonce()),
                 now.plusSeconds(policy.codeTtlSeconds()),
                 now.plusSeconds(policy.resendSeconds()),
                 newWindow ? now : previous.windowStartedAt(),
@@ -68,7 +70,7 @@ public class EmailCodeStore {
             propagation = Propagation.MANDATORY,
             noRollbackFor = EmailErrors.InvalidCode.class)
     public void verifyAndConsume(String email, String purpose, String code) {
-        EmailCodeMapper.Verification stored = codes.lock(email, purpose);
+        EmailVerificationEntity stored = codes.lock(email, purpose);
         if (stored == null
                 || !"ready".equals(stored.status())
                 || !stored.expiresAt().isAfter(ServerTime.now(clock))

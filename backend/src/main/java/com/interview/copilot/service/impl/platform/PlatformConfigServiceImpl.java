@@ -2,13 +2,14 @@ package com.interview.copilot.service.impl.platform;
 
 import com.interview.copilot.config.ProviderProperties;
 import com.interview.copilot.converter.platform.PlatformConfigCodec;
+import com.interview.copilot.entity.platform.PlatformConfigRow;
 import com.interview.copilot.exception.platform.PlatformConfigErrors;
 import com.interview.copilot.mapper.platform.PlatformConfigMapper;
 import com.interview.copilot.model.platform.PlatformConfig;
+import com.interview.copilot.model.platform.PlatformPolicy;
 import com.interview.copilot.model.platform.PlatformSnapshot;
 import com.interview.copilot.service.audit.AuditService;
 import com.interview.copilot.service.platform.PlatformConfigService;
-import com.interview.copilot.util.platform.PlatformPolicy;
 import com.interview.copilot.validation.platform.PlatformConfigValidator;
 
 import org.springframework.stereotype.Service;
@@ -40,13 +41,13 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
     }
 
     public PlatformConfig get() {
-        PlatformConfigMapper.Row row = row();
+        PlatformConfigRow row = row();
         return row.published() ? codec.view(row) : empty(row.version()).view();
     }
 
     @Override
     public PlatformSnapshot snapshot() {
-        PlatformConfigMapper.Row row = row();
+        PlatformConfigRow row = row();
         return row.published()
                 ? codec.snapshot(row, PlatformPolicy.from(properties))
                 : empty(row.version());
@@ -71,7 +72,7 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
     }
 
     public PlatformSnapshot draft(PlatformConfig input) {
-        PlatformConfigMapper.Row row = row();
+        PlatformConfigRow row = row();
         if (input == null) {
             throw PlatformConfigErrors.invalid("请提供完整平台配置。");
         }
@@ -122,8 +123,8 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
         return new PlatformSnapshot(config, Map.of(), PlatformPolicy.from(properties));
     }
 
-    private PlatformConfigMapper.Row row() {
-        PlatformConfigMapper.Row row = mapper.read();
+    private PlatformConfigRow row() {
+        PlatformConfigRow row = mapper.read();
         if (row == null) {
             throw PlatformConfigErrors.storageUnavailable();
         }

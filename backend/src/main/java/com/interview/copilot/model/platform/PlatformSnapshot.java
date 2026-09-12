@@ -1,9 +1,9 @@
 package com.interview.copilot.model.platform;
 
 import com.interview.copilot.config.ProviderProperties;
-import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.exception.ai.ProviderErrors;
-import com.interview.copilot.util.platform.PlatformPolicy;
+import com.interview.copilot.exception.ApiException;
+import com.interview.copilot.model.platform.PlatformPolicy;
 
 import org.springframework.http.HttpStatus;
 

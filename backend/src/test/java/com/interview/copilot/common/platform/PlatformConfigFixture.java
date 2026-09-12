@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.interview.copilot.config.ProviderProperties;
 import com.interview.copilot.converter.platform.PlatformConfigCodec;
+import com.interview.copilot.entity.platform.PlatformConfigRow;
 import com.interview.copilot.mapper.platform.PlatformConfigMapper;
 import com.interview.copilot.model.platform.PlatformConfig;
 import com.interview.copilot.security.platform.PlatformSecretCipher;
@@ -20,8 +21,8 @@ import jakarta.validation.Validation;
 import jakarta.validation.ValidatorFactory;
 
 import java.util.Base64;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.List;
 
 public final class PlatformConfigFixture implements AutoCloseable {
     public static final String MASTER_KEY = Base64.getEncoder().encodeToString(new byte[32]);
@@ -29,8 +30,8 @@ public final class PlatformConfigFixture implements AutoCloseable {
     public final ProviderProperties environment = new ProviderProperties();
     public final PlatformConfigMapper mapper = mock(PlatformConfigMapper.class);
     public final AuditService audit = mock(AuditService.class);
-    public final AtomicReference<PlatformConfigMapper.Row> row =
-            new AtomicReference<>(new PlatformConfigMapper.Row(0, false, "{}"));
+    public final AtomicReference<PlatformConfigRow> row =
+            new AtomicReference<>(new PlatformConfigRow(0, false, "{}"));
     public final ValidatorFactory validation = Validation.buildDefaultValidatorFactory();
     public final PlatformConfigService service;
 
@@ -39,13 +40,13 @@ public final class PlatformConfigFixture implements AutoCloseable {
         when(mapper.publish(anyLong(), anyString()))
                 .thenAnswer(
                         call -> {
-                            PlatformConfigMapper.Row old = row.get();
+                            PlatformConfigRow old = row.get();
                             if (old.version() != call.<Long>getArgument(0)) {
                                 return 0;
                             }
                             return row.compareAndSet(
                                             old,
-                                            new PlatformConfigMapper.Row(
+                                            new PlatformConfigRow(
                                                     old.version() + 1, true, call.getArgument(1)))
                                     ? 1
                                     : 0;

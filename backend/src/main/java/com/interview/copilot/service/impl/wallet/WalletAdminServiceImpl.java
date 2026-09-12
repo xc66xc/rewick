@@ -1,16 +1,18 @@
 package com.interview.copilot.service.impl.wallet;
 
 import com.interview.copilot.common.Page;
+import com.interview.copilot.dto.wallet.WalletAdjustment;
+import com.interview.copilot.entity.wallet.WalletEntity;
 import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.mapper.wallet.WalletAdminMapper;
 import com.interview.copilot.mapper.wallet.WalletMapper;
-import com.interview.copilot.request.wallet.WalletAdjustmentRequest;
 import com.interview.copilot.response.wallet.WalletResponse;
 import com.interview.copilot.response.wallet.WalletTransactionResponse;
 import com.interview.copilot.service.wallet.WalletAdminService;
 import com.interview.copilot.service.wallet.WalletService;
 import com.interview.copilot.util.ServerTime;
 import com.interview.copilot.validation.admin.AdminInput;
+import com.interview.copilot.validation.wallet.WalletInput;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -37,17 +39,17 @@ public class WalletAdminServiceImpl implements WalletAdminService {
     }
 
     @Transactional
-    public WalletResponse adjust(long actor, long userId, WalletAdjustmentRequest input) {
+    public WalletResponse adjust(long actor, long userId, WalletAdjustment input) {
         validate(input);
         authorize(actor);
-        repository.lock(userId);
+        lockWallet(userId);
         var row = mapper.adjustment(userId, input.requestId());
         if (row != null) {
-            if (!Objects.equals(row.get("operation"), input.operation())
-                    || !Objects.equals(row.get("requested_seconds"), input.seconds())
-                    || !Objects.equals(row.get("expected_version"), input.expectedVersion())
-                    || !Objects.equals(row.get("reason"), input.reason())
-                    || !Objects.equals(row.get("actor_id"), actor)) throw conflict();
+            if (!Objects.equals(row.operation(), input.operation())
+                    || !Objects.equals(row.requestedSeconds(), input.seconds())
+                    || !Objects.equals(row.expectedVersion(), input.expectedVersion())
+                    || !Objects.equals(row.reason(), input.reason())
+                    || !Objects.equals(row.actorId(), actor)) throw conflict();
             return wallets.state(userId);
         }
         var before = wallets.state(userId);
@@ -99,7 +101,7 @@ public class WalletAdminServiceImpl implements WalletAdminService {
                 now);
     }
 
-    private long calculate(long before, WalletAdjustmentRequest input) {
+    private long calculate(long before, WalletAdjustment input) {
         long after =
                 switch (input.operation()) {
                     case "add" -> before + input.seconds();
@@ -118,8 +120,8 @@ public class WalletAdminServiceImpl implements WalletAdminService {
             throw new ApiException(HttpStatus.FORBIDDEN, "forbidden", "无权执行管理操作。");
     }
 
-    private void validate(WalletAdjustmentRequest input) {
-        WalletServiceImpl.uuid(input.requestId());
+    private void validate(WalletAdjustment input) {
+        WalletInput.uuid(input.requestId());
         if (input.operation() == null
                 || !Set.of("add", "subtract", "set").contains(input.operation())
                 || input.seconds() == null
@@ -134,5 +136,13 @@ public class WalletAdminServiceImpl implements WalletAdminService {
 
     private ApiException conflict() {
         return new ApiException(HttpStatus.CONFLICT, "duplicate_request", "请求标识已用于其他调整。");
+    }
+
+    private WalletEntity lockWallet(long userId) {
+        if (repository.lockUser(userId) == null) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "user_not_found", "用户不存在。");
+        }
+        repository.ensureWallet(userId);
+        return repository.lockWallet(userId);
     }
 }

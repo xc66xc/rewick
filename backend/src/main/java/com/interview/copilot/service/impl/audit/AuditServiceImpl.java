@@ -1,10 +1,11 @@
 package com.interview.copilot.service.impl.audit;
 
 import com.interview.copilot.common.Page;
+import com.interview.copilot.converter.audit.AuditConverter;
+import com.interview.copilot.dto.audit.AuditDTO;
 import com.interview.copilot.mapper.audit.AuditMapper;
 import com.interview.copilot.service.audit.AuditService;
 import com.interview.copilot.validation.admin.AdminInput;
-import com.interview.copilot.vo.audit.AuditVO;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,9 +25,11 @@ public class AuditServiceImpl implements AuditService {
         mapper.record(actorId, action, AdminInput.bounded(target, 160));
     }
 
-    public Page<AuditVO> list(AdminInput.Paging paging) {
+    public Page<AuditDTO> list(AdminInput.Paging paging) {
         return new Page<>(
-                mapper.page(paging.size(), paging.offset()),
+                mapper.page(paging.size(), paging.offset()).stream()
+                        .map(AuditConverter::toDTO)
+                        .toList(),
                 mapper.count(),
                 paging.page(),
                 paging.size());

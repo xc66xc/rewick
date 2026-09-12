@@ -1,11 +1,11 @@
 package com.interview.copilot.service.usage;
 
 import com.interview.copilot.common.Page;
+import com.interview.copilot.dto.usage.UsageDTO;
 import com.interview.copilot.validation.admin.AdminInput;
-import com.interview.copilot.vo.usage.UsageVO;
 
 public interface AdminUsageService {
-    Page<UsageVO> list(
+    Page<UsageDTO> list(
             String userId,
             String query,
             String capability,
