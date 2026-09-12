@@ -19,7 +19,7 @@ interview-copilot/
 │   ├── src/              用户、平台配置、邮件服务、调用记录、操作日志
 │   └── package.json
 ├── backend/              JDK 21 + Spring Boot 3.5 + MyBatis-Plus
-│   ├── src/main/java/    auth / admin / platform / usage / ai / asr / knowledge
+│   ├── src/main/java/    controller / service / mapper / entity 等职责包
 │   ├── sql/              手动执行的数据库初始化和变更 SQL
 │   ├── src/test/
 │   ├── pom.xml

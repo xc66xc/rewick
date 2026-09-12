@@ -2,6 +2,16 @@
 
 独立 Java 模块化单体，供 macOS / Windows 客户端调用平台能力。采用 JDK 21、Spring Boot 3.5.16、MyBatis-Plus 3.5.17、PostgreSQL 15.19 和 pgvector 0.8.6。MyBatis-Plus 模块由其 3.5.17 BOM 统一管理，其余 Spring/数据库组件使用 Boot BOM。平台供应商与 SMTP 连接只从后台管理的数据库配置读取，Key/密码加密保存，不回退环境配置；客户端持有可撤销的业务登录凭证。
 
+## 代码分层
+
+根包保持 `com.interview.copilot`，先按职责分包，再按业务模块细分。例如用户模块使用 `controller/user`、`service/user`、`service/impl/user`、`mapper/user`、`entity/user`、`request/user` 和 `vo/user`。
+
+- Controller 只校验和转换 HTTP 输入、调用 Service 接口、返回响应。
+- Service 接口与 `service/impl/<模块>/*ServiceImpl` 实现分离，使用构造器注入。
+- 数据库访问统一通过 MyBatis-Plus 管理的 Mapper；资料检索、索引任务和时长钱包不再使用 JDBC。事务边界保留在服务实现中。
+- 请求、响应、数据库映射和运行时模型分别放在 `request`、`response`/`vo`、`entity`、`model`/`dto`；认证和会话放在 `security`，全局异常处理放在 `exception`。
+- `BackendArchitectureTest` 检查职责包、Controller 依赖、Service 接口/实现分离，以及禁止生产代码直接使用 JDBC/JPA。修改分层后运行 `./mvnw verify -Pintegration` 验证真实数据库行为。
+
 ## 构建与运行
 
 先按 [sql/README.md](sql/README.md) 初始化数据库，设置连接环境变量和指向 JDK 21 的 `JAVA_HOME`，然后执行：
