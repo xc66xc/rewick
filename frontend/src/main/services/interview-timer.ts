@@ -21,6 +21,7 @@ export class InterviewTimer {
   private startId: string | null = null
   private pendingEnd: { connection: Connection; id: string } | null = null
   constructor(private readonly changed: (state: WalletState) => void, private readonly stopped: () => void) {}
+  get sessionId(): string | undefined { return this.state?.session?.id }
   get active(): boolean { return Boolean(this.connection && this.state?.session?.status === 'active' && performance.now() < this.deadline && Date.now() < this.wallDeadline) }
   assertActive(): void { if (!this.active) throw new Error('请先开始面试；面试已结束或可用时长已耗尽。') }
   async read(connection: Connection): Promise<WalletState> { return this.request(connection, '/api/v1/wallet') }

@@ -100,3 +100,22 @@ describe('deleting a session from history', () => {
     expect((screen.getByRole('button', { name: '确认删除' }) as HTMLButtonElement).disabled).toBe(false)
   })
 })
+
+describe('server history', () => {
+  it('loads summaries by page and fetches body only when opened', async () => {
+    const summary = { ...record('cloud', '服务器面试'), answerCount: 2, segmentCount: 3 }
+    const getHistoryPage = vi.fn(async (cursor?: number) => ({ records: cursor ? [record('older', '更早面试')] : [summary], nextCursor: cursor ? null : 123 }))
+    const getHistoryDetail = vi.fn(async () => ({ ...summary, segments: [{ id: 's', text: '服务器完整转写', startMs: 0, isFinal: true }] }))
+    const bridge = { getHistoryPage, getHistoryDetail } as unknown as import('../src/shared/types').DesktopBridge
+    render(<HistoryPage bridge={bridge} records={[]} activeSessionId="other" activeSessionLocked={false} onDelete={vi.fn()} onExport={vi.fn()} />)
+    await screen.findByText('服务器面试')
+    expect(getHistoryDetail).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: '查看详情：服务器面试' }))
+    await screen.findByText('服务器完整转写')
+    expect(getHistoryDetail).toHaveBeenCalledWith('cloud')
+    await userEvent.click(screen.getByRole('button', { name: '返回记录' }))
+    await userEvent.click(screen.getByRole('button', { name: '下一页' }))
+    await screen.findByText('更早面试')
+    expect(getHistoryPage).toHaveBeenLastCalledWith(123)
+  })
+})

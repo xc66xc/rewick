@@ -1,48 +1,5 @@
-import { join } from 'node:path'
-import { z } from 'zod'
 import type { SessionRecord } from '../../shared/types'
 import { parseInput, sessionRecordSchema } from './validation'
-import { readJson, SerialQueue, writeJsonAtomic } from './storage'
-
-export class HistoryStore {
-  private readonly path: string
-  private readonly queue = new SerialQueue()
-  private readonly removedIds = new Set<string>()
-  constructor(rootDir: string) { this.path = join(rootDir, 'history.json') }
-
-  list(): Promise<SessionRecord[]> { return this.queue.run(() => this.read()) }
-
-  save(record: SessionRecord): Promise<void> {
-    return this.queue.run(async () => {
-      const parsed = parseInput(sessionRecordSchema, record)
-      if (this.removedIds.has(parsed.id)) return
-      if (Buffer.byteLength(JSON.stringify(parsed, null, 2)) > 4 * 1_048_576) throw new Error('单次会话超过 4 MB，请新建会话后继续。')
-      const previous = await this.read()
-      const records = [parsed, ...previous.filter((item) => item.id !== parsed.id)]
-        .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt)).slice(0, 50)
-      await writeJsonAtomic(this.path, records)
-    })
-  }
-
-  remove(id: unknown): Promise<void> {
-    return this.queue.run(async () => {
-      const parsed = parseInput(sessionRecordSchema.shape.id, id)
-      const previous = await this.read()
-      const remaining = previous.filter(record => record.id !== parsed)
-      if (remaining.length !== previous.length) await writeJsonAtomic(this.path, remaining)
-      // Reject late autosaves from this process without changing the on-disk history format.
-      this.removedIds.add(parsed)
-    })
-  }
-
-  private async read(): Promise<SessionRecord[]> {
-    const raw = await readJson(this.path, 220 * 1_048_576)
-    if (raw === undefined) return []
-    const parsed = z.array(sessionRecordSchema).max(50).safeParse(raw)
-    if (!parsed.success) throw new Error('本地会话文件格式无效，请先备份后检查 history.json。')
-    return parsed.data
-  }
-}
 
 function timecode(milliseconds: number): string {
   const seconds = Math.floor(milliseconds / 1000)

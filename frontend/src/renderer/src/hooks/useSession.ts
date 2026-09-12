@@ -22,6 +22,14 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
   const questionAssemblingRef = useRef(false)
   const [error, setError] = useState('')
   const [referenceError, setReferenceError] = useState('')
+  const [historySyncStatus, setHistorySyncStatus] = useState('已同步')
+  useEffect(() => {
+    if (!bridge?.getHistorySyncStatus) return
+    let active = true
+    const update = () => { void bridge.getHistorySyncStatus().then(value => { if (active) setHistorySyncStatus(value) }).catch(() => { if (active) setHistorySyncStatus('无法读取同步状态') }) }
+    update(); const timer = setInterval(update, 3000)
+    return () => { active = false; clearInterval(timer) }
+  }, [bridge])
   const [history, setHistory] = useState<SessionRecord[]>([])
   const [elapsed, setElapsed] = useState(0)
   const [historyVersion, setHistoryVersion] = useState(0)
@@ -351,7 +359,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
     error: error || referenceError, clearError: () => { setError(''); setReferenceError('') },
     autoAnswer: settings.autoAnswer, autoAnswerState: automatic.state, autoAnswerSaving: automatic.saving,
     setAutoAnswer: automatic.setPreferences, autoAnswerModelReady: isAnswerModelReady(settings),
-    history, elapsed, busy, start, stop, generate, answerSegment, beginSegmentEdit, editSegment, finishSegmentEdit,
+    historySyncStatus, history, elapsed, busy, start, stop, generate, answerSegment, beginSegmentEdit, editSegment, finishSegmentEdit,
     saveHistory: () => persist(true), cancel, reset, activateEnvironment, saveEnvironment, exportRecord, removeSession, desktop: Boolean(bridge) }
 }
 

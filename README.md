@@ -166,3 +166,11 @@ npm --prefix frontend run test:platform
 邮箱找回密码版本还需执行 `backend/sql/07_email_code_purpose.sql`，将注册和密码重置验证码按用途分别保存。已执行至 06 的数据库只追加 07；先备份并停止旧后端，再使用 `psql -v ON_ERROR_STOP=1 --single-transaction` 执行脚本并发布新版后端。桌面开发进程需重新启动，已安装桌面应用需重新打包更新。
 
 数据库时间统一使用北京时间的 `TIMESTAMP(6) WITHOUT TIME ZONE`，Java 持久层使用 `LocalDateTime`，每日额度按北京时间零点划分。已有 01–07 数据库停服务后手动执行 `backend/sql/08_server_local_time.sql`，再启动新版后端；当前开发阶段按约定直接执行，不做数据库备份。脚本把原时间转换到 `Asia/Shanghai`，设置当前业务库时区，并保留微秒精度。接口里的登录过期时间仍带明确时区，避免不同时区客户端误判；历史 `usage_day` 日期不重算。
+
+### 服务器会话记录
+
+新版本会话记录通过登录账号保存到 PostgreSQL，历史列表按每页 20 条读取，正文在打开详情时获取。旧本地 `history.json` 不迁移、不再读取。Markdown 导出不修改历史记录。
+
+更新后端前手动执行 `backend/sql/13_session_records.sql`，并确保运行角色可访问新表和序列。无需 Redis。数据库会话时间沿用北京时间；记录关联计时面试，删除记录不改变钱包余额或计时账本。
+
+桌面每 15 秒及回答/编辑完成时保存，先用系统加密能力将待上传正文写入账号工作区的 `history-outbox.enc.json`，上传成功后清除该正文。断网保留草稿，恢复原账号登录后重试；工作台底部显示同步状态。尚未成功写入草稿的内容在强制终止进程时仍可能丢失。

@@ -3,10 +3,9 @@ import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promise
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { defaultSettings } from '../../src/shared/defaults'
-import type { ModelInputSnapshot, SessionRecord, SettingsInput } from '../../src/shared/types'
+import type { SessionRecord, SettingsInput } from '../../src/shared/types'
 import { SettingsStore } from '../../src/main/services/settings-store'
-import { HistoryStore, sessionToMarkdown } from '../../src/main/services/history-store'
-import * as storage from '../../src/main/services/storage'
+import { sessionToMarkdown } from '../../src/main/services/history-store'
 
 const crypto = {
   isEncryptionAvailable: () => true,
@@ -185,76 +184,7 @@ describe('SettingsStore', () => {
   })
 })
 
-describe('HistoryStore', () => {
-  it('preserves history on a failed deletion write and does not suppress later saves or retries', async () => {
-    const store = new HistoryStore(directory)
-    const session = record(1)
-    await store.save(session)
-    const write = vi.spyOn(storage, 'writeJsonAtomic').mockRejectedValueOnce(new Error('模拟磁盘错误'))
-    await expect(store.remove(session.id)).rejects.toThrow('模拟磁盘错误')
-    expect(await store.list()).toEqual([session])
-    write.mockRestore()
-    const changed = { ...session, title: '删除失败后继续保存' }
-    await store.save(changed)
-    expect(await store.list()).toEqual([changed])
-    await store.remove(session.id)
-    expect(await store.list()).toEqual([])
-  })
-
-  it('removes only the selected session and keeps that deletion after restart', async () => {
-    const store = new HistoryStore(directory)
-    await store.save(record(1))
-    await store.save(record(2))
-    await store.remove(record(1).id)
-    expect(await store.list()).toEqual([record(2)])
-    expect(await new HistoryStore(directory).list()).toEqual([record(2)])
-    await store.remove(record(1).id)
-    await store.remove(record(2).id)
-    expect(await new HistoryStore(directory).list()).toEqual([])
-  })
-
-  it('serializes deletion with queued autosaves and ignores late saves of a deleted id', async () => {
-    const store = new HistoryStore(directory)
-    const deleted = record(1)
-    await store.save(deleted)
-    await Promise.all([store.save({ ...deleted, title: '排队中的自动保存' }), store.remove(deleted.id),
-      store.save({ ...deleted, title: '迟到的自动保存' }), store.save(record(2))])
-    expect(await store.list()).toEqual([record(2)])
-    await store.save(deleted)
-    expect(await new HistoryStore(directory).list()).toEqual([record(2)])
-  })
-
-  it.each(['', 'x'.repeat(129), null, { id: 'session-1' }])('rejects invalid deletion identifiers without changing saved history %#', async id => {
-    const store = new HistoryStore(directory)
-    await store.save(record(1))
-    await expect(store.remove(id)).rejects.toThrow()
-    expect(await store.list()).toEqual([record(1)])
-    await store.remove(record(1).id)
-    expect(await store.list()).toEqual([])
-  })
-
-  it('keeps the newest 50 records and replaces an existing session', async () => {
-    const store = new HistoryStore(directory)
-    await Promise.all(Array.from({ length: 53 }, (_, i) => store.save(record(i))))
-    const records = await store.list()
-    expect(records).toHaveLength(50)
-    expect(records[0].id).toBe('session-52')
-    expect(records.at(-1)?.id).toBe('session-3')
-    await store.save({ ...record(52), title: '更新后' })
-    expect((await new HistoryStore(directory).list())[0].title).toBe('更新后')
-    expect(await readdir(directory)).toEqual(['history.json'])
-  })
-
-  it('rejects invalid timeline and oversized sessions', async () => {
-    const store = new HistoryStore(directory)
-    const session = record()
-    session.segments = [{ id: 's1', text: '你好', startMs: 100, endMs: 50, isFinal: true }]
-    await expect(store.save(session)).rejects.toThrow('结束时间')
-    session.segments = Array.from({ length: 150 }, (_, index) => ({ id: String(index), text: '字'.repeat(10_000), startMs: 0, isFinal: true }))
-    await expect(store.save(session)).rejects.toThrow('4 MB')
-    expect(await store.list()).toEqual([])
-  })
-
+describe('Markdown export', () => {
   it('exports readable timestamps and preserves incomplete response state', () => {
     const session = record()
     session.segments = [{ id: 's1', text: '介绍一下缓存', startMs: 65_000, isFinal: false }]
@@ -266,111 +196,4 @@ describe('HistoryStore', () => {
     expect(markdown).toContain('状态：已停止')
   })
 
-  it('preserves manually edited text and its flag across restart and Markdown export', async () => {
-    const store = new HistoryStore(directory)
-    const session = record()
-    session.segments = [
-      { id: 'edited', text: '如何使用 Redis？', startMs: 0, endMs: 1500, isFinal: true, isEdited: true },
-      { id: 'cleared', text: '', startMs: 1600, endMs: 1700, isFinal: true, isEdited: true },
-      { id: 'original', text: '下一道问题', startMs: 1800, isFinal: false },
-    ]
-    await store.save(session)
-    const reloaded = (await new HistoryStore(directory).list())[0]
-    expect(reloaded.segments).toEqual(session.segments)
-    expect(reloaded.segments[1]).toMatchObject({ text: '', isEdited: true })
-    const exported = sessionToMarkdown(reloaded)
-    expect(exported).toContain('如何使用 Redis？')
-    expect(exported).toContain('下一道问题')
-    expect(exported).not.toContain('undefined')
-    expect(exported).not.toContain('null')
-  })
-
-  it('retains target and reference snapshots across restart and export', async () => {
-    const session = record()
-    session.answers = [{ id: 'answer', question: '缓存？', text: '我会先考虑一致性。', createdAt: session.createdAt, status: 'complete',
-      interviewTarget: { companyName: '历史公司', roleName: '后端', jobDescription: '关注高并发' },
-      retrieval: { status: 'ready', excerpts: [{ documentId: 'removed-file', revision: 2, name: '缓存.pdf', kind: 'technical', chunkId: 'chunk-2', text: '先更新数据库，再删除缓存。', pageStart: 2, pageEnd: 3 }] } }]
-    await new HistoryStore(directory).save(session)
-    const loaded = (await new HistoryStore(directory).list())[0]
-    expect(loaded.answers).toEqual(session.answers)
-    const markdown = sessionToMarkdown(loaded)
-    expect(markdown).toContain('历史公司')
-    expect(markdown).toContain('关注高并发')
-    expect(markdown).toContain('第 2–3 页')
-    expect(markdown).toContain('先更新数据库，再删除缓存。')
-  })
-
-  it('preserves remote source and agent snapshots across restart and exports without inventing document versions', async () => {
-    const session = record()
-    session.answers = [{ id: 'remote-answer', question: '如何设置缓存？', text: '我会先明确一致性要求。', createdAt: session.createdAt, status: 'complete',
-      retrieval: { status: 'ready', remote: { agentId: 'aid-historical', status: 'ready' }, excerpts: [
-        { source: 'bailian', documentId: 'bailian-doc', chunkId: 'bailian-chunk', revision: 1, kind: 'technical', name: '远程缓存资料', text: '历史远程片段', pageStart: 210 },
-        { documentId: 'local-doc', chunkId: 'local-chunk', revision: 3, kind: 'personal', name: '本地项目', text: '历史项目片段' },
-      ] }, modelInput: { model: 'test', messages: [{ role: 'user', content: '实际发送的历史远程片段' }] } }]
-    await new HistoryStore(directory).save(session)
-    const restored = (await new HistoryStore(directory).list())[0]
-    expect(restored.answers).toEqual(session.answers)
-    const exported = sessionToMarkdown(restored)
-    expect(exported).toContain('百炼远程知识库 · Agent ID：aid-historical')
-    expect(exported).toContain('远程缓存资料 · 百炼远程知识库 · 第 210 页')
-    expect(exported).not.toContain('远程缓存资料 · 版本 1')
-    expect(exported).toContain('本地项目 · 版本 3')
-  })
-
-  it('round-trips actual model input alongside legacy answers without inventing old snapshots', async () => {
-    const session = record()
-    const legacy = { id: 'legacy-answer', question: '旧问题', text: '旧回答', createdAt: session.createdAt, status: 'complete' as const }
-    await writeFile(join(directory, 'history.json'), JSON.stringify([{ ...session, answers: [legacy] }]))
-    const store = new HistoryStore(directory)
-    const loadedLegacy = (await store.list())[0]
-    expect(loadedLegacy.answers).toEqual([legacy])
-    expect(loadedLegacy.answers[0]).not.toHaveProperty('modelInput')
-
-    const modelInput: ModelInputSnapshot = { model: 'custom-model', messages: [
-      { role: 'system', content: '只输出回答正文。\n保留换行和 Unicode。' },
-      { role: 'user', content: JSON.stringify({ question: '如何处理 "引号" 和 \\ ？', personalContext: '生成时的简历', interviewTarget: { jobDescription: '生成时的 JD' }, referenceContext: [{ text: '生成时的参考资料' }] }) },
-    ] }
-    loadedLegacy.answers.push({ id: 'new-answer', question: '新问题', text: '部分回答', createdAt: session.createdAt, status: 'cancelled', modelInput })
-    await store.save(loadedLegacy)
-    const reloaded = (await new HistoryStore(directory).list())[0]
-    expect(reloaded.answers).toEqual(loadedLegacy.answers)
-    expect(reloaded.answers[0]).not.toHaveProperty('modelInput')
-    expect(reloaded.answers[1].modelInput).toEqual(modelInput)
-  })
-
-  it('preserves the full allowed message length without truncating model input', async () => {
-    const session = record()
-    const content = `${'a'.repeat(1_499_997)}END`
-    session.answers = [{ id: 'answer', question: '问题', text: '', createdAt: session.createdAt, status: 'error',
-      modelInput: { model: 'custom-model', messages: [{ role: 'system', content: '回答问题' }, { role: 'user', content }] } }]
-    await new HistoryStore(directory).save(session)
-    const loaded = (await new HistoryStore(directory).list())[0]
-    expect(loaded.answers[0].modelInput?.messages[1].content).toBe(content)
-  })
-
-  it.each([
-    { model: 'm'.repeat(201), messages: [{ role: 'user' as const, content: '问题' }] },
-    { model: 'model', messages: Array.from({ length: 3 }, () => ({ role: 'user' as const, content: '问题' })) },
-    { model: 'model', messages: [{ role: 'user' as const, content: 'a'.repeat(1_500_001) }] },
-  ])('rejects an out-of-bounds model input without changing saved history %#', async (modelInput) => {
-    const store = new HistoryStore(directory)
-    const saved = record()
-    await store.save(saved)
-    const invalid = record(1)
-    invalid.answers = [{ id: 'answer', question: '问题', text: '', createdAt: invalid.createdAt, status: 'complete', modelInput }]
-    await expect(store.save(invalid)).rejects.toThrow()
-    expect(await new HistoryStore(directory).list()).toEqual([saved])
-  })
-
-  it('rejects model input that exceeds the session byte budget instead of truncating or overwriting history', async () => {
-    const store = new HistoryStore(directory)
-    const saved = record()
-    await store.save(saved)
-    const before = await readFile(join(directory, 'history.json'), 'utf8')
-    const oversized = { ...saved, answers: [{ id: 'answer', question: '问题', text: '', createdAt: saved.createdAt, status: 'complete' as const,
-      modelInput: { model: 'model', messages: [{ role: 'user' as const, content: '字'.repeat(1_450_000) }] } }] }
-    await expect(store.save(oversized)).rejects.toThrow('4 MB')
-    expect(await readFile(join(directory, 'history.json'), 'utf8')).toBe(before)
-    expect(await new HistoryStore(directory).list()).toEqual([saved])
-  })
 })

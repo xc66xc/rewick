@@ -47,12 +47,13 @@ public class HttpBodyLimitFilter extends OncePerRequestFilter {
             chain.doFilter(request, response);
             return;
         }
-        if (request.getContentLengthLong() > MAX_BODY_BYTES) {
+        int limit = request.getRequestURI().startsWith("/api/v1/session-records/") ? 5 * MAX_BODY_BYTES : MAX_BODY_BYTES;
+        if (request.getContentLengthLong() > limit) {
             reject(response);
             return;
         }
-        byte[] bytes = request.getInputStream().readNBytes(MAX_BODY_BYTES + 1);
-        if (bytes.length > MAX_BODY_BYTES) {
+        byte[] bytes = request.getInputStream().readNBytes(limit + 1);
+        if (bytes.length > limit) {
             reject(response);
             return;
         }
@@ -60,6 +61,6 @@ public class HttpBodyLimitFilter extends OncePerRequestFilter {
     }
 
     private void reject(HttpServletResponse response) throws IOException {
-        errors.write(response, 413, "request_too_large", "请求正文不能超过 1 MiB。");
+        errors.write(response, 413, "request_too_large", "请求正文超过接口容量限制。");
     }
 }

@@ -19,7 +19,7 @@ import type { PlatformCapability } from './services/service-routing'
 import { InterviewStore } from './services/interview-store'
 import { environmentInputSchema } from './services/interview-validation'
 import { SerialQueue } from './services/storage'
-import { HistoryStore, sessionToMarkdown } from './services/history-store'
+import { sessionToMarkdown } from './services/history-store'
 import { AsrClient } from './services/asr-client'
 import { LlmClient } from './services/llm-client'
 import { DisplayCaptureService } from './services/display-capture'
@@ -506,17 +506,20 @@ function registerHandlers(): void {
       if (fullFullScreen) window.setFullScreen(true)
     }
   })
+  handle('history:page', cursor => history.page(parseInput(z.number().int().positive().optional(), cursor)))
+  handle('history:detail', id => history.detail(String(id)))
+  handle('history:status', () => history.status())
   handle('history:list', () => history.list())
   handle('history:save', input => {
     const value = input as { record: SessionRecord; accountScope?: string }
     if (!value.accountScope || value.accountScope !== accounts.current().id) throw new Error('会话不属于当前登录账户。')
-    return history.save(value.record)
+    return history.save({ ...value.record, interviewSessionId: value.record.interviewSessionId ?? interviewTimer.sessionId })
   })
-  handle('history:remove', id => history.remove(id))
+  handle('history:remove', id => history.remove(parseInput(z.string().min(1).max(128), id)))
   handle('history:export', async record => {
     if (!window) return false
     // Save validates the public record before it can become an exported document.
-    await history.save(record as SessionRecord)
+    sessionToMarkdown(record as SessionRecord)
     const result = await dialog.showSaveDialog(window, { title: '导出会话', defaultPath: `面试记录-${new Date().toISOString().slice(0, 10)}.md`, filters: [{ name: 'Markdown', extensions: ['md'] }] })
     if (result.canceled || !result.filePath) return false
     await writeFile(result.filePath, sessionToMarkdown(record as SessionRecord), 'utf8')

@@ -128,6 +128,9 @@ export interface SessionRecord {
   id: string
   createdAt: string
   title: string
+  interviewSessionId?: string
+  segmentCount?: number
+  answerCount?: number
   segments: TranscriptSegment[]
   answers: Answer[]
   interviewEnvironment?: InterviewEnvironmentSnapshot
@@ -203,6 +206,9 @@ export interface DesktopBridge {
   cancelAnswer(): Promise<void>
   setAlwaysOnTop(value: boolean): Promise<boolean>
   setCompact(value: boolean): Promise<void>
+  getHistoryPage(cursor?: number): Promise<{ records: SessionRecord[]; nextCursor: number | null }>
+  getHistoryDetail(id: string): Promise<SessionRecord>
+  getHistorySyncStatus(): Promise<string>
   getHistory(): Promise<SessionRecord[]>
   saveSession(record: SessionRecord, accountScope?: string): Promise<void>
   removeSession(id: string): Promise<void>

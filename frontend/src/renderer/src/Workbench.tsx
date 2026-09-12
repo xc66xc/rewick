@@ -38,7 +38,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
   async function handleLogout() {
     if (loggingOut.current) return
     loggingOut.current = true; setLeaving(true)
-    try { await Promise.all([timer.end(), session.stop(), session.cancel()]); await onLogout() }
+    try { await Promise.all([timer.end(), session.stop(), session.cancel()]); await session.saveHistory(); await onLogout() }
     finally { loggingOut.current = false; setLeaving(false) }
   }
   useEffect(() => { main.current?.querySelector<HTMLElement>('h1')?.focus() }, [page])
@@ -106,11 +106,11 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
           {compact && <AutoAnswerControls session={session} compact />}
           <div className={cn('grid min-h-0 flex-1 grid-cols-[minmax(280px,.72fr)_minmax(400px,1.28fr)] gap-5 wide:grid-cols-[minmax(300px,.75fr)_minmax(430px,1.55fr)] wide:gap-6 max-[1060px]:grid-cols-[minmax(260px,.68fr)_minmax(340px,1.32fr)] max-[1060px]:gap-4 max-[820px]:grid-cols-[minmax(0,1fr)] max-[820px]:overflow-y-auto',
             compact && 'flex overflow-hidden')}>{!compact && <TranscriptPanel session={session} />}<AnswerPanel session={session} settings={config.settings} onSettings={handleSettings} onContext={handleContext} compact={compact} /></div>
-          {!compact && <footer className="flex min-h-[42px] shrink-0 items-center justify-between gap-4 text-[10px] text-text-muted max-[560px]:[&>span:last-child]:hidden"><span>声音不落盘 · 会话保存在本机</span><span>系统音频可自动回答，也可随时手动生成</span></footer>}
+          {!compact && <footer className="flex min-h-[42px] shrink-0 items-center justify-between gap-4 text-[10px] text-text-muted max-[560px]:[&>span:last-child]:hidden"><span>声音不落盘 · 会话云端保存：{session.historySyncStatus}</span><span>系统音频可自动回答，也可随时手动生成</span></footer>}
         </div>}
         {page === 'purchase' && <PurchasePage key={config.settings.accountScope} bridge={bridge} scope={config.settings.accountScope ?? ''} remaining={timer.remaining} onCredited={timer.refresh} />}
         {page === 'context' && <ContextPage settings={config.settings} bridge={bridge} onSave={config.save} />}
-        {page === 'history' && <HistoryPage records={session.history} activeSessionId={session.record.id} activeSessionLocked={timer.active || session.busy || !['idle', 'error'].includes(session.status)} onExport={session.exportRecord} onDelete={session.removeSession} />}
+        {page === 'history' && <HistoryPage bridge={bridge} records={session.history} activeSessionId={session.record.id} activeSessionLocked={timer.active || session.busy || !['idle', 'error'].includes(session.status)} onExport={session.exportRecord} onDelete={session.removeSession} />}
       </main>
     </div>
     {settingsOpen && <SettingsDialog settings={config.settings} bridge={bridge} onSave={config.save} onApply={config.apply} onLogout={handleLogout} onClose={() => setSettingsOpen(false)} />}

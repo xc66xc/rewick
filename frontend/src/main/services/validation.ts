@@ -91,6 +91,7 @@ export const sessionRecordSchema = z.object({
   id: z.string().min(1).max(128), createdAt: timestamp,
   title: z.string().trim().min(1).max(200),
   interviewEnvironment: environmentSnapshotSchema.optional(),
+  interviewSessionId: z.string().max(128).optional(),
   segments: z.array(z.object({
     id: z.string().min(1).max(160), text: z.string().max(20_000),
     startMs: z.number().finite().nonnegative(), endMs: z.number().finite().nonnegative().optional(),
