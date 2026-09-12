@@ -39,6 +39,6 @@ export default function PurchasePage({ bridge, scope, remaining, onCredited }: P
         <Button onClick={() => payments.setSelected(order)}>查看订单</Button>
       </li>)}
     </ul>
-    {payments.selected && <PaymentOrderDialog order={payments.selected} busy={payments.busy} onClose={() => payments.setSelected(null)} onRefresh={() => { if (payments.selected) void payments.refresh(payments.selected) }} />}
+    {payments.selected && <PaymentOrderDialog order={payments.selected} busy={payments.busy} onCancel={() => { if (payments.selected) void payments.cancel(payments.selected) }} onClose={() => payments.setSelected(null)} onRefresh={() => { if (payments.selected) void payments.refresh(payments.selected) }} />}
   </section>
 }

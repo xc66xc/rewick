@@ -263,6 +263,7 @@ function registerHandlers(): void {
   handle('payments:list', () => paymentRequest(client => client.orders()))
   handle('payments:create', input => paymentRequest(client => client.create(input)))
   handle('payments:refresh', id => paymentRequest(client => client.refresh(id)))
+  handle('payments:cancel', id => paymentRequest(client => client.cancel(id)))
   handle('wallet:get', async () => interviewTimer.read(await walletConnection()))
   handle('interview:start', input => interviewMutations.run(async () => {
     const requestId = parseInput(z.string().uuid(), input)

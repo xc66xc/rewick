@@ -71,6 +71,21 @@ public class PaymentSyncServiceImpl implements PaymentSyncService {
                     providers.create(order.paymentMethod(), order.configVersion(), request));
     }
 
+    public void cancel(String orderId) {
+        var order = orders.find(orderId);
+        if (!"creating".equals(order.status()) && !"pending".equals(order.status())) return;
+        var request = PaymentConverter.orderDTO(order);
+        var result = providers.query(order.paymentMethod(), order.configVersion(), request);
+        providers.validateIdentity(order.paymentMethod(), order.configVersion(), result);
+        if (!orderId.equals(result.orderId())) throw PaymentErrors.invalid("支付查询结果与当前订单不匹配");
+        if ("SUCCESS".equals(result.state())) {
+            fulfillment.credit(result);
+            return;
+        }
+        providers.close(order.paymentMethod(), order.configVersion(), request);
+        orders.close(orderId);
+    }
+
     public void notify(String body, PaymentHeadersDTO headers) {
         validateNotification(body, headers);
         PaymentResultDTO result = providers.wechatNotification(body, headers);

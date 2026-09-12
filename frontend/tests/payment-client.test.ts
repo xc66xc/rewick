@@ -13,7 +13,14 @@ describe('PaymentClient', () => {
   it('rejects order paths before network access', async () => {
     const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher)
     await expect(new PaymentClient(connection).refresh('../admin')).rejects.toThrow()
+    await expect(new PaymentClient(connection).cancel('../admin')).rejects.toThrow()
     expect(fetcher).not.toHaveBeenCalled()
+  })
+  it('cancels through the authenticated order endpoint', async () => {
+    const fetcher = vi.fn(async () => new Response('', { status: 503 }))
+    vi.stubGlobal('fetch', fetcher)
+    await expect(new PaymentClient(connection).cancel('order-1')).rejects.toThrow()
+    expect(fetcher).toHaveBeenCalledWith('https://platform.example/api/v1/payment-orders/order-1/cancel', expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ Authorization: 'Bearer test-token' }) }))
   })
   it('explains changed package rather than accepting a stale price', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 409 })))

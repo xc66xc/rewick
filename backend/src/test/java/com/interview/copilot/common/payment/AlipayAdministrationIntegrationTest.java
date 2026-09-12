@@ -87,11 +87,11 @@ class AlipayAdministrationIntegrationTest extends AlipayHttpFixture {
 
     @Test
     void sameTransactionAndRefundReference_inDifferentChannels_doNotCollide() {
-        var alipayOrder = alipayOrder();
         var wechatOrder = pendingOrder();
         paid();
         var paidWechat = call(HttpMethod.POST, "/payment-orders/" + wechatOrder.path("id").asText() + "/refresh", aliceToken, null);
         assertThat(paidWechat.getBody().path("credited").asBoolean()).isTrue();
+        var alipayOrder = alipayOrder();
         var fields = signer.payment(alipayOrder.path("id").asText(), "TRADE_SUCCESS", "15.99");
         fields.put("trade_no", "fixture-" + wechatOrder.path("id").asText());
         assertThat(notify(signer.sign(fields)).getBody()).isEqualTo("success");

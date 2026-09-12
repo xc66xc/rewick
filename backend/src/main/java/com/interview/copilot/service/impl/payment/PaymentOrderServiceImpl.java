@@ -39,6 +39,8 @@ public class PaymentOrderServiceImpl implements PaymentOrderService {
             long packageVersion,
             String requestId,
             String paymentMethod) {
+        var active = orders.active(userId);
+        if (active != null) sync.sync(active.id());
         var order =
                 reservations.reserve(userId, packageId, packageVersion, requestId, paymentMethod);
         return refresh(userId, order.id());
@@ -60,6 +62,12 @@ public class PaymentOrderServiceImpl implements PaymentOrderService {
     public PaymentOrderResponse refresh(Long userId, String id) {
         read(userId, id);
         sync.sync(id);
+        return read(userId, id);
+    }
+
+    public PaymentOrderResponse cancel(long userId, String id) {
+        read(userId, id);
+        sync.cancel(id);
         return read(userId, id);
     }
 

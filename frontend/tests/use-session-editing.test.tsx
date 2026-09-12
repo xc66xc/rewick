@@ -37,6 +37,7 @@ function setup(fakeTimers = false) {
     getPaymentOrders: vi.fn(async () => []),
     createPaymentOrder: vi.fn(async () => { throw new Error('unused') }),
     refreshPaymentOrder: vi.fn(async () => { throw new Error('unused') }),
+    cancelPaymentOrder: vi.fn(async () => { throw new Error('unused') }),
     getWallet: vi.fn(async () => ({ availableSeconds: 3600, version: 0, serverTime: new Date().toISOString(), session: null })),
     startInterview: vi.fn(async () => ({ availableSeconds: 3600, version: 0, serverTime: new Date().toISOString(), session: null })),
     endInterview: vi.fn(async () => null),

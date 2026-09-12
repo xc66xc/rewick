@@ -15,8 +15,8 @@ export function orderStatus(order: PaymentOrder) {
   if (order.status === 'closed') return '订单已关闭'
   return order.status === 'creating' ? '正在确认支付订单' : `等待${paymentBrand(order.paymentMethod)}支付`
 }
-interface Props { order: PaymentOrder; busy: boolean; onClose: () => void; onRefresh: () => void }
-export default function PaymentOrderDialog({ order, busy, onClose, onRefresh }: Props) {
+interface Props { order: PaymentOrder; busy: boolean; onClose: () => void; onRefresh: () => void; onCancel: () => void }
+export default function PaymentOrderDialog({ order, busy, onClose, onRefresh, onCancel }: Props) {
   const [image, setImage] = useState('')
   const [now, setNow] = useState(Date.now())
   const remaining = Math.max(0, Math.ceil((Date.parse(order.expiresAt) - now) / 1000))
@@ -28,7 +28,7 @@ export default function PaymentOrderDialog({ order, busy, onClose, onRefresh }: 
     return () => { live = false }
   }, [order.codeUrl, payable])
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer) }, [])
-  return <Modal open onOpenChange={open => { if (!open) onClose() }} title={`${paymentBrand(order.paymentMethod)}扫码购买时长`} footer={<><Button onClick={onClose}>关闭</Button><Button variant="primary" loading={busy} onClick={onRefresh}>查看支付结果</Button></>}>
+  return <Modal open onOpenChange={open => { if (!open) onClose() }} title={`${paymentBrand(order.paymentMethod)}扫码购买时长`} footer={<><Button onClick={onClose}>关闭</Button>{['creating', 'pending'].includes(order.status) && <Button disabled={busy} onClick={onCancel}>取消订单</Button>}<Button variant="primary" loading={busy} onClick={onRefresh}>查看支付结果</Button></>}>
     <div className="flex flex-col items-center gap-4 text-center">
       <h2 className="text-lg font-semibold">{order.packageName}</h2>
       <p className="text-3xl font-semibold text-accent-text">{money(order.totalCents)}</p>

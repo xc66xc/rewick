@@ -68,6 +68,12 @@ public class PaymentController {
         return orders.refresh(user.id(), id);
     }
 
+    @PostMapping("/payment-orders/{id}/cancel")
+    public PaymentOrderResponse cancel(
+            @AuthenticationPrincipal UserPrincipal user, @PathVariable String id) {
+        return orders.cancel(user.id(), id);
+    }
+
     @PostMapping("/payments/wechat/notify")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void notify(

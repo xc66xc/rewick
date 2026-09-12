@@ -55,6 +55,8 @@ public class PaymentReservationServiceImpl implements PaymentReservationService 
                 throw PaymentErrors.conflict("PAYMENT_REQUEST_REUSED", "请求标识已用于其他套餐");
             return PaymentConverter.orderResponse(previous, true);
         }
+        var active = orders.active(userId);
+        if (active != null) return PaymentConverter.orderResponse(active, true);
         long configVersion = configs.activeVersion(paymentMethod);
         var p = packages.lock(packageId);
         if (p == null || !p.enabled()) throw PaymentErrors.missing();

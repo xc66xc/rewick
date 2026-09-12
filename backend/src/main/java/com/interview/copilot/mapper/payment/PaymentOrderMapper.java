@@ -30,6 +30,11 @@ public interface PaymentOrderMapper {
     @Select("SELECT " + COLUMNS + JOIN + " WHERE o.order_id=#{id}")
     PaymentOrderEntity find(String id);
 
+    @Select("SELECT " + COLUMNS + JOIN
+            + " WHERE o.app_users_id=#{userId} AND o.status IN ('creating','pending')"
+            + " ORDER BY o.id LIMIT 1")
+    PaymentOrderEntity active(long userId);
+
     @Select("SELECT " + COLUMNS + JOIN + " WHERE o.order_id=#{id} FOR UPDATE OF o")
     PaymentOrderEntity lock(String id);
 

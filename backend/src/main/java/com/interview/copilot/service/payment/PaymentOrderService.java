@@ -20,6 +20,8 @@ public interface PaymentOrderService {
 
     PaymentOrderResponse refresh(Long userId, String id);
 
+    PaymentOrderResponse cancel(long userId, String id);
+
     PaymentOrderResponse refund(long actorId, String id, ManualRefundDTO input);
 
     void notify(String body, PaymentHeadersDTO headers);

@@ -12,6 +12,10 @@ export class PaymentClient {
   async create(input: unknown) {
     return paymentOrderSchema.parse(await this.request('/payment-orders', createPaymentOrderSchema.parse(input)))
   }
+  async cancel(input: unknown) {
+    const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/).parse(input)
+    return paymentOrderSchema.parse(await this.request(`/payment-orders/${id}/cancel`, {}))
+  }
   async refresh(input: unknown) {
     const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/).parse(input)
     return paymentOrderSchema.parse(await this.request(`/payment-orders/${id}/refresh`, {}))
