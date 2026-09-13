@@ -1,3 +1,4 @@
+import { sessionFault } from './session-fault'
 import { randomUUID } from 'node:crypto'
 import type { AnswerRequest, AppEvent, ModelInputSnapshot, RetrievalContext, Settings } from '../../shared/types'
 import { answerRequestSchema, isLoopback, parseInput, settingsInputSchema } from './validation'
@@ -130,6 +131,7 @@ export class LlmClient {
         method: 'POST', headers: this.headers(parsed.requestId), signal: state.controller.signal, redirect: 'error',
         body,
       })
+      if (this.platform && response.status === 401) throw await sessionFault(response, this.apiKey)
       await consumeResponse(response, (delta) => {
         if (this.active !== state || state.cancelled || state.finished) return
         received = true
@@ -176,6 +178,7 @@ export class LlmClient {
         method: 'POST', headers: this.headers(randomUUID()), signal: controller.signal, redirect: 'error',
         body: JSON.stringify({ model: this.settings.llm.model, stream: false, messages: [{ role: 'user', content: '请只回复 OK。' }], ...this.providerOptions() }),
       })
+      if (this.platform && response.status === 401) throw await sessionFault(response, this.apiKey)
       await consumeResponse(response, () => { received = true }, () => undefined)
       if (!received) throw new Error('接口连接成功，但模型没有返回可展示的回答内容。')
       return { latencyMs: Math.round(performance.now() - started), message: '模型连接成功' }

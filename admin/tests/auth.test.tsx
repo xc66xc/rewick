@@ -16,7 +16,7 @@ describe('administrator authentication', () => {
   it('restores tab credentials and clears them on 401', async () => {
     const expired = { value: false }
     vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
-      if (url.endsWith('/auth/login')) { expect(JSON.parse(String(options.body))).toEqual({ identifier: 'admin', password: 'long-password' }); return response({ accessToken: 'private-memory-token', expiresAt: '2099-01-01T00:00:00Z', user: { id: '1', displayName: 'admin' } }) }
+      if (url.endsWith('/auth/login')) { expect(JSON.parse(String(options.body))).toEqual({ identifier: 'admin', password: 'long-password', clientType: 'admin' }); return response({ accessToken: 'private-memory-token', expiresAt: '2099-01-01T00:00:00Z', user: { id: '1', displayName: 'admin' } }) }
       expect((options.headers as Record<string, string>).Authorization).toBe('Bearer private-memory-token')
       if (url.endsWith('/admin/me')) return response({ id: '1', displayName: 'admin', role: 'ADMIN' })
       if (expired.value) return response({ message: 'expired' }, 401)

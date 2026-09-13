@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { sessionFault, SessionFault } from './session-fault'
 import type { PlatformInfo, Settings } from '../../shared/types'
 import { emailCodeResponseSchema, emailInputSchema, platformInfoSchema, platformLoginInputSchema, platformLoginResponseSchema, registerInputSchema } from './platform-schema'
 import { parseInput, platformSettingsSchema } from './validation'
@@ -13,7 +14,7 @@ export class PlatformClient {
   }
   async login(input: unknown) {
     const credentials = parseInput(platformLoginInputSchema, input)
-    const raw = await this.request('/api/v1/auth/login', undefined, credentials)
+    const raw = await this.request('/api/v1/auth/login', undefined, { ...credentials, clientType: 'desktop' })
     const parsed = platformLoginResponseSchema.safeParse(raw)
     if (!parsed.success) throw new Error('平台登录响应格式无效。')
     if (Date.parse(parsed.data.expiresAt) <= Date.now()) throw new Error('平台登录已过期，请重新登录。')
@@ -39,6 +40,7 @@ export class PlatformClient {
     if (!parsed.success) throw new Error('平台能力响应格式无效，请联系平台管理员。')
     return parsed.data
   }
+  async session(token: string): Promise<void> { await this.request('/api/v1/auth/session', token) }
   async logout(token: string): Promise<void> { await this.request('/api/v1/auth/logout', token, {}) }
   async walletRequest(path: string, token: string, body?: unknown): Promise<unknown> { return this.request(path, token, body) }
   async paymentRequest(path: string, token: string, body?: unknown, signal?: AbortSignal): Promise<unknown> { return this.request(path, token, body, signal) }
@@ -55,6 +57,7 @@ export class PlatformClient {
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       })
       if (!response.ok) {
+        if (response.status === 401 && token) throw await sessionFault(response, token)
         if (response.status === 400 && path.endsWith('/interview-sessions/start')) {
           await response.body?.cancel().catch(() => undefined)
           throw new PlatformRequestError('面试背景校验失败，请刷新简历、岗位和资料选择后重试。', response.status)
@@ -165,7 +168,7 @@ export class PlatformService {
       const info = await new PlatformClient(platform.baseUrl).info(snapshot.secrets.platformAccessToken, signal)
       return await this.store.savePlatformSession(platform.baseUrl, snapshot.secrets.platformAccessToken, platform.expiresAt, info, snapshot.secrets.platformAccessToken)
     } catch (error) {
-      if (error instanceof PlatformRequestError && error.status === 401) await this.store.clearPlatformSession(snapshot.secrets.platformAccessToken)
+      if (error instanceof SessionFault) throw error
       throw error
     }
   }

@@ -10,6 +10,7 @@ import com.interview.copilot.mapper.background.BackgroundMapper;
 import com.interview.copilot.mapper.wallet.WalletMapper;
 import com.interview.copilot.model.background.BackgroundKind;
 import com.interview.copilot.response.wallet.WalletResponse;
+import com.interview.copilot.service.auth.SessionGuardService;
 import com.interview.copilot.service.background.BackgroundService;
 import com.interview.copilot.service.wallet.WalletService;
 import com.interview.copilot.validation.background.BackgroundPolicy;
@@ -25,16 +26,22 @@ import java.util.UUID;
 @Transactional
 public class BackgroundServiceImpl implements BackgroundService {
     private final BackgroundMapper records;
-    private final WalletMapper users;
+    private final SessionGuardService users;
     private final WalletService wallet;
     private final ObjectMapper json;
+    private final WalletMapper sessions;
 
     public BackgroundServiceImpl(
-            BackgroundMapper records, WalletMapper users, WalletService wallet, ObjectMapper json) {
+            BackgroundMapper records,
+            SessionGuardService users,
+            WalletService wallet,
+            ObjectMapper json,
+            WalletMapper sessions) {
         this.records = records;
         this.users = users;
         this.wallet = wallet;
         this.json = json;
+        this.sessions = sessions;
     }
 
     public JsonNode library(long user) {
@@ -140,7 +147,7 @@ public class BackgroundServiceImpl implements BackgroundService {
     public WalletResponse start(long user, String requestId, String environmentId) {
         lock(user);
         BackgroundPolicy.id(requestId);
-        var previous = users.byRequest(user, requestId);
+        var previous = sessions.byRequest(user, requestId);
         if (previous != null) {
             var result = wallet.start(user, requestId);
             String saved = records.snapshot(user, previous.id());

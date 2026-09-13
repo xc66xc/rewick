@@ -45,7 +45,7 @@ export function useAuth() {
     const guest = new ApiClient()
     let candidate: ApiClient | undefined
     try {
-      const result = await guest.request('/auth/login', loginSchema, { method: 'POST', body: { identifier, password } })
+      const result = await guest.request('/auth/login', loginSchema, { method: 'POST', body: { identifier, password, clientType: 'admin' } })
       if (!(Date.parse(result.expiresAt) > Date.now())) throw new Error('登录凭证已过期，请重新登录。')
       candidate = new ApiClient(result.accessToken, expire)
       const admin = await candidate.request('/admin/me', adminSchema)

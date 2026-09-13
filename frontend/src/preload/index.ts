@@ -63,6 +63,7 @@ function createBridge(accountScope?: string): DesktopBridge {
   getHistoryDetail: id => invoke('history:detail', id),
   getHistorySyncStatus: () => invoke('history:status'),
   getHistory: () => invoke('history:list'),
+  stageSessionForLogout: (nonce, record) => invoke('session:stage', { nonce, record }),
   saveSession: (record, owner) => invoke('history:save', { record, accountScope: owner ?? accountScope ?? latestScope }),
   removeSession: id => invoke('history:remove', id),
   exportSession: record => invoke('history:export', record),

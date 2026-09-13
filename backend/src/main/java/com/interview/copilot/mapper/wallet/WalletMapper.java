@@ -16,7 +16,10 @@ import java.util.List;
 public interface WalletMapper {
     String SESSION_COLUMNS =
             "session_id AS id,app_users_id AS"
-                    + " user_id,status,started_at,expires_at,ended_at,used_seconds,end_reason";
+                + " user_id,status,started_at,expires_at,ended_at,used_seconds,end_reason,auth_tokens_id";
+
+    @Select("SELECT clock_timestamp() AT TIME ZONE 'Asia/Shanghai'")
+    LocalDateTime now();
 
     @Select("SELECT id FROM app_users WHERE id=#{userId} FOR UPDATE")
     Long lockUser(long userId);
@@ -59,18 +62,20 @@ public interface WalletMapper {
                     + SESSION_COLUMNS
                     + " FROM interview_sessions WHERE app_users_id=#{userId} AND"
                     + " request_id=#{requestId}")
-    InterviewSessionEntity byRequest(@Param("userId") long userId, @Param("requestId") String requestId);
+    InterviewSessionEntity byRequest(
+            @Param("userId") long userId, @Param("requestId") String requestId);
 
     @Insert(
             "INSERT INTO"
-                + " interview_sessions(session_id,app_users_id,request_id,started_at,expires_at)"
-                + " VALUES(#{id},#{userId},#{requestId},#{now},#{expiry})")
+                + " interview_sessions(session_id,app_users_id,request_id,started_at,expires_at,auth_tokens_id)"
+                + " VALUES(#{id},#{userId},#{requestId},#{now},#{expiry},#{tokenId})")
     void create(
             @Param("userId") long userId,
             @Param("id") String id,
             @Param("requestId") String requestId,
             @Param("now") LocalDateTime now,
-            @Param("expiry") LocalDateTime expiry);
+            @Param("expiry") LocalDateTime expiry,
+            @Param("tokenId") Long tokenId);
 
     @Update(
             "UPDATE interview_sessions SET"

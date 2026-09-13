@@ -220,7 +220,13 @@ SELECT id, ('[' || id || ',0,0]')::vector FROM generate_series(1, 32) AS id
         var response =
                 http.postForEntity(
                         "/api/v1/auth/login",
-                        Map.of("identifier", "alice", "password", "incorrect"),
+                        Map.of(
+                                "identifier",
+                                "alice",
+                                "password",
+                                "incorrect",
+                                "clientType",
+                                "desktop"),
                         JsonNode.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -359,7 +365,13 @@ SELECT id, ('[' || id || ',0,0]')::vector FROM generate_series(1, 32) AS id
         var response =
                 http.postForEntity(
                         "/api/v1/auth/login",
-                        Map.of("identifier", displayName, "password", "test-only-password-2026"),
+                        Map.of(
+                                "identifier",
+                                displayName,
+                                "password",
+                                "test-only-password-2026",
+                                "clientType",
+                                "desktop"),
                         JsonNode.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         return response.getBody().get("accessToken").asText();
@@ -407,6 +419,9 @@ SELECT id, ('[' || id || ',0,0]')::vector FROM generate_series(1, 32) AS id
             withCopyFileToContainer(
                     MountableFile.forHostPath(Path.of("sql", "10_time_wallet.sql")),
                     "/tmp/10_time_wallet.sql");
+            withCopyFileToContainer(
+                    MountableFile.forHostPath(Path.of("sql", "16_desktop_sessions.sql")),
+                    "/tmp/16_desktop_sessions.sql");
         }
 
         @Override
@@ -447,7 +462,9 @@ SELECT id, ('[' || id || ',0,0]')::vector FROM generate_series(1, 32) AS id
                                 "-f",
                                 "/tmp/09_pg_references.sql",
                                 "-f",
-                                "/tmp/10_time_wallet.sql");
+                                "/tmp/10_time_wallet.sql",
+                                "-f",
+                                "/tmp/16_desktop_sessions.sql");
                 if (result.getExitCode() != 0) {
                     throw new IllegalStateException(
                             "Database SQL initialization failed: " + result.getStderr());

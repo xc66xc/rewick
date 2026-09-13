@@ -202,6 +202,16 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
     } catch (reason) { setError(errorMessage(reason)) }
   }
   function handleEvent(event: AppEvent) {
+    if (event.kind === 'session-stopping') {
+      operation.current++; automatic.coordinator.current?.acknowledge(); updateStatus('idle')
+      const current = recordRef.current
+      const saved = snapshotForSave({ ...current, answers: current.answers.map(answer => answer.status === 'streaming' ? { ...answer, status: 'cancelled' as const } : answer) })
+      recordRef.current = saved
+      void releaseAudio().catch(reason => setError(errorMessage(reason)))
+      void bridge?.stageSessionForLogout(event.nonce, recordHasContent(saved) ? saved : null).catch(reason => setError(errorMessage(reason)))
+      return
+    }
+    if (event.kind === 'session-ended' || event.kind === 'session-paused' || event.kind === 'session-restored') return
     if (event.kind === 'wallet-changed') {
       if (event.wallet.session?.status !== 'active') { void stop(); void cancel(); void persist(true).catch(reason => setError(errorMessage(reason))) }
       return

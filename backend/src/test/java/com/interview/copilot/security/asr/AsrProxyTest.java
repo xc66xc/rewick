@@ -20,6 +20,7 @@ import com.interview.copilot.security.auth.UserPrincipal;
 import com.interview.copilot.service.usage.UsageService;
 import com.interview.copilot.util.ai.ProviderJson;
 import com.interview.copilot.util.asr.AsrProtocol;
+
 import io.netty.handler.codec.http.websocketx.BinaryWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 
@@ -31,20 +32,21 @@ import org.springframework.web.socket.BinaryMessage;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 import reactor.netty.DisposableServer;
 import reactor.netty.http.server.HttpServer;
 
 import java.nio.ByteBuffer;
+import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class AsrProxyTest {
     private final ObjectMapper mapper = new ObjectMapper();
@@ -63,13 +65,18 @@ public class AsrProxyTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        when(usage.start(anyLong(), anyString(), anyString())).thenReturn(lease);
+        when(usage.startForSession(anyLong(), anyString(), anyString(), anyLong()))
+                .thenReturn(lease);
         server = fakeServer();
         settings.getAsr().setUrl("ws://127.0.0.1:" + server.port() + "/asr");
         settings.getAsr().setApiKey("server-secret");
         settings.getAsr().setModel("server-asr-model");
-        proxy = new AsrProxy(
-                new PlatformRuntimeFixture(settings), json, usage, new PlatformLimitsProperties(3600));
+        proxy =
+                new AsrProxy(
+                        new PlatformRuntimeFixture(settings),
+                        json,
+                        usage,
+                        new PlatformLimitsProperties(3600));
         session = session("first");
         proxy.afterConnectionEstablished(session);
     }
@@ -164,7 +171,7 @@ public class AsrProxyTest {
     @Test
     void session_configurationChangesDuringReservation_preservesCapturedRouteAndCredentials()
             throws Exception {
-        when(usage.start(anyLong(), anyString(), anyString()))
+        when(usage.startForSession(anyLong(), anyString(), anyString(), anyLong()))
                 .thenAnswer(
                         call -> {
                             settings.getAsr().setUrl("ws://127.0.0.1:1/replacement");
@@ -194,7 +201,7 @@ public class AsrProxyTest {
         AtomicBoolean reserved = new AtomicBoolean();
         AtomicInteger reservations = new AtomicInteger();
         UsageLease restartedLease = mock(UsageLease.class);
-        when(usage.start(anyLong(), anyString(), anyString()))
+        when(usage.startForSession(anyLong(), anyString(), anyString(), anyLong()))
                 .thenAnswer(
                         call -> {
                             if (!reserved.compareAndSet(false, true)) {
@@ -306,13 +313,13 @@ public class AsrProxyTest {
                                                                     if (frame
                                                                             instanceof
                                                                             TextWebSocketFrame
-                                                                                    text) {
+                                                                                            text) {
                                                                         reply(text.text(), replies);
                                                                     }
                                                                     if (frame
                                                                             instanceof
                                                                             BinaryWebSocketFrame
-                                                                                    binary) {
+                                                                                            binary) {
                                                                         audioBytes.addAndGet(
                                                                                 binary.content()
                                                                                         .readableBytes());

@@ -27,6 +27,7 @@ export interface PlatformSettings {
   limits?: PlatformInfo['limits']
 }
 export interface Settings {
+  sessionNotice?: string
   preferencesVersion?: number
   unavailablePlatformSelections?: Partial<Record<ServiceKind, string | null>>
   accountScope?: string
@@ -149,6 +150,10 @@ export interface WalletState {
   session: { id: string; status: 'active' | 'ended'; startedAt: string; expiresAt: string; endedAt: string | null; usedSeconds: number; endReason: string | null } | null
 }
 export type AppEvent =
+  | { kind: 'session-stopping'; nonce: string }
+  | { kind: 'session-ended'; message: string }
+  | { kind: 'session-paused'; message: string }
+  | { kind: 'session-restored' }
   | { kind: 'wallet-changed'; wallet: WalletState }
   | { kind: 'asr-status'; sessionId: string; status: AsrStatus; message?: string }
   | { kind: 'transcript'; sessionId: string; segment: TranscriptSegment }
@@ -163,6 +168,7 @@ export type AppEvent =
   | { kind: 'answer-error'; requestId: string; message: string }
   | { kind: 'shortcut'; action: 'answer' }
 export interface DesktopBridge {
+  stageSessionForLogout(nonce: string, record: SessionRecord | null): Promise<void>
   withAccountScope?(scope: string): DesktopBridge
   getPackageCatalog(): Promise<PackageCatalog>
   getPaymentOrders(): Promise<PaymentOrder[]>

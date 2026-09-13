@@ -1,17 +1,16 @@
 package com.interview.copilot.service.impl.auth;
 
-import com.interview.copilot.config.AuthProperties;
 import com.interview.copilot.entity.user.UserEntity;
 import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.mapper.auth.TokenMapper;
 import com.interview.copilot.mapper.user.UserMapper;
 import com.interview.copilot.response.auth.LoginResponse;
-import com.interview.copilot.response.auth.PublicUserResponse;
+import com.interview.copilot.security.auth.SessionValidation;
 import com.interview.copilot.security.auth.TokenSecrets;
 import com.interview.copilot.security.auth.UserPrincipal;
 import com.interview.copilot.security.email.EmailAddress;
 import com.interview.copilot.service.auth.AuthService;
-import com.interview.copilot.util.ServerTime;
+import com.interview.copilot.service.auth.TokenIssuerService;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -19,8 +18,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
-import java.time.Clock;
-import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Service
@@ -28,32 +25,35 @@ public class AuthServiceImpl implements AuthService {
     private final UserMapper users;
     private final TokenMapper tokens;
     private final PasswordEncoder passwords;
-    private final AuthProperties properties;
-    private final Clock clock;
+    private final TokenIssuerService issuer;
     private final String absentPassword;
 
     public AuthServiceImpl(
             UserMapper users,
             TokenMapper tokens,
             PasswordEncoder passwords,
-            AuthProperties properties,
-            Clock clock) {
+            TokenIssuerService issuer) {
         this.users = users;
         this.tokens = tokens;
         this.passwords = passwords;
-        this.properties = properties;
-        this.clock = clock;
+        this.issuer = issuer;
         this.absentPassword = passwords.encode(TokenSecrets.create());
     }
 
     @Transactional
-    public LoginResponse login(String identifier, String password) {
+    public LoginResponse login(String identifier, String password, String clientType) {
         if (password.getBytes(StandardCharsets.UTF_8).length > 72) throw invalidCredentials();
         UserEntity user = findLoginUser(identifier);
+        if (user != null) {
+            tokens.lockUser(user.getId());
+            user = findLoginUser(identifier);
+        }
         String hash = user == null ? absentPassword : user.getPasswordHash();
         boolean matches = passwords.matches(password, hash);
         if (!matches || user == null || !user.isEnabled()) throw invalidCredentials();
-        return issueToken(user);
+        if ("admin".equals(clientType) && !"ADMIN".equals(user.getRole()))
+            throw invalidCredentials();
+        return issuer.issue(user, clientType);
     }
 
     private UserEntity findLoginUser(String identifier) {
@@ -71,24 +71,22 @@ public class AuthServiceImpl implements AuthService {
 
     @Transactional
     public LoginResponse issueToken(UserEntity user) {
-        String token = TokenSecrets.create();
-        LocalDateTime expiresAt = ServerTime.now(clock).plusHours(properties.tokenHours());
-        tokens.create(user.getId(), TokenSecrets.hash(token), expiresAt);
-        return new LoginResponse(
-                token,
-                ServerTime.instant(expiresAt),
-                new PublicUserResponse(
-                        user.getId().toString(),
-                        user.getDisplayName(),
-                        user.getRole(),
-                        user.getEmail()));
+        return issuer.issue(user, "desktop");
     }
 
     public Optional<UserPrincipal> authenticate(String token) {
         if (token == null || !token.matches("[A-Za-z0-9_-]{43}")) return Optional.empty();
-        return Optional.ofNullable(
-                tokens.authenticate(TokenSecrets.hash(token), ServerTime.now(clock)))
-                .map(user -> new UserPrincipal(user.id(), user.displayName(), user.role(), user.email()));
+        var row = tokens.authenticate(TokenSecrets.hash(token));
+        if (row == null) return Optional.empty();
+        SessionValidation.require(row, tokens.now());
+        return Optional.of(
+                new UserPrincipal(
+                        row.id(),
+                        row.displayName(),
+                        row.role(),
+                        row.email(),
+                        row.tokenId(),
+                        row.clientType()));
     }
 
     public void logout(String token) {

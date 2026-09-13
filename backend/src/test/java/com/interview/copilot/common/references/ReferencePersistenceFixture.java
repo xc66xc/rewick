@@ -2,7 +2,9 @@ package com.interview.copilot.common.references;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.spring.MybatisSqlSessionFactoryBean;
+import com.interview.copilot.mapper.auth.TokenMapper;
 import com.interview.copilot.mapper.references.ReferenceMapper;
+import com.interview.copilot.service.impl.auth.SessionGuardServiceImpl;
 import com.interview.copilot.service.impl.references.ReferenceJobServiceImpl;
 import com.interview.copilot.service.impl.references.ReferenceStorageServiceImpl;
 import com.interview.copilot.service.references.ReferenceJobService;
@@ -26,6 +28,7 @@ public final class ReferencePersistenceFixture {
             var configuration = new MybatisConfiguration();
             configuration.setMapUnderscoreToCamelCase(true);
             configuration.addMapper(ReferenceMapper.class);
+            configuration.addMapper(TokenMapper.class);
             var factory = new MybatisSqlSessionFactoryBean();
             factory.setDataSource(source);
             factory.setConfiguration(configuration);
@@ -33,7 +36,11 @@ public final class ReferencePersistenceFixture {
             var manager = new DataSourceTransactionManager(source);
             storage =
                     transactional(
-                            new ReferenceStorageServiceImpl(mapper),
+                            new ReferenceStorageServiceImpl(
+                                    mapper,
+                                    new SessionGuardServiceImpl(
+                                            new SqlSessionTemplate(factory.getObject())
+                                                    .getMapper(TokenMapper.class))),
                             ReferenceStorageService.class,
                             manager);
             jobs =

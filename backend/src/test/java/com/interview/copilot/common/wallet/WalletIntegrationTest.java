@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.github.dockerjava.api.command.InspectContainerResponse;
-import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.dto.wallet.WalletAdjustment;
+import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.service.usage.UsageService;
 import com.interview.copilot.service.wallet.WalletAdminService;
 import com.interview.copilot.service.wallet.WalletService;
@@ -58,6 +58,9 @@ public class WalletIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired MutableClock clock;
 
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    com.interview.copilot.mapper.wallet.WalletMapper walletMapper;
+
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry properties) {
         properties.add("spring.datasource.url", DATABASE::getJdbcUrl);
@@ -72,6 +75,9 @@ public class WalletIntegrationTest {
                 "INSERT INTO app_users(display_name,password_hash,role)"
                     + " VALUES('alice','fixture','USER'),('bob','fixture','USER'),('administrator','fixture','ADMIN')");
         clock.set(Instant.parse("2026-09-11T00:00:00Z"));
+        org.mockito.Mockito.doAnswer(invocation -> com.interview.copilot.util.ServerTime.now(clock))
+                .when(walletMapper)
+                .now();
     }
 
     @Test
@@ -249,8 +255,7 @@ public class WalletIntegrationTest {
     void adjust_sameRequest_isIdempotentAndRecordsActorAndReason() {
         grant(1, 120);
         var adjustment =
-                new WalletAdjustment(
-                        request(), "add", 60L, wallets.state(1).version(), "测试分配");
+                new WalletAdjustment(request(), "add", 60L, wallets.state(1).version(), "测试分配");
         admin.adjust(3, 1, adjustment);
         var retry = admin.adjust(3, 1, adjustment);
 
@@ -289,8 +294,7 @@ public class WalletIntegrationTest {
         clock.advance(Duration.ofSeconds(11));
         long version = wallets.state(1).version();
         var adjusted =
-                admin.adjust(
-                        3, 1, new WalletAdjustment(request(), "set", 0L, version, "结束额度"));
+                admin.adjust(3, 1, new WalletAdjustment(request(), "set", 0L, version, "结束额度"));
 
         assertThat(adjusted.availableSeconds()).isZero();
         assertThat(adjusted.session().status()).isEqualTo("ended");
@@ -407,7 +411,8 @@ public class WalletIntegrationTest {
                         "07_email_code_purpose.sql",
                         "08_server_local_time.sql",
                         "09_pg_references.sql",
-                        "10_time_wallet.sql");
+                        "10_time_wallet.sql",
+                        "16_desktop_sessions.sql");
 
         WalletDatabase() {
             super(

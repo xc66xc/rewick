@@ -147,7 +147,7 @@ describe('platform credentials and sessions', () => {
     vi.stubGlobal('fetch', fetchMock)
     await store.saveSettings(enabledInput())
     const visible = await new PlatformService(store).login({ identifier: 'demo', password: 'password-never-persist' })
-    expect(fetchMock.mock.calls[0]).toEqual(['http://127.0.0.1:8080/api/v1/auth/login', expect.objectContaining({ body: JSON.stringify({ identifier: 'demo', password: 'password-never-persist' }), redirect: 'error' })])
+    expect(fetchMock.mock.calls[0]).toEqual(['http://127.0.0.1:8080/api/v1/auth/login', expect.objectContaining({ body: JSON.stringify({ identifier: 'demo', password: 'password-never-persist', clientType: 'desktop' }), redirect: 'error' })])
     expect(fetchMock.mock.calls[0][1].headers).not.toHaveProperty('Authorization')
     expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe('Bearer business-token')
     const stored = await readFile(join(directory, 'settings.json'), 'utf8')
@@ -162,12 +162,13 @@ describe('platform credentials and sessions', () => {
     expect((await new PlatformService(store).logout()).platform?.authenticated).toBe(false)
     expect((await store.getSecrets()).platformAccessToken).toBe('')
   })
-  it('clears invalid authentication and reports a login error instead of falling back', async () => {
+  it('reports invalid authentication for the main-process draft and sign-out coordinator', async () => {
     await store.saveSettings(enabledInput())
     await store.savePlatformSession('http://127.0.0.1:8080', 'business-token', expiresAt(), info)
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('private-error-body', { status: 401 })))
     await expect(new PlatformService(store).refresh()).rejects.toThrow('登录已失效')
-    expect((await store.getSettings()).platform?.authenticated).toBe(false)
+    // Credential cleanup waits for the main-process draft handshake.
+    expect((await store.getSettings()).platform?.authenticated).toBe(true)
   })
   it.each(['http://203.0.113.10:8080', 'https://platform.example'])('accepts platform HTTP and HTTPS at %s', async baseUrl => {
     await store.saveSettings({ ...enabledInput(), platform: { enabled: true, baseUrl } })

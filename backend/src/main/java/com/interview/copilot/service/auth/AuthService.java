@@ -7,7 +7,7 @@ import com.interview.copilot.security.auth.UserPrincipal;
 import java.util.Optional;
 
 public interface AuthService {
-    LoginResponse login(String identifier, String password);
+    LoginResponse login(String identifier, String password, String clientType);
 
     LoginResponse issueToken(UserEntity user);
 

@@ -61,20 +61,12 @@ export function useDesktopAuth(bridge: DesktopBridge | undefined, config: Return
     timer = window.setTimeout(expire, Math.max(0, Math.min(expires - Date.now(), 2_147_483_647)))
     return () => window.clearTimeout(timer)
   }, [bridge, expiresAt, verified])
-  useEffect(() => {
-    if (!bridge || !verified || verified !== accountKey) return
-    let active = true
-    let pending = false
-    const timer = window.setInterval(() => {
-      if (pending) return
-      pending = true
-      const request = epoch.current
-      void bridge.refreshPlatform().then(value => {
-        if (active && request === epoch.current) latest.current.apply(value)
-      }).catch(() => undefined).finally(() => { pending = false })
-    }, 60_000)
-    return () => { active = false; window.clearInterval(timer) }
-  }, [accountKey, bridge, verified])
+  useEffect(() => bridge?.onEvent(event => {
+    if (event.kind === 'session-ended' || event.kind === 'session-paused') {
+      blocked.current = true; epoch.current++; setVerified(''); setChecking(false); setError(event.message); clearLibraryDrafts()
+    }
+    if (event.kind === 'session-restored') { blocked.current = false; attempted.current = ''; setError(''); setRetryCount(value => value + 1) }
+  }), [bridge])
   async function logout() {
     blocked.current = true; epoch.current++; setVerified(''); setChecking(true); setError(''); clearLibraryDrafts()
     try { if (bridge) latest.current.apply(await bridge.platformLogout()) }

@@ -226,7 +226,13 @@ public class AdminIntegrationTest {
                                         HttpMethod.POST,
                                         "/api/v1/auth/login",
                                         null,
-                                        Map.of("identifier", "member", "password", PASSWORD))
+                                        Map.of(
+                                                "identifier",
+                                                "member",
+                                                "password",
+                                                PASSWORD,
+                                                "clientType",
+                                                "desktop"))
                                 .getStatusCode())
                 .isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(login("member", replacement)).isNotBlank();
@@ -393,7 +399,13 @@ public class AdminIntegrationTest {
                         HttpMethod.POST,
                         "/api/v1/auth/login",
                         null,
-                        Map.of("identifier", displayName, "password", password));
+                        Map.of(
+                                "identifier",
+                                displayName,
+                                "password",
+                                password,
+                                "clientType",
+                                "desktop"));
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         return response.getBody().path("accessToken").asText();
     }
@@ -442,7 +454,8 @@ public class AdminIntegrationTest {
                             "07_email_code_purpose.sql",
                             "08_server_local_time.sql",
                             "09_pg_references.sql",
-                            "10_time_wallet.sql")) {
+                            "10_time_wallet.sql",
+                            "16_desktop_sessions.sql")) {
                 withCopyFileToContainer(
                         MountableFile.forHostPath(Path.of("sql", name)), "/tmp/" + name);
             }
@@ -482,7 +495,9 @@ public class AdminIntegrationTest {
                                 "-f",
                                 "/tmp/09_pg_references.sql",
                                 "-f",
-                                "/tmp/10_time_wallet.sql");
+                                "/tmp/10_time_wallet.sql",
+                                "-f",
+                                "/tmp/16_desktop_sessions.sql");
                 if (result.getExitCode() != 0)
                     throw new IllegalStateException("Admin test SQL initialization failed");
             } catch (IOException error) {

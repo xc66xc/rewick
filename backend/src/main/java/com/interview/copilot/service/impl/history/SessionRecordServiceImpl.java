@@ -6,9 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.interview.copilot.entity.history.SessionRecordEntity;
 import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.mapper.history.SessionRecordMapper;
-import com.interview.copilot.mapper.wallet.WalletMapper;
 import com.interview.copilot.response.history.RecordPageResponse;
 import com.interview.copilot.response.history.RecordResponse;
+import com.interview.copilot.service.auth.SessionGuardService;
 import com.interview.copilot.service.history.SessionRecordService;
 import com.interview.copilot.validation.history.SessionRecordPolicy;
 
@@ -22,11 +22,11 @@ import java.time.ZoneId;
 @Service
 public class SessionRecordServiceImpl implements SessionRecordService {
     private final SessionRecordMapper records;
-    private final WalletMapper users;
+    private final SessionGuardService users;
     private final ObjectMapper json;
 
     public SessionRecordServiceImpl(
-            SessionRecordMapper records, WalletMapper users, ObjectMapper json) {
+            SessionRecordMapper records, SessionGuardService users, ObjectMapper json) {
         this.records = records;
         this.users = users;
         this.json = json;

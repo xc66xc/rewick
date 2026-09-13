@@ -1,16 +1,20 @@
+import { randomUUID } from 'node:crypto'
+import { DesktopSessionMonitor } from './services/desktop-session-monitor'
+import { onSessionFault } from './services/session-fault'
 import { PaymentClient } from './services/payment-client'
 import { InterviewTimer } from './services/interview-timer'
 import { AccountWorkspaces } from './services/account-workspace'
 import { platformBaseUrl } from '../shared/defaults'
-import { app, BrowserWindow, Menu, dialog, globalShortcut, ipcMain, safeStorage, session, systemPreferences, desktopCapturer } from 'electron'
+import { app, BrowserWindow, Menu, dialog, globalShortcut, ipcMain, safeStorage, session, powerMonitor, systemPreferences, desktopCapturer } from 'electron'
 import type { IpcMainInvokeEvent, Rectangle } from 'electron'
 import { basename, join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
+import { mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
 import { SettingsStore } from './services/settings-store'
 import type { ServiceSecrets } from './services/settings-store'
-import { PlatformService } from './services/platform-client'
+import { PlatformService, PlatformClient } from './services/platform-client'
 import { testCustomService } from './services/custom-service-test'
 import { customServiceSchema } from './services/custom-service-profiles'
 import { PlatformWork } from './services/platform-work'
@@ -26,7 +30,7 @@ import { DisplayCaptureService } from './services/display-capture'
 import { ReferenceService } from './services/reference-service'
 import { extractDocument } from './services/document-extractor'
 import { RemoteKnowledgeClient } from './services/remote-knowledge-client'
-import { answerRequestSchema, parseInput, referencePatchSchema, settingsInputSchema } from './services/validation'
+import { answerRequestSchema, parseInput, referencePatchSchema, settingsInputSchema, sessionRecordSchema } from './services/validation'
 import type { AppEvent, Settings, SettingsInput, SessionRecord, RetrievalContext } from '../shared/types'
 import { resolveInterviewSettings } from '../shared/interview-settings'
 
@@ -39,7 +43,15 @@ if (process.platform === 'darwin' && !app.isPackaged) {
 
 const directory = fileURLToPath(new URL('.', import.meta.url))
 if (process.env.COPILOT_USER_DATA) app.setPath('userData', process.env.COPILOT_USER_DATA)
+else if (!app.isPackaged) {
+  const developmentData = join(app.getPath('appData'), 'Interview Copilot Development')
+  mkdirSync(developmentData, { recursive: true })
+  app.setPath('userData', developmentData)
+}
 app.setName('Interview Copilot')
+const hasInstanceLock = app.requestSingleInstanceLock()
+if (!hasInstanceLock) app.exit(0)
+let pendingActivation = false
 let window: BrowserWindow | null = null
 let asr: AsrClient | null = null
 let llm: LlmClient | null = null
@@ -65,9 +77,7 @@ const secretStorage = {
 const authSettings = new SettingsStore(join(app.getPath('userData'), 'authentication-v3'), secretStorage)
 const platform = new PlatformService(authSettings)
 const accounts = new AccountWorkspaces(app.getPath('userData'), secretStorage, () => emit({ kind: 'documents-changed' }), () => authSettings.getConnectionSnapshot(), async token => {
-  await authSettings.clearPlatformSession(token)
-  await syncAccount()
-  emit({ kind: 'settings-changed' })
+  await accounts.context.exit(() => finishInvalidSession(token, '登录已失效，请重新登录。', true))
 })
 const interviewTimer = new InterviewTimer(wallet => emit({ kind: 'wallet-changed', wallet }), () => disposeWork())
 async function walletConnection() {
@@ -189,7 +199,7 @@ function scopedStore<K extends 'history' | 'interviews' | 'references'>(kind: K)
 const references = scopedStore('references')
 const interviews = scopedStore('interviews')
 async function effectiveSettings() {
-  const value = await settings.getSettings()
+  const value = { ...await settings.getSettings(), sessionNotice }
   return interviewTimer.active && interviewTimer.background ? { ...value, ...interviewTimer.background } : accounts.active ? interviews.resolve(value) : value
 }
 function assertInterviewIdle() {
@@ -233,6 +243,51 @@ function disposeWork(): void {
   cancelAnswerWork()
 }
 
+let sessionNotice = ''
+let pendingSignOut: { nonce: string; owner: typeof accounts.active; finish: () => void } | undefined
+let signOut: Promise<void> | undefined
+const sessionMonitor = new DesktopSessionMonitor({
+  connection: async () => {
+    const snapshot = await authSettings.getConnectionSnapshot()
+    return snapshot.settings.platform?.authenticated && snapshot.secrets.platformAccessToken
+      ? { baseUrl: snapshot.settings.platform.baseUrl, token: snapshot.secrets.platformAccessToken } : null
+  },
+  check: connection => new PlatformClient(connection.baseUrl).session(connection.token),
+  invalidated: (token, message) => finishInvalidSession(token, message, true),
+  paused: token => finishInvalidSession(token, '暂时无法确认登录状态，面试操作已停止。请检查网络，恢复后重新开始面试。', false),
+  restored: () => { sessionNotice = ''; accounts.active?.history.start(); emit({ kind: 'session-restored' }) }
+})
+const unsubscribeSessionFault = onSessionFault((token, error) => {
+  accounts.context.exit(() => { void finishInvalidSession(token, error.message, true).catch(() => console.error('无法完成登录会话清理')) })
+})
+async function finishInvalidSession(token: string, message: string, revoke: boolean): Promise<void> {
+  if (signOut) { await signOut; if (revoke) return finishInvalidSession(token, message, revoke); return }
+  const snapshot = await authSettings.getConnectionSnapshot()
+  if (snapshot.secrets.platformAccessToken !== token) return
+  if (signOut) { await signOut; return finishInvalidSession(token, message, revoke) }
+  const operation = async () => {
+    const owner = accounts.active
+    owner?.history.dispose()
+    platformWork.invalidate()
+    interviewTimer.invalidate()
+    disposeWork()
+    const nonce = randomUUID()
+    await new Promise<void>(resolve => {
+      const timer = setTimeout(resolve, 3000)
+      pendingSignOut = { nonce, owner, finish: () => { clearTimeout(timer); resolve() } }
+      emit({ kind: 'session-stopping', nonce })
+    })
+    pendingSignOut = undefined
+    if ((await authSettings.getConnectionSnapshot()).secrets.platformAccessToken !== token) return
+    sessionNotice = message
+    if (revoke) { await authSettings.clearPlatformSession(token); await syncAccount() }
+    emit({ kind: revoke ? 'session-ended' : 'session-paused', message })
+    emit({ kind: 'settings-changed' })
+  }
+  signOut = operation()
+  try { await signOut } finally { signOut = undefined }
+}
+
 function assertSender(event: IpcMainInvokeEvent): void {
   if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) throw new Error('不允许的应用请求')
 }
@@ -245,12 +300,22 @@ function registerHandlers(): void {
       const { payload: arg, accountScope } = parseInput(z.object({ payload: z.unknown().optional(), accountScope: z.string().optional() }), envelope)
       const dispatch = channel === 'answer:generate' || channel === 'answer:cancel' ? ++answerDispatchEpoch : answerDispatchEpoch
       const asrDispatch = asrEpoch
+      if (channel === 'session:stage') {
+        const input = parseInput(z.object({ nonce: z.string().uuid(), record: sessionRecordSchema.nullable() }), arg)
+        const pending = pendingSignOut
+        if (!pending || pending.nonce !== input.nonce || accountScope !== pending.owner?.id) throw new Error('退出会话已变化。')
+        if (input.record && pending.owner) await pending.owner.history.saveDraft(input.record)
+        pending.finish()
+        return
+      }
+      if (pendingSignOut && !['asr:stop','answer:cancel','settings:get','platform:remembered-login'].includes(channel)) throw new Error('正在结束旧登录会话，请稍后重试。')
       const owner = await syncAccount()
       if (accountScope && owner?.id !== accountScope && !channel.startsWith('platform:') && channel !== 'settings:get') throw new Error('账户已切换，旧操作已取消。')
       if (!publicChannels.has(channel) && (!owner || accountScope !== owner.id)) {
         disposeWork(); emit({ kind: 'settings-changed' })
         throw new Error('请先使用邮箱注册或登录。')
       }
+      if (!publicChannels.has(channel) && channel !== 'history:save') sessionMonitor.assertVerified((await authSettings.getSecrets()).platformAccessToken)
       if (channel === 'answer:generate' && dispatch !== answerDispatchEpoch) {
         const request = parseInput(answerRequestSchema, arg)
         emit({ kind: 'answer-done', requestId: request.requestId, cancelled: true })
@@ -271,6 +336,7 @@ function registerHandlers(): void {
     try { return await operation(new PaymentClient(connection, controller.signal)) }
     finally { release() }
   }
+  handle('session:stage', () => undefined)
   handle('payments:catalog', () => paymentRequest(client => client.catalog()))
   handle('payments:list', () => paymentRequest(client => client.orders()))
   handle('payments:create', input => paymentRequest(client => client.create(input)))
@@ -287,13 +353,13 @@ function registerHandlers(): void {
   handle('settings:get', async () => { await accounts.active?.preferences.load(true); return effectiveSettings() })
   handle('platform:remembered-login', () => authSettings.getRememberedLogin())
   handle('platform:login', input => {
-    return mutatePlatform(async () => { disposeWork(); await platform.login(input); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings() })
+    return mutatePlatform(async () => { disposeWork(); await platform.login(input); sessionNotice = ''; await sessionMonitor.ensureVerified(); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings() })
   })
   handle('platform:email-code', input => platform.emailCode(input))
   handle('platform:password-reset-code', input => platform.passwordResetCode(input))
   handle('platform:password-reset', input => platform.resetPassword(input))
   handle('platform:register', input => mutatePlatform(async () => {
-    disposeWork(); await platform.register(input); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings()
+    disposeWork(); await platform.register(input); sessionNotice = ''; await sessionMonitor.ensureVerified(); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings()
   }))
   handle('platform:logout', () => {
     return mutatePlatform(async () => { await interviewTimer.end().catch(() => undefined); disposeWork(); await platform.logout(); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings() })
@@ -302,7 +368,7 @@ function registerHandlers(): void {
     const controller = new AbortController()
     const release = platformWork.track(platformWork.revision, () => controller.abort(new Error('平台连接已更改，状态刷新已取消。')))
     return platformMutations.run(async () => {
-      try { await platform.refresh(controller.signal); await syncAccount(); await accounts.active?.preferences.load(true); return await effectiveSettings() }
+      try { await platform.refresh(controller.signal); await sessionMonitor.ensureVerified(); await syncAccount(); await accounts.active?.preferences.load(true); return await effectiveSettings() }
       finally {
         release()
         if (!(await settings.getSettings()).platform?.authenticated) disposeWork()
@@ -539,14 +605,13 @@ async function createWindow(): Promise<void> {
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', event => event.preventDefault())
   window.on('closed', () => { interviewTimer.dispose(); disposeWork(); window = null; compact = false; fullBounds = null; fullMaximized = false; fullFullScreen = false })
-  window.once('ready-to-show', () => window?.show())
+  window.once('ready-to-show', () => { window?.show(); if (pendingActivation) { window?.focus(); pendingActivation = false } })
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) await window.loadURL(process.env.ELECTRON_RENDERER_URL)
   else await window.loadFile(join(directory, '../renderer/index.html'))
 }
 
-const hasInstanceLock = app.requestSingleInstanceLock()
-if (!hasInstanceLock) app.quit()
 app.on('second-instance', () => {
+  pendingActivation = true
   if (window?.isMinimized()) window.restore()
   window?.show()
   window?.focus()
@@ -577,9 +642,12 @@ if (hasInstanceLock) app.whenReady().then(async () => {
   await syncAccount()
   registerHandlers()
   await createWindow()
+  sessionMonitor.start()
+  powerMonitor.on('resume', () => { void sessionMonitor.check().catch(() => console.error('无法读取登录状态')) })
+  window?.on('focus', () => { void sessionMonitor.check().catch(() => console.error('无法读取登录状态')) })
   globalShortcut.register('CommandOrControl+Shift+Enter', () => emit({ kind: 'shortcut', action: 'answer' }))
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) void createWindow() })
 }).catch(error => { dialog.showErrorBox('启动失败', error instanceof Error ? error.message : '无法启动应用'); app.quit() })
 
-app.on('before-quit', () => { interviewTimer.dispose(); disposeWork(); accounts.dispose(); globalShortcut.unregisterAll() })
+app.on('before-quit', () => { sessionMonitor.dispose(); unsubscribeSessionFault(); interviewTimer.dispose(); disposeWork(); accounts.dispose(); globalShortcut.unregisterAll() })
 app.on('window-all-closed', () => app.quit())

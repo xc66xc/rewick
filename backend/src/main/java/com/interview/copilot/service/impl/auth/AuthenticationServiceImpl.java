@@ -7,6 +7,7 @@ import com.interview.copilot.service.auth.AuthenticationService;
 import com.interview.copilot.service.wallet.WalletService;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthenticationServiceImpl implements AuthenticationService {
@@ -21,13 +22,17 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         this.wallets = wallets;
     }
 
-    public LoginResponse login(String address, String identifier, String password) {
+    public LoginResponse login(
+            String address, String identifier, String password, String clientType) {
         limiter.acquire(address, identifier);
-        return auth.login(identifier, password);
+        return auth.login(identifier, password, clientType);
     }
 
+    @Transactional
     public void logout(String token) {
-        auth.authenticate(token).ifPresent(user -> wallets.endCurrent(user.id()));
+        auth.authenticate(token)
+                .filter(user -> "desktop".equals(user.clientType()))
+                .ifPresent(user -> wallets.endCurrent(user.id()));
         auth.logout(token);
     }
 }

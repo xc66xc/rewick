@@ -4,6 +4,7 @@ import com.interview.copilot.converter.references.ReferenceDocumentConverter;
 import com.interview.copilot.exception.references.ReferenceErrors;
 import com.interview.copilot.mapper.references.ReferenceMapper;
 import com.interview.copilot.response.references.ReferenceDocumentResponse;
+import com.interview.copilot.service.auth.SessionGuardService;
 import com.interview.copilot.service.references.ReferenceStorageService;
 
 import org.springframework.stereotype.Service;
@@ -14,9 +15,11 @@ import java.util.List;
 @Service
 public class ReferenceStorageServiceImpl implements ReferenceStorageService {
     private final ReferenceMapper mapper;
+    private final SessionGuardService sessions;
 
-    public ReferenceStorageServiceImpl(ReferenceMapper mapper) {
+    public ReferenceStorageServiceImpl(ReferenceMapper mapper, SessionGuardService sessions) {
         this.mapper = mapper;
+        this.sessions = sessions;
     }
 
     public List<ReferenceDocumentResponse> list(long user) {
@@ -32,7 +35,7 @@ public class ReferenceStorageServiceImpl implements ReferenceStorageService {
     }
 
     public void lockUser(long user) {
-        if (mapper.lockUser(user) == null) {
+        if (sessions.lockUser(user) == null) {
             throw ReferenceErrors.missing();
         }
     }
@@ -58,8 +61,10 @@ public class ReferenceStorageServiceImpl implements ReferenceStorageService {
         mapper.enqueue(user, id, revision);
     }
 
+    @Transactional
     public void update(long user, String id, Boolean enabled, String kind) {
         require(user, id);
+        lockUser(user);
         mapper.update(user, id, enabled, kind);
     }
 

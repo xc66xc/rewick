@@ -10,7 +10,8 @@ public record InterviewSessionEntity(
         LocalDateTime expiresAt,
         LocalDateTime endedAt,
         long usedSeconds,
-        String endReason) {
+        String endReason,
+        Long authTokensId) {
     public InterviewSessionEntity update(
             LocalDateTime expiry, LocalDateTime end, long used, String reason) {
         return new InterviewSessionEntity(
@@ -21,6 +22,7 @@ public record InterviewSessionEntity(
                 expiry,
                 end,
                 used,
-                reason);
+                reason,
+                authTokensId);
     }
 }

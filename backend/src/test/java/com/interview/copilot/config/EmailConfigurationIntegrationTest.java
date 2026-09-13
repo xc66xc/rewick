@@ -264,7 +264,13 @@ public class EmailConfigurationIntegrationTest {
                         HttpMethod.POST,
                         "/api/v1/auth/login",
                         null,
-                        Map.of("identifier", username, "password", PASSWORD))
+                        Map.of(
+                                "identifier",
+                                username,
+                                "password",
+                                PASSWORD,
+                                "clientType",
+                                "desktop"))
                 .getBody()
                 .path("accessToken")
                 .asText();

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import com.interview.copilot.config.PlatformLimitsProperties;
 import com.interview.copilot.mapper.usage.UsageMapper;
+import com.interview.copilot.service.auth.SessionGuardService;
 import com.interview.copilot.service.wallet.WalletService;
 
 import org.junit.jupiter.params.ParameterizedTest;
@@ -35,7 +36,8 @@ public class UsageServiceTest {
                         mapper,
                         new PlatformLimitsProperties(60),
                         Clock.fixed(Instant.parse(instant), ZoneOffset.UTC),
-                        wallet);
+                        wallet,
+                        mock(SessionGuardService.class));
 
         service.start(1L, "question", "llm");
 

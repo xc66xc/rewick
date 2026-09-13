@@ -1,6 +1,7 @@
 package com.interview.copilot.security.auth;
 
 import com.interview.copilot.common.ApiErrorWriter;
+import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.service.auth.AuthService;
 
 import jakarta.servlet.FilterChain;
@@ -30,11 +31,25 @@ public class BearerTokenFilter extends OncePerRequestFilter {
         this.errors = errors;
     }
 
+    private boolean isPublicAuthentication(String uri) {
+        return List.of(
+                        "/api/v1/auth/login",
+                        "/api/v1/auth/register",
+                        "/api/v1/auth/email-code",
+                        "/api/v1/auth/password-reset",
+                        "/api/v1/auth/password-reset/email-code")
+                .contains(uri);
+    }
+
     @Override
     protected void doFilterInternal(
             HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+        if (isPublicAuthentication(request.getRequestURI())) {
+            chain.doFilter(request, response);
+            return;
+        }
         try {
             if (header != null && header.startsWith("Bearer ")) {
                 auth.authenticate(header.substring(7))
@@ -51,11 +66,24 @@ public class BearerTokenFilter extends OncePerRequestFilter {
                                                                                         + principal
                                                                                                 .role())))));
             }
+        } catch (ApiException error) {
+            errors.write(response, 401, error.code(), error.getMessage());
+            return;
         } catch (DataAccessException error) {
             LOGGER.error(
                     "Authentication storage unavailable; exceptionType={}",
                     error.getClass().getName());
             errors.write(response, 503, "authentication_unavailable", "登录服务暂时不可用。");
+            return;
+        }
+        var current = CurrentLogin.principal();
+        String uri = request.getRequestURI();
+        if (current != null
+                && "admin".equals(current.clientType())
+                && !uri.startsWith("/api/v1/admin/")
+                && !uri.equals("/api/v1/auth/logout")
+                && !uri.equals("/api/v1/auth/session")) {
+            errors.write(response, 403, "client_scope_invalid", "请使用桌面端登录后访问此服务。");
             return;
         }
         chain.doFilter(request, response);

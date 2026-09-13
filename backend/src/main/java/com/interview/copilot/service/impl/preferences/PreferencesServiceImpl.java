@@ -6,9 +6,9 @@ import com.interview.copilot.dto.preferences.UserPreferences;
 import com.interview.copilot.entity.preferences.PreferencesEntity;
 import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.mapper.preferences.PreferencesMapper;
-import com.interview.copilot.mapper.wallet.WalletMapper;
 import com.interview.copilot.model.platform.PlatformSnapshot;
 import com.interview.copilot.response.preferences.PreferencesResponse;
+import com.interview.copilot.service.auth.SessionGuardService;
 import com.interview.copilot.service.platform.PlatformRuntimeService;
 import com.interview.copilot.service.preferences.PreferencesService;
 
@@ -25,13 +25,13 @@ import java.util.UUID;
 @Transactional
 public class PreferencesServiceImpl implements PreferencesService {
     private final PreferencesMapper mapper;
-    private final WalletMapper users;
+    private final SessionGuardService users;
     private final ObjectMapper json;
     private final PlatformRuntimeService platform;
 
     public PreferencesServiceImpl(
             PreferencesMapper mapper,
-            WalletMapper users,
+            SessionGuardService users,
             ObjectMapper json,
             PlatformRuntimeService platform) {
         this.mapper = mapper;

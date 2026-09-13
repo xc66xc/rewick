@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,7 +26,13 @@ public class AuthController {
 
     @PostMapping("/login")
     public LoginResponse login(@Valid @RequestBody LoginRequest body, HttpServletRequest request) {
-        return service.login(request.getRemoteAddr(), body.identifier(), body.password());
+        return service.login(
+                request.getRemoteAddr(), body.identifier(), body.password(), body.clientType());
+    }
+
+    @GetMapping("/session")
+    public ResponseEntity<Void> session() {
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/logout")

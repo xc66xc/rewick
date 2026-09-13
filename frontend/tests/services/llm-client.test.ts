@@ -4,6 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { defaultSettings } from '../../src/shared/defaults'
 import type { AnswerRequest, AppEvent, RetrievalContext, Settings } from '../../src/shared/types'
 import { LlmClient } from '../../src/main/services/llm-client'
+import { onSessionFault } from '../../src/main/services/session-fault'
 
 let server: Server | undefined
 let client: LlmClient | undefined
@@ -33,6 +34,23 @@ afterEach(async () => {
 })
 
 describe('LlmClient', () => {
+  it('reports platform session replacement without treating custom-provider 401 as logout', async () => {
+    const settings = await serve((_req, res) => {
+      res.writeHead(401, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ code: 'session_replaced' }))
+    })
+    const observer = vi.fn()
+    const unsubscribe = onSessionFault(observer)
+    try {
+      client = new LlmClient(settings, 'desktop-token', () => undefined, true)
+      await expect(client.generate(request)).rejects.toThrow('其他设备')
+      expect(observer).toHaveBeenCalledWith('desktop-token', expect.any(Error))
+      observer.mockClear()
+      client = new LlmClient(settings, 'custom-provider-key', () => undefined)
+      await expect(client.generate(request)).rejects.toThrow()
+      expect(observer).not.toHaveBeenCalled()
+    } finally { unsubscribe() }
+  })
   it('handles fragmented UTF-8 SSE, excludes reasoning, and isolates question and context', async () => {
     let captured: unknown
     let capturedPath = ''

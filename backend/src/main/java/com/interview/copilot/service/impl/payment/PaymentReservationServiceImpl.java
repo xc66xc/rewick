@@ -5,8 +5,8 @@ import com.interview.copilot.entity.payment.PaymentOrderEntity;
 import com.interview.copilot.exception.payment.PaymentErrors;
 import com.interview.copilot.mapper.payment.PaymentOrderMapper;
 import com.interview.copilot.mapper.payment.TimePackageMapper;
-import com.interview.copilot.mapper.wallet.WalletMapper;
 import com.interview.copilot.response.payment.PaymentOrderResponse;
+import com.interview.copilot.service.auth.SessionGuardService;
 import com.interview.copilot.service.payment.PaymentProviderService;
 import com.interview.copilot.service.payment.PaymentReservationService;
 import com.interview.copilot.util.ServerTime;
@@ -21,14 +21,14 @@ import java.util.UUID;
 public class PaymentReservationServiceImpl implements PaymentReservationService {
     private final PaymentOrderMapper orders;
     private final TimePackageMapper packages;
-    private final WalletMapper wallets;
+    private final SessionGuardService wallets;
     private final PaymentProviderService configs;
     private final Clock clock;
 
     public PaymentReservationServiceImpl(
             PaymentOrderMapper orders,
             TimePackageMapper packages,
-            WalletMapper wallets,
+            SessionGuardService wallets,
             PaymentProviderService configs,
             Clock clock) {
         this.orders = orders;
@@ -45,8 +45,7 @@ public class PaymentReservationServiceImpl implements PaymentReservationService 
             long packageVersion,
             String requestId,
             String paymentMethod) {
-        if (wallets.lockUser(userId) == null || !wallets.enabled(userId))
-            throw PaymentErrors.missing();
+        if (wallets.lockUser(userId) == null) throw PaymentErrors.missing();
         var previous = orders.byRequest(userId, requestId);
         if (previous != null) {
             if (previous.packageId() != packageId

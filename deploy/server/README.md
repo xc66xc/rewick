@@ -60,3 +60,9 @@ Nginx 映射 `0.0.0.0:8080:80`，后端容器通过内部网络访问。宿主�
 后端容器设置 `TZ=Asia/Shanghai` 和 JVM 时区；连接池为每条数据库连接设置同一时区。数据库业务时间字段通过 `backend/sql/08_server_local_time.sql` 转为 `TIMESTAMP(6) WITHOUT TIME ZONE`，原数据使用 `AT TIME ZONE 'Asia/Shanghai'` 转换。脚本只设置当前业务库的默认时区，不修改同一个 PostgreSQL 实例的其他数据库。
 
 本次开发阶段按用户要求不做数据库备份：先停止后端，事务执行 08，再发布并启动新版后端。不要重复执行已完成的脚本。确认新连接 `SHOW timezone` 为 `Asia/Shanghai`，业务表不再含带时区时间字段，并验证登录与验证码有效期。历史每日额度日期不回算，新请求按北京时间日期计数。
+
+## 2026-09-13 发布状态
+
+已部署提交 `1057fdd` 的后端和最新管理端。远程 PostgreSQL 15.19 / pgvector 0.8.6 保持原版本；SQL 13、14、15 已按序执行，新表 CRUD 和新增序列使用权限已授予 `copilot_backend`。不要重复执行这些脚本。
+
+公网首页、健康检查、管理员登录及登录后的 `/api/v1/user-preferences`、`/api/v1/background`、`/api/v1/session-records` 均验证成功。部署目录保留 `releases/before-1057fdd` 旧产物与 `*:before-1057fdd` 镜像；供应商、邮件、支付配置和参考资料卷未变更。桌面端须使用最新代码或重新打包；旧桌面开始面试协议不再适用。

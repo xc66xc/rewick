@@ -12,6 +12,6 @@ export default function App({ bridge = window.copilot }: { bridge?: DesktopBridg
   return <ErrorBoundary><AppToastProvider>{auth.ready && bridge
     ? <Workbench key={auth.accountKey} bridge={bridge} config={config} onLogout={auth.logout} />
     : <LoginScreen settings={config.settings} bridge={bridge} checking={config.loading || auth.checking}
-      error={auth.error || config.error} onSave={config.save} onAuthenticated={auth.accept} onRetry={auth.retry} />}
+      error={auth.error || config.error || config.settings.sessionNotice || ''} onSave={config.save} onAuthenticated={auth.accept} onRetry={auth.retry} />}
   </AppToastProvider></ErrorBoundary>
 }

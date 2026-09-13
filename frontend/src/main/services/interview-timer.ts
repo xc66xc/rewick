@@ -69,6 +69,7 @@ export class InterviewTimer {
     this.changed(state)
     return state
   }
+  invalidate(): void { this.generation++; this.pendingEnd = null; this.startId = null; this.clear(); this.state = null; this.stopped() }
   dispose(): void { void this.end().catch(() => undefined) }
   private clear(): void { this.background = null; this.connection = null; this.deadline = 0; this.wallDeadline = 0; if (this.interval) clearInterval(this.interval); this.interval = undefined }
   private accept(state: WalletState, roundTripMs = 0): void {

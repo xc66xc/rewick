@@ -22,7 +22,8 @@ public final class ReferenceDatabase extends PostgreSQLContainer<ReferenceDataba
                     "07_email_code_purpose.sql",
                     "08_server_local_time.sql",
                     "09_pg_references.sql",
-                    "10_time_wallet.sql");
+                    "10_time_wallet.sql",
+                    "16_desktop_sessions.sql");
 
     public ReferenceDatabase() {
         super(

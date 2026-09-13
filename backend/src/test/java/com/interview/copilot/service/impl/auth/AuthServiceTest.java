@@ -19,16 +19,15 @@ import com.interview.copilot.mapper.auth.TokenMapper;
 import com.interview.copilot.mapper.user.UserMapper;
 import com.interview.copilot.security.auth.TokenSecrets;
 import com.interview.copilot.service.auth.AuthService;
+import com.interview.copilot.service.wallet.WalletService;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 
 public class AuthServiceTest {
     private final UserMapper users = mock(UserMapper.class);
@@ -39,24 +38,31 @@ public class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
+        when(tokens.now()).thenReturn(LocalDateTime.parse("2026-09-08T08:00:00"));
         service =
                 new AuthServiceImpl(
                         users,
                         tokens,
                         passwords,
-                        new AuthProperties(24, 10, 60, "", ""),
-                        Clock.fixed(now, ZoneOffset.UTC));
+                        new TokenIssuerServiceImpl(
+                                tokens,
+                                new AuthProperties(24, 10, 60, "", ""),
+                                mock(WalletService.class)));
     }
 
     @Test
     void login_validCredentials_storesOnlyHashWithExpiry() {
         when(users.findForLogin("alice")).thenReturn(user("alice", true));
 
-        var result = service.login("alice", "a-test-password");
+        var result = service.login("alice", "a-test-password", "desktop");
 
         ArgumentCaptor<String> stored = ArgumentCaptor.forClass(String.class);
         verify(tokens)
-                .create(eq(7L), stored.capture(), eq(LocalDateTime.parse("2026-09-09T08:00:00")));
+                .create(
+                        eq(7L),
+                        stored.capture(),
+                        eq(LocalDateTime.parse("2026-09-09T08:00:00")),
+                        eq("desktop"));
         assertThat(stored.getValue()).hasSize(64).isNotEqualTo(result.accessToken());
         assertThat(result.accessToken()).matches("[A-Za-z0-9_-]{43}");
         assertThat(result.user().id()).isEqualTo("7");
@@ -68,24 +74,24 @@ public class AuthServiceTest {
     void login_wrongPassword_doesNotIssueToken() {
         when(users.findForLogin("alice")).thenReturn(user("alice", true));
 
-        assertThatThrownBy(() -> service.login("alice", "wrong-password"))
+        assertThatThrownBy(() -> service.login("alice", "wrong-password", "desktop"))
                 .isInstanceOf(ApiException.class)
                 .hasMessage("登录账号或密码不正确。");
-        verify(tokens, never()).create(anyLong(), anyString(), any());
+        verify(tokens, never()).create(anyLong(), anyString(), any(), anyString());
     }
 
     @Test
     void login_disabledUser_rejectsCorrectPassword() {
         when(users.findForLogin("alice")).thenReturn(user("alice", false));
 
-        assertThatThrownBy(() -> service.login("alice", "a-test-password"))
+        assertThatThrownBy(() -> service.login("alice", "a-test-password", "desktop"))
                 .isInstanceOf(ApiException.class);
-        verify(tokens, never()).create(anyLong(), anyString(), any());
+        verify(tokens, never()).create(anyLong(), anyString(), any(), anyString());
     }
 
     @Test
     void login_missingUser_usesSameSafeError() {
-        assertThatThrownBy(() -> service.login("missing", "a-test-password"))
+        assertThatThrownBy(() -> service.login("missing", "a-test-password", "desktop"))
                 .isInstanceOf(ApiException.class)
                 .hasMessage("登录账号或密码不正确。");
     }
@@ -93,14 +99,25 @@ public class AuthServiceTest {
     @Test
     void authenticate_malformedToken_doesNotQueryStorage() {
         assertThat(service.authenticate("not-an-opaque-token")).isEmpty();
-        verify(tokens, never()).authenticate(any(), any());
+        verify(tokens, never()).authenticate(any());
     }
 
     @Test
     void authenticate_validToken_preservesIdentityAndRoleInSecurityPrincipal() {
         String token = TokenSecrets.create();
-        when(tokens.authenticate(TokenSecrets.hash(token), LocalDateTime.parse("2026-09-08T08:00:00")))
-                .thenReturn(new AuthenticatedUserEntity(7L, "Alice", "ADMIN", "alice@example.test"));
+        when(tokens.authenticate(TokenSecrets.hash(token)))
+                .thenReturn(
+                        new AuthenticatedUserEntity(
+                                7L,
+                                "Alice",
+                                "ADMIN",
+                                "alice@example.test",
+                                9L,
+                                "desktop",
+                                false,
+                                "",
+                                true,
+                                LocalDateTime.parse("2026-09-09T08:00:00")));
 
         var principal = service.authenticate(token).orElseThrow();
 

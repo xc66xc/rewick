@@ -43,7 +43,7 @@ function setup(initial = structuredClone(defaultSettings), strict = false, remem
   } as unknown as DesktopBridge
   const mount = () => render(strict ? <StrictMode><App bridge={bridge} /></StrictMode> : <App bridge={bridge} />)
   function change(settings: Settings) { current = settings; act(() => { for (const listener of listeners) listener({ kind: 'settings-changed' }) }) }
-  return { mount, bridge, change, getHistory, getSettings, saveSettings, platformLogin, platformLogout, platformRegister, refreshPlatform, requestEmailCode, requestPasswordResetCode, resetPassword, stopAsr, cancelAnswer, nativeWindow, user: userEvent.setup() }
+  return { notify: (event: AppEvent) => act(() => { for (const listener of listeners) listener(event) }), mount, bridge, change, getHistory, getSettings, saveSettings, platformLogin, platformLogout, platformRegister, refreshPlatform, requestEmailCode, requestPasswordResetCode, resetPassword, stopAsr, cancelAnswer, nativeWindow, user: userEvent.setup() }
 }
 afterEach(() => { cleanup(); vi.useRealTimers() })
 async function login(user: ReturnType<typeof userEvent.setup>) {
@@ -150,7 +150,7 @@ describe('desktop account gate', () => {
     expect(await screen.findByRole('heading', { name: '登录面试工作台' })).toBeTruthy()
     await waitFor(() => expect(platformLogout).toHaveBeenCalledOnce())
   })
-  it('refreshes periodically without dropping the workbench on a transient network error', async () => {
+  it('leaves periodic verification to the main process without duplicating catalog requests', async () => {
     const { mount, refreshPlatform } = setup(account())
     vi.useFakeTimers()
     mount()
@@ -158,7 +158,7 @@ describe('desktop account gate', () => {
     expect(screen.getByRole('heading', { name: '准备面试' })).toBeTruthy()
     refreshPlatform.mockRejectedValueOnce(new Error('temporary network failure'))
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000) })
-    expect(refreshPlatform).toHaveBeenCalledTimes(2)
+    expect(refreshPlatform).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('heading', { name: '准备面试' })).toBeTruthy()
   })
   it('sends an email verification code with a retry countdown, then registers without storing password/code in settings', async () => {
@@ -224,4 +224,17 @@ describe('desktop account gate', () => {
     expect(getHistory).not.toHaveBeenCalled()
   })
 
+})
+
+it('shows replacement without silently logging back in using remembered credentials', async () => {
+  const saved = { identifier: 'remember@example.test', password: 'remember-password' }
+  const f = setup(account(), false, saved)
+  f.mount()
+  await screen.findByRole('heading', { name: '准备面试' })
+  f.notify({ kind: 'session-ended', message: '你的账号已在其他设备登录，本机已退出。' })
+  await screen.findByRole('heading', { name: '登录面试工作台' })
+  expect(screen.getByText('你的账号已在其他设备登录，本机已退出。')).toBeTruthy()
+  await waitFor(() => expect((screen.getByLabelText('密码', { exact: true }) as HTMLInputElement).value).toBe(saved.password))
+  expect(f.platformLogin).not.toHaveBeenCalled()
+  expect(f.platformLogout).not.toHaveBeenCalled()
 })

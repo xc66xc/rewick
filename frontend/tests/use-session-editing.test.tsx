@@ -90,6 +90,7 @@ function setup(fakeTimers = false) {
     setAlwaysOnTop: vi.fn(async (value: boolean) => value),
     setCompact: vi.fn(async () => undefined),
     getHistory: vi.fn(async () => structuredClone(records)),
+    stageSessionForLogout: vi.fn(async () => undefined),
     saveSession: vi.fn(async (record: SessionRecord) => {
       records = [structuredClone(record), ...records.filter(item => item.id !== record.id)]
     }),
@@ -744,5 +745,19 @@ describe('final session snapshot on authentication gate unmount', () => {
     await act(async () => { rejectRequest(new Error('退出后返回的过期网络错误')); await pending })
     expect(bridge.saveSession).toHaveBeenCalledTimes(writes)
     expect((await bridge.getHistory())[0].answers[1].status).toBe('cancelled')
+  })
+})
+
+describe('forced sign-out draft handshake', () => {
+  it('stages the latest interrupted answer locally before the workbench is unmounted', async () => {
+    const { result, bridge, run, emit } = setup()
+    await run(() => result.current.setQuestion('如何处理并发登录？'))
+    await run(() => result.current.generate())
+    const requestId = result.current.record.answers[0].id
+    await emit({ kind: 'answer-delta', requestId, delta: '可以使用数据库事务' })
+    await emit({ kind: 'session-stopping', nonce: 'shutdown-nonce' })
+    await waitFor(() => expect(bridge.stageSessionForLogout).toHaveBeenCalledWith('shutdown-nonce', expect.objectContaining({
+      answers: expect.arrayContaining([expect.objectContaining({ text: '可以使用数据库事务', status: 'cancelled' })])
+    })))
   })
 })

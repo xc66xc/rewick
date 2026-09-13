@@ -1,3 +1,4 @@
+import { sessionFault } from './session-fault'
 import { randomUUID } from 'node:crypto'
 import type { EnvironmentInput, InterviewLibrary, ResumeInput, Settings, TargetInput } from '../../shared/types'
 import { resolveInterviewSettings } from '../../shared/interview-settings'
@@ -52,6 +53,7 @@ export class InterviewStore {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     })
+    if (response.status === 401) throw await sessionFault(response, token)
     const reader = response.body?.getReader()
     const chunks: Uint8Array[] = []
     let size = 0

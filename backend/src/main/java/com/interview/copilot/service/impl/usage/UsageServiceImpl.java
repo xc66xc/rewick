@@ -4,6 +4,7 @@ import com.interview.copilot.common.usage.UsageLease;
 import com.interview.copilot.config.PlatformLimitsProperties;
 import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.mapper.usage.UsageMapper;
+import com.interview.copilot.service.auth.SessionGuardService;
 import com.interview.copilot.service.usage.UsageService;
 import com.interview.copilot.service.wallet.WalletService;
 import com.interview.copilot.util.ServerTime;
@@ -23,16 +24,27 @@ public class UsageServiceImpl implements UsageService {
     private final PlatformLimitsProperties limits;
     private final Clock clock;
     private final WalletService wallets;
+    private final SessionGuardService sessions;
 
     public UsageServiceImpl(
             UsageMapper mapper,
             PlatformLimitsProperties limits,
             Clock clock,
-            WalletService wallets) {
+            WalletService wallets,
+            SessionGuardService sessions) {
         this.mapper = mapper;
         this.limits = limits;
         this.clock = clock;
         this.wallets = wallets;
+        this.sessions = sessions;
+    }
+
+    @Transactional
+    public UsageLease startForSession(
+            long userId, String requestId, String capability, long tokenId) {
+        sessions.lockUser(userId);
+        sessions.requireSession(userId, tokenId);
+        return start(userId, requestId, capability);
     }
 
     @Transactional

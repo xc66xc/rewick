@@ -87,7 +87,7 @@ public final class AsrBridge {
         Map<String, Object> request = AsrProtocol.run(frame, upstreamId, config.getModel());
         clientId = taskId;
         String requestId = requestId();
-        lease = resources.usage().start(user.id(), requestId, "asr");
+        lease = resources.usage().startForSession(user.id(), requestId, "asr", user.tokenId());
         lease.watch(() -> close("cancel"));
         resources.usage().describeModel(user.id(), requestId, "asr", config.getModel());
         if (ended.get()) {

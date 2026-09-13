@@ -265,7 +265,17 @@ public class EmailPasswordResetIntegrationTest {
                 .isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(jdbc.queryForObject("SELECT status FROM email_verifications", String.class))
                 .isEqualTo("ready");
-        assertThat(login(OLD).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(
+                        passwords.matches(
+                                OLD,
+                                jdbc.queryForObject(
+                                        "SELECT password_hash FROM app_users", String.class)))
+                .isTrue();
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT count(*) FROM auth_tokens WHERE NOT is_revoked",
+                                Long.class))
+                .isEqualTo(1L);
     }
 
     @Test
@@ -304,7 +314,9 @@ public class EmailPasswordResetIntegrationTest {
     }
 
     private ResponseEntity<JsonNode> login(String password) {
-        return post("/login", Map.of("identifier", EMAIL, "password", password));
+        return post(
+                "/login",
+                Map.of("identifier", EMAIL, "password", password, "clientType", "desktop"));
     }
 
     private ResponseEntity<JsonNode> post(String path, Object body) {

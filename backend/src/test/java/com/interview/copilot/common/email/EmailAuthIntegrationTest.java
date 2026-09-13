@@ -116,7 +116,11 @@ public class EmailAuthIntegrationTest {
                                 .path("email")
                                 .asText())
                 .isEqualTo(EMAIL);
-        assertThat(login(" ALICE@EXAMPLE.COM ", PASSWORD).getStatusCode()).isEqualTo(HttpStatus.OK);
+        var relogin = login(" ALICE@EXAMPLE.COM ", PASSWORD);
+        assertThat(relogin.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(call(HttpMethod.GET, "/api/v1/platform", token, null).getStatusCode())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        token = relogin.getBody().path("accessToken").asText();
         assertThat(jdbc.queryForObject("SELECT code_digest FROM email_verifications", String.class))
                 .isEmpty();
         assertThat(call(HttpMethod.POST, "/api/v1/auth/logout", token, null).getStatusCode())
@@ -309,7 +313,7 @@ public class EmailAuthIntegrationTest {
                 HttpMethod.POST,
                 "/api/v1/auth/login",
                 null,
-                Map.of("identifier", displayName, "password", password));
+                Map.of("identifier", displayName, "password", password, "clientType", "desktop"));
     }
 
     private ResponseEntity<JsonNode> call(

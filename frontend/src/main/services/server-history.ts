@@ -1,3 +1,4 @@
+import { sessionFault } from './session-fault'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
@@ -32,6 +33,7 @@ export class ServerHistory {
       ...(body === undefined ? {} : { body: JSON.stringify(body) })
     })
     if (!response.ok) {
+      if (response.status === 401) throw await sessionFault(response, snapshot.secrets.platformAccessToken)
       await response.body?.cancel()
       if (response.status === 409 || response.status === 410) throw new Error('记录已变更或删除，待上传草稿已保留，不能覆盖服务器记录。')
       throw new Error(`会话服务请求失败（${response.status}），待上传内容保留在本机。`)
@@ -59,6 +61,10 @@ export class ServerHistory {
   async list(): Promise<SessionRecord[]> { return (await this.page()).records }
   async detail(id: string): Promise<SessionRecord> { return responseSchema.parse(await this.request(`/${encodeURIComponent(id)}`)).record }
   async save(record: SessionRecord): Promise<void> {
+    await this.saveDraft(record)
+    void this.flush().catch(() => undefined)
+  }
+  async saveDraft(record: SessionRecord): Promise<void> {
     await this.queue.run(async () => {
       const value = parseInput(sessionRecordSchema, record)
       if (Buffer.byteLength(JSON.stringify(value)) > 4 * 1048576) throw new Error('单次会话超过 4 MiB，请新建会话。')
@@ -69,7 +75,6 @@ export class ServerHistory {
       await this.write(journal)
       this.state = '待同步'
     })
-    void this.flush().catch(() => undefined)
   }
   async remove(id: string): Promise<void> {
     await this.request(`/${encodeURIComponent(id)}/delete`, {})
