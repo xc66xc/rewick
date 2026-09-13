@@ -191,3 +191,9 @@ node scripts/check-packaged-debugging.mjs '../dist/debug-hardened/mac-arm64/Inte
 ```
 
 脚本使用独立临时账户目录，检查调试参数拒绝、正常启动、环境变量注入与 Inspector 信号。macOS 在 Inspector 信号处理被禁用后可能按默认行为通过 `SIGUSR1` 终止进程；这不代表开启调试。本限制是客户端加固，不替代服务端鉴权，也不保证阻止设备所有者修改应用。签名/ASAR 完整性加固及实际系统音频回归不包含在此项验证中。
+
+### TLS 连接重置修复（2026-09-14）
+
+同一 Electron 运行时中，HTTPS Agent 启用 TLS 会话缓存时首次连接成功，后续连接出现 `ECONNRESET`；禁用缓存后连续连接成功。主进程通过 Undici 配置 `connect.maxCachedSessions: 0`，WSS 使用同样禁用会话缓存的 HTTPS Agent。新连接执行完整 TLS 握手，已有 HTTP keep-alive 连接仍可复用；保留 HTTPS/WSS、证书校验、请求超时及禁止重定向，不添加 HTTP 回退或自动重试。代价是重新建立 TLS 连接时增加握手开销。
+
+服务器关闭会话缓存的对照实验未解决问题，已恢复原 Nginx 配置。客户端修复后 HTTPS 平台接口和 WSS 握手连续三轮均到达服务端并返回预期的未认证 401；这证明传输连通，不等于实际音频转写验收。需要重启开发主进程或重新打包，旧进程不会应用新连接器配置。

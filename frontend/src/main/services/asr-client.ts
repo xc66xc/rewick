@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
+import { websocketHttpsAgent } from './network-transport'
 import { z } from 'zod'
 import type { AppEvent, Settings } from '../../shared/types'
 import { asrSettingsSchema, isLoopback, parseInput } from './validation'
@@ -40,6 +41,7 @@ export class AsrClient {
     if (!this.apiKey.trim() && !isLoopback(new URL(config.url).hostname)) throw new Error('请先在设置中填写阿里云语音转写 API Key。')
     this.dispose()
     const socket = new WebSocket(config.url, {
+      agent: new URL(config.url).protocol === 'wss:' ? websocketHttpsAgent : undefined,
       headers: this.apiKey.trim() ? { Authorization: `Bearer ${this.apiKey.trim()}` } : {},
       handshakeTimeout: 15_000, maxPayload: 1_048_576, followRedirects: false,
     })

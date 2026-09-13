@@ -35,8 +35,10 @@ import { answerRequestSchema, parseInput, referencePatchSchema, settingsInputSch
 import type { AppEvent, Settings, SettingsInput, SessionRecord, RetrievalContext } from '../shared/types'
 import { resolveInterviewSettings } from '../shared/interview-settings'
 import { enforcePackagedStartup } from './services/startup-security'
+import { initializeNetworkTransport } from './services/network-transport'
 
 enforcePackagedStartup(app, process.argv)
+initializeNetworkTransport()
 
 // IDE/terminal parents may lack NSAudioCaptureUsageDescription required by CoreAudio Tap.
 // Use Electron's documented screen-recording capture path during macOS development.
