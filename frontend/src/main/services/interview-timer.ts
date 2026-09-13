@@ -85,7 +85,10 @@ export class InterviewTimer {
       const previous = this.state
       this.clear(); this.stopped()
       if (previous?.session) {
-        const elapsed = Math.min(previous.availableSeconds, Math.max(0, Math.floor((Date.parse(previous.session.expiresAt) - Date.parse(previous.serverTime)) / 1000)))
+        // Match server settlement: cumulative whole seconds minus already charged seconds.
+        // Rounding the time since the last snapshot loses its fractional second.
+        const totalSeconds = Math.floor((Date.parse(previous.session.expiresAt) - Date.parse(previous.session.startedAt)) / 1000)
+        const elapsed = Math.min(previous.availableSeconds, Math.max(0, totalSeconds - previous.session.usedSeconds))
         this.state = { ...previous, availableSeconds: previous.availableSeconds - elapsed, session: { ...previous.session, usedSeconds: previous.session.usedSeconds + elapsed, endedAt: previous.session.expiresAt, status: 'ended', endReason: 'connection_expired' } }
         this.changed(this.state)
       }

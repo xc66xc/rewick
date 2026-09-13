@@ -11,6 +11,26 @@ function state(status: 'active' | 'ended' = 'active'): WalletState {
 beforeEach(() => vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'Date', 'performance'] }))
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
 describe('interview metering lease', () => {
+  it.each([
+    { balance: 1, leaseSeconds: 13, expectedBalance: 0, expectedUsed: 13 },
+    { balance: 108, leaseSeconds: 42, expectedBalance: 78, expectedUsed: 42 },
+  ])('settles fractional snapshot time without leaving a phantom second: $balance', async ({ balance, leaseSeconds, expectedBalance, expectedUsed }) => {
+    const startedAt = new Date(Date.now() - 12250).toISOString()
+    const snapshot = state()
+    snapshot.availableSeconds = balance
+    if (!snapshot.session) throw new Error('Missing test session')
+    snapshot.session.startedAt = startedAt
+    snapshot.session.usedSeconds = 12
+    snapshot.session.expiresAt = new Date(Date.parse(startedAt) + leaseSeconds * 1000).toISOString()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(Response.json(snapshot)).mockRejectedValue(new Error('offline')))
+    const changed = vi.fn()
+    const timer = new InterviewTimer(changed, vi.fn())
+    await timer.start(connection, requestId, 'environment')
+    await vi.advanceTimersByTimeAsync(31000)
+    expect(timer.active).toBe(false)
+    expect(changed.mock.calls.at(-1)?.[0]).toMatchObject({ availableSeconds: expectedBalance,
+      session: { status: 'ended', usedSeconds: expectedUsed } })
+  })
   it('does not permit model use before start and a repeated accepted start is idempotent', async () => {
     const fetcher = vi.fn(async () => Response.json(state())); vi.stubGlobal('fetch', fetcher)
     const timer = new InterviewTimer(vi.fn(), vi.fn())
