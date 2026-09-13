@@ -5,8 +5,8 @@ import { AppSelect } from './ui/select'
 import { TextField } from './ui/field'
 import { fieldClass, fieldRowClass, formNoteClass } from '../lib/form'
 
-interface ServicePreferencesProps { kind: ServiceKind; draft: SettingsInput; onChange: (draft: SettingsInput) => void }
-export default function ServicePreferences({ kind, draft, onChange }: ServicePreferencesProps) {
+interface ServicePreferencesProps { advanced?: boolean; kind: ServiceKind; draft: SettingsInput; onChange: (draft: SettingsInput) => void }
+export default function ServicePreferences({ advanced = false, kind, draft, onChange }: ServicePreferencesProps) {
   const styleId = useId()
   const temperatureId = useId()
   const silenceId = useId()
@@ -15,7 +15,7 @@ export default function ServicePreferences({ kind, draft, onChange }: ServicePre
     <label className={fieldClass} htmlFor={styleId}>回答风格<AppSelect id={styleId} value={draft.answerStyle}
       options={[{ value: 'concise', label: '简短口语' }, { value: 'detailed', label: '展开口语' }]}
       onValueChange={value => onChange({ ...draft, answerStyle: value as SettingsInput['answerStyle'] })} /></label>
-    <label className={fieldClass} htmlFor={temperatureId}>生成温度<TextField id={temperatureId} type="number" min={0} max={2} step={0.1} required value={draft.llm.temperature} onChange={event => onChange({ ...draft, llm: { ...draft.llm, temperature: Number(event.target.value) } })} /></label>
+    {advanced && <label className={fieldClass} htmlFor={temperatureId}>生成温度<TextField id={temperatureId} type="number" min={0} max={2} step={0.1} required value={draft.llm.temperature} onChange={event => onChange({ ...draft, llm: { ...draft.llm, temperature: Number(event.target.value) } })} /></label>}
   </div>
   if (kind === 'asr') return <>
     <div className={fieldRowClass}><label className={fieldClass} htmlFor={silenceId}>句末静音（毫秒）<TextField id={silenceId} type="number" min={200} max={6000} step={100} required value={draft.asr.silenceMs} onChange={event => onChange({ ...draft, asr: { ...draft.asr, silenceMs: Number(event.target.value) } })} /></label>

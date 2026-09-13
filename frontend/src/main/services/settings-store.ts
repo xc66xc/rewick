@@ -233,7 +233,7 @@ export class SettingsStore {
     const info = authenticated ? value.platformSession?.info : undefined
     let result: Settings = {
       customServices: value.customServices.map(profileView), serviceSelections: value.settings.serviceSelections,
-      platform: { ...value.settings.platform, authenticated, user: info?.user, expiresAt: value.platformSession?.expiresAt, capabilities: info?.capabilities ?? { llm: false, asr: false, knowledge: false }, models: info?.models ?? { llm: '', asr: '' }, services: info?.services, limits: info?.limits },
+      platform: { ...value.settings.platform, authenticated, advancedSettingsEnabled: info?.advancedSettingsEnabled ?? false, desktopDefaults: info?.desktopDefaults, user: info?.user, expiresAt: value.platformSession?.expiresAt, capabilities: info?.capabilities ?? { llm: false, asr: false, knowledge: false }, models: info?.models ?? { llm: '', asr: '' }, services: info?.services, limits: info?.limits },
       asr: { url: asr.url, model: asr.model, silenceMs: asr.silenceMs, hasApiKey: Boolean(value.secrets.asr) },
       llm: { baseUrl: llm.baseUrl, model: llm.model, temperature: llm.temperature, hasApiKey: Boolean(value.secrets.llm) },
       remoteKnowledge: { ...remoteKnowledge, hasApiKey: Boolean(value.secrets.remoteKnowledge) },

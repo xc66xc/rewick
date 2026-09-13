@@ -455,7 +455,8 @@ public class AdminIntegrationTest {
                             "08_server_local_time.sql",
                             "09_pg_references.sql",
                             "10_time_wallet.sql",
-                            "16_desktop_sessions.sql")) {
+                            "16_desktop_sessions.sql",
+                            "17_desktop_settings.sql")) {
                 withCopyFileToContainer(
                         MountableFile.forHostPath(Path.of("sql", name)), "/tmp/" + name);
             }
@@ -497,7 +498,9 @@ public class AdminIntegrationTest {
                                 "-f",
                                 "/tmp/10_time_wallet.sql",
                                 "-f",
-                                "/tmp/16_desktop_sessions.sql");
+                                "/tmp/16_desktop_sessions.sql",
+                                "-f",
+                                "/tmp/17_desktop_settings.sql");
                 if (result.getExitCode() != 0)
                     throw new IllegalStateException("Admin test SQL initialization failed");
             } catch (IOException error) {

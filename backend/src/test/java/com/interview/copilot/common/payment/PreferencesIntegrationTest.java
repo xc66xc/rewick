@@ -11,6 +11,12 @@ import java.util.Map;
 import java.util.UUID;
 
 class PreferencesIntegrationTest extends PaymentHttpFixture {
+    @org.junit.jupiter.api.BeforeEach
+    void advancedPreferences() {
+        jdbc.update(
+                "UPDATE app_users SET advanced_settings_enabled=TRUE WHERE display_name='alice'");
+    }
+
     @Test
     void save_versionsAndRetries_preserveIsolationAndRejectConflicts() {
         var defaults = call(HttpMethod.GET, "/user-preferences", aliceToken, null).getBody();

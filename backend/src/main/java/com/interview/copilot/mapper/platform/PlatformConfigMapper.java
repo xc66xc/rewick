@@ -9,6 +9,15 @@ import org.apache.ibatis.annotations.Update;
 
 @Mapper
 public interface PlatformConfigMapper {
+    @Select("SELECT id FROM platform_config WHERE id=1 FOR UPDATE")
+    Long lock();
+
+    @Select(
+            "SELECT"
+                + " version,llm_model_id,temperature,asr_service_id,retrieval_mode,knowledge_service_id"
+                + " FROM desktop_settings WHERE id=1")
+    com.interview.copilot.entity.platform.DesktopSettingsEntity desktopDefaults();
+
     @Select(
             "SELECT version, is_published AS published, payload::text AS payload FROM"
                     + " platform_config WHERE id = 1")

@@ -41,7 +41,8 @@ public class AsrWebSocketConfiguration implements WebSocketConfigurer {
                 return false;
             }
             try {
-                proxy.checkAvailable(request.getURI());
+                proxy.checkAvailable(
+                        AsrProxy.principal(request.getPrincipal()).id(), request.getURI());
                 return true;
             } catch (ApiException exception) {
                 response.setStatusCode(exception.status());

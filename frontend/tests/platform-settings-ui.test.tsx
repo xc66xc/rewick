@@ -14,7 +14,7 @@ beforeEach(() => {
 afterEach(() => cleanup())
 function platformSettings(): Settings & { platform: NonNullable<Settings['platform']> } {
   return { ...structuredClone(defaultSettings), platform: {
-    enabled: true, baseUrl: 'http://127.0.0.1:8080', authenticated: true,
+    advancedSettingsEnabled: true, enabled: true, baseUrl: 'http://127.0.0.1:8080', authenticated: true,
     user: { id: '1', displayName: 'tester', email: 'tester@example.test' },
     capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'fast', asr: 'platform-asr', available: [{ id: 'fast', name: '快速回答' }, { id: 'careful', name: '深度回答' }] },
     services: { asr: [{ id: 'speech', name: '平台转写' }], knowledge: [{ id: 'rag', name: '平台知识库' }] },
@@ -47,6 +47,27 @@ async function pickOption(user: ReturnType<typeof userEvent.setup>, combobox: st
   await user.click(await screen.findByRole('option', { name: option }))
 }
 describe('grouped service settings', () => {
+  it('shows only style and audio preferences to ordinary users', async () => {
+    const settings = platformSettings()
+    settings.platform.advancedSettingsEnabled = false
+    const { user, onSave } = setup(settings)
+    expect(screen.queryByRole('combobox', { name: '回答模型' })).toBeNull()
+    expect(screen.queryByLabelText('生成温度')).toBeNull()
+    expect(screen.queryByRole('combobox', { name: '实时语音转写' })).toBeNull()
+    expect(screen.queryByText('远程知识库')).toBeNull()
+    expect(screen.getByLabelText('句末静音（毫秒）')).toBeTruthy()
+    await pickOption(user, '回答风格', '展开口语')
+    await user.click(screen.getByRole('button', { name: '保存设置' }))
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ answerStyle: 'detailed' }))
+  })
+  it('closes an open custom editor when permission is removed', async () => {
+    const settings = platformSettings()
+    const { user, view, bridge, onSave } = setup(settings)
+    await openCustom(user)
+    view.rerender(<SettingsDialog settings={{ ...settings, platform: { ...settings.platform, advancedSettingsEnabled: false } }} bridge={bridge} onSave={onSave} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '添加回答模型' })).toBeNull())
+    expect(screen.queryByLabelText('生成温度')).toBeNull()
+  })
   it('keeps the draft version when newer settings arrive and explicitly reloads on request', async () => {
     const settings = { ...platformSettings(), preferencesVersion: 2 }
     const { user, onSave, view, bridge, onApply } = setup(settings)

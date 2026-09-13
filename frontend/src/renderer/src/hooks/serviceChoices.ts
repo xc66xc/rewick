@@ -35,6 +35,6 @@ export function explicitServiceReady(settings: Settings, kind: ServiceKind): boo
 export function answerModelLabel(settings: Settings): string {
   const selection = selectionFor(settings, 'llm')
   if (selection?.source === 'custom') return selectedCustom(settings, 'llm')?.name ?? '请选择回答模型'
-  if (selection?.source === 'platform') return platformChoices(settings, 'llm').find(model => model.id === selection.id)?.name ?? '请选择回答模型'
+  if (selection?.source === 'platform') return platformChoices(settings, 'llm').find(model => model.id === selection.id)?.name ?? (settings.platform?.advancedSettingsEnabled ? '请选择回答模型' : '平台默认回答模型不可用')
   return settings.llm.model
 }

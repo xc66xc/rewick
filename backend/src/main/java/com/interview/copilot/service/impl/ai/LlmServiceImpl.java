@@ -8,6 +8,7 @@ import com.interview.copilot.common.usage.UsageLease;
 import com.interview.copilot.config.ProviderProperties;
 import com.interview.copilot.exception.ai.ProviderErrors;
 import com.interview.copilot.service.ai.LlmService;
+import com.interview.copilot.service.platform.DesktopSettingsService;
 import com.interview.copilot.service.platform.PlatformRuntimeService;
 import com.interview.copilot.service.usage.UsageService;
 import com.interview.copilot.util.ai.ProviderHttpClient;
@@ -15,16 +16,18 @@ import com.interview.copilot.util.ai.ProviderJson;
 import com.interview.copilot.validation.ai.LlmRequestPolicy;
 
 import org.springframework.stereotype.Service;
+
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.Map;
 
 @Service
 public class LlmServiceImpl implements LlmService {
+    private final DesktopSettingsService desktop;
     private final PlatformRuntimeService providers;
     private final ProviderHttpClient http;
     private final ProviderJson json;
@@ -35,7 +38,9 @@ public class LlmServiceImpl implements LlmService {
             PlatformRuntimeService providers,
             ProviderHttpClient http,
             ProviderJson json,
-            UsageService usage) {
+            UsageService usage,
+            DesktopSettingsService desktop) {
+        this.desktop = desktop;
         this.providers = providers;
         this.http = http;
         this.json = json;
@@ -46,6 +51,7 @@ public class LlmServiceImpl implements LlmService {
         if (!input.isObject() || (input.has("model") && !input.get("model").isTextual())) {
             throw ProviderErrors.invalid();
         }
+        input = desktop.llm(userId, (ObjectNode) input);
         var selected =
                 providers.snapshot().llm(input.has("model") ? input.get("model").asText() : null);
         ProviderProperties.Llm config = selected.config();

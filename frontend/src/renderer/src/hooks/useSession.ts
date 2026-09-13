@@ -135,7 +135,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
   }
   async function start() {
     if (!bridge || stopping.current || changingTarget.current || !['idle', 'error'].includes(statusRef.current)) return
-    if (!isAsrReady(settingsRef.current)) { setError('请在模型与设置中选择可用的转写服务。'); return }
+    if (!isAsrReady(settingsRef.current)) { setError(settingsRef.current.platform?.advancedSettingsEnabled ? '请在模型与设置中选择可用的转写服务。' : '平台默认转写服务不可用，请联系管理员。'); return }
     attachEnvironment()
     const currentOperation = ++operation.current
     pendingAsrEvents.current = []

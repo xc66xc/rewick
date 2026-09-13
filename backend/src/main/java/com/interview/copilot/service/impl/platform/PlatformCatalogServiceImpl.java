@@ -8,16 +8,21 @@ import com.interview.copilot.response.platform.PlatformModelsResponse;
 import com.interview.copilot.response.platform.PlatformResponse;
 import com.interview.copilot.response.platform.PlatformServicesResponse;
 import com.interview.copilot.security.auth.UserPrincipal;
+import com.interview.copilot.service.platform.DesktopSettingsService;
 import com.interview.copilot.service.platform.PlatformCatalogService;
 import com.interview.copilot.service.platform.PlatformRuntimeService;
 
 @org.springframework.stereotype.Service
 public class PlatformCatalogServiceImpl implements PlatformCatalogService {
+    private final DesktopSettingsService desktop;
     private final PlatformRuntimeService providers;
     private final PlatformLimitsProperties limits;
 
     public PlatformCatalogServiceImpl(
-            PlatformRuntimeService providers, PlatformLimitsProperties limits) {
+            PlatformRuntimeService providers,
+            PlatformLimitsProperties limits,
+            DesktopSettingsService desktop) {
+        this.desktop = desktop;
         this.providers = providers;
         this.limits = limits;
     }
@@ -37,6 +42,8 @@ public class PlatformCatalogServiceImpl implements PlatformCatalogService {
                         snapshot.availableModels()),
                 new PlatformLimitsResponse(limits.maxAsrSessionSeconds()),
                 new PlatformServicesResponse(
-                        snapshot.availableAsrServices(), snapshot.availableKnowledgeServices()));
+                        snapshot.availableAsrServices(), snapshot.availableKnowledgeServices()),
+                desktop.advanced(user.id()),
+                desktop.get());
     }
 }

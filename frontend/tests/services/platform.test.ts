@@ -13,7 +13,7 @@ import { AccountWorkspaces } from '../../src/main/services/account-workspace'
 import { LlmClient } from '../../src/main/services/llm-client'
 import { RemoteKnowledgeClient } from '../../src/main/services/remote-knowledge-client'
 
-const info: PlatformInfo = { user: { id: 'user-1', displayName: 'demo' }, capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'server-model', asr: 'server-asr' }, limits: { maxAsrSessionSeconds: 3600 } }
+const info: PlatformInfo = { advancedSettingsEnabled: true, user: { id: 'user-1', displayName: 'demo' }, capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'server-model', asr: 'server-asr' }, limits: { maxAsrSessionSeconds: 3600 } }
 const expiresAt = () => new Date(Date.now() + 3_600_000).toISOString()
 const crypto = { isEncryptionAvailable: () => true, encryptString: (value: string) => Buffer.from(value.split('').reverse().join('')), decryptString: (value: Buffer) => value.toString().split('').reverse().join('') }
 const enabledInput = (): SettingsInput => ({ ...structuredClone(defaultSettings), platform: { enabled: true, baseUrl: 'http://127.0.0.1:8080' } })

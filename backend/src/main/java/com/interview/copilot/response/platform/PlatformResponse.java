@@ -7,4 +7,6 @@ public record PlatformResponse(
         PlatformCapabilitiesResponse capabilities,
         PlatformModelsResponse models,
         PlatformLimitsResponse limits,
-        PlatformServicesResponse services) {}
+        PlatformServicesResponse services,
+        boolean advancedSettingsEnabled,
+        DesktopSettingsResponse desktopDefaults) {}

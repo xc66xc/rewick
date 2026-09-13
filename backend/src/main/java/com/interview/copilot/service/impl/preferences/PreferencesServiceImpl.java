@@ -9,6 +9,7 @@ import com.interview.copilot.mapper.preferences.PreferencesMapper;
 import com.interview.copilot.model.platform.PlatformSnapshot;
 import com.interview.copilot.response.preferences.PreferencesResponse;
 import com.interview.copilot.service.auth.SessionGuardService;
+import com.interview.copilot.service.platform.DesktopSettingsService;
 import com.interview.copilot.service.platform.PlatformRuntimeService;
 import com.interview.copilot.service.preferences.PreferencesService;
 
@@ -24,6 +25,7 @@ import java.util.UUID;
 @Service
 @Transactional
 public class PreferencesServiceImpl implements PreferencesService {
+    private final DesktopSettingsService desktop;
     private final PreferencesMapper mapper;
     private final SessionGuardService users;
     private final ObjectMapper json;
@@ -33,7 +35,9 @@ public class PreferencesServiceImpl implements PreferencesService {
             PreferencesMapper mapper,
             SessionGuardService users,
             ObjectMapper json,
-            PlatformRuntimeService platform) {
+            PlatformRuntimeService platform,
+            DesktopSettingsService desktop) {
+        this.desktop = desktop;
         this.mapper = mapper;
         this.users = users;
         this.json = json;
@@ -50,6 +54,17 @@ public class PreferencesServiceImpl implements PreferencesService {
         initialize(user);
         var before = mapper.get(user);
         var original = decode(before.payload());
+        if (!desktop.advanced(user)) {
+            preferences =
+                    new UserPreferences(
+                            preferences.answerStyle(),
+                            original.temperature(),
+                            preferences.silenceMs(),
+                            preferences.autoAnswer(),
+                            preferences.retrievalEnabled(),
+                            original.remoteKnowledgeEnabled(),
+                            original.platformSelections());
+        }
         if (mutation.toString().equals(before.mutationId())) {
             if (!preferences.equals(original)) throw conflict();
             return response(before);

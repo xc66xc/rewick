@@ -55,7 +55,10 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
 
     @Transactional
     public PlatformConfig publish(long actorId, PlatformConfig input) {
+        mapper.lock();
         PlatformSnapshot prepared = draft(input);
+        com.interview.copilot.validation.platform.DesktopDefaultsValidator.validate(
+                mapper.desktopDefaults(), prepared);
         if (mapper.publish(input.version(), codec.encode(prepared)) != 1) {
             throw PlatformConfigErrors.conflict();
         }

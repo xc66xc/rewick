@@ -86,7 +86,8 @@ public class AsrServiceSelectionTest {
                         new PlatformRuntimeFixture(settings),
                         json,
                         usage,
-                        new PlatformLimitsProperties(3600));
+                        new PlatformLimitsProperties(3600),
+                        com.interview.copilot.common.platform.DesktopSettingsFixture.advanced());
     }
 
     @AfterEach
@@ -120,7 +121,9 @@ public class AsrServiceSelectionTest {
             })
     void selection_malformedOrDuplicateQuery_isRejected(String query) {
         assertThatThrownBy(
-                        () -> proxy.checkAvailable(URI.create("ws://localhost/api/v1/asr" + query)))
+                        () ->
+                                proxy.checkAvailable(
+                                        1, URI.create("ws://localhost/api/v1/asr" + query)))
                 .isInstanceOf(ApiException.class)
                 .extracting("code")
                 .isEqualTo("INVALID_AI_REQUEST");
@@ -130,7 +133,7 @@ public class AsrServiceSelectionTest {
     @Test
     void session_staleSelection_rejectsBeforeOpeningSupplier() throws Exception {
         WebSocketSession session = session("?serviceId=retired-asr");
-        assertThatThrownBy(() -> proxy.checkAvailable(session.getUri()))
+        assertThatThrownBy(() -> proxy.checkAvailable(1, session.getUri()))
                 .isInstanceOf(ApiException.class)
                 .extracting("code")
                 .isEqualTo("SERVICE_UNAVAILABLE");
@@ -148,7 +151,7 @@ public class AsrServiceSelectionTest {
     void session_currentOrUnspecifiedSelection_runsBoundServiceWithoutForwardingSelection(
             String query) throws Exception {
         WebSocketSession session = session(query);
-        proxy.checkAvailable(session.getUri());
+        proxy.checkAvailable(1, session.getUri());
         proxy.afterConnectionEstablished(session);
 
         proxy.handleMessage(session, new TextMessage(run()));
@@ -166,7 +169,7 @@ public class AsrServiceSelectionTest {
     void session_serviceDisabledAfterHandshake_rechecksSelectionBeforeTaskStarts()
             throws Exception {
         WebSocketSession session = session("?serviceId=environment-asr");
-        proxy.checkAvailable(session.getUri());
+        proxy.checkAvailable(1, session.getUri());
         proxy.afterConnectionEstablished(session);
         settings.getAsr().setApiKey("");
 

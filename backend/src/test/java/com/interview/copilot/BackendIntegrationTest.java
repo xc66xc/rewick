@@ -422,6 +422,9 @@ SELECT id, ('[' || id || ',0,0]')::vector FROM generate_series(1, 32) AS id
             withCopyFileToContainer(
                     MountableFile.forHostPath(Path.of("sql", "16_desktop_sessions.sql")),
                     "/tmp/16_desktop_sessions.sql");
+            withCopyFileToContainer(
+                    MountableFile.forHostPath(Path.of("sql", "17_desktop_settings.sql")),
+                    "/tmp/17_desktop_settings.sql");
         }
 
         @Override
@@ -464,7 +467,9 @@ SELECT id, ('[' || id || ',0,0]')::vector FROM generate_series(1, 32) AS id
                                 "-f",
                                 "/tmp/10_time_wallet.sql",
                                 "-f",
-                                "/tmp/16_desktop_sessions.sql");
+                                "/tmp/16_desktop_sessions.sql",
+                                "-f",
+                                "/tmp/17_desktop_settings.sql");
                 if (result.getExitCode() != 0) {
                     throw new IllegalStateException(
                             "Database SQL initialization failed: " + result.getStderr());

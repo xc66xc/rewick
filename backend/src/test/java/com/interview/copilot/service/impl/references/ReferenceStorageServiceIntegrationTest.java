@@ -204,7 +204,13 @@ public class ReferenceStorageServiceIntegrationTest {
                 .thenReturn(
                         org.mockito.Mockito.mock(
                                 com.interview.copilot.common.usage.UsageLease.class));
-        var search = new ReferenceSearchServiceImpl(repository, client, usage, persistence.mapper);
+        var search =
+                new ReferenceSearchServiceImpl(
+                        repository,
+                        client,
+                        usage,
+                        persistence.mapper,
+                        com.interview.copilot.common.platform.DesktopSettingsFixture.advanced());
         assertThat(search.search(1, "empty", "Redis", List.of()).excerpts()).isEmpty();
         org.mockito.Mockito.verifyNoInteractions(client);
         var ids = List.of(UUID.fromString(id));

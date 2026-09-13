@@ -2,6 +2,8 @@ import { z } from 'zod'
 const publicUser = z.object({ id: z.string().min(1).max(128), displayName: z.string().min(1).max(254), email: z.string().max(254).nullable().optional() })
 const serviceList = z.array(z.object({ id: z.string().min(1).max(200), name: z.string().min(1).max(200) })).max(100)
 export const platformInfoSchema = z.object({
+  advancedSettingsEnabled: z.boolean().default(false),
+  desktopDefaults: z.object({ version: z.number().int().nonnegative(), llmModelId: z.string().max(200), temperature: z.number().min(0).max(2), asrServiceId: z.string().max(200), retrievalMode: z.enum(['local', 'remote']), knowledgeServiceId: z.string().max(200) }).optional(),
   user: publicUser,
   services: z.object({ asr: serviceList, knowledge: serviceList }).optional(),
   capabilities: z.object({ llm: z.boolean(), asr: z.boolean(), knowledge: z.boolean() }),

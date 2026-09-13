@@ -19,6 +19,7 @@ import { testCustomService } from './services/custom-service-test'
 import { customServiceSchema } from './services/custom-service-profiles'
 import { PlatformWork } from './services/platform-work'
 import { needsPlatform, routeService } from './services/service-routing'
+import { applyDesktopDefaults, assertAllowedSettings, hasAdvancedSettings, preserveLocalAdvancedSettings, requireAdvancedSettings } from './services/advanced-settings'
 import type { PlatformCapability } from './services/service-routing'
 import { InterviewStore } from './services/interview-store'
 import { environmentInputSchema } from './services/interview-validation'
@@ -97,7 +98,7 @@ const settings = new Proxy(authSettings, {
       const own = accounts.context.getStore() ?? accounts.active
       if (own && accounts.identity(auth.settings) !== own.id) throw new Error('账户已切换，请重试。')
       const snapshot = own ? await own.settings.getConnectionSnapshot() : auth
-      const merged = own ? await own.preferences.merge(snapshot.settings) : snapshot.settings
+      const merged = applyDesktopDefaults({ ...(own ? await own.preferences.merge(snapshot.settings) : snapshot.settings), platform: auth.settings.platform })
       const secrets = { ...snapshot.secrets }
       if (own) for (const [kind, key] of [['llm', 'llmApiKey'], ['asr', 'asrApiKey'], ['knowledge', 'remoteKnowledgeApiKey']] as const) {
         if (merged.serviceSelections?.[kind]?.source !== 'custom') secrets[key] = ''
@@ -112,7 +113,8 @@ const settings = new Proxy(authSettings, {
           if (selection?.source === 'custom' && !(await own.settings.getSettings()).customServices?.some(profile => profile.id === selection.id && profile.kind === kind)) throw new Error('所选自定义服务不存在，请重新选择。')
         }
         await own.preferences.save(input)
-        return own.settings.saveSettings(input)
+        const localInput = hasAdvancedSettings(await authSettings.getSettings()) ? input : preserveLocalAdvancedSettings(input, await own.settings.getSettings())
+        return own.settings.saveSettings(localInput)
       }
       return authSettings.saveSettings(input)
     }
@@ -198,6 +200,20 @@ function scopedStore<K extends 'history' | 'interviews' | 'references'>(kind: K)
 }
 const references = scopedStore('references')
 const interviews = scopedStore('interviews')
+let catalogRefreshTimer: ReturnType<typeof setInterval> | undefined
+let catalogRefreshing = false
+async function refreshCatalog() {
+  if (catalogRefreshing) return
+  catalogRefreshing = true
+  try {
+    const before = await authSettings.getConnectionSnapshot()
+    if (!before.settings.platform?.authenticated) return
+    await platform.refreshSnapshot(before)
+    const after = await authSettings.getConnectionSnapshot()
+    if (after.secrets.platformAccessToken === before.secrets.platformAccessToken && JSON.stringify(before.settings.platform) !== JSON.stringify(after.settings.platform)) emit({ kind: 'settings-changed' })
+  } catch { /* Session faults are handled centrally; transient catalog failures keep the last verified policy. */ }
+  finally { catalogRefreshing = false }
+}
 async function effectiveSettings() {
   const value = { ...await settings.getSettings(), sessionNotice }
   return interviewTimer.active && interviewTimer.background ? { ...value, ...interviewTimer.background } : accounts.active ? interviews.resolve(value) : value
@@ -380,6 +396,7 @@ function registerHandlers(): void {
   handle('settings:save', async input => {
     let parsed = parseInput(settingsInputSchema, input)
     const previous = await settings.getSettings()
+    if (previous.platform?.authenticated) assertAllowedSettings(parsed, previous)
     if (interviewTimer.active) {
       const before = parseInput(settingsInputSchema, previous)
       if (JSON.stringify({ ...parsed, preferencesVersion: before.preferencesVersion, context: before.context, interviewTarget: before.interviewTarget, autoAnswer: before.autoAnswer }) !== JSON.stringify(before)) throw new Error('请先结束面试，再修改模型与设置。')
@@ -397,12 +414,14 @@ function registerHandlers(): void {
     return saved
   })
   handle('services:test', async input => {
+    requireAdvancedSettings(await settings.getSettings())
     const controller = new AbortController()
     serviceTests.add(controller)
     try { return await testCustomService(settings, parseInput(customServiceSchema, input), controller.signal) }
     finally { serviceTests.delete(controller) }
   })
   handle('services:save', async input => {
+    requireAdvancedSettings(await settings.getSettings())
     assertInterviewIdle()
     const profile = parseInput(customServiceSchema, input)
     await settings.saveCustomService(profile)
@@ -410,12 +429,13 @@ function registerHandlers(): void {
     return effectiveSettings()
   })
   handle('services:remove', async input => {
+    requireAdvancedSettings(await settings.getSettings())
     assertInterviewIdle()
     await settings.removeCustomService(parseInput(z.string().min(1).max(128), input))
     emit({ kind: 'settings-changed' })
     return effectiveSettings()
   })
-  handle('model:test', () => testService('llm'))
+  handle('model:test', async () => { requireAdvancedSettings(await settings.getSettings()); return testService('llm') })
   handle('context:import', async () => {
     if (!window) return null
     const result = await dialog.showOpenDialog(window, { title: '导入简历', properties: ['openFile'], filters: [{ name: '简历文件', extensions: ['pdf', 'md', 'txt'] }] })
@@ -450,7 +470,7 @@ function registerHandlers(): void {
     const library = await interviews.activate(parseInput(profileId, input))
     return resolveInterviewSettings(config, library)
   }))
-  handle('remote-knowledge:test', () => testService('knowledge'))
+  handle('remote-knowledge:test', async () => { requireAdvancedSettings(await settings.getSettings()); return testService('knowledge') })
   handle('references:list', () => references.list())
   handle('references:import', async () => {
     if (!window) return []
@@ -527,9 +547,10 @@ function registerHandlers(): void {
       }
       const connection = await serviceConnection({ settings: config, secrets }, 'llm', controller.signal)
       if (epoch !== answerEpoch || controller.signal.aborted) return
-      const retrieval = config.remoteKnowledge.enabled
-        ? await retrieveRemote({ settings: config, secrets }, request.question, controller.signal, platformRevision)
-        : await references.retrieve(request.question, request.transcript, config, controller.signal)
+      const resolved = connection.settings
+      const retrieval = resolved.remoteKnowledge.enabled
+        ? await retrieveRemote({ settings: resolved, secrets }, request.question, controller.signal, platformRevision)
+        : await references.retrieve(request.question, request.transcript, resolved, controller.signal)
       if (epoch !== answerEpoch || controller.signal.aborted) return
       emit({ kind: 'answer-context', requestId: request.requestId, interviewTarget: config.interviewTarget, retrieval, interviewEnvironment: config.interviewEnvironment })
       interviewTimer.assertActive()
@@ -643,11 +664,12 @@ if (hasInstanceLock) app.whenReady().then(async () => {
   registerHandlers()
   await createWindow()
   sessionMonitor.start()
+  catalogRefreshTimer = setInterval(() => { void refreshCatalog() }, 30_000)
   powerMonitor.on('resume', () => { void sessionMonitor.check().catch(() => console.error('无法读取登录状态')) })
   window?.on('focus', () => { void sessionMonitor.check().catch(() => console.error('无法读取登录状态')) })
   globalShortcut.register('CommandOrControl+Shift+Enter', () => emit({ kind: 'shortcut', action: 'answer' }))
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) void createWindow() })
 }).catch(error => { dialog.showErrorBox('启动失败', error instanceof Error ? error.message : '无法启动应用'); app.quit() })
 
-app.on('before-quit', () => { sessionMonitor.dispose(); unsubscribeSessionFault(); interviewTimer.dispose(); disposeWork(); accounts.dispose(); globalShortcut.unregisterAll() })
+app.on('before-quit', () => { clearInterval(catalogRefreshTimer); sessionMonitor.dispose(); unsubscribeSessionFault(); interviewTimer.dispose(); disposeWork(); accounts.dispose(); globalShortcut.unregisterAll() })
 app.on('window-all-closed', () => app.quit())

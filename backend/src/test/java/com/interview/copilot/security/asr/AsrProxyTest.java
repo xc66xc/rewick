@@ -76,7 +76,8 @@ public class AsrProxyTest {
                         new PlatformRuntimeFixture(settings),
                         json,
                         usage,
-                        new PlatformLimitsProperties(3600));
+                        new PlatformLimitsProperties(3600),
+                        com.interview.copilot.common.platform.DesktopSettingsFixture.advanced());
         session = session("first");
         proxy.afterConnectionEstablished(session);
     }

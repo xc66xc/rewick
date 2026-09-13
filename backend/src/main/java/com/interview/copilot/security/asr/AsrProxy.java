@@ -2,9 +2,10 @@ package com.interview.copilot.security.asr;
 
 import com.interview.copilot.config.PlatformLimitsProperties;
 import com.interview.copilot.config.ProviderProperties;
-import com.interview.copilot.exception.ai.ProviderErrors;
 import com.interview.copilot.exception.ApiException;
+import com.interview.copilot.exception.ai.ProviderErrors;
 import com.interview.copilot.security.auth.UserPrincipal;
+import com.interview.copilot.service.platform.DesktopSettingsService;
 import com.interview.copilot.service.platform.PlatformRuntimeService;
 import com.interview.copilot.service.usage.UsageService;
 import com.interview.copilot.util.ai.ProviderJson;
@@ -15,12 +16,12 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.BinaryMessage;
 import org.springframework.web.socket.CloseStatus;
-import org.springframework.web.socket.handler.AbstractWebSocketHandler;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.AbstractWebSocketHandler;
 
-import java.net.http.HttpClient;
 import java.net.URI;
+import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -28,6 +29,7 @@ import java.util.concurrent.ScheduledExecutorService;
 
 @Component
 public class AsrProxy extends AbstractWebSocketHandler {
+    private final DesktopSettingsService desktop;
     private final PlatformRuntimeService providers;
     private final ProviderJson json;
     private final UsageService usage;
@@ -47,7 +49,9 @@ public class AsrProxy extends AbstractWebSocketHandler {
             PlatformRuntimeService providers,
             ProviderJson json,
             UsageService usage,
-            PlatformLimitsProperties limits) {
+            PlatformLimitsProperties limits,
+            DesktopSettingsService desktop) {
+        this.desktop = desktop;
         this.providers = providers;
         this.json = json;
         this.usage = usage;
@@ -58,7 +62,7 @@ public class AsrProxy extends AbstractWebSocketHandler {
     public void afterConnectionEstablished(WebSocketSession session) throws java.io.IOException {
         UserPrincipal user = principal(session.getPrincipal());
         if (user == null
-                || !available(session.getUri())
+                || !available(user.id(), session.getUri())
                 || users.putIfAbsent(user.id(), session.getId()) != null) {
             session.close(CloseStatus.POLICY_VIOLATION);
             return;
@@ -117,23 +121,19 @@ public class AsrProxy extends AbstractWebSocketHandler {
         }
     }
 
-    public void checkAvailable() {
-        checkAvailable(null);
+    public ProviderProperties.Asr config(long user, URI uri) {
+        return providers.snapshot().asr(desktop.asr(user, AsrServiceSelection.from(uri)));
     }
 
-    public void checkAvailable(URI uri) {
-        if (!config(uri).isEnabled()) {
+    public void checkAvailable(long user, URI uri) {
+        if (!config(user, uri).isEnabled()) {
             throw ProviderErrors.unavailable();
         }
     }
 
-    public ProviderProperties.Asr config(URI uri) {
-        return providers.snapshot().asr(AsrServiceSelection.from(uri));
-    }
-
-    private boolean available(URI uri) {
+    private boolean available(long user, URI uri) {
         try {
-            return config(uri).isEnabled();
+            return config(user, uri).isEnabled();
         } catch (ApiException exception) {
             return false;
         }

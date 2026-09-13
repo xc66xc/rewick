@@ -21,8 +21,8 @@ import jakarta.validation.Validation;
 import jakarta.validation.ValidatorFactory;
 
 import java.util.Base64;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class PlatformConfigFixture implements AutoCloseable {
     public static final String MASTER_KEY = Base64.getEncoder().encodeToString(new byte[32]);
@@ -37,6 +37,10 @@ public final class PlatformConfigFixture implements AutoCloseable {
 
     public PlatformConfigFixture() {
         when(mapper.read()).thenAnswer(call -> row.get());
+        when(mapper.desktopDefaults())
+                .thenReturn(
+                        new com.interview.copilot.entity.platform.DesktopSettingsEntity(
+                                0, "", 0.7, "", "local", ""));
         when(mapper.publish(anyLong(), anyString()))
                 .thenAnswer(
                         call -> {

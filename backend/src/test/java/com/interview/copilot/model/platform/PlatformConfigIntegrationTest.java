@@ -174,7 +174,9 @@ public class PlatformConfigIntegrationTest {
                                 "-f",
                                 "/tmp/copilot-sql/10_time_wallet.sql",
                                 "-f",
-                                "/tmp/copilot-sql/16_desktop_sessions.sql");
+                                "/tmp/copilot-sql/16_desktop_sessions.sql",
+                                "-f",
+                                "/tmp/copilot-sql/17_desktop_settings.sql");
                 if (result.getExitCode() != 0) {
                     throw new IllegalStateException(
                             "Test SQL initialization failed: " + result.getStderr());

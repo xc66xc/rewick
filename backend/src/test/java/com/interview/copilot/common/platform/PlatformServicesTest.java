@@ -48,7 +48,9 @@ public class PlatformServicesTest {
                                 new PlatformController(
                                         new com.interview.copilot.service.impl.platform
                                                 .PlatformCatalogServiceImpl(
-                                                () -> snapshot, limits)))
+                                                () -> snapshot,
+                                                limits,
+                                                DesktopSettingsFixture.advanced())))
                         .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                         .build();
 

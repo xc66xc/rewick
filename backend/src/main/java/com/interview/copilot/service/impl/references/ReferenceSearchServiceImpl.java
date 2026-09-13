@@ -5,6 +5,7 @@ import com.interview.copilot.converter.references.ReferenceExcerptConverter;
 import com.interview.copilot.mapper.references.ReferenceMapper;
 import com.interview.copilot.response.references.ReferenceExcerptResponse;
 import com.interview.copilot.response.references.ReferenceRetrievalResponse;
+import com.interview.copilot.service.platform.DesktopSettingsService;
 import com.interview.copilot.service.references.ReferenceSearchService;
 import com.interview.copilot.service.references.ReferenceStorageService;
 import com.interview.copilot.service.usage.UsageService;
@@ -25,6 +26,7 @@ import java.util.UUID;
 @Service
 public class ReferenceSearchServiceImpl implements ReferenceSearchService {
     private static final Logger LOG = LoggerFactory.getLogger(ReferenceSearchServiceImpl.class);
+    private final DesktopSettingsService desktop;
     private final ReferenceStorageService repository;
     private final PlatformEmbeddingClient embedding;
     private final UsageService usage;
@@ -34,7 +36,9 @@ public class ReferenceSearchServiceImpl implements ReferenceSearchService {
             ReferenceStorageService repository,
             PlatformEmbeddingClient embedding,
             UsageService usage,
-            ReferenceMapper mapper) {
+            ReferenceMapper mapper,
+            DesktopSettingsService desktop) {
+        this.desktop = desktop;
         this.repository = repository;
         this.embedding = embedding;
         this.usage = usage;
@@ -43,6 +47,7 @@ public class ReferenceSearchServiceImpl implements ReferenceSearchService {
 
     public ReferenceRetrievalResponse search(
             long user, String requestId, String query, List<UUID> ids) {
+        desktop.requireLocal(user);
         if (ids.isEmpty()) {
             return result("disabled", "当前环境未选择参考资料。", List.of());
         }
@@ -85,11 +90,13 @@ public class ReferenceSearchServiceImpl implements ReferenceSearchService {
                     keyword(user, query, ids, selection.fingerprint()));
         }
         var excerpts =
-                mapper.vectorSearch(
-                        user,
-                        selection.fingerprint(),
-                        ids.stream().map(UUID::toString).toList(),
-                        vector.toString()).stream()
+                mapper
+                        .vectorSearch(
+                                user,
+                                selection.fingerprint(),
+                                ids.stream().map(UUID::toString).toList(),
+                                vector.toString())
+                        .stream()
                         .map(ReferenceExcerptConverter::toResponse)
                         .toList();
         return result(

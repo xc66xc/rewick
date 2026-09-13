@@ -11,6 +11,7 @@ public final class UserConverter {
         return new UserDTO(
                 value.id(),
                 value.displayName(),
+                value.email(),
                 value.role(),
                 value.enabled(),
                 value.availableSeconds(),
@@ -22,6 +23,7 @@ public final class UserConverter {
         return new UserVO(
                 value.id(),
                 value.displayName(),
+                value.email(),
                 value.role(),
                 value.enabled(),
                 value.availableSeconds(),

@@ -412,7 +412,8 @@ public class WalletIntegrationTest {
                         "08_server_local_time.sql",
                         "09_pg_references.sql",
                         "10_time_wallet.sql",
-                        "16_desktop_sessions.sql");
+                        "16_desktop_sessions.sql",
+                        "17_desktop_settings.sql");
 
         WalletDatabase() {
             super(

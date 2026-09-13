@@ -55,7 +55,7 @@ export class UserPreferencesClient {
     for (const kind of kinds) {
       const selection = input.serviceSelections?.[kind]
       // Choosing a custom service changes only this device; keep the account's platform choice.
-      if (selection?.source === 'platform') platformSelections[kind] = selection.id
+      if (selection?.source === 'platform') platformSelections[kind] = selection.id || null
       else if (!selection) platformSelections[kind] = null
     }
     const preferences: State['preferences'] = { answerStyle: input.answerStyle, temperature: input.llm.temperature, silenceMs: input.asr.silenceMs,

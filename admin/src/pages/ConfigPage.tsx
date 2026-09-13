@@ -4,6 +4,8 @@ import { ApiError, type ApiClient, message } from '../api'
 import { capabilityNames, configPayload, configSchema, testSchema, type Capability, type Config } from '../types'
 import { applyService, serviceForms, type ServiceForm } from '../hooks/unified-service'
 import ReferencePolicy from '../components/ReferencePolicy'
+import DesktopSettingsPolicy from '../components/DesktopSettingsPolicy'
+import ErrorBoundary from '../components/ErrorBoundary'
 import UnifiedServiceCard from '../components/UnifiedServiceCard'
 import LoadState from '../components/LoadState'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -11,6 +13,7 @@ import styles from '../styles.module.css'
 interface Props { api: ApiClient; active?: boolean }
 export default function ConfigPage({ api, active = true }: Props) {
   const [showPolicy, setShowPolicy] = useState(false)
+  const [showDesktopPolicy, setShowDesktopPolicy] = useState(false)
   const [config, setConfig] = useState<Config | null>(null)
   const [items, setItems] = useState<ServiceForm[]>([])
   const [error, setError] = useState('')
@@ -56,6 +59,8 @@ export default function ConfigPage({ api, active = true }: Props) {
     <button type="button" disabled={busy} className={styles.secondaryButton} onClick={() => { if (window.confirm('重新加载会丢弃未保存内容，是否继续？')) setRevision(value => value + 1) }}>重新加载配置</button>
     <button type="button" className={styles.secondaryButton} aria-expanded={showPolicy} onClick={() => setShowPolicy(value => !value)}>资料上传配额</button>
     {showPolicy && <ReferencePolicy api={api} />}
+    <button type="button" className={styles.secondaryButton} aria-expanded={showDesktopPolicy} onClick={() => setShowDesktopPolicy(value => !value)}>桌面高级设置权限</button>
+    {showDesktopPolicy && <ErrorBoundary><DesktopSettingsPolicy api={api} config={config} /></ErrorBoundary>}
     {!items.length && <p className={styles.empty}>尚无模型或服务，请添加。</p>}
     {items.map(item => <UnifiedServiceCard key={item.id} value={item} busy={busy} saved={config.providers.some(provider => provider.id === item.providerId)} active={active} onSave={save} onRemove={() => setRemoving(item)} />)}
     {removing && <ConfirmDialog title={`删除 ${removing.name || '新服务'}`} action="确认删除" onClose={() => setRemoving(null)} onConfirm={() => { if (config.providers.some(provider => provider.id === removing.providerId)) void save(removing, false, true); else setItems(current => current.filter(item => item.id !== removing.id)); setRemoving(null) }}><p>删除后桌面端不再提供此项。</p></ConfirmDialog>}

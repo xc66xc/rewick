@@ -80,7 +80,7 @@ public final class AsrBridge {
     }
 
     private void run(JsonNode frame, String taskId) {
-        ProviderProperties.Asr config = resources.config(downstream.getUri());
+        ProviderProperties.Asr config = resources.config(user.id(), downstream.getUri());
         if (!config.isEnabled()) {
             throw ProviderErrors.unavailable();
         }

@@ -11,7 +11,7 @@ import { testCustomService } from '../../src/main/services/custom-service-test'
 
 const crypto = { isEncryptionAvailable: () => true, encryptString: (value: string) => Buffer.from(value.split('').reverse().join('')), decryptString: (value: Buffer) => value.toString().split('').reverse().join('') }
 const draft = { name: '我的回答', kind: 'llm' as const, url: 'https://models.example/v1', model: 'own-model', apiKey: 'private-api-key' }
-const info: PlatformInfo = { user: { id: '1', displayName: 'u_demo', email: 'demo@example.com' }, capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'fast', asr: 'asr-model', available: [{ id: 'fast', name: '平台快速' }] }, services: { asr: [{ id: 'asr-one', name: '平台语音' }], knowledge: [{ id: 'knowledge-one', name: '平台知识库' }] }, limits: { maxAsrSessionSeconds: 600 } }
+const info: PlatformInfo = { advancedSettingsEnabled: true, user: { id: '1', displayName: 'u_demo', email: 'demo@example.com' }, capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'fast', asr: 'asr-model', available: [{ id: 'fast', name: '平台快速' }] }, services: { asr: [{ id: 'asr-one', name: '平台语音' }], knowledge: [{ id: 'knowledge-one', name: '平台知识库' }] }, limits: { maxAsrSessionSeconds: 600 } }
 let directory: string
 let store: SettingsStore
 beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'copilot-custom-')); store = new SettingsStore(directory, crypto) })
@@ -24,7 +24,7 @@ describe('custom service library', () => {
     const selections = { llm: { source: 'platform' as const, id: 'fast' }, asr }
     const result = await store.saveSettings({ ...defaultSettings, platform: { enabled: true, baseUrl: 'https://platform.example' }, serviceSelections: selections })
     expect(result.serviceSelections).toEqual(selections)
-    const authenticated = { ...result, platform: { ...result.platform, ...info, enabled: true, baseUrl: 'https://platform.example', authenticated: true, expiresAt: new Date(Date.now() + 60000).toISOString() } }
+    const authenticated = { ...result, platform: { ...result.platform, ...info, enabled: true, baseUrl: 'https://platform.example', authenticated: true, advancedSettingsEnabled: true, expiresAt: new Date(Date.now() + 60000).toISOString() } }
     const connection = routeService(authenticated, { ...(await store.getSecrets()), platformAccessToken: 'business-token' }, 'llm')
     expect(connection.platform).toBe(true)
     expect(connection.settings.llm.model).toBe('fast')

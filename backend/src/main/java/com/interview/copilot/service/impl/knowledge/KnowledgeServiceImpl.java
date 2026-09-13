@@ -5,6 +5,7 @@ import com.interview.copilot.common.usage.UsageLease;
 import com.interview.copilot.config.ProviderProperties;
 import com.interview.copilot.exception.ai.ProviderErrors;
 import com.interview.copilot.service.knowledge.KnowledgeService;
+import com.interview.copilot.service.platform.DesktopSettingsService;
 import com.interview.copilot.service.platform.PlatformRuntimeService;
 import com.interview.copilot.service.usage.UsageService;
 import com.interview.copilot.util.ai.ProviderHttpClient;
@@ -14,20 +15,25 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.concurrent.Semaphore;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Semaphore;
 
 @Service
 public class KnowledgeServiceImpl implements KnowledgeService {
+    private final DesktopSettingsService desktop;
     private final PlatformRuntimeService providers;
     private final ProviderHttpClient http;
     private final UsageService usage;
     private final Semaphore capacity = new Semaphore(16);
 
     public KnowledgeServiceImpl(
-            PlatformRuntimeService providers, ProviderHttpClient http, UsageService usage) {
+            PlatformRuntimeService providers,
+            ProviderHttpClient http,
+            UsageService usage,
+            DesktopSettingsService desktop) {
+        this.desktop = desktop;
         this.providers = providers;
         this.http = http;
         this.usage = usage;
@@ -36,7 +42,8 @@ public class KnowledgeServiceImpl implements KnowledgeService {
     public Map<String, Object> search(long userId, String requestId, JsonNode input) {
         validate(input);
         String serviceId = input.has("serviceId") ? input.get("serviceId").asText() : null;
-        ProviderProperties.Knowledge config = providers.snapshot().knowledge(serviceId);
+        ProviderProperties.Knowledge config =
+                providers.snapshot().knowledge(desktop.knowledge(userId, serviceId));
         if (!config.isEnabled()) {
             throw ProviderErrors.unavailable();
         }

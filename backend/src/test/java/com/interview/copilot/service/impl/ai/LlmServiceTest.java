@@ -32,17 +32,18 @@ import org.springframework.security.web.method.annotation.AuthenticationPrincipa
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.netty.DisposableServer;
 import reactor.netty.http.server.HttpServer;
 
 import java.time.Duration;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class LlmServiceTest {
     private final ObjectMapper mapper = new ObjectMapper();
@@ -60,7 +61,10 @@ public class LlmServiceTest {
         proxy =
                 new LlmServiceImpl(
                         new PlatformRuntimeFixture(settings),
-                        new ProviderHttpClient(), new ProviderJson(mapper), usage);
+                        new ProviderHttpClient(),
+                        new ProviderJson(mapper),
+                        usage,
+                        com.interview.copilot.common.platform.DesktopSettingsFixture.advanced());
     }
 
     @AfterEach

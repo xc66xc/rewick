@@ -37,7 +37,7 @@ public interface AdminUserMapper {
 
     @Select(
             """
-SELECT id::text, display_name, role, is_enabled AS enabled,
+SELECT id::text, display_name, (SELECT identifier FROM auth_identities i WHERE i.app_users_id=app_users.id AND i.identity_type='email' LIMIT 1) AS email, role, is_enabled AS enabled,
     COALESCE((SELECT available_seconds FROM time_wallets w WHERE w.app_users_id=app_users.id),0) AS available_seconds,
     COALESCE((SELECT version FROM time_wallets w WHERE w.app_users_id=app_users.id),0) AS wallet_version,
     created_at AT TIME ZONE 'Asia/Shanghai' AS created_at
@@ -49,7 +49,7 @@ ORDER BY id DESC LIMIT #{size} OFFSET #{offset}
 
     @Select(
             """
-SELECT id::text, display_name, role, is_enabled AS enabled,
+SELECT id::text, display_name, (SELECT identifier FROM auth_identities i WHERE i.app_users_id=app_users.id AND i.identity_type='email' LIMIT 1) AS email, role, is_enabled AS enabled,
     COALESCE((SELECT available_seconds FROM time_wallets w WHERE w.app_users_id=app_users.id),0) AS available_seconds,
     COALESCE((SELECT version FROM time_wallets w WHERE w.app_users_id=app_users.id),0) AS wallet_version,
     created_at AT TIME ZONE 'Asia/Shanghai' AS created_at

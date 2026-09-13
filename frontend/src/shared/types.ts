@@ -7,7 +7,10 @@ export interface CustomServiceInput {
 }
 export interface CustomServiceProfile extends Omit<CustomServiceInput, 'id' | 'apiKey'> { id: string; hasApiKey: boolean }
 export interface PlatformServices { asr: { id: string; name: string }[]; knowledge: { id: string; name: string }[] }
+export interface DesktopDefaults { version: number; llmModelId: string; temperature: number; asrServiceId: string; retrievalMode: 'local' | 'remote'; knowledgeServiceId: string }
 export interface PlatformInfo {
+  advancedSettingsEnabled?: boolean
+  desktopDefaults?: DesktopDefaults
   user: { id: string; displayName: string; email?: string | null }
   capabilities: { llm: boolean; asr: boolean; knowledge: boolean }
   models: { llm: string; asr: string; available?: { id: string; name: string }[] }
@@ -15,6 +18,8 @@ export interface PlatformInfo {
   limits: { maxAsrSessionSeconds: number }
 }
 export interface PlatformSettings {
+  advancedSettingsEnabled?: boolean
+  desktopDefaults?: DesktopDefaults
   enabled: boolean
   baseUrl: string
   selectedModelId?: string

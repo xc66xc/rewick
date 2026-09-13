@@ -2,9 +2,11 @@ import type { Settings } from '../../shared/types'
 import { selectedPlatformModel } from '../../shared/platform-models'
 import type { ServiceSecrets } from './settings-store'
 import { isLoopback } from './validation'
+import { applyDesktopDefaults, hasAdvancedSettings } from './advanced-settings'
 
 export type PlatformCapability = 'llm' | 'asr' | 'knowledge'
 export function needsPlatform(settings: Settings, secrets: ServiceSecrets, capability: PlatformCapability): boolean {
+  settings = applyDesktopDefaults(settings)
   const selected = settings.serviceSelections?.[capability]
   if (selected) return selected.source === 'platform'
   const ownKey = capability === 'llm' ? secrets.llmApiKey : capability === 'asr' ? secrets.asrApiKey : secrets.remoteKnowledgeApiKey
@@ -13,6 +15,7 @@ export function needsPlatform(settings: Settings, secrets: ServiceSecrets, capab
   return true
 }
 export function routeService(settings: Settings, secrets: ServiceSecrets, capability: PlatformCapability): { settings: Settings; apiKey: string; platform?: true } {
+  settings = applyDesktopDefaults(settings)
   const selected = settings.serviceSelections?.[capability]
   if (selected?.source === 'custom' && !settings.customServices?.some(value => value.id === selected.id && value.kind === capability)) {
     throw new Error('所选自定义服务已移除，请在模型与设置中重新选择。')
@@ -20,9 +23,10 @@ export function routeService(settings: Settings, secrets: ServiceSecrets, capabi
   const apiKey = capability === 'llm' ? secrets.llmApiKey : capability === 'asr' ? secrets.asrApiKey : secrets.remoteKnowledgeApiKey
   if (!needsPlatform(settings, secrets, capability)) return { settings, apiKey }
   const platform = settings.platform
+  if (platform?.authenticated && !hasAdvancedSettings(settings) && !selected?.id) throw new Error('平台尚未配置默认服务，请联系管理员。')
   if (!platform?.authenticated || !secrets.platformAccessToken || !platform.expiresAt || Date.parse(platform.expiresAt) <= Date.now()) throw new Error('请先登录平台账号后再使用平台服务。')
   const names = { llm: '回答模型', asr: '实时转写', knowledge: '远程知识库' }
-  if (!platform.capabilities[capability]) throw new Error(`平台尚未启用${names[capability]}，请联系管理员或填写自己的 API Key。`)
+  if (!platform.capabilities[capability]) throw new Error(`平台尚未启用${names[capability]}，请联系管理员。`)
   if (capability === 'llm') {
     const model = selectedPlatformModel(selected?.source === 'platform' ? { ...platform, selectedModelId: selected.id } : platform)
     if (!model) throw new Error('所选平台模型已下架或不可用，请在模型与设置中刷新列表并重新选择。')
