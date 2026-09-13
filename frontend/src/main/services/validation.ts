@@ -1,3 +1,4 @@
+import { productionPlatformUrl } from '../../shared/platform-transport'
 import { z } from 'zod'
 import { environmentSnapshotSchema } from './interview-validation'
 
@@ -60,7 +61,7 @@ export const settingsInputSchema = z.object({
     asr: z.object({ source: z.enum(['platform', 'custom']), id: z.string().max(200) }).optional(),
     knowledge: z.object({ source: z.enum(['platform', 'custom']), id: z.string().max(200) }).optional(),
   }).optional(),
-  platform: platformSettingsSchema.default({ enabled: false, baseUrl: 'http://127.0.0.1:8080' }),
+  platform: platformSettingsSchema.default({ enabled: false, baseUrl: productionPlatformUrl }),
   asr: asrSettingsSchema.extend({ apiKey }),
   llm: llmSettingsSchema.extend({ apiKey }),
   context: z.object({ name: z.string().max(255), text: z.string().max(100_000) }),

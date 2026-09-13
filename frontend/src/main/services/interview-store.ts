@@ -1,3 +1,4 @@
+import { assertPlatformTransport } from '../../shared/platform-transport'
 import { sessionFault } from './session-fault'
 import { randomUUID } from 'node:crypto'
 import type { EnvironmentInput, InterviewLibrary, ResumeInput, Settings, TargetInput } from '../../shared/types'
@@ -48,6 +49,7 @@ export class InterviewStore {
     const auth = await this.authentication()
     const token = auth.secrets.platformAccessToken
     if (!token || !auth.settings.platform?.authenticated) throw new Error('请先登录账户。')
+    assertPlatformTransport(auth.settings.platform.baseUrl)
     const response = await fetch(`${auth.settings.platform.baseUrl}/api/v1/background${path}`, {
       method: body === undefined ? 'GET' : 'POST', redirect: 'error', signal: AbortSignal.timeout(15_000),
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

@@ -1,3 +1,4 @@
+import { assertPlatformTransport } from '../../shared/platform-transport'
 import { sessionFault } from './session-fault'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -27,6 +28,7 @@ export class ServerHistory {
   private async request(path: string, body?: unknown): Promise<unknown> {
     const snapshot = await this.auth()
     if (!snapshot.settings.platform?.authenticated) throw new Error('请先登录。')
+    assertPlatformTransport(snapshot.settings.platform.baseUrl)
     const response = await fetch(`${snapshot.settings.platform.baseUrl}/api/v1/session-records${path}`, {
       method: body === undefined ? 'GET' : 'POST', redirect: 'error', signal: AbortSignal.timeout(15000),
       headers: { Authorization: `Bearer ${snapshot.secrets.platformAccessToken}`, 'Content-Type': 'application/json' },

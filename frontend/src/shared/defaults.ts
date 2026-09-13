@@ -1,6 +1,7 @@
 import type { Settings } from './types'
+import { productionPlatformUrl } from './platform-transport'
 declare const __COPILOT_PLATFORM_URL__: string
-export const platformBaseUrl = typeof __COPILOT_PLATFORM_URL__ === 'undefined' ? 'http://127.0.0.1:8080' : __COPILOT_PLATFORM_URL__
+export const platformBaseUrl = typeof __COPILOT_PLATFORM_URL__ === 'undefined' ? productionPlatformUrl : __COPILOT_PLATFORM_URL__
 export const defaultSettings: Settings = {
   customServices: [],
   platform: { advancedSettingsEnabled: false, enabled: false, baseUrl: platformBaseUrl, authenticated: false, capabilities: { llm: false, asr: false, knowledge: false }, models: { llm: '', asr: '' } },

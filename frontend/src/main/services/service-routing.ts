@@ -1,4 +1,5 @@
 import type { Settings } from '../../shared/types'
+import { assertPlatformTransport } from '../../shared/platform-transport'
 import { selectedPlatformModel } from '../../shared/platform-models'
 import type { ServiceSecrets } from './settings-store'
 import { isLoopback } from './validation'
@@ -25,6 +26,7 @@ export function routeService(settings: Settings, secrets: ServiceSecrets, capabi
   const platform = settings.platform
   if (platform?.authenticated && !hasAdvancedSettings(settings) && !selected?.id) throw new Error('平台尚未配置默认服务，请联系管理员。')
   if (!platform?.authenticated || !secrets.platformAccessToken || !platform.expiresAt || Date.parse(platform.expiresAt) <= Date.now()) throw new Error('请先登录平台账号后再使用平台服务。')
+  assertPlatformTransport(platform.baseUrl)
   const names = { llm: '回答模型', asr: '实时转写', knowledge: '远程知识库' }
   if (!platform.capabilities[capability]) throw new Error(`平台尚未启用${names[capability]}，请联系管理员。`)
   if (capability === 'llm') {

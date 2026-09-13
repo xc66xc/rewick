@@ -34,6 +34,9 @@ import { RemoteKnowledgeClient } from './services/remote-knowledge-client'
 import { answerRequestSchema, parseInput, referencePatchSchema, settingsInputSchema, sessionRecordSchema } from './services/validation'
 import type { AppEvent, Settings, SettingsInput, SessionRecord, RetrievalContext } from '../shared/types'
 import { resolveInterviewSettings } from '../shared/interview-settings'
+import { enforcePackagedStartup } from './services/startup-security'
+
+enforcePackagedStartup(app, process.argv)
 
 // IDE/terminal parents may lack NSAudioCaptureUsageDescription required by CoreAudio Tap.
 // Use Electron's documented screen-recording capture path during macOS development.
@@ -621,7 +624,7 @@ async function createWindow(): Promise<void> {
     width: 1220, height: 820, minWidth: 900, minHeight: 640,
     title: 'Interview Copilot', titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 18, y: 20 }, backgroundColor: '#F7F6F3', show: false,
-    webPreferences: { preload: join(directory, '../preload/index.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false }
+    webPreferences: { preload: join(directory, '../preload/index.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: !app.isPackaged, backgroundThrottling: false }
   })
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', event => event.preventDefault())

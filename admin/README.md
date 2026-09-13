@@ -12,6 +12,8 @@ COPILOT_ADMIN_PROXY_TARGET=http://127.0.0.1:8080 npm run dev
 
 默认访问 `http://127.0.0.1:5174`。`COPILOT_ADMIN_PROXY_TARGET` 只供 Vite 的 Node 配置使用，不注入页面。后端需按根目录部署说明配置 bootstrap 管理员并手动执行 `backend/sql/01`–`05`；已完成 `01`–`04` 的库只升级 `05_email_auth.sql`，详见 [SQL 说明](../backend/sql/README.md)。没有默认管理密码。
 
+连接公网后台时使用 `COPILOT_ADMIN_PROXY_TARGET=https://admin.junshi.icu npm run dev`。线上管理页面为 `https://admin.junshi.icu`；不要将管理代理指向 `api.junshi.icu`，该域名禁止管理接口。桌面应用则使用 `https://api.junshi.icu`，语音连接使用 WSS。
+
 ```sh
 npm test
 npm run build

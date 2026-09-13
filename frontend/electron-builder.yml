@@ -1,5 +1,8 @@
 appId: local.interview.copilot
 productName: Interview Copilot
+electronFuses:
+  enableNodeCliInspectArguments: false
+  enableNodeOptionsEnvironmentVariable: false
 directories:
   output: ../dist
 files:

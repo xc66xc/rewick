@@ -92,7 +92,7 @@ describe('custom service library', () => {
   it('honors explicit platform choices even with an existing custom key and binds service IDs', async () => {
     await store.initializeServices()
     await store.saveCustomService(draft)
-    await store.savePlatformSession('http://127.0.0.1:8080', 'business-token', new Date(Date.now() + 60000).toISOString(), info)
+    await store.savePlatformSession(defaultSettings.platform!.baseUrl, 'business-token', new Date(Date.now() + 60000).toISOString(), info)
     await store.saveSettings({ ...await store.getSettings(), serviceSelections: { llm: { source: 'platform', id: 'fast' }, asr: { source: 'platform', id: 'asr-one' }, knowledge: { source: 'platform', id: 'knowledge-one' } } })
     const { settings, secrets } = await store.getConnectionSnapshot()
     expect(routeService(settings, secrets, 'llm')).toMatchObject({ platform: true, apiKey: 'business-token', settings: { llm: { model: 'fast' } } })
@@ -102,7 +102,7 @@ describe('custom service library', () => {
   })
   it('rejects stale platform service selection instead of using a newly published binding', async () => {
     await store.initializeServices()
-    await store.savePlatformSession('http://127.0.0.1:8080', 'business-token', new Date(Date.now() + 60000).toISOString(), info)
+    await store.savePlatformSession(defaultSettings.platform!.baseUrl, 'business-token', new Date(Date.now() + 60000).toISOString(), info)
     await store.saveSettings({ ...await store.getSettings(), serviceSelections: { asr: { source: 'platform', id: 'retired' } } })
     const snapshot = await store.getConnectionSnapshot()
     expect(() => routeService(snapshot.settings, snapshot.secrets, 'asr')).toThrow('已下架')

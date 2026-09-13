@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { assertPlatformTransport } from '../../shared/platform-transport'
 import { sessionFault, SessionFault } from './session-fault'
 import type { PlatformInfo, Settings } from '../../shared/types'
 import { emailCodeResponseSchema, emailInputSchema, platformInfoSchema, platformLoginInputSchema, platformLoginResponseSchema, registerInputSchema } from './platform-schema'
@@ -10,6 +11,7 @@ const MAX_BYTES = 65_536
 export class PlatformClient {
   readonly baseUrl: string
   constructor(baseUrl: string, private readonly timeoutMs = 8000) {
+    assertPlatformTransport(baseUrl)
     this.baseUrl = parseInput(platformSettingsSchema, { enabled: true, baseUrl }).baseUrl
   }
   async login(input: unknown) {

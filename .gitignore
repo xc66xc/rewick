@@ -68,3 +68,6 @@ Desktop.ini
 /workspace/
 /docs/
 /backend/docs/
+
+# Server TLS certificate material
+/deploy/server/certs/

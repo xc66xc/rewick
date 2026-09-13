@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { defaultSettings } from '../../../shared/defaults'
+import { defaultSettings, platformBaseUrl } from '../../../shared/defaults'
 import type { DesktopBridge, Settings, SettingsInput } from '../../../shared/types'
 
 export function settingsInput(settings: Settings): SettingsInput {
   return {
     preferencesVersion: settings.preferencesVersion,
     serviceSelections: settings.serviceSelections,
-    platform: { enabled: settings.platform?.enabled ?? false, baseUrl: settings.platform?.baseUrl ?? 'http://127.0.0.1:8080', selectedModelId: settings.platform?.selectedModelId },
+    platform: { enabled: settings.platform?.enabled ?? false, baseUrl: settings.platform?.baseUrl ?? platformBaseUrl, selectedModelId: settings.platform?.selectedModelId },
     asr: { url: settings.asr.url, model: settings.asr.model, silenceMs: settings.asr.silenceMs },
     llm: { baseUrl: settings.llm.baseUrl, model: settings.llm.model, temperature: settings.llm.temperature },
     context: settings.context,

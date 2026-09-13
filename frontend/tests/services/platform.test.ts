@@ -75,7 +75,7 @@ describe('platform credentials and sessions', () => {
     await expect(new PlatformClient('https://platform.example')[method](input)).rejects.toThrow(message)
   })
   it('persists the selected platform model across restart and capability refresh, clearing it on server change', async () => {
-    const platform = { enabled: true, baseUrl: 'http://127.0.0.1:8080', selectedModelId: 'careful' }
+    const platform = { enabled: true, baseUrl: defaultSettings.platform!.baseUrl, selectedModelId: 'careful' }
     await store.saveSettings({ ...enabledInput(), platform })
     await store.savePlatformSession(platform.baseUrl, 'business-token', expiresAt(), {
       ...info, models: { ...info.models, available: [{ id: 'server-model', name: '快速回答' }, { id: 'careful', name: '深度回答' }] },
@@ -170,7 +170,7 @@ describe('platform credentials and sessions', () => {
     // Credential cleanup waits for the main-process draft handshake.
     expect((await store.getSettings()).platform?.authenticated).toBe(true)
   })
-  it.each(['http://203.0.113.10:8080', 'https://platform.example'])('accepts platform HTTP and HTTPS at %s', async baseUrl => {
+  it.each(['http://127.0.0.1:8080', 'https://platform.example'])('accepts loopback HTTP and remote HTTPS at %s', async baseUrl => {
     await store.saveSettings({ ...enabledInput(), platform: { enabled: true, baseUrl } })
     expect((await store.getSettings()).platform?.baseUrl).toBe(baseUrl)
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(info), { status: 200 }))

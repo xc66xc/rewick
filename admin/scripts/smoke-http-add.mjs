@@ -13,7 +13,7 @@ try {
         : { items: [], total: 0, page: 1, size: 20 }
     await route.fulfill({ json: value })
   })
-  await page.goto('http://101.33.245.166:8080')
+  await page.goto(process.env.COPILOT_ADMIN_URL || 'https://admin.junshi.icu')
   await page.getByRole('button', { name: '平台配置', exact: true }).click()
   await expect(page.getByText('尚无模型或服务，请添加。')).toBeVisible()
   console.log(await page.evaluate(() => ({ secureContext: isSecureContext, randomUUID: typeof crypto.randomUUID, getRandomValues: typeof crypto.getRandomValues })))
@@ -24,6 +24,6 @@ try {
   } else {
     await expect(page.getByRole('form')).toHaveCount(4)
     expect(errors).toEqual([])
-    console.log('PASS public HTTP add model, ASR, knowledge, embedding drafts; all APIs mocked, no server config changed')
+    console.log('PASS admin add model, ASR, knowledge, embedding drafts; all APIs mocked, no server config changed')
   }
 } finally { await browser.close() }

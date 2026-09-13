@@ -1,3 +1,4 @@
+import { assertPlatformTransport } from '../../shared/platform-transport'
 import { open } from 'node:fs/promises'
 import { basename, extname } from 'node:path'
 import { z } from 'zod'
@@ -74,6 +75,7 @@ export class ReferenceService {
     if (!settings.platform?.authenticated || !secrets.platformAccessToken) throw new Error('平台登录已失效，请重新登录。')
     combined.throwIfAborted()
     const multipart = body instanceof FormData
+    assertPlatformTransport(settings.platform.baseUrl)
     const response = await fetch(`${settings.platform.baseUrl}/api/v1/references${path}`, {
       method, signal: combined, redirect: 'error', headers: { Authorization: `Bearer ${secrets.platformAccessToken}`, ...(!multipart ? { 'Content-Type': 'application/json' } : {}) },
       ...(body === undefined ? {} : { body: multipart ? body : JSON.stringify(body) }),

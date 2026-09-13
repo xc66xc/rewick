@@ -2,11 +2,10 @@ import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'node:path'
+import { assertPlatformTransport, productionPlatformUrl } from './src/shared/platform-transport'
 
-const platformUrl = process.env.COPILOT_PLATFORM_URL?.trim() || 'http://127.0.0.1:8080'
-const parsed = new URL(platformUrl)
-if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('COPILOT_PLATFORM_URL must use HTTP or HTTPS.')
-if (parsed.username || parsed.password || parsed.search || parsed.hash) throw new Error('COPILOT_PLATFORM_URL must not contain credentials, query or fragment.')
+const platformUrl = process.env.COPILOT_PLATFORM_URL?.trim() || productionPlatformUrl
+assertPlatformTransport(platformUrl)
 const define = { __COPILOT_PLATFORM_URL__: JSON.stringify(platformUrl.replace(/\/+$/, '')) }
 
 export default defineConfig({

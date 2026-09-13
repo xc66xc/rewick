@@ -1,6 +1,6 @@
 # 单机部署（复用现有 PostgreSQL）
 
-此目录用于部署已编译的 Java JAR 和管理端静态文件。服务器运行 Java 21 镜像，不需要安装宿主机 JDK。`compose.yaml` 当前按验收需求通过 Nginx 统一开放 HTTP 8080 端口，公网 HTTPS 入口需另外配置。
+此目录用于部署已编译的 Java JAR 和管理端静态文件。服务器运行 Java 21 镜像，不需要安装宿主机 JDK。`compose.yaml` 通过 Nginx 提供管理后台 HTTPS 443，HTTP 80 对管理域名跳转 HTTPS；保留 IP:8080 原入口。
 
 ## 准备发布文件
 
@@ -31,14 +31,14 @@ curl -fsS http://127.0.0.1:8080/actuator/health
 
 ## 本次服务器验收
 
-服务器：`ubuntu@101.33.245.166`；部署目录：`/home/ubuntu/interview-copilot`。复用 `pgvector-postgres` 容器和 `interview_copilot` 库，新增受限账号 `copilot_backend`。部署前数据库备份在服务器 `backups/before-backend-deploy.dump`。
+服务器 SSH：`ubuntu@api.junshi.icu`（该域名当前直接解析到部署主机；如果以后接入 CDN/负载均衡，应改用独立运维域名）；部署目录：`/home/ubuntu/interview-copilot`。复用 `pgvector-postgres` 容器和 `interview_copilot` 库，新增受限账号 `copilot_backend`。部署前数据库备份在服务器 `backups/before-backend-deploy.dump`。
 
 本机 SSH 隧道：
 
 ```sh
 ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \
   -L 127.0.0.1:18080:127.0.0.1:8080 \
-  -L 127.0.0.1:15174:127.0.0.1:5174 ubuntu@101.33.245.166
+  -L 127.0.0.1:15174:127.0.0.1:5174 ubuntu@api.junshi.icu
 ```
 
 管理端 `http://127.0.0.1:15174`，统一入口 `http://127.0.0.1:18080`。桌面若需连接此验收地址，构建时设置 `COPILOT_PLATFORM_URL=http://127.0.0.1:18080`；现有桌面安装包未改变。
@@ -47,13 +47,13 @@ ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \
 
 待处理：现有 PostgreSQL 为 15.19，但容器提供的 vector 扩展文件实际为 0.8.6，业务库尚未启用扩展；另一个标记 0.5.1 的镜像为 ARM 架构。未启用错误版本，也未替换现有数据库容器。应构建 x86_64 的指定 0.5.1 镜像并另行安排数据库切换。现有数据库 5432 映射所有网卡，需另行确认安全组访问限制。
 
-## IP 地址验收
+## 公网域名入口
 
-管理页面和后端统一使用 `http://101.33.245.166:8080`，API 路径保留 `/api/v1/`，健康检查为 `/actuator/health`。公网 5174 请求无法到达服务器，因此使用已验证可达的 8080 作为 Nginx 入口。
+管理页面使用 `https://admin.junshi.icu`，桌面 API 使用 `https://api.junshi.icu`，实时转写使用 `wss://api.junshi.icu/api/v1/asr`。API 路径保留 `/api/v1/`，健康检查为 `https://api.junshi.icu/actuator/health`。管理端 API 必须通过管理域名访问，API 域名会拒绝 `/api/v1/admin/`。
 
 Nginx 映射 `0.0.0.0:8080:80`，后端容器通过内部网络访问。宿主机直连后端端口为 `127.0.0.1:18081`，管理页面原回环端口 5174 仍用于 SSH 隧道。没有向公网开放新的数据库端口。
 
-此入口仅供临时 HTTP 验收，正式部署应配置 HTTPS。桌面应用地址未改变。云安全组需允许 TCP 8080。
+旧 8080 映射目前仍保留，不能据此认为明文入口已经关闭。新的客户端构建和验收应使用以上 HTTPS/WSS 域名；支付回调等数据库配置需另行迁移，详见本文 API HTTPS 状态。
 
 ## 北京时间存储
 
@@ -84,3 +84,38 @@ Nginx 映射 `0.0.0.0:8080:80`，后端容器通过内部网络访问。宿主�
 后端健康，公网管理端已更新；管理员登录、新默认配置接口、授权列表、用户查询均验收成功，未登录访问配置返回 401。初始默认服务和授权名单为空，需要管理员在“平台配置 → 桌面高级设置权限”中保存默认回答模型、温度、转写及检索方式，再按需授权用户。
 
 旧产物在 `releases/before-advanced-settings-20260913`，旧镜像标签为 `before-advanced-settings-20260913`。桌面端需运行本地最新代码或重新打包，本次未替换安装包。
+
+## 管理后台 HTTPS（2026-09-13）
+
+- 地址：`https://admin.junshi.icu`，A 记录指向部署主机公网地址。
+- 80/443/8080 由 admin Nginx 容器提供。`nginx.conf` 和 `certs/` 只读挂载；证书不打入镜像、不提交 Git。
+- 部署目录 `certs/admin.junshi.icu_bundle.crt` 与 `certs/admin.junshi.icu.key`，目录权限 700、私钥 600。
+- 当前证书北京时间 2026-12-12 19:59:59 到期；手动下载证书，尚未配置自动续期。到期前重新签发并替换证书，执行 `docker compose exec admin nginx -t` 后 `docker compose exec admin nginx -s reload`，再检查公网证书有效期。
+- 先准备证书再启动新配置：`docker compose run --rm --no-deps admin nginx -t`，随后 `docker compose up -d --no-deps --no-build admin`。未重启 backend、未变更数据库和支付回调。
+- 验证：HTTPS 首页 200、Chrome 登录页可见、HTTP 域名 308、HTTPS 健康检查 UP、受保护 API 未登录 401、原 IP:8080 健康检查 UP。
+- 变更前线上配置留在 `backups/admin-https-20260913/`；必要时恢复其中 compose.yaml/nginx.conf 并仅重建 admin 服务。
+- `api.junshi.icu` 尚未配置；主域名 HTTP 建设中页面见下节。
+
+## 主域名与管理后台分离（2026-09-13）
+
+`junshi.icu` / `www.junshi.icu` 的 HTTP 虚拟主机使用 `landing/`，只读挂载到 `/usr/share/nginx/landing`。主页显示“网站建设中”，API 和原管理静态资源返回 404。以后可用正式落地页替换此目录。管理子域名 HTTPS 配置保持原样，旧 IP:8080 入口未修改；backend 未重启。
+
+目前只有 admin 子域证书，主域名 HTTPS 尚未部署。浏览器验收被腾讯云跳转到 `dnspod.qcloud.com/static/webblock.html?d=junshi.icu`，页面明确显示网站未完成备案。命令行 HTTP 可取得建设中页面，但不能据此认定公网浏览器可访问。管理域名在服务器侧 HTTPS 200/健康检查 UP/未登录 API 401，本机 HTTPS 连接重置；临时恢复变更前 Nginx 配置亦复现，恢复了新版分域配置。随后 Chrome 已成功打开 admin HTTPS 登录页，管理入口浏览器验收通过；主域名仍需先处理腾讯云提示的备案问题，再重新验收。
+
+本次旧配置：`backups/domain-split-20260913/`。证书续期与旧入口说明仍适用。
+
+## HTTPS 默认站点隔离（2026-09-14）
+
+修正主域名 HTTPS 会落入管理后台的问题：443 默认虚拟主机使用 ssl_reject_handshake，只有 admin.junshi.icu 匹配管理站点；管理站点同时校验 HTTP Host，不匹配返回 404。主域名未配置证书前 HTTPS 拒绝连接，HTTP 仍为建设中页面。原 IP:8080 未改变。
+
+服务器侧验证：admin HTTPS 200、root HTTPS 握手拒绝、admin SNI 配 root Host 返回 404、主域名 HTTP 建设中、旧 8080 健康 UP。外部本机 curl 访问 admin 仍存在之前已复现的连接重置，未据此宣称所有网络均正常。仅 nginx 热重载，未重启容器。旧配置 backups/nginx-before-tls-isolation-20260914.conf。
+
+## API HTTPS（2026-09-14）
+
+新增 `https://api.junshi.icu`，DNS 指向现有服务器。证书及私钥位于服务器 `certs/api.junshi.icu_bundle.crt` 和 `certs/api.junshi.icu.key`，私钥权限 600；北京时间 2026-12-12 22:59:59 到期，手动续期。只热重载 Nginx，Java 未重启。
+
+API 域名只开放 `/api/` 与健康检查，`/api/v1/admin/` 和页面根路径 404；HTTP API 域名返回 426。保留流式请求禁止缓存/缓冲、WS Upgrade 与上传限制。管理域名及主域名隔离配置不变。
+
+验证：浏览器健康检查 UP；服务器侧 HTTPS UP、管理 API 404、未登录平台接口和 WebSocket Upgrade 401。当前本机 Node.js fetch 和 ws 均 ECONNRESET，curl 直连亦失败；尚未确认根因，不降低 TLS 校验、不回退 HTTP。公网全链路验收仍未完成。
+
+支付宝配置当前仍指向旧 IP:8080 通知地址；本次保留旧入口，未修改支付配置/订单/用户令牌。S1 收尾必须解决直连失败、升级客户端、迁移支付通知，随后关闭旧公网明文业务接口并撤销旧令牌。仅新增 TLS 不能保证旧客户端安全。旧配置在 `backups/nginx-before-api-tls-20260914.conf`。
