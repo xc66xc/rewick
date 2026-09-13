@@ -47,9 +47,16 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
     void bridge.setCompact(false).catch(() => undefined)
     void bridge.setAlwaysOnTop(false).catch(() => undefined)
   }, [bridge])
+  useEffect(() => {
+    if (timer.active || !compact) return
+    let current = true
+    void bridge.setCompact(false).then(() => { if (current) setCompact(false) })
+      .catch(reason => { if (current) setWindowError(errorMessage(reason)) })
+    return () => { current = false }
+  }, [timer.active, compact, bridge])
   async function handleCompact() {
     /* v30:紧凑模式仅在面试进行中可用;静默返回会被当成按钮失灵,给出明确提示 */
-    if (!timer.active) { toast.show('紧凑模式在面试进行中可用 · 先开始面试'); return }
+    if (!timer.active && !compact) { toast.show('紧凑模式在面试进行中可用 · 先开始面试'); return }
     try { await bridge?.setCompact(!compact); setCompact(!compact); setPage('workspace') }
     catch (reason) { setWindowError(errorMessage(reason)) }
   }
@@ -63,7 +70,6 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
     await Promise.all([timer.end(), session.stop(), session.cancel()])
     await session.saveHistory().catch(reason => setWindowError(`面试已停止计时，但会话保存失败：${errorMessage(reason)}`))
     setPage('preparation')
-    if (compact) { await bridge.setCompact(false); setCompact(false) }
   }
   async function handlePrepare(input: Parameters<typeof session.saveEnvironment>[0]) {
     await session.saveEnvironment(input)

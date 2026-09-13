@@ -141,6 +141,21 @@ describe('desktop account gate', () => {
     expect(screen.getByRole('button', { name: '紧凑模式' })).toBeTruthy()
     expect(nativeWindow).toEqual({ compact: false, pinned: false })
   })
+  it.each(['time_exhausted', 'connection_expired'])('restores the full window when the interview ends automatically: %s', async endReason => {
+    const { mount, user, notify, nativeWindow, bridge } = setup(account())
+    mount()
+    await user.click(await screen.findByRole('button', { name: '开始面试' }))
+    await user.click(await screen.findByRole('button', { name: '紧凑模式' }))
+    expect(nativeWindow.compact).toBe(true)
+    const now = new Date().toISOString()
+    notify({ kind: 'wallet-changed', wallet: { availableSeconds: 0, version: 1, serverTime: now,
+      session: { id: 'session', status: 'ended', startedAt: now, expiresAt: now, endedAt: now, usedSeconds: 3600, endReason } } })
+    await screen.findByRole('heading', { name: '准备面试' })
+    await waitFor(() => expect(nativeWindow.compact).toBe(false))
+    expect(screen.getByRole('button', { name: '紧凑模式' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '恢复完整窗口' })).toBeNull()
+    expect(bridge.endInterview).not.toHaveBeenCalled()
+  })
   it('returns to login when the public token expiry passes', async () => {
     const { mount, change, platformLogout } = setup(account())
     mount()
