@@ -23,3 +23,13 @@ mac:
     NSScreenCaptureUsageDescription: 选择系统音频来源，用于实时语音转写；应用不保存屏幕画面。
 dmg:
   title: Interview Copilot
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+# 常规向导式安装（可选目录），更符合 Windows 用户习惯；改 oneClick: true 可回到双击直装
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-${version}-setup.${ext}

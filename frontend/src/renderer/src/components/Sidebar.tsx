@@ -1,6 +1,5 @@
 import { Button } from './ui/button'
 import { ClockCounterClockwise, FileText, Plus, SquaresFour, ShoppingBag } from '@phosphor-icons/react'
-import { version } from '../../../../package.json'
 import { cn } from '../lib/cn'
 
 export type Page = 'preparation' | 'workspace' | 'context' | 'history' | 'purchase'
@@ -24,7 +23,7 @@ export default function Sidebar({ page, onChange, account }: SidebarProps) {
       </Button>)}
     </nav>
     <div className="mt-auto">
-      <p className="px-3 pt-4 pb-1 text-[10.5px] leading-[1.9] text-text-secondary max-[950px]:hidden">专注对话，让思路自然发生。<span className="mt-1.5 block font-mono text-[9px] tracking-[0.1em] text-text-muted">INTERVIEW COPILOT / {version}</span></p>
+      <p className="px-3 pt-4 pb-1 text-[10.5px] leading-[1.9] text-text-secondary max-[950px]:hidden">专注对话，让思路自然发生。<span className="mt-1.5 block font-mono text-[9px] tracking-[0.1em] text-text-muted">INTERVIEW COPILOT</span></p>
       <div className="flex items-center gap-2.5 px-2 pt-3 max-[950px]:flex-col max-[950px]:justify-center max-[950px]:px-0">
         {account && <span className="grid size-[31px] shrink-0 place-items-center rounded-full bg-accent-subtle text-[10.5px] font-semibold text-accent" aria-hidden="true">{account.slice(0, 2).toUpperCase()}</span>}
         {account && <strong className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-text-primary max-[950px]:hidden">{account}</strong>}

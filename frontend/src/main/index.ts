@@ -642,8 +642,12 @@ function registerHandlers(): void {
 async function createWindow(): Promise<void> {
   window = new BrowserWindow({
     width: 1220, height: 820, minWidth: 900, minHeight: 640,
-    title: 'Interview Copilot', titleBarStyle: 'hiddenInset',
+    // mac 沿用 hiddenInset(红绿灯悬浮左上);Windows 隐藏原生标题栏,改用系统窗口控制按钮悬浮右上(Window Controls Overlay)
+    title: 'Interview Copilot', titleBarStyle: process.platform === 'win32' ? 'hidden' : 'hiddenInset',
+    ...(process.platform === 'win32' ? { titleBarOverlay: { color: '#ffffff', symbolColor: '#2a2a2e', height: 50 } } : {}),
     trafficLightPosition: { x: 18, y: 20 }, backgroundColor: '#F7F6F3', show: false,
+    // Windows 隐藏顶部菜单栏(按 Alt 可临时呼出),菜单角色快捷键仍有效;无边框窗口下菜单条会破坏顶栏布局,开发版同样隐藏。mac 不变
+    autoHideMenuBar: process.platform === 'win32',
     webPreferences: { preload: join(directory, '../preload/index.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: !app.isPackaged, backgroundThrottling: false }
   })
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))

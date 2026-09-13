@@ -13,6 +13,8 @@
     "test:e2e": "node scripts/smoke.mjs",
     "pack": "npm run build && electron-builder --mac dir --arm64",
     "dist": "npm run build && electron-builder --mac dmg --arm64",
+    "pack:win": "node scripts/package.mjs win dir x64",
+    "dist:win": "node scripts/package.mjs win nsis x64",
     "test:rag": "node scripts/smoke-rag.mjs",
     "test:environments": "node scripts/smoke-environments.mjs",
     "test:remote-knowledge": "node scripts/smoke-remote-knowledge.mjs",
