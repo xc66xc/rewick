@@ -1,5 +1,4 @@
 User-agent: *
 Allow: /
 
-# 拿到正式域名后取消下一行注释并替换域名
-# Sitemap: https://your-domain.com/sitemap.xml
+Sitemap: https://rewick.netlify.app/sitemap.xml

@@ -71,3 +71,6 @@ Desktop.ini
 
 # Server TLS certificate material
 /deploy/server/certs/
+
+# Local Netlify folder
+.netlify
