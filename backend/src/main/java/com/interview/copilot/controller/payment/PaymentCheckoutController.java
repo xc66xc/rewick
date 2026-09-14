@@ -37,13 +37,13 @@ public class PaymentCheckoutController {
         return checkout.issue(user.id(), id);
     }
 
-    @GetMapping({"/api/v1/payments/alipay/checkout", "/api/v1/payments/zpay/checkout"})
+    @GetMapping("/api/v1/payments/alipay/checkout")
     public ResponseEntity<String> confirm(@RequestParam String ticket) {
         return html(checkout.confirm(ticket));
     }
 
     @PostMapping(
-            value = {"/api/v1/payments/alipay/checkout", "/api/v1/payments/zpay/checkout"},
+            value = "/api/v1/payments/alipay/checkout",
             consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
     public ResponseEntity<String> submit(InputStream body) throws IOException {
         var values = AlipayFormConverter.parameters(body).get("ticket");
@@ -61,7 +61,7 @@ public class PaymentCheckoutController {
                         "default-src 'none'; script-src 'sha256-"
                                 + submitScriptHash()
                                 + "'; form-action 'self' https://openapi.alipay.com"
-                                + " https://openapi-sandbox.dl.alipaydev.com https://zpayz.cn https://z-pay.cn; base-uri 'none';"
+                                + " https://openapi-sandbox.dl.alipaydev.com; base-uri 'none';"
                                 + " frame-ancestors 'none'")
                 .body(body);
     }

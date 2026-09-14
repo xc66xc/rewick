@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DesktopBridge } from '../src/shared/types'
 import type { CreatePaymentOrder, PaymentMethod, PaymentOrder } from '../src/shared/payment'
 import PurchasePage from '../src/renderer/src/components/payment/PurchasePage'
+import QRCode from 'qrcode'
 vi.mock('qrcode', () => ({ default: { toDataURL: vi.fn(async () => 'data:image/png;base64,test') } }))
 vi.mock('../src/renderer/src/components/ui/toast', () => ({ toast: { show: vi.fn() } }))
 const item = { id: 1, version: 2, name: '面试两小时', description: '适合两场面试', durationSeconds: 7200, originalPriceCents: 2000, discountBps: 8000, priceCents: 1600, sortOrder: 1, enabled: true }
@@ -131,15 +132,40 @@ describe('PurchasePage', () => {
 
 })
 
-it('offers ZPAY as an independent browser channel with local cancellation disclosure', async () => {
+it('shows the ZPAY API QR code without opening a browser and preserves it when reopened', async () => {
   const { api } = setup(true, [], ['wechat', 'alipay', 'zpay'])
+  api.createPaymentOrder.mockResolvedValueOnce({ ...order, paymentMethod: 'zpay', codeUrl: 'https://qr.alipay.com/test-payment' })
   const user = userEvent.setup()
   await user.click(await screen.findByRole('button', { name: 'ZPAY支付' }))
   await user.click(screen.getByRole('button', { name: '购买 面试两小时' }))
-  await user.click(await screen.findByRole('button', { name: '打开ZPAY收银台' }))
+  await screen.findByRole('img', { name: 'ZPAY 付款二维码' })
   expect(api.createPaymentOrder).toHaveBeenCalledWith(expect.objectContaining({ paymentMethod: 'zpay' }))
-  expect(api.openPaymentCheckout).toHaveBeenCalledWith('order-1')
-  expect(screen.queryByRole('img')).toBeNull()
+  expect(api.openPaymentCheckout).not.toHaveBeenCalled()
+  expect(QRCode.toDataURL).toHaveBeenCalledWith('https://qr.alipay.com/test-payment', expect.any(Object))
+  expect(screen.queryByRole('button', { name: '打开ZPAY收银台' })).toBeNull()
   expect(screen.getByText(/取消或超时仅关闭本地订单/)).toBeTruthy()
   expect(screen.getByText(/本次付款入口剩余/)).toBeTruthy()
+  await user.click(screen.getAllByRole('button', { name: '关闭' })[0])
+  await user.click(screen.getByRole('button', { name: '查看订单' }))
+  await screen.findByRole('img', { name: 'ZPAY 付款二维码' })
+  expect(api.createPaymentOrder).toHaveBeenCalledTimes(1)
+})
+
+it('removes the ZPAY QR code when a refreshed order is credited', async () => {
+  const { onCredited } = setup(true, [{ ...order, paymentMethod: 'zpay', codeUrl: 'https://qr.alipay.com/test-payment' }], ['zpay'])
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: '查看订单' }))
+  await screen.findByRole('img', { name: 'ZPAY 付款二维码' })
+  await user.click(screen.getByRole('button', { name: '查看支付结果' }))
+  await waitFor(() => expect(onCredited).toHaveBeenCalledTimes(1))
+  expect(screen.queryByRole('img')).toBeNull()
+})
+
+it.each(['closed', 'expired'] as const)('hides the ZPAY QR code for a %s order while allowing result checks', async state => {
+  setup(true, [{ ...order, paymentMethod: 'zpay', codeUrl: 'https://qr.alipay.com/test-payment', status: state === 'closed' ? 'closed' : 'pending', expiresAt: state === 'expired' ? new Date(Date.now() - 1000).toISOString() : order.expiresAt }], ['zpay'])
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: '查看订单' }))
+  expect(screen.queryByRole('img')).toBeNull()
+  expect(screen.getByRole('button', { name: '查看支付结果' })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: '打开ZPAY收银台' })).toBeNull()
 })

@@ -27,7 +27,7 @@ public final class ZpayConfigValidation {
         if (!PAYMENT_TYPES.contains(value.paymentType())) {
             throw PaymentErrors.invalid("ZPAY 支付类型只能是 alipay 或 wxpay");
         }
-        validateEndpoint(value.gatewayUrl(), "/submit.php");
+        validateEndpoint(value.gatewayUrl(), "/mapi.php");
         validateEndpoint(value.queryUrl(), "/api.php");
         if (!value.notifyUrl().isBlank()) secureUri(value.notifyUrl());
         if (!value.returnUrl().isBlank()) secureUri(value.returnUrl());

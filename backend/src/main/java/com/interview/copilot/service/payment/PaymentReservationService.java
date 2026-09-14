@@ -8,5 +8,6 @@ public interface PaymentReservationService {
             long packageId,
             long packageVersion,
             String requestId,
-            String paymentMethod);
+            String paymentMethod,
+            String clientIp);
 }

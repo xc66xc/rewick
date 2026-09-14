@@ -25,7 +25,7 @@ export default function PaymentOrderDialog({ order, busy, onClose, onRefresh, on
   useEffect(() => {
     let live = true
     setImage('')
-    if (order.paymentMethod === 'wechat' && order.codeUrl && payable) void QRCode.toDataURL(order.codeUrl, { width: 264, margin: 2 }).then(value => { if (live) setImage(value) }).catch(() => { if (live) toast.show('二维码生成失败，请关闭后重新打开订单。', { type: 'error' }) })
+    if (order.paymentMethod !== 'alipay' && order.codeUrl && payable) void QRCode.toDataURL(order.codeUrl, { width: 264, margin: 2 }).then(value => { if (live) setImage(value) }).catch(() => { if (live) toast.show('二维码生成失败，请关闭后重新打开订单。', { type: 'error' }) })
     return () => { live = false }
   }, [order.codeUrl, order.paymentMethod, payable])
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer) }, [])
@@ -34,9 +34,9 @@ export default function PaymentOrderDialog({ order, busy, onClose, onRefresh, on
       <h2 className="text-lg font-semibold">{order.packageName}</h2>
       <p className="text-3xl font-semibold text-accent-text">{money(order.totalCents)}</p>
       <p className="text-sm text-text-secondary">购买 {formatDuration(order.durationSeconds)} · 长期有效</p>
-      {payable && image && <img src={image} width={264} height={264} alt={`使用手机${paymentBrand(order.paymentMethod)}扫描此二维码支付`} />}
-      {payable && order.paymentMethod !== 'wechat' && <Button variant="primary" loading={busy} onClick={onOpenCheckout}>打开{paymentBrand(order.paymentMethod)}收银台</Button>}
-      {payable && <p className="text-xs text-text-secondary">{order.paymentMethod !== 'wechat' ? '请在浏览器完成支付，随后返回客户端' : '请使用手机微信扫码'} · {order.paymentMethod === 'zpay' ? '本次付款入口剩余' : '剩余'} {formatDuration(remaining)}</p>}
+      {payable && image && <img src={image} width={264} height={264} alt={order.paymentMethod === 'zpay' ? 'ZPAY 付款二维码' : '使用手机微信扫描此二维码支付'} />}
+      {payable && order.paymentMethod === 'alipay' && <Button variant="primary" loading={busy} onClick={onOpenCheckout}>打开支付宝收银台</Button>}
+      {payable && <p className="text-xs text-text-secondary">{order.paymentMethod === 'alipay' ? '请在浏览器完成支付，随后返回客户端' : order.paymentMethod === 'zpay' ? '请使用对应的支付宝或微信扫码付款' : '请使用手机微信扫码'} · {order.paymentMethod === 'zpay' ? '本次付款入口剩余' : '剩余'} {formatDuration(remaining)}</p>}
       {!payable && !order.credited && order.status !== 'closed' && <p className="text-xs text-text-secondary">{remaining === 0 ? '支付时间已到，正在核实订单最终状态。' : '正在核实订单，请稍候。'}</p>}
       <p role="status" className="text-sm font-medium">{orderStatus(order)}</p>
       <p className="text-xs leading-relaxed text-text-muted">关闭窗口不会取消订单，可在购买记录继续查看。时长到账后不会自动开始面试。</p>

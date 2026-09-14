@@ -37,7 +37,6 @@ public class SecurityConfiguration {
                                                 "/api/v1/invitations/settings",
                                                 "/api/v1/client-downloads",
                                                 "/api/v1/payments/alipay/checkout",
-                                                "/api/v1/payments/zpay/checkout",
                                                 "/api/v1/payments/zpay/notify",
                                                 "/downloads/*/*")
                                         .permitAll()
@@ -55,8 +54,7 @@ public class SecurityConfiguration {
                                                 HttpMethod.POST,
                                                 "/api/v1/payments/wechat/notify",
                                                 "/api/v1/payments/alipay/notify",
-                                                "/api/v1/payments/alipay/checkout",
-                                                "/api/v1/payments/zpay/checkout")
+                                                "/api/v1/payments/alipay/checkout")
                                         .permitAll()
                                         .requestMatchers("/api/v1/admin/**")
                                         .hasRole("ADMIN")

@@ -38,11 +38,11 @@ public class PaymentOrderServiceImpl implements PaymentOrderService {
             long packageId,
             long packageVersion,
             String requestId,
-            String paymentMethod) {
+            String paymentMethod, String clientIp) {
         var active = orders.active(userId);
         if (active != null) sync.sync(active.id());
         var order =
-                reservations.reserve(userId, packageId, packageVersion, requestId, paymentMethod);
+                reservations.reserve(userId, packageId, packageVersion, requestId, paymentMethod, clientIp);
         return refresh(userId, order.id());
     }
 

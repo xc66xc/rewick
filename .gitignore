@@ -78,3 +78,4 @@ Desktop.ini
 # Runtime client installers (published and temporary uploads)
 /backend/data/client-downloads/
 /data/client-downloads/
+/scripts/

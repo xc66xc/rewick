@@ -48,13 +48,13 @@ class ZpayConfigServiceImplTest {
 
     @Test
     void save_validConfig_encryptsSecretAndPreservesBlankUpdate() {
-        var saved = service.save(7, input("https://zpayz.cn/submit.php", "merchant-test-secret"));
+        var saved = service.save(7, input("https://zpayz.cn/mapi.php", "merchant-test-secret"));
         assertThat(saved.hasMerchantKey()).isTrue();
         assertThat(stored.get().merchantKey()).doesNotContain("merchant-test-secret");
         assertThat(cipher.decrypt("zpay-merchant", stored.get().merchantKey())).isEqualTo("merchant-test-secret");
         String encrypted = stored.get().merchantKey();
 
-        service.save(7, input("https://zpayz.cn/submit.php", ""));
+        service.save(7, input("https://zpayz.cn/mapi.php", ""));
         assertThat(stored.get().merchantKey()).isEqualTo(encrypted);
         assertThat(service.available()).isTrue();
     }
@@ -62,15 +62,15 @@ class ZpayConfigServiceImplTest {
     @Test
     void save_staleVersion_rejectsWithoutWrite() {
         stored.set(new ZpayConfigEntity(3, false, "", "", "", "", "", "", "", ""));
-        assertThatThrownBy(() -> service.save(7, input("https://zpayz.cn/submit.php", "secret")))
+        assertThatThrownBy(() -> service.save(7, input("https://zpayz.cn/mapi.php", "secret")))
                 .isInstanceOf(ApiException.class).hasMessageContaining("配置已变更");
         verify(mapper, never()).insert(any());
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"http://zpayz.cn/submit.php", "https://example.com/submit.php",
-            "https://zpayz.cn", "https://zpayz.cn/submit.php?x=1", "https://x@zpayz.cn/submit.php",
-            "https://zpayz.cn/submit.php#x", "https://zpayz.cn:8443/submit.php"})
+    @ValueSource(strings = {"http://zpayz.cn/mapi.php", "https://example.com/mapi.php",
+            "https://zpayz.cn", "https://zpayz.cn/submit.php", "https://zpayz.cn/mapi.php?x=1", "https://x@zpayz.cn/mapi.php",
+            "https://zpayz.cn/mapi.php#x", "https://zpayz.cn:8443/mapi.php"})
     void save_invalidGateway_rejectsWithoutWrite(String endpoint) {
         assertThatThrownBy(() -> service.save(7, input(endpoint, "secret"))).isInstanceOf(ApiException.class);
         verify(mapper, never()).insert(any());
@@ -86,7 +86,7 @@ class ZpayConfigServiceImplTest {
 
     @Test
     void save_enableWithoutMerchantKey_rejects() {
-        assertThatThrownBy(() -> service.save(7, input("https://z-pay.cn/submit.php", "")))
+        assertThatThrownBy(() -> service.save(7, input("https://z-pay.cn/mapi.php", "")))
                 .isInstanceOf(ApiException.class).hasMessageContaining("完整填写");
     }
 

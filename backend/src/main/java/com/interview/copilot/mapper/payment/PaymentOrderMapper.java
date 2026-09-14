@@ -59,9 +59,18 @@ public interface PaymentOrderMapper {
 
     @Insert(
             "INSERT INTO"
-                + " payment_orders(order_id,app_users_id,request_id,time_packages_id,package_version,package_name,duration_seconds,total_cents,payment_config_versions_id,expires_at,created_at,updated_at,payment_method)"
-                + " VALUES(#{o.id},#{o.userId},#{requestId},#{o.packageId},#{o.packageVersion},#{o.packageName},#{o.durationSeconds},#{o.totalCents},#{o.configVersion},#{o.expiresAt},#{o.createdAt},#{o.createdAt},#{o.paymentMethod})")
-    void create(@Param("o") PaymentOrderEntity o, @Param("requestId") String requestId);
+                + " payment_orders(order_id,app_users_id,request_id,time_packages_id,package_version,package_name,duration_seconds,total_cents,payment_config_versions_id,expires_at,created_at,updated_at,payment_method,client_ip)"
+                + " VALUES(#{o.id},#{o.userId},#{requestId},#{o.packageId},#{o.packageVersion},#{o.packageName},#{o.durationSeconds},#{o.totalCents},#{o.configVersion},#{o.expiresAt},#{o.createdAt},#{o.createdAt},#{o.paymentMethod},#{clientIp})")
+    void create(@Param("o") PaymentOrderEntity o, @Param("requestId") String requestId,
+            @Param("clientIp") String clientIp);
+
+    @Select("SELECT client_ip FROM payment_orders WHERE order_id=#{id}")
+    String clientIp(String id);
+
+    @Update("UPDATE payment_orders SET is_create_attempted=TRUE WHERE order_id=#{id}"
+            + " AND payment_method='zpay' AND status='creating' AND NOT is_create_attempted"
+            + " AND expires_at>LOCALTIMESTAMP")
+    int claimZpayCreate(String id);
 
     @Update(
             "UPDATE payment_orders SET status='pending',updated_at=LOCALTIMESTAMP WHERE"
@@ -111,8 +120,7 @@ public interface PaymentOrderMapper {
     @Select("SELECT o.order_id FROM payment_orders o WHERE o.payment_method='zpay'"
             + " AND o.status='closed' AND NOT o.is_credited AND o.created_at>#{since}"
             + " AND (o.last_query_at IS NULL OR o.last_query_at<#{threshold})"
-            + " AND EXISTS(SELECT 1 FROM payment_checkout_tickets t"
-            + " WHERE t.payment_orders_id=o.id AND t.is_consumed)"
+            + " AND o.is_create_attempted"
             + " ORDER BY o.last_query_at NULLS FIRST,o.id LIMIT 10")
     List<String> closedZpay(@Param("since") LocalDateTime since,
             @Param("threshold") LocalDateTime threshold);

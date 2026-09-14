@@ -190,7 +190,7 @@ describe('ZPAY management', () => {
     await actor.type(screen.getByLabelText('ZPAY 商户密钥'), 'test-secret')
     await actor.click(screen.getByRole('button', { name: '保存 ZPAY 设置' }))
     await waitFor(() => expect(writes).toHaveLength(1))
-    expect(writes[0]).toEqual({ version: 3, enabled: false, pid: '12345', paymentType: 'wxpay', merchantKey: 'test-secret', gatewayUrl: 'https://zpayz.cn/submit.php', queryUrl: 'https://zpayz.cn/api.php', notifyUrl: 'https://api.junshi.icu/api/v1/payments/zpay/notify', returnUrl: 'https://junshi.icu/payment/result', cid: '' })
+    expect(writes[0]).toEqual({ version: 3, enabled: false, pid: '12345', paymentType: 'wxpay', merchantKey: 'test-secret', gatewayUrl: 'https://zpayz.cn/mapi.php', queryUrl: 'https://zpayz.cn/api.php', notifyUrl: 'https://api.junshi.icu/api/v1/payments/zpay/notify', returnUrl: 'https://junshi.icu/payment/result', cid: '' })
     await screen.findByText('ZPAY 设置已保存。')
     await actor.click(screen.getByRole('button', { name: '微信支付' }))
     await actor.click(screen.getByRole('button', { name: 'ZPAY' }))

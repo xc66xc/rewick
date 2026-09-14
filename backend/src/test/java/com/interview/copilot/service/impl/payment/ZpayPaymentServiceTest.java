@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * @author Carl Wang
  * @date 2026-09-14
- * @description 验证 ZPAY 表单安全、严格查单及通知校验。
+ * @description 验证 ZPAY 二维码下单、严格查单及通知校验。
  */
 class ZpayPaymentServiceTest {
     private HttpServer server;
@@ -30,8 +30,13 @@ class ZpayPaymentServiceTest {
     private ZpayPaymentServiceImpl service;
     private String response;
     private String requestedQuery;
+    private String createResponse;
+    private String requestBody;
+    private String contentType;
+    private String accept;
+    private int createStatus;
     private final PaymentOrderDTO order = new PaymentOrderDTO("123456", 1, "套餐\"<script>&", 60, 120,
-            Instant.parse("2026-09-14T12:00:00Z"));
+            Instant.parse("2026-09-14T12:00:00Z"), "203.0.113.8");
 
     @BeforeEach
     void setUp() throws Exception {
@@ -42,22 +47,89 @@ class ZpayPaymentServiceTest {
             exchange.sendResponseHeaders(200, bytes.length);
             try (var output = exchange.getResponseBody()) { output.write(bytes); }
         });
+        server.createContext("/mapi.php", exchange -> {
+            requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            contentType = exchange.getRequestHeaders().getFirst("Content-Type");
+            accept = exchange.getRequestHeaders().getFirst("Accept");
+            byte[] bytes = createResponse.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(createStatus, bytes.length);
+            try (var output = exchange.getResponseBody()) { output.write(bytes); }
+        });
         server.start();
         config = config("http://127.0.0.1:" + server.getAddress().getPort() + "/api.php");
         service = new ZpayPaymentServiceImpl(new ObjectMapper());
         response = success("1");
+        createResponse = "{\"code\":1,\"qrcode\":\"https://qr.alipay.com/test-qr\"}";
+        createStatus = 200;
     }
 
     @AfterEach
     void tearDown() { server.stop(0); }
 
     @Test
-    void create_specialCharacters_escapesFormWithoutExposingMerchantKey() {
-        String html = service.create(config, order);
+    void create_validResponse_sendsSignedMultipartAndReturnsQr() {
+        String qr = service.create(config, order);
 
-        assertThat(html).contains("action=\"https://z-pay.cn/submit.php\"", "套餐&quot;&lt;script&gt;&amp;",
-                "document.forms[0].submit();", "name=\"money\" value=\"1.20\"", "name=\"cid\" value=\"456\"")
-                .doesNotContain("merchant-secret", "套餐\"<script>");
+        assertThat(qr).isEqualTo("https://qr.alipay.com/test-qr");
+        assertThat(accept).isEqualTo("*/*");
+        assertThat(contentType).startsWith("multipart/form-data; boundary=");
+        Map<String, String> fields = multipartFields();
+        assertThat(fields).containsEntry("clientip", "203.0.113.8").containsEntry("device", "pc")
+                .containsEntry("money", "1.20").containsEntry("name", order.packageName())
+                .containsEntry("cid", "456").containsEntry("out_trade_no", order.id());
+        ZpaySignature.verify(fields, config.merchantKey());
+        assertThat(requestBody).doesNotContain("merchant-secret");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{\"code\":0}", "{\"code\":1,\"payurl\":\"https://example.test\"}",
+            "{\"code\":1,\"qrcode\":123}", "{\"code\":1,\"qrcode\":\" \"}", "[]", "bad-json"})
+    void create_invalidQrResponse_rejectsWithoutPayurlFallback(String body) {
+        createResponse = body;
+
+        assertThatThrownBy(() -> service.create(config, order)).isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void create_missingIp_rejectsBeforeCallingProvider() {
+        var missingIp = new PaymentOrderDTO(order.id(), 1, "套餐", 60, 120, order.expiresAt());
+
+        assertThatThrownBy(() -> service.create(config, missingIp)).isInstanceOf(ApiException.class);
+        assertThat(requestBody).isNull();
+    }
+
+    @Test
+    void create_oversizedQr_rejectsResponse() {
+        createResponse = "{\"code\":1,\"qrcode\":\"" + "x".repeat(2049) + "\"}";
+
+        assertThatThrownBy(() -> service.create(config, order)).isInstanceOf(ApiException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {302, 500, 502})
+    void create_httpFailure_rejectsResponse(int status) {
+        createStatus = status;
+
+        assertThatThrownBy(() -> service.create(config, order)).isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void create_oversizedResponse_rejectsWithoutRetry() {
+        createResponse = " ".repeat(70000);
+
+        assertThatThrownBy(() -> service.create(config, order)).isInstanceOf(ApiException.class);
+    }
+
+    private Map<String, String> multipartFields() {
+        String boundary = contentType.substring(contentType.indexOf("boundary=") + 9);
+        Map<String, String> fields = new HashMap<>();
+        for (String part : requestBody.split("--" + boundary)) {
+            int start = part.indexOf("name=\"");
+            if (start < 0) continue;
+            int end = part.indexOf('"', start + 6);
+            fields.put(part.substring(start + 6, end), part.substring(part.indexOf("\r\n\r\n") + 4, part.length() - 2));
+        }
+        return fields;
     }
 
     @Test
@@ -219,7 +291,7 @@ class ZpayPaymentServiceTest {
     }
 
     private ZpayConfigDTO config(String queryUrl) {
-        return new ZpayConfigDTO(1, true, "123", "alipay", "https://z-pay.cn/submit.php", queryUrl,
+        return new ZpayConfigDTO(1, true, "123", "alipay", "http://127.0.0.1:" + server.getAddress().getPort() + "/mapi.php", queryUrl,
                 "https://api.example.test/notify", "https://example.test/result", "456", "merchant-secret");
     }
 }

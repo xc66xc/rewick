@@ -44,7 +44,7 @@ public class PaymentReservationServiceImpl implements PaymentReservationService 
             long packageId,
             long packageVersion,
             String requestId,
-            String paymentMethod) {
+            String paymentMethod, String clientIp) {
         if (wallets.lockUser(userId) == null) throw PaymentErrors.missing();
         var previous = orders.byRequest(userId, requestId);
         if (previous != null) {
@@ -88,7 +88,7 @@ public class PaymentReservationServiceImpl implements PaymentReservationService 
                         0,
                         0,
                         paymentMethod);
-        orders.create(order, requestId);
+        orders.create(order, requestId, clientIp);
         return PaymentConverter.orderResponse(orders.find(id), true);
     }
 }

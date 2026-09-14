@@ -9,6 +9,7 @@ import com.interview.copilot.service.payment.PackageService;
 import com.interview.copilot.service.payment.PaymentOrderService;
 
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -42,13 +43,13 @@ public class PaymentController {
     @PostMapping("/payment-orders")
     public PaymentOrderResponse create(
             @AuthenticationPrincipal UserPrincipal user,
-            @Valid @RequestBody CreatePaymentOrderRequest p) {
+            @Valid @RequestBody CreatePaymentOrderRequest p, HttpServletRequest request) {
         return orders.create(
                 user.id(),
                 p.packageId(),
                 p.packageVersion(),
                 p.requestId().toString(),
-                p.paymentMethod());
+                p.paymentMethod(), request.getRemoteAddr());
     }
 
     @GetMapping("/payment-orders")

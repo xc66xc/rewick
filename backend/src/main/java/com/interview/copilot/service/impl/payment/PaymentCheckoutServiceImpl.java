@@ -63,7 +63,7 @@ public class PaymentCheckoutServiceImpl implements PaymentCheckoutService {
         var entry = ticket(ticket);
         var order = orders.find(entry.orderId());
         payable(order);
-        String label = "zpay".equals(order.paymentMethod()) ? "ZPAY" : "支付宝";
+        String label = "支付宝";
         return "<!doctype html><html lang=zh-CN><meta charset=utf-8><meta name=viewport"
                    + " content='width=device-width,initial-scale=1'>"
                    + "<title>付款</title><body><h1>前往" + label + "收银台</h1>"
@@ -101,7 +101,7 @@ public class PaymentCheckoutServiceImpl implements PaymentCheckoutService {
 
     private void payable(PaymentOrderEntity order) {
         if (order == null) throw PaymentErrors.missing();
-        if (!("alipay".equals(order.paymentMethod()) || "zpay".equals(order.paymentMethod()))
+        if (!"alipay".equals(order.paymentMethod())
                 || !"pending".equals(order.status())
                 || order.credited()
                 || !order.expiresAt().isAfter(ServerTime.now(clock)))

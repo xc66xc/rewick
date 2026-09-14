@@ -12,7 +12,8 @@ public interface PaymentOrderService {
             long packageId,
             long packageVersion,
             String requestId,
-            String paymentMethod);
+            String paymentMethod,
+            String clientIp);
 
     PaymentOrderResponse read(Long userId, String id);
 

@@ -45,7 +45,6 @@ public interface PaymentCheckoutMapper {
     @Delete(
             "DELETE FROM payment_checkout_tickets t USING payment_orders o WHERE"
                 + " t.payment_orders_id=o.id AND t.expires_at<#{before} AND o.status IN"
-                + " ('paid','closed') AND (o.payment_method<>'zpay' OR o.is_credited"
-                + " OR NOT t.is_consumed OR o.created_at<#{before}-INTERVAL '29 days')")
+                + " ('paid','closed')")
     void cleanup(LocalDateTime before);
 }

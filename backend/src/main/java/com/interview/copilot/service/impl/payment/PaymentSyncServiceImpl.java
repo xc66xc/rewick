@@ -58,13 +58,18 @@ public class PaymentSyncServiceImpl implements PaymentSyncService {
             orders.close(orderId);
             return;
         }
-        if (List.of("alipay", "zpay").contains(order.paymentMethod()) && "creating".equals(order.status())) {
+        if ("alipay".equals(order.paymentMethod()) && "creating".equals(order.status())) {
             if (order.expiresAt().isAfter(now)) orders.ready(orderId);
             else orders.close(orderId);
             return;
         }
-        if ("zpay".equals(order.paymentMethod()) && !"closed".equals(order.status())
-                && !tickets.submitted(orderId)) return;
+        if ("zpay".equals(order.paymentMethod()) && orders.claimZpayCreate(orderId) == 1) {
+            var creation = new com.interview.copilot.dto.payment.PaymentOrderDTO(request.id(),
+                    request.userId(), request.packageName(), request.durationSeconds(), request.totalCents(),
+                    request.expiresAt(), orders.clientIp(orderId));
+            orders.qr(orderId, providers.create("zpay", order.configVersion(), creation));
+            return;
+        }
         var result = providers.query(order.paymentMethod(), order.configVersion(), request);
         providers.validateIdentity(order.paymentMethod(), order.configVersion(), result);
         if (!order.id().equals(result.orderId())) throw PaymentErrors.invalid("支付查询结果与当前订单不匹配");
@@ -84,7 +89,7 @@ public class PaymentSyncServiceImpl implements PaymentSyncService {
             return;
         }
         // Page-pay trades may not exist until the browser submits the cashier form.
-        if (List.of("alipay", "zpay").contains(order.paymentMethod())) return;
+        if ("alipay".equals(order.paymentMethod())) return;
         if ("NOTFOUND".equals(result.state())
                 || ("NOTPAY".equals(result.state()) && order.codeUrl() == null))
             orders.qr(

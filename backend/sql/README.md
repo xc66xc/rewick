@@ -4,6 +4,7 @@ PostgreSQL 15.19 / pgvector 0.8.6。脚本手动按编号执行；后端不使�
 
 | 文件 | 用途 |
 | --- | --- |
+| `22_zpay_api_qr.sql` | ZPAY API 下单客户端 IP、一次性请求标记；停用旧表单地址配置，需管理端明确改为 mapi.php 后启用 |
 | `01_schema.sql` | 账号、令牌、额度与调用记录 |
 | `02_pgvector.sql` | 启用并检查 pgvector 0.8.6 |
 | `03_admin_users.sql` | 管理员角色、用户额度与操作记录 |
