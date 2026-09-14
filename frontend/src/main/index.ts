@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { invitationSettingsSchema, invitationSummarySchema } from '../shared/invitation'
 import { DesktopSessionMonitor } from './services/desktop-session-monitor'
 import { onSessionFault } from './services/session-fault'
 import { PaymentClient } from './services/payment-client'
@@ -314,7 +315,7 @@ function assertSender(event: IpcMainInvokeEvent): void {
 }
 
 function registerHandlers(): void {
-  const publicChannels = new Set(['settings:get', 'settings:save', 'platform:remembered-login', 'platform:login', 'platform:register', 'platform:email-code', 'platform:password-reset-code', 'platform:password-reset', 'platform:logout', 'platform:refresh', 'asr:stop', 'answer:cancel', 'window:compact', 'window:pin'])
+  const publicChannels = new Set(['invitation:settings', 'settings:get', 'settings:save', 'platform:remembered-login', 'platform:login', 'platform:register', 'platform:email-code', 'platform:password-reset-code', 'platform:password-reset', 'platform:logout', 'platform:refresh', 'asr:stop', 'answer:cancel', 'window:compact', 'window:pin'])
   const handle = (channel: string, callback: (arg: unknown) => unknown): void => {
     ipcMain.handle(channel, async (event, envelope: unknown) => {
       assertSender(event)
@@ -357,6 +358,19 @@ function registerHandlers(): void {
     try { return await operation(new PaymentClient(connection, controller.signal)) }
     finally { release() }
   }
+  handle('invitation:settings', async () => {
+    const { settings } = await authSettings.getConnectionSnapshot()
+    return invitationSettingsSchema.parse(await new PlatformClient(settings.platform?.baseUrl ?? platformBaseUrl).invitationRequest('/api/v1/invitations/settings'))
+  })
+  const invitationRequest = async (create: boolean) => {
+    const revision = platformWork.revision
+    const connection = await walletConnection()
+    const result = invitationSummarySchema.parse(await new PlatformClient(connection.baseUrl).invitationRequest(create ? '/api/v1/invitations/me/code' : '/api/v1/invitations/me', connection.token, create ? {} : undefined))
+    if (platformWork.revision !== revision) throw new Error('账户已切换，邀请信息已丢弃。')
+    return result
+  }
+  handle('invitation:mine', () => invitationRequest(false))
+  handle('invitation:code', () => invitationRequest(true))
   handle('session:stage', () => undefined)
   handle('payments:catalog', () => paymentRequest(client => client.catalog()))
   handle('payments:list', () => paymentRequest(client => client.orders()))

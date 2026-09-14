@@ -1,8 +1,9 @@
 import { z } from 'zod'
+import { invitationErrors } from '../../shared/invitation'
 import { assertPlatformTransport } from '../../shared/platform-transport'
 import { sessionFault, SessionFault } from './session-fault'
 import type { PlatformInfo, Settings } from '../../shared/types'
-import { emailCodeResponseSchema, emailInputSchema, platformInfoSchema, platformLoginInputSchema, platformLoginResponseSchema, registerInputSchema } from './platform-schema'
+import { emailCodeResponseSchema, emailInputSchema, platformInfoSchema, platformLoginInputSchema, platformLoginResponseSchema, registerInputSchema, passwordResetInputSchema } from './platform-schema'
 import { parseInput, platformSettingsSchema } from './validation'
 import type { ServiceSecrets, SettingsStore } from './settings-store'
 
@@ -35,8 +36,9 @@ export class PlatformClient {
     return parseInput(emailCodeResponseSchema, raw)
   }
   async resetPassword(input: unknown): Promise<void> {
-    await this.request('/api/v1/auth/password-reset', undefined, parseInput(registerInputSchema, input))
+    await this.request('/api/v1/auth/password-reset', undefined, parseInput(passwordResetInputSchema, input))
   }
+  async invitationRequest(path: string, token?: string, body?: unknown) { return this.request(path, token, body) }
   async info(token: string, signal?: AbortSignal): Promise<PlatformInfo> {
     const parsed = platformInfoSchema.safeParse(await this.request('/api/v1/platform', token, undefined, signal))
     if (!parsed.success) throw new Error('平台能力响应格式无效，请联系平台管理员。')
@@ -59,6 +61,19 @@ export class PlatformClient {
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       })
       if (!response.ok) {
+        if (path === '/api/v1/auth/register' && [400, 409].includes(response.status)) {
+          const reader = response.body?.getReader()
+          if (reader) {
+            const chunks: Uint8Array[] = []; let bytes = 0
+            try { while (bytes <= 4096) { const part = await reader.read(); if (part.done) break; bytes += part.value.byteLength; chunks.push(part.value) } }
+            finally { await reader.cancel().catch(() => undefined); reader.releaseLock() }
+            if (bytes <= 4096) {
+              let code: unknown
+              try { code = (JSON.parse(Buffer.concat(chunks).toString('utf8')) as { code?: unknown }).code } catch { /* Fall through to the existing HTTP status error. */ }
+              if (typeof code === 'string' && Object.hasOwn(invitationErrors, code)) throw new PlatformRequestError(invitationErrors[code], response.status)
+            }
+          }
+        }
         if (response.status === 401 && token) throw await sessionFault(response, token)
         if (response.status === 400 && path.endsWith('/interview-sessions/start')) {
           await response.body?.cancel().catch(() => undefined)

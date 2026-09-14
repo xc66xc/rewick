@@ -14,6 +14,7 @@ export function useEmailAuth({ settings, bridge, checking, onSave, onAuthenticat
   const [rememberMe, setRememberMe] = useState(false)
   const [confirmation, setConfirmation] = useState('')
   const [code, setCode] = useState('')
+  const [invitationCode, setInvitationCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -58,7 +59,7 @@ export function useEmailAuth({ settings, bridge, checking, onSave, onAuthenticat
         setNotice('密码修改成功，请使用新密码登录。')
       } else {
         const value = mode === 'login' ? await bridge.platformLogin({ identifier: email.trim(), password, rememberMe })
-          : await bridge.platformRegister({ email: email.trim(), password, code: code.trim() })
+          : await bridge.platformRegister({ email: email.trim(), password, code: code.trim(), ...(invitationCode.trim() ? { invitationCode: invitationCode.trim().toUpperCase() } : {}) })
         setPassword(''); setCode(''); onAuthenticated(value)
       }
     } catch (reason) { setError(errorMessage(reason)) }
@@ -68,5 +69,5 @@ export function useEmailAuth({ settings, bridge, checking, onSave, onAuthenticat
     setMode(value); setError(''); setNotice(''); setPassword(''); setConfirmation(''); setCode(''); setRetryAt(0)
     emailInput.current?.focus()
   }
-  return { rememberMe, setRememberMe, mode, email, setEmail, password, setPassword, confirmation, setConfirmation, code, setCode, busy, error, notice, remaining, emailInput, perform, changeMode }
+  return { invitationCode, setInvitationCode, rememberMe, setRememberMe, mode, email, setEmail, password, setPassword, confirmation, setConfirmation, code, setCode, busy, error, notice, remaining, emailInput, perform, changeMode }
 }

@@ -32,7 +32,7 @@ function setup(fakeTimers = false) {
     { id: 'environment-one', name: '原环境', resumeId: null, targetId: null, referenceIds: [], createdAt, updatedAt: createdAt },
     { id: 'environment-two', name: '新环境', resumeId: null, targetId: null, referenceIds: [], createdAt, updatedAt: createdAt },
   ] }
-  const bridge = {
+  const bridge = { invitationSettings: vi.fn(async () => ({ enabled: false, rewardSeconds: 0, version: 0 })), invitationMine: vi.fn(), invitationCreateCode: vi.fn(),
     getPackageCatalog: vi.fn(async () => ({ paymentAvailable: false, paymentMethods: [], packages: [] })),
     getPaymentOrders: vi.fn(async () => []),
     createPaymentOrder: vi.fn(async () => { throw new Error('unused') }),

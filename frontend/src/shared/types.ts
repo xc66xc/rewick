@@ -173,6 +173,9 @@ export type AppEvent =
   | { kind: 'answer-error'; requestId: string; message: string }
   | { kind: 'shortcut'; action: 'answer' }
 export interface DesktopBridge {
+  invitationSettings(): Promise<import('./invitation').InvitationSettings>
+  invitationMine(): Promise<import('./invitation').InvitationSummary>
+  invitationCreateCode(): Promise<import('./invitation').InvitationSummary>
   stageSessionForLogout(nonce: string, record: SessionRecord | null): Promise<void>
   withAccountScope?(scope: string): DesktopBridge
   getPackageCatalog(): Promise<PackageCatalog>
@@ -187,7 +190,7 @@ export interface DesktopBridge {
   getSettings(): Promise<Settings>
   getRememberedLogin(): Promise<{ identifier: string; password: string } | null>
   platformLogin(input: { identifier: string; password: string; rememberMe?: boolean }): Promise<Settings>
-  platformRegister(input: { email: string; password: string; code: string }): Promise<Settings>
+  platformRegister(input: { email: string; password: string; code: string; invitationCode?: string }): Promise<Settings>
   requestEmailCode(input: { email: string }): Promise<{ retryAfterSeconds: number; expiresInSeconds: number }>
   requestPasswordResetCode(input: { email: string }): Promise<{ retryAfterSeconds: number; expiresInSeconds: number }>
   resetPassword(input: { email: string; password: string; code: string }): Promise<void>

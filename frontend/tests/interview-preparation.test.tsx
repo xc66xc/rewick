@@ -11,7 +11,7 @@ function setup(resumeId: string | null = 'resume', availableSeconds = 600, secon
   const library: InterviewLibrary = { resumes: [{ id: 'resume', name: '开发简历', text: '开发工程师经历', createdAt: '', updatedAt: '' }], targets: [], environments: [{ id: 'env', name: '默认环境', resumeId, targetId: null, referenceIds: [], createdAt: '', updatedAt: '' }], activeEnvironmentId: 'env' }
   if (summaries) library.resumes = library.resumes.map(record => ({ ...record, text: '', bodyLoaded: false, hasContent: true }))
   if (secondEnvironment) library.environments.push({ id: 'env-2', name: '备用环境', resumeId, targetId: null, referenceIds: [], createdAt: '', updatedAt: '' })
-  const bridge = { getInterviewLibrary: vi.fn(async () => library), listReferences: vi.fn(async () => []), removeEnvironment: vi.fn(async (id: string) => ({ ...library, environments: library.environments.filter(record => record.id !== id) })), onEvent: () => () => undefined } as unknown as DesktopBridge
+  const bridge = { invitationSettings: vi.fn(async () => ({ enabled: false, rewardSeconds: 0, version: 0 })),  getInterviewLibrary: vi.fn(async () => library), listReferences: vi.fn(async () => []), removeEnvironment: vi.fn(async (id: string) => ({ ...library, environments: library.environments.filter(record => record.id !== id) })), onEvent: () => () => undefined } as unknown as DesktopBridge
   const start = vi.fn(async () => undefined)
   const onPrepare = vi.fn(async (_input: EnvironmentInput) => undefined)
   const onSave = vi.fn(async (input: EnvironmentInput) => {

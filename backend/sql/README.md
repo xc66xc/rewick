@@ -21,20 +21,21 @@ PostgreSQL 15.19 / pgvector 0.8.6。脚本手动按编号执行；后端不使�
 | `15_user_preferences.sql` | 用户偏好、平台服务选择、版本和幂等标识 |
 | `16_desktop_sessions.sql` | 单桌面登录、会话撤销原因与面试登录归属 |
 | `17_desktop_settings.sql` | 桌面高级设置授权与普通用户默认模型、温度和检索方式 |
+| `18_invitations.sql` | 用户邀请码、邀请奖励规则、注册关系与钱包奖励流水 |
 
 ## 初始化空数据库
 
 从 backend 目录执行，密码通过交互提示或本机凭据提供：
 
 ```sh
-psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f sql/01_schema.sql -f sql/02_pgvector.sql -f sql/03_admin_users.sql -f sql/04_platform_config.sql -f sql/05_email_auth.sql -f sql/06_display_name.sql -f sql/07_email_code_purpose.sql -f sql/08_server_local_time.sql -f sql/09_pg_references.sql -f sql/10_time_wallet.sql -f sql/11_payment_packages.sql -f sql/12_alipay_payments.sql -f sql/13_session_records.sql -f sql/14_server_background.sql -f sql/15_user_preferences.sql -f sql/16_desktop_sessions.sql -f sql/17_desktop_settings.sql
+psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f sql/01_schema.sql -f sql/02_pgvector.sql -f sql/03_admin_users.sql -f sql/04_platform_config.sql -f sql/05_email_auth.sql -f sql/06_display_name.sql -f sql/07_email_code_purpose.sql -f sql/08_server_local_time.sql -f sql/09_pg_references.sql -f sql/10_time_wallet.sql -f sql/11_payment_packages.sql -f sql/12_alipay_payments.sql -f sql/13_session_records.sql -f sql/14_server_background.sql -f sql/15_user_preferences.sql -f sql/16_desktop_sessions.sql -f sql/17_desktop_settings.sql -f sql/18_invitations.sql
 ```
 
 使用 Compose 时，从仓库根目录执行：
 
 ```sh
 docker compose up -d --build --wait database
-docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql -f /opt/copilot/sql/06_display_name.sql -f /opt/copilot/sql/07_email_code_purpose.sql -f /opt/copilot/sql/08_server_local_time.sql -f /opt/copilot/sql/09_pg_references.sql -f /opt/copilot/sql/10_time_wallet.sql -f /opt/copilot/sql/11_payment_packages.sql -f /opt/copilot/sql/12_alipay_payments.sql -f /opt/copilot/sql/13_session_records.sql -f /opt/copilot/sql/14_server_background.sql -f /opt/copilot/sql/15_user_preferences.sql -f /opt/copilot/sql/16_desktop_sessions.sql -f /opt/copilot/sql/17_desktop_settings.sql
+docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 --single-transaction -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql -f /opt/copilot/sql/06_display_name.sql -f /opt/copilot/sql/07_email_code_purpose.sql -f /opt/copilot/sql/08_server_local_time.sql -f /opt/copilot/sql/09_pg_references.sql -f /opt/copilot/sql/10_time_wallet.sql -f /opt/copilot/sql/11_payment_packages.sql -f /opt/copilot/sql/12_alipay_payments.sql -f /opt/copilot/sql/13_session_records.sql -f /opt/copilot/sql/14_server_background.sql -f /opt/copilot/sql/15_user_preferences.sql -f /opt/copilot/sql/16_desktop_sessions.sql -f /opt/copilot/sql/17_desktop_settings.sql -f /opt/copilot/sql/18_invitations.sql
 docker compose up -d --build backend admin
 ```
 
@@ -160,3 +161,20 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON desktop_settings TO copilot_backend;
 无新增序列。新注册及已有用户默认不具备高级设置权限。同步更新后端、管理端和桌面端，在管理端“平台配置 → 桌面高级设置权限”保存普通用户默认回答模型、温度、转写服务及检索方式，再按需搜索已有用户授权。初始默认模型为空，不自动选择供应商；未配置的能力会提示管理员配置。
 
 普通用户修改回答风格不覆盖原有高级偏好，自定义凭据仍在本机；撤销授权后停止使用这些配置，重新授权后可继续选择。正在进行的回答或转写不强制中断，后续请求使用新权限。此轮仅本地实施，未部署公网。
+
+## 邀请奖励升级
+
+已执行 01–17 的数据库仅执行以下脚本，使用拥有 DDL 权限的账号：
+
+```sh
+psql -X -h 127.0.0.1 -U postgres -d interview_copilot -v ON_ERROR_STOP=1 -f sql/18_invitations.sql
+```
+
+若应用使用独立角色，补充权限：
+
+```sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON invitation_settings, user_invitation_codes, user_invitations TO copilot_backend;
+GRANT USAGE, SELECT ON SEQUENCE user_invitation_codes_id_seq, user_invitations_id_seq TO copilot_backend;
+```
+
+同步更新后端、管理端和桌面端。邀请奖励初始关闭，在管理端“邀请奖励”配置奖励时长并启用。注册邀请码选填；旧用户第一次打开“邀请好友”时生成固定的 6 位邀请码。奖励仅发给邀请人，注册、邀请关系和钱包流水在同一事务提交。更改规则不重算历史奖励，关闭后不再接受邀请码。此脚本不会补发历史注册奖励。

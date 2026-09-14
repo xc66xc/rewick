@@ -41,9 +41,10 @@ public class EmailAccountServiceImpl implements EmailAccountService {
         return codeResponse();
     }
 
-    public LoginResponse register(String address, String email, String password, String code) {
+    public LoginResponse register(
+            String address, String email, String password, String code, String invitationCode) {
         limiter.register(address);
-        return registration.register(EmailAddress.normalize(email), password, code);
+        return registration.register(EmailAddress.normalize(email), password, code, invitationCode);
     }
 
     public void resetPassword(String address, String email, String password, String code) {

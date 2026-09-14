@@ -40,6 +40,7 @@ public class EmailAuthController {
                                 request.getRemoteAddr(),
                                 body.email(),
                                 body.password(),
-                                body.code()));
+                                body.code(),
+                                body.invitationCode()));
     }
 }

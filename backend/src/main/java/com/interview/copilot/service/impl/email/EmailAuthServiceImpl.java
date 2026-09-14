@@ -49,12 +49,13 @@ public class EmailAuthServiceImpl implements EmailAuthService {
         }
     }
 
-    public LoginResponse register(String email, String password, String code) {
+    public LoginResponse register(
+            String email, String password, String code, String invitationCode) {
         mail.requireConfigured();
         if (!PasswordRules.isValid(password)) {
             throw new ApiException(
                     HttpStatus.BAD_REQUEST, "invalid_password", "密码至少 12 个字符，且不超过 72 个 UTF-8 字节。");
         }
-        return registration.register(email, passwords.encode(password), code);
+        return registration.register(email, passwords.encode(password), code, invitationCode);
     }
 }

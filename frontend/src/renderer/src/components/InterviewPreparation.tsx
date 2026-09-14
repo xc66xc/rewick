@@ -1,3 +1,4 @@
+import InviteFriendsButton from './invitation/InviteFriendsButton'
 import { useState } from 'react'
 import { CheckCircle, Plus, PlusCircle } from '@phosphor-icons/react'
 import type { DesktopBridge, EnvironmentInput, InterviewEnvironment, Settings } from '../../../shared/types'
@@ -84,6 +85,7 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
       <div className="flex flex-col items-end gap-3 max-[560px]:items-start">
         {/* v30 .prep-wallet:标签次要小字,时长值 mono 蓝色强调(≤60s 转红),刷新钮 30px */}
         <div className="flex items-center gap-[9px]"><strong className="text-xs font-medium text-text-secondary">可用时长</strong><span className={cn('font-mono text-[13px] font-semibold tabular-nums text-accent-text', timer.remaining <= 60 && 'text-danger')}>{formatDuration(timer.remaining)}</span><RefreshTimeButton className="size-[30px] text-accent-text hover:bg-accent/10" refreshing={timer.refreshing} onRefresh={timer.refresh} /></div>
+        <InviteFriendsButton bridge={bridge} />
         {onPurchase && <Button onClick={onPurchase}>购买时长</Button>}
         <Button variant="primary" disabled={!data.library || busy} onClick={requestNew}><Plus size={18} aria-hidden="true" />新建面试准备</Button>
       </div>

@@ -77,6 +77,7 @@ public class EmailAuthIntegrationTest {
         jdbc.execute(
                 "TRUNCATE email_verifications, auth_identities, auth_tokens, usage_events,"
                         + " audit_events, app_users RESTART IDENTITY CASCADE");
+        jdbc.update("UPDATE invitation_settings SET is_enabled=false,reward_seconds=0,version=0");
         mailbox.clear();
         reset(mail);
         doAnswer(
@@ -294,6 +295,197 @@ public class EmailAuthIntegrationTest {
         assertThat(call(HttpMethod.POST, "/api/v1/auth/register", null, injected).getStatusCode())
                 .isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(count("app_users")).isZero();
+    }
+
+    @Test
+    void invitation_registerCreditsInviterOnceAndPreservesVerifiedRegistration() {
+        String invitation = prepareInvitation();
+        send("friend@example.com");
+        var result = invitedRegistration("friend@example.com", invitation.toLowerCase());
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT available_seconds FROM time_wallets WHERE app_users_id=1",
+                                Long.class))
+                .isEqualTo(600);
+        assertThat(count("user_invitations")).isEqualTo(1);
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT delta_seconds FROM time_wallet_transactions WHERE"
+                                    + " operation='invitation_reward'",
+                                Long.class))
+                .isEqualTo(600);
+        assertThat(
+                        invitedRegistration("friend@example.com", invitation)
+                                .getStatusCode()
+                                .is4xxClientError())
+                .isTrue();
+        assertThat(count("user_invitations")).isEqualTo(1);
+    }
+
+    @Test
+    void invitation_invalidOrDisabledCodeRollsBackAccountAndAllowsCorrectedRetry() {
+        String invitation = prepareInvitation();
+        send("friend@example.com");
+        assertThat(invitedRegistration("friend@example.com", "AAAAAA").getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(count("app_users")).isEqualTo(1);
+        jdbc.update("UPDATE invitation_settings SET is_enabled=false");
+        assertThat(invitedRegistration("friend@example.com", invitation).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+        assertThat(count("user_invitations")).isZero();
+        jdbc.update("UPDATE invitation_settings SET is_enabled=true");
+        assertThat(invitedRegistration("friend@example.com", invitation).getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+    }
+
+    @Test
+    void invitation_tokenFailureRollsBackRewardAndCodeConsumption() {
+        String invitation = prepareInvitation();
+        send("friend@example.com");
+        jdbc.execute(
+                "ALTER TABLE auth_tokens ADD CONSTRAINT email_test_reject_token CHECK"
+                    + " (app_users_id=1)");
+        assertThat(
+                        invitedRegistration("friend@example.com", invitation)
+                                .getStatusCode()
+                                .is5xxServerError())
+                .isTrue();
+        assertThat(count("app_users")).isEqualTo(1);
+        assertThat(count("user_invitations")).isZero();
+        assertThat(count("time_wallet_transactions")).isZero();
+        jdbc.execute("ALTER TABLE auth_tokens DROP CONSTRAINT email_test_reject_token");
+        assertThat(invitedRegistration("friend@example.com", invitation).getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+    }
+
+    @Test
+    void invitation_concurrentNewUsersAccumulateAllRewards() throws Exception {
+        String invitation = prepareInvitation();
+        send("first@example.com");
+        send("second@example.com");
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var first = executor.submit(() -> invitedRegistration("first@example.com", invitation));
+            var second =
+                    executor.submit(() -> invitedRegistration("second@example.com", invitation));
+            assertThat(first.get().getStatusCode()).isEqualTo(HttpStatus.CREATED);
+            assertThat(second.get().getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        }
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT available_seconds FROM time_wallets WHERE app_users_id=1",
+                                Long.class))
+                .isEqualTo(1200);
+        assertThat(count("user_invitations")).isEqualTo(2);
+    }
+
+    @Test
+    void invitation_adminRulesAreVersionedAndRecordsShowEmails() {
+        String invitation = prepareInvitation();
+        send("friend@example.com");
+        var friend = invitedRegistration("friend@example.com", invitation);
+        String userToken = friend.getBody().path("accessToken").asText();
+        assertThat(call(HttpMethod.GET, "/api/v1/invitations/me", null, null).getStatusCode())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(
+                        call(HttpMethod.GET, "/api/v1/admin/invitations", userToken, null)
+                                .getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        jdbc.update("UPDATE app_users SET role='ADMIN' WHERE display_name='friend@example.com'");
+        var admin =
+                call(
+                        HttpMethod.POST,
+                        "/api/v1/auth/login",
+                        null,
+                        Map.of(
+                                "identifier",
+                                "friend@example.com",
+                                "password",
+                                PASSWORD,
+                                "clientType",
+                                "admin"));
+        String token = admin.getBody().path("accessToken").asText();
+        var input = Map.of("enabled", true, "rewardSeconds", 1200, "version", 0);
+        assertThat(
+                        call(HttpMethod.PUT, "/api/v1/admin/invitation-settings", token, input)
+                                .getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(
+                        call(HttpMethod.PUT, "/api/v1/admin/invitation-settings", token, input)
+                                .getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+        var records =
+                call(
+                        HttpMethod.GET,
+                        "/api/v1/admin/invitations?search=friend@example.com",
+                        token,
+                        null);
+        assertThat(records.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(records.getBody().path("total").asInt()).isEqualTo(1);
+        assertThat(records.getBody().path("items").get(0).path("inviterEmail").asText())
+                .isEqualTo(EMAIL);
+        assertThat(records.getBody().path("items").get(0).path("rewardSeconds").asLong())
+                .isEqualTo(600);
+    }
+
+    @Test
+    void invitation_creditSettlesExpiredInterviewBeforeAddingNewTime() {
+        String invitation = prepareInvitation();
+        jdbc.update("INSERT INTO time_wallets(app_users_id,available_seconds) VALUES(1,100)");
+        jdbc.update(
+                "INSERT INTO"
+                    + " interview_sessions(session_id,app_users_id,request_id,started_at,expires_at)"
+                    + " VALUES('test-expired',1,'test-request',(clock_timestamp() AT TIME ZONE"
+                    + " 'Asia/Shanghai')-interval '120 seconds',(clock_timestamp() AT TIME ZONE"
+                    + " 'Asia/Shanghai')-interval '90 seconds')");
+        send("friend@example.com");
+        assertThat(invitedRegistration("friend@example.com", invitation).getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT available_seconds FROM time_wallets WHERE app_users_id=1",
+                                Long.class))
+                .isEqualTo(670);
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT status FROM interview_sessions WHERE app_users_id=1",
+                                String.class))
+                .isEqualTo("ended");
+    }
+
+    private String prepareInvitation() {
+        send(EMAIL);
+        var registered = register(EMAIL, PASSWORD, mailbox.get(EMAIL));
+        assertThat(registered.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        String token = registered.getBody().path("accessToken").asText();
+        jdbc.update("UPDATE invitation_settings SET is_enabled=true,reward_seconds=600");
+        var created = call(HttpMethod.POST, "/api/v1/invitations/me/code", token, null);
+        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
+        String code = created.getBody().path("code").asText();
+        assertThat(code).matches("[A-Z2-9]{6}");
+        assertThat(
+                        call(HttpMethod.POST, "/api/v1/invitations/me/code", token, null)
+                                .getBody()
+                                .path("code")
+                                .asText())
+                .isEqualTo(code);
+        return code;
+    }
+
+    private ResponseEntity<JsonNode> invitedRegistration(String email, String invitation) {
+        return call(
+                HttpMethod.POST,
+                "/api/v1/auth/register",
+                null,
+                Map.of(
+                        "email",
+                        email,
+                        "password",
+                        PASSWORD,
+                        "code",
+                        mailbox.get(email),
+                        "invitationCode",
+                        invitation));
     }
 
     private ResponseEntity<JsonNode> send(String email) {

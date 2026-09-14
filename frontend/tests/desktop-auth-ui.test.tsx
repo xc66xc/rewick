@@ -36,7 +36,7 @@ function setup(initial = structuredClone(defaultSettings), strict = false, remem
   const getWallet = vi.fn(async () => wallet)
   const startInterview = vi.fn(async () => ({ ...wallet, session: { id: 'session', status: 'active', startedAt: wallet.serverTime, expiresAt: new Date(Date.now() + 30000).toISOString(), endedAt: null, usedSeconds: 0, endReason: null } }))
   const endInterview = vi.fn(async () => wallet)
-  const bridge = { getRememberedLogin: vi.fn(async () => remembered), getSettings, saveSettings, platformLogin, platformLogout, platformRegister, refreshPlatform, requestEmailCode, requestPasswordResetCode, resetPassword,
+  const bridge = { invitationSettings: vi.fn(async () => ({ enabled: false, rewardSeconds: 0, version: 0 })), invitationMine: vi.fn(), invitationCreateCode: vi.fn(), getRememberedLogin: vi.fn(async () => remembered), getSettings, saveSettings, platformLogin, platformLogout, platformRegister, refreshPlatform, requestEmailCode, requestPasswordResetCode, resetPassword,
     getWallet, startInterview, endInterview, getInterviewLibrary: vi.fn(async () => library), listReferences: vi.fn(async () => []), saveEnvironment: vi.fn(async () => library), activateEnvironment: vi.fn(async () => current),
     getHistory, stopAsr, cancelAnswer, setCompact, setAlwaysOnTop, saveSession: vi.fn(async () => undefined),
     onEvent: (listener: (event: AppEvent) => void) => { listeners.add(listener); return () => { listeners.delete(listener) } },

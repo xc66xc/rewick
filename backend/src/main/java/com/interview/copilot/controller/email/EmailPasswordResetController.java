@@ -1,7 +1,7 @@
 package com.interview.copilot.controller.email;
 
 import com.interview.copilot.request.email.EmailCodeRequest;
-import com.interview.copilot.request.email.EmailRegisterRequest;
+import com.interview.copilot.request.email.EmailPasswordResetRequest;
 import com.interview.copilot.response.email.EmailCodeResponse;
 import com.interview.copilot.service.email.EmailAccountService;
 
@@ -31,7 +31,7 @@ public class EmailPasswordResetController {
 
     @PostMapping
     public ResponseEntity<Void> reset(
-            @Valid @RequestBody EmailRegisterRequest body, HttpServletRequest request) {
+            @Valid @RequestBody EmailPasswordResetRequest body, HttpServletRequest request) {
         service.resetPassword(request.getRemoteAddr(), body.email(), body.password(), body.code());
         return ResponseEntity.noContent().build();
     }

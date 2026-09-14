@@ -312,3 +312,8 @@ describe('capability routing', () => {
     expect(events.at(-1)).toMatchObject({ kind: 'answer-done', cancelled: false })
   })
 })
+
+ it('explains invalid invitation codes without exposing provider error messages', async () => {
+   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ code: 'invalid_invitation_code', message: 'private server detail' }, { status: 400 })))
+   await expect(new PlatformClient('https://platform.example').register({ email: 'alice@example.com', password: 'safe-password-123', code: '123456', invitationCode: 'ABC234' })).rejects.toThrow('邀请码无效或邀请人已停用')
+ })

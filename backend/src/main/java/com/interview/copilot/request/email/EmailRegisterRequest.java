@@ -7,7 +7,8 @@ import jakarta.validation.constraints.Size;
 public record EmailRegisterRequest(
         @NotBlank @Size(max = 254) String email,
         @NotBlank @Size(max = 72) String password,
-        @NotBlank @Pattern(regexp = "[0-9]{6}") String code) {
+        @NotBlank @Pattern(regexp = "[0-9]{6}") String code,
+        @Size(max = 64) String invitationCode) {
     @Override
     public String toString() {
         return "EmailRegisterRequest[password=redacted, code=redacted]";

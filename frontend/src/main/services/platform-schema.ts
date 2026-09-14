@@ -25,7 +25,8 @@ export const platformInfoSchema = z.object({
 })
 export const platformLoginInputSchema = z.object({ identifier: z.string().trim().min(1).max(254), password: z.string().min(1).max(1024) }).strict()
 export const emailInputSchema = z.object({ email: z.string().trim().toLowerCase().email().max(254) }).strict()
-export const registerInputSchema = emailInputSchema.extend({ password: z.string().min(12).refine(value => Buffer.byteLength(value, 'utf8') <= 72, '密码最多 72 个 UTF-8 字节。'), code: z.string().regex(/^\d{6}$/, '请输入六位验证码。') })
+export const passwordResetInputSchema = emailInputSchema.extend({ password: z.string().min(12).refine(value => Buffer.byteLength(value, 'utf8') <= 72, '密码最多 72 个 UTF-8 字节。'), code: z.string().regex(/^\d{6}$/, '请输入六位验证码。') })
+export const registerInputSchema = passwordResetInputSchema.extend({ invitationCode: z.string().trim().toUpperCase().regex(/^([A-Z2-9]{6})?$/, '邀请码须为 6 位字母或数字。').optional() })
 export const emailCodeResponseSchema = z.object({ retryAfterSeconds: z.number().int().min(1).max(3600), expiresInSeconds: z.number().int().min(1).max(3600) })
 export const platformLoginResponseSchema = z.object({
   accessToken: z.string().min(1).max(4096).refine(value => !/\s/.test(value)),

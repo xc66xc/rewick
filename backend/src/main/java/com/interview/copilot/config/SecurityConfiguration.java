@@ -31,7 +31,10 @@ public class SecurityConfiguration {
                                 access.dispatcherTypeMatchers(
                                                 DispatcherType.ASYNC, DispatcherType.ERROR)
                                         .permitAll()
-                                        .requestMatchers(HttpMethod.GET, "/actuator/health")
+                                        .requestMatchers(
+                                                HttpMethod.GET,
+                                                "/actuator/health",
+                                                "/api/v1/invitations/settings")
                                         .permitAll()
                                         .requestMatchers(
                                                 HttpMethod.POST,

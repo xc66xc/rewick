@@ -1,3 +1,4 @@
+import InvitationField from './invitation/InvitationField'
 import { CheckRow } from './ui/check-row'
 import { Sparkle } from '@phosphor-icons/react'
 import type { DesktopBridge, Settings, SettingsInput } from '../../../shared/types'
@@ -10,7 +11,7 @@ interface LoginScreenProps {
   onSave: (input: SettingsInput) => Promise<Settings>; onAuthenticated: (settings: Settings) => void; onRetry: () => void
 }
 export default function LoginScreen({ settings, bridge, checking, error: externalError, onSave, onAuthenticated, onRetry }: LoginScreenProps) {
-  const { rememberMe, setRememberMe, mode, email, setEmail, password, setPassword, confirmation, setConfirmation, code, setCode, busy, error, notice, remaining, emailInput, perform, changeMode } = useEmailAuth({ settings, bridge, checking, onSave, onAuthenticated })
+  const { invitationCode, setInvitationCode, rememberMe, setRememberMe, mode, email, setEmail, password, setPassword, confirmation, setConfirmation, code, setCode, busy, error, notice, remaining, emailInput, perform, changeMode } = useEmailAuth({ settings, bridge, checking, onSave, onAuthenticated })
   return <main className={authStyles.screen}>
     <div className={authStyles.dragBar}>Interview Copilot</div>
     <section className={authStyles.card} aria-labelledby="login-title" aria-busy={busy || checking}>
@@ -32,6 +33,7 @@ export default function LoginScreen({ settings, bridge, checking, error: externa
               <button type="button" className={styles.secondaryButton} disabled={remaining > 0 || !email.trim()} onClick={() => void perform('code')}>{remaining > 0 ? `${remaining} 秒后重发` : '发送验证码'}</button></span></div></>}
           {mode === 'login' && <CheckRow label="记住我" checked={rememberMe} onChange={setRememberMe} disabled={busy || checking || !bridge} />}
           <button className={`${styles.primaryButton} ${authStyles.submit}`} type="submit">{busy ? '处理中…' : mode === 'login' ? '登录' : mode === 'reset' ? '确认修改密码' : '注册并登录'}</button>
+        {mode === 'register' && bridge && <InvitationField bridge={bridge} value={invitationCode} onChange={setInvitationCode} />}
         </fieldset>
       </form>
       <button type="button" className={styles.textButton} disabled={busy || checking} onClick={() => changeMode(mode === 'reset' ? 'login' : 'reset')}>{mode === 'reset' ? '返回登录' : '找回密码'}</button>

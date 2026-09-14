@@ -8,7 +8,8 @@ public interface EmailAccountService {
 
     EmailCodeResponse resetCode(String address, String email);
 
-    LoginResponse register(String address, String email, String password, String code);
+    LoginResponse register(
+            String address, String email, String password, String code, String invitationCode);
 
     void resetPassword(String address, String email, String password, String code);
 }
