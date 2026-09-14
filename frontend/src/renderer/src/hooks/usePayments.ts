@@ -89,8 +89,15 @@ export default function usePayments(bridge: DesktopBridge, scope: string, onCred
     try {
       const updated = await bridge.cancelPaymentOrder(order.id)
       await accept(updated)
-      if (live.current && updated.status === 'closed') toast.show('订单已取消，可以重新购买。', { type: 'success' })
+      if (live.current && updated.status === 'closed') toast.show(updated.paymentMethod === 'zpay' ? '本地订单已取消，原 ZPAY 付款链接可能仍有效，请勿重复支付。' : '订单已取消，可以重新购买。', { type: 'success' })
     } catch (reason) { if (live.current) toast.show(errorMessage(reason), { type: 'error' }) }
+    finally { locked.current = false; if (live.current) setBusy(false) }
+  }
+  async function openCheckout(order: PaymentOrder) {
+    if (locked.current) return
+    locked.current = true; setBusy(true)
+    try { await bridge.openPaymentCheckout(order.id) }
+    catch (reason) { if (live.current) toast.show(errorMessage(reason), { type: 'error' }) }
     finally { locked.current = false; if (live.current) setBusy(false) }
   }
   const selectedId = selected?.id
@@ -100,5 +107,5 @@ export default function usePayments(bridge: DesktopBridge, scope: string, onCred
     const timer = setInterval(() => { if (selected) void refresh(selected, true) }, 5000)
     return () => clearInterval(timer)
   }, [selectedId, settled])
-  return { catalog, paymentMethod, setPaymentMethod, orders, selected, setSelected, busy, loading, reload, buy, refresh, cancel }
+  return { catalog, paymentMethod, setPaymentMethod, orders, selected, setSelected, busy, loading, reload, buy, refresh, cancel, openCheckout }
 }

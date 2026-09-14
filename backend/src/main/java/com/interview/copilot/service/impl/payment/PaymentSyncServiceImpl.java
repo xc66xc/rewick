@@ -4,6 +4,7 @@ import com.interview.copilot.converter.payment.PaymentConverter;
 import com.interview.copilot.dto.payment.PaymentHeadersDTO;
 import com.interview.copilot.dto.payment.PaymentResultDTO;
 import com.interview.copilot.exception.payment.PaymentErrors;
+import com.interview.copilot.mapper.payment.PaymentCheckoutMapper;
 import com.interview.copilot.mapper.payment.PaymentOrderMapper;
 import com.interview.copilot.service.payment.PaymentFulfillmentService;
 import com.interview.copilot.service.payment.PaymentProviderService;
@@ -28,16 +29,19 @@ public class PaymentSyncServiceImpl implements PaymentSyncService {
     private final PaymentProviderService providers;
     private final PaymentFulfillmentService fulfillment;
     private final Clock clock;
+    private final PaymentCheckoutMapper tickets;
 
     public PaymentSyncServiceImpl(
             PaymentOrderMapper orders,
             PaymentProviderService providers,
             PaymentFulfillmentService fulfillment,
-            Clock clock) {
+            Clock clock,
+            PaymentCheckoutMapper tickets) {
         this.orders = orders;
         this.providers = providers;
         this.fulfillment = fulfillment;
         this.clock = clock;
+        this.tickets = tickets;
     }
 
     public void sync(String orderId) {
@@ -45,6 +49,22 @@ public class PaymentSyncServiceImpl implements PaymentSyncService {
         if (orders.claimQuery(orderId, now, now.minusSeconds(3)) == 0) return;
         var order = orders.find(orderId);
         var request = PaymentConverter.orderDTO(order);
+        if ("cancelling".equals(order.status())) {
+            cancel(orderId);
+            return;
+        }
+        if ("zpay".equals(order.paymentMethod()) && !"closed".equals(order.status())
+                && !order.expiresAt().isAfter(now)) {
+            orders.close(orderId);
+            return;
+        }
+        if (List.of("alipay", "zpay").contains(order.paymentMethod()) && "creating".equals(order.status())) {
+            if (order.expiresAt().isAfter(now)) orders.ready(orderId);
+            else orders.close(orderId);
+            return;
+        }
+        if ("zpay".equals(order.paymentMethod()) && !"closed".equals(order.status())
+                && !tickets.submitted(orderId)) return;
         var result = providers.query(order.paymentMethod(), order.configVersion(), request);
         providers.validateIdentity(order.paymentMethod(), order.configVersion(), result);
         if (!order.id().equals(result.orderId())) throw PaymentErrors.invalid("支付查询结果与当前订单不匹配");
@@ -56,14 +76,15 @@ public class PaymentSyncServiceImpl implements PaymentSyncService {
             orders.close(orderId);
             return;
         }
+        if ("zpay".equals(order.paymentMethod())) return;
         if (!order.expiresAt().isAfter(now)) {
             if (!"NOTFOUND".equals(result.state()))
                 providers.close(order.paymentMethod(), order.configVersion(), request);
             orders.close(orderId);
             return;
         }
-        // Alipay may not create a queryable trade until the buyer scans the existing QR code.
-        if ("alipay".equals(order.paymentMethod()) && order.codeUrl() != null) return;
+        // Page-pay trades may not exist until the browser submits the cashier form.
+        if (List.of("alipay", "zpay").contains(order.paymentMethod())) return;
         if ("NOTFOUND".equals(result.state())
                 || ("NOTPAY".equals(result.state()) && order.codeUrl() == null))
             orders.qr(
@@ -73,8 +94,21 @@ public class PaymentSyncServiceImpl implements PaymentSyncService {
 
     public void cancel(String orderId) {
         var order = orders.find(orderId);
-        if (!"creating".equals(order.status()) && !"pending".equals(order.status())) return;
+        if (!List.of("creating", "pending", "cancelling").contains(order.status())) return;
+        // This update serializes against checkout's order lock before checking submitted tickets.
+        orders.cancelling(orderId);
+        order = orders.find(orderId);
+        if (!"cancelling".equals(order.status())) return;
         var request = PaymentConverter.orderDTO(order);
+        // ZPAY has no remote close API; local cancellation was explicitly approved.
+        if ("zpay".equals(order.paymentMethod())) {
+            orders.close(orderId);
+            return;
+        }
+        if ("alipay".equals(order.paymentMethod()) && !tickets.submitted(orderId)) {
+            orders.close(orderId);
+            return;
+        }
         var result = providers.query(order.paymentMethod(), order.configVersion(), request);
         providers.validateIdentity(order.paymentMethod(), order.configVersion(), result);
         if (!orderId.equals(result.orderId())) throw PaymentErrors.invalid("支付查询结果与当前订单不匹配");
@@ -82,7 +116,11 @@ public class PaymentSyncServiceImpl implements PaymentSyncService {
             fulfillment.credit(result);
             return;
         }
-        providers.close(order.paymentMethod(), order.configVersion(), request);
+        if ("NOTFOUND".equals(result.state())
+                && "alipay".equals(order.paymentMethod())
+                && order.expiresAt().isAfter(ServerTime.now(clock))) return;
+        if (!List.of("NOTFOUND", "CLOSED", "REVOKED").contains(result.state()))
+            providers.close(order.paymentMethod(), order.configVersion(), request);
         orders.close(orderId);
     }
 
@@ -94,7 +132,10 @@ public class PaymentSyncServiceImpl implements PaymentSyncService {
     }
 
     public void reconcile() {
-        for (String id : orders.pending(ServerTime.now(clock).minusSeconds(30))) {
+        var now = ServerTime.now(clock);
+        var pending = new java.util.ArrayList<>(orders.pending(now.minusSeconds(30)));
+        pending.addAll(orders.closedZpay(now.minusDays(30), now.minusMinutes(5)));
+        for (String id : pending) {
             try {
                 sync(id);
             } catch (RuntimeException error) {

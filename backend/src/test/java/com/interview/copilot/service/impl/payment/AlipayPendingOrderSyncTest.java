@@ -9,10 +9,12 @@ import static org.mockito.Mockito.when;
 
 import com.interview.copilot.dto.payment.PaymentResultDTO;
 import com.interview.copilot.entity.payment.PaymentOrderEntity;
+import com.interview.copilot.mapper.payment.PaymentCheckoutMapper;
 import com.interview.copilot.mapper.payment.PaymentOrderMapper;
 import com.interview.copilot.service.payment.PaymentFulfillmentService;
 import com.interview.copilot.service.payment.PaymentProviderService;
 import com.interview.copilot.util.ServerTime;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -26,7 +28,9 @@ class AlipayPendingOrderSyncTest {
     private final PaymentOrderMapper orders = mock(PaymentOrderMapper.class);
     private final PaymentProviderService providers = mock(PaymentProviderService.class);
     private final PaymentFulfillmentService fulfillment = mock(PaymentFulfillmentService.class);
-    private final PaymentSyncServiceImpl service = new PaymentSyncServiceImpl(orders, providers, fulfillment, clock);
+    private final PaymentSyncServiceImpl service =
+            new PaymentSyncServiceImpl(
+                    orders, providers, fulfillment, clock, mock(PaymentCheckoutMapper.class));
 
     @ParameterizedTest
     @ValueSource(strings = {"NOTFOUND", "NOTPAY"})
@@ -41,13 +45,13 @@ class AlipayPendingOrderSyncTest {
     }
 
     @Test
-    void sync_missingQrAndTrade_recoversPrecreation() {
+    void sync_newPageOrder_marksReadyWithoutPrecreation() {
         prepare(null, 600, "NOTFOUND");
-        when(providers.create(eq("alipay"), eq(1L), any())).thenReturn("https://qr.alipay.com/new");
 
         service.sync("order");
 
-        verify(orders).qr("order", "https://qr.alipay.com/new");
+        verify(orders).ready("order");
+        verify(providers, never()).create(any(), eq(1L), any());
     }
 
     @Test
@@ -62,12 +66,41 @@ class AlipayPendingOrderSyncTest {
 
     private void prepare(String qr, int expiresIn, String state) {
         var now = ServerTime.now(clock);
-        var order = new PaymentOrderEntity(1, "order", 1, "User", 1, 1, "Package",
-                3600, 100, 1, qr == null ? "creating" : "pending", false, qr, null,
-                now.minusSeconds(60), now.plusSeconds(expiresIn), null, 0, 0, "alipay");
+        var order =
+                new PaymentOrderEntity(
+                        1,
+                        "order",
+                        1,
+                        "User",
+                        1,
+                        1,
+                        "Package",
+                        3600,
+                        100,
+                        1,
+                        qr == null ? "creating" : "pending",
+                        false,
+                        qr,
+                        null,
+                        now.minusSeconds(60),
+                        now.plusSeconds(expiresIn),
+                        null,
+                        0,
+                        0,
+                        "alipay");
         when(orders.claimQuery(eq("order"), any(), any())).thenReturn(1);
         when(orders.find("order")).thenReturn(order);
-        when(providers.query(eq("alipay"), eq(1L), any())).thenReturn(
-                new PaymentResultDTO("order", "merchant", "app", null, state, "CNY", 100, null, "alipay"));
+        when(providers.query(eq("alipay"), eq(1L), any()))
+                .thenReturn(
+                        new PaymentResultDTO(
+                                "order",
+                                "merchant",
+                                "app",
+                                null,
+                                state,
+                                "CNY",
+                                100,
+                                null,
+                                "alipay"));
     }
 }

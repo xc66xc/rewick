@@ -36,6 +36,9 @@ public class SecurityConfiguration {
                                                 "/actuator/health",
                                                 "/api/v1/invitations/settings",
                                                 "/api/v1/client-downloads",
+                                                "/api/v1/payments/alipay/checkout",
+                                                "/api/v1/payments/zpay/checkout",
+                                                "/api/v1/payments/zpay/notify",
                                                 "/downloads/*/*")
                                         .permitAll()
                                         .requestMatchers(HttpMethod.HEAD, "/downloads/*/*")
@@ -51,7 +54,9 @@ public class SecurityConfiguration {
                                         .requestMatchers(
                                                 HttpMethod.POST,
                                                 "/api/v1/payments/wechat/notify",
-                                                "/api/v1/payments/alipay/notify")
+                                                "/api/v1/payments/alipay/notify",
+                                                "/api/v1/payments/alipay/checkout",
+                                                "/api/v1/payments/zpay/checkout")
                                         .permitAll()
                                         .requestMatchers("/api/v1/admin/**")
                                         .hasRole("ADMIN")

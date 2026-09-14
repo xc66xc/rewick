@@ -63,6 +63,9 @@ public class PaymentReservationServiceImpl implements PaymentReservationService 
             throw PaymentErrors.conflict("PACKAGE_CHANGED", "套餐已变更，请重新确认价格");
         var now = ServerTime.now(clock);
         var id = UUID.randomUUID().toString().replace("-", "");
+        if ("zpay".equals(paymentMethod))
+            id = String.format("%032d", new java.math.BigInteger(id, 16)
+                    .mod(java.math.BigInteger.TEN.pow(32)));
         var order =
                 new PaymentOrderEntity(
                         0,

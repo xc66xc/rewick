@@ -6,7 +6,7 @@ import { PaymentClient } from './services/payment-client'
 import { InterviewTimer } from './services/interview-timer'
 import { AccountWorkspaces } from './services/account-workspace'
 import { platformBaseUrl } from '../shared/defaults'
-import { app, BrowserWindow, Menu, dialog, globalShortcut, ipcMain, safeStorage, session, powerMonitor, systemPreferences, desktopCapturer } from 'electron'
+import { app, shell, BrowserWindow, Menu, dialog, globalShortcut, ipcMain, safeStorage, session, powerMonitor, systemPreferences, desktopCapturer } from 'electron'
 import type { IpcMainInvokeEvent, Rectangle } from 'electron'
 import { basename, join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
@@ -377,6 +377,10 @@ function registerHandlers(): void {
   handle('payments:create', input => paymentRequest(client => client.create(input)))
   handle('payments:refresh', id => paymentRequest(client => client.refresh(id)))
   handle('payments:cancel', id => paymentRequest(client => client.cancel(id)))
+  handle('payments:openCheckout', async id => {
+    const url = await paymentRequest(client => client.checkout(id))
+    await shell.openExternal(url)
+  })
   handle('wallet:get', async () => interviewTimer.read(await walletConnection()))
   handle('interview:start', input => interviewMutations.run(async () => {
     const { requestId, environmentId } = parseInput(z.object({ requestId: z.string().uuid(), environmentId: z.string().uuid() }), input)

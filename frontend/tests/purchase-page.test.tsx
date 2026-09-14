@@ -10,7 +10,7 @@ vi.mock('../src/renderer/src/components/ui/toast', () => ({ toast: { show: vi.fn
 const item = { id: 1, version: 2, name: '面试两小时', description: '适合两场面试', durationSeconds: 7200, originalPriceCents: 2000, discountBps: 8000, priceCents: 1600, sortOrder: 1, enabled: true }
 const order: PaymentOrder = { id: 'order-1', paymentMethod: 'wechat', userId: 1, displayName: 'a@example.com', packageName: item.name, durationSeconds: 7200, totalCents: 1600, status: 'pending', credited: false, codeUrl: 'weixin://test', createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 900000).toISOString(), paidAt: null, refundedCents: 0, deductedSeconds: 0 }
 function setup(available = true, orders: PaymentOrder[] = [], methods: PaymentMethod[] = ['wechat']) {
-  const api = { getPackageCatalog: vi.fn(async () => ({ paymentAvailable: available, paymentMethods: available ? methods : [], packages: [item] })), getPaymentOrders: vi.fn(async () => orders), createPaymentOrder: vi.fn(async (input: CreatePaymentOrder) => ({ ...order, paymentMethod: input.paymentMethod })), refreshPaymentOrder: vi.fn(async () => ({ ...order, status: 'paid' as const, credited: true })), startInterview: vi.fn(), endInterview: vi.fn() }
+  const api = { openPaymentCheckout: vi.fn(async () => undefined), getPackageCatalog: vi.fn(async () => ({ paymentAvailable: available, paymentMethods: available ? methods : [], packages: [item] })), getPaymentOrders: vi.fn(async () => orders), createPaymentOrder: vi.fn(async (input: CreatePaymentOrder) => ({ ...order, paymentMethod: input.paymentMethod })), refreshPaymentOrder: vi.fn(async () => ({ ...order, status: 'paid' as const, credited: true })), startInterview: vi.fn(), endInterview: vi.fn() }
   const onCredited = vi.fn(async () => undefined)
   const view = render(<PurchasePage bridge={api as unknown as DesktopBridge} scope="account-1" remaining={100} onCredited={onCredited} />)
   return { ...view, api, onCredited }
@@ -76,13 +76,17 @@ describe('PurchasePage', () => {
     expect(screen.getByRole('button', { name: '微信支付' }).getAttribute('aria-pressed')).toBe('true')
     await user.click(screen.getByRole('button', { name: '支付宝支付' }))
     await user.click(screen.getByRole('button', { name: '购买 面试两小时' }))
-    await screen.findByRole('img', { name: '使用手机支付宝扫描此二维码支付' })
+    await user.click(await screen.findByRole('button', { name: '打开支付宝收银台' }))
+    expect(api.openPaymentCheckout).toHaveBeenCalledWith('order-1')
+    expect(screen.queryByRole('img')).toBeNull()
     expect(api.createPaymentOrder).toHaveBeenCalledWith(expect.objectContaining({ paymentMethod: 'alipay' }))
-    expect(screen.getByRole('dialog').textContent).toContain('支付宝扫码购买时长')
+    expect(screen.getByRole('dialog').textContent).toContain('支付宝购买时长')
     await user.click(screen.getAllByRole('button', { name: '关闭' })[0])
     await user.click(screen.getByRole('button', { name: '微信支付' }))
     await user.click(screen.getByRole('button', { name: '查看订单' }))
-    await screen.findByRole('img', { name: '使用手机支付宝扫描此二维码支付' })
+    await user.click(await screen.findByRole('button', { name: '打开支付宝收银台' }))
+    expect(api.openPaymentCheckout).toHaveBeenCalledWith('order-1')
+    expect(screen.queryByRole('img')).toBeNull()
     expect(api.createPaymentOrder).toHaveBeenCalledTimes(1)
   })
 
@@ -125,4 +129,17 @@ describe('PurchasePage', () => {
     expect(inputs[1].paymentMethod).toBe('alipay')
   })
 
+})
+
+it('offers ZPAY as an independent browser channel with local cancellation disclosure', async () => {
+  const { api } = setup(true, [], ['wechat', 'alipay', 'zpay'])
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: 'ZPAY支付' }))
+  await user.click(screen.getByRole('button', { name: '购买 面试两小时' }))
+  await user.click(await screen.findByRole('button', { name: '打开ZPAY收银台' }))
+  expect(api.createPaymentOrder).toHaveBeenCalledWith(expect.objectContaining({ paymentMethod: 'zpay' }))
+  expect(api.openPaymentCheckout).toHaveBeenCalledWith('order-1')
+  expect(screen.queryByRole('img')).toBeNull()
+  expect(screen.getByText(/取消或超时仅关闭本地订单/)).toBeTruthy()
+  expect(screen.getByText(/本次付款入口剩余/)).toBeTruthy()
 })

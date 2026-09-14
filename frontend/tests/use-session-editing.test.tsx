@@ -41,6 +41,7 @@ function setup(fakeTimers = false) {
     getHistoryDetail: vi.fn(async () => { throw new Error('unused') }),
     getHistorySyncStatus: vi.fn(async () => '已同步'),
     getRememberedLogin: vi.fn(async () => null),
+    openPaymentCheckout: vi.fn(),
     cancelPaymentOrder: vi.fn(async () => { throw new Error('unused') }),
     getWallet: vi.fn(async () => ({ availableSeconds: 3600, version: 0, serverTime: new Date().toISOString(), session: null })),
     startInterview: vi.fn(async () => ({ availableSeconds: 3600, version: 0, serverTime: new Date().toISOString(), session: null })),

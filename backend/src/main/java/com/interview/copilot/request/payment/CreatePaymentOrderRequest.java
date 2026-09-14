@@ -11,4 +11,4 @@ public record CreatePaymentOrderRequest(
         @Min(1) long packageId,
         @Min(1) long packageVersion,
         @NotNull UUID requestId,
-        @NotBlank @Pattern(regexp = "wechat|alipay") String paymentMethod) {}
+        @NotBlank @Pattern(regexp = "wechat|alipay|zpay") String paymentMethod) {}

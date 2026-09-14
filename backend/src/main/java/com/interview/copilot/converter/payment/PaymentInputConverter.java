@@ -46,6 +46,7 @@ public final class PaymentInputConverter {
                 p.sellerId(),
                 p.gatewayUrl(),
                 p.notifyUrl(),
+                p.returnUrl(),
                 p.appPrivateKey(),
                 p.alipayPublicKey());
     }

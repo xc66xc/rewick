@@ -21,7 +21,7 @@ export default function PurchasePage({ bridge, scope, remaining, onCredited }: P
     {payments.loading && !payments.catalog && <p role="status" className="text-sm text-text-secondary">正在加载套餐…</p>}
     {payments.catalog && !payments.catalog.paymentAvailable && <EmptyState icon={<ShoppingBag />} title="支付暂未开放" description="平台正在准备支付服务。您可以先查看套餐，开放后再购买。" />}
     {payments.catalog?.packages.length === 0 && <EmptyState icon={<ShoppingBag />} title="暂无可购买套餐" description="套餐发布后将在这里显示。" />}
-    {methodOptions.length > 0 && <div className="flex flex-wrap items-center gap-3"><span className="text-sm font-medium">支付方式</span><Segmented aria-label="支付方式" value={payments.paymentMethod ?? ''} disabled={payments.busy} options={methodOptions} onValueChange={value => { if (value === 'wechat' || value === 'alipay') payments.setPaymentMethod(value) }} />{!payments.paymentMethod && <span className="text-xs text-text-secondary">原支付方式已不可用，请重新选择。</span>}</div>}
+    {methodOptions.length > 0 && <div className="flex flex-wrap items-center gap-3"><span className="text-sm font-medium">支付方式</span><Segmented aria-label="支付方式" value={payments.paymentMethod ?? ''} disabled={payments.busy} options={methodOptions} onValueChange={value => { if (value === 'wechat' || value === 'alipay' || value === 'zpay') payments.setPaymentMethod(value) }} />{!payments.paymentMethod && <span className="text-xs text-text-secondary">原支付方式已不可用，请重新选择。</span>}</div>}
     <ul className="grid list-none grid-cols-3 gap-4 max-[1100px]:grid-cols-2 max-[730px]:grid-cols-1">
       {payments.catalog?.packages.filter(item => item.enabled).map(item => <li key={item.id} className="flex flex-col gap-4 rounded-card border border-border bg-card p-6">
         <h2 className="text-lg font-semibold">{item.name}</h2><p className="text-sm text-text-secondary">{item.description}</p>
@@ -39,6 +39,6 @@ export default function PurchasePage({ bridge, scope, remaining, onCredited }: P
         <Button onClick={() => payments.setSelected(order)}>查看订单</Button>
       </li>)}
     </ul>
-    {payments.selected && <PaymentOrderDialog order={payments.selected} busy={payments.busy} onCancel={() => { if (payments.selected) void payments.cancel(payments.selected) }} onClose={() => payments.setSelected(null)} onRefresh={() => { if (payments.selected) void payments.refresh(payments.selected) }} />}
+    {payments.selected && <PaymentOrderDialog onOpenCheckout={() => { if (payments.selected) void payments.openCheckout(payments.selected) }} order={payments.selected} busy={payments.busy} onCancel={() => { if (payments.selected) void payments.cancel(payments.selected) }} onClose={() => payments.setSelected(null)} onRefresh={() => { if (payments.selected) void payments.refresh(payments.selected) }} />}
   </section>
 }

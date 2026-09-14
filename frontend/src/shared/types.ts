@@ -182,6 +182,7 @@ export interface DesktopBridge {
   getPaymentOrders(): Promise<PaymentOrder[]>
   createPaymentOrder(input: CreatePaymentOrder): Promise<PaymentOrder>
   refreshPaymentOrder(id: string): Promise<PaymentOrder>
+  openPaymentCheckout(id: string): Promise<void>
   cancelPaymentOrder(id: string): Promise<PaymentOrder>
   getWallet(): Promise<WalletState>
   startInterview(requestId: string, environmentId: string): Promise<WalletState>

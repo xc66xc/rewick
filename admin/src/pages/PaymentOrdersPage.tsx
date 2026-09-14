@@ -20,9 +20,9 @@ export default function PaymentOrdersPage({ api }: PaymentOrdersPageProps) {
     try { const result = await api.request(`/admin/payment-orders/${encodeURIComponent(order.id)}/refresh`, paymentOrderSchema, { method: 'POST' }); setNotice(`订单 ${result.id}：${paymentStatus(result)}`); reload() }
     catch (failure) { setError(message(failure)) } finally { setBusy(null) }
   }
-  const orders = state.kind === 'ready' ? state.data.filter(order => `${order.displayName} ${order.id} ${order.packageName}`.toLowerCase().includes(filter.toLowerCase())) : []
+  const orders = state.kind === 'ready' ? state.data.filter(order => `${order.displayName} ${order.id} ${order.packageName} ${paymentMethodName(order.paymentMethod)}`.toLowerCase().includes(filter.toLowerCase())) : []
   return <section className={styles.pageBody} aria-label="支付订单"><div className={styles.sectionHeading}><div><h2>套餐购买订单</h2><p>展示最近 100 条订单。查询支付结果会重试已支付订单的时长到账。</p></div><button type="button" className={styles.secondaryButton} onClick={reload}>刷新订单列表</button></div>
-    <label className={styles.searchField}>筛选当前列表<input value={filter} onChange={event => setFilter(event.target.value)} placeholder="用户、订单号或套餐名称" /></label>
+    <label className={styles.searchField}>筛选当前列表<input value={filter} onChange={event => setFilter(event.target.value)} placeholder="用户、订单号、套餐名称或支付渠道" /></label>
     {error && <p className={styles.error} role="alert">{error}</p>}{notice && <p className={styles.notice} role="status">{notice}</p>}
     {state.kind === 'loading' ? <LoadState /> : state.kind === 'error' ? <LoadState error={state.error} onRetry={reload} /> : orders.length ? <div className={styles.tableScroll}><table><caption className={styles.srOnly}>支付订单列表</caption><thead><tr><th>用户 / 订单</th><th>套餐</th><th>金额 / 时长</th><th>状态 / 退款</th><th>时间</th><th>操作</th></tr></thead><tbody>{orders.map(order => <tr key={order.id}>
       <th scope="row">{order.displayName}<span className={styles.tableDetail}>用户 ID {order.userId}</span><span className={styles.tableDetail}>{order.id}</span></th>

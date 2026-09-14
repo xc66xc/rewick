@@ -5,11 +5,11 @@ import com.alipay.api.AlipayConfig;
 import com.alipay.api.AlipayResponse;
 import com.alipay.api.DefaultAlipayClient;
 import com.alipay.api.domain.AlipayTradeCloseModel;
-import com.alipay.api.domain.AlipayTradePrecreateModel;
+import com.alipay.api.domain.AlipayTradePagePayModel;
 import com.alipay.api.domain.AlipayTradeQueryModel;
 import com.alipay.api.internal.util.AlipaySignature;
 import com.alipay.api.request.AlipayTradeCloseRequest;
-import com.alipay.api.request.AlipayTradePrecreateRequest;
+import com.alipay.api.request.AlipayTradePagePayRequest;
 import com.alipay.api.request.AlipayTradeQueryRequest;
 import com.alipay.api.response.AlipayTradeQueryResponse;
 import com.interview.copilot.dto.payment.AlipayConfigDTO;
@@ -23,8 +23,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.interfaces.RSAKey;
@@ -74,22 +74,21 @@ public class AlipayPaymentServiceImpl implements AlipayPaymentService {
     }
 
     public String create(AlipayConfigDTO c, PaymentOrderDTO o) {
-        var model = new AlipayTradePrecreateModel();
+        var model = new AlipayTradePagePayModel();
         model.setOutTradeNo(o.id());
         model.setSubject(o.packageName());
-        model.setSellerId(c.sellerId());
+        model.setProductCode("FAST_INSTANT_TRADE_PAY");
         model.setTotalAmount(BigDecimal.valueOf(o.totalCents(), 2).toPlainString());
         model.setTimeExpire(TIME.format(ServerTime.local(o.expiresAt())));
-        var request = new AlipayTradePrecreateRequest();
+        var request = new AlipayTradePagePayRequest();
         request.setBizModel(model);
         request.setNotifyUrl(c.notifyUrl());
+        request.setReturnUrl(c.returnUrl());
         try {
-            var response = client(c).execute(request);
-            requireSuccess(response, o.id());
-            if (!o.id().equals(response.getOutTradeNo())
-                    || response.getQrCode() == null
-                    || response.getQrCode().isBlank()) throw PaymentErrors.upstream();
-            return response.getQrCode();
+            var response = client(c).pageExecute(request, "POST");
+            if (response.getBody() == null || response.getBody().isBlank())
+                throw PaymentErrors.upstream();
+            return response.getBody().replace("style=\"display:none\"", "hidden");
         } catch (AlipayApiException e) {
             throw upstream(o.id(), e);
         }
@@ -129,7 +128,8 @@ public class AlipayPaymentServiceImpl implements AlipayPaymentService {
         request.setBizModel(model);
         try {
             var response = client(c).execute(request);
-            if ("ACQ.TRADE_NOT_EXIST".equals(response.getSubCode())) return;
+            if ("ACQ.TRADE_NOT_EXIST".equals(response.getSubCode()))
+                throw PaymentErrors.conflict("PAYMENT_CANCEL_PENDING", "支付宝尚未确认关闭交易，请稍后查看支付结果");
             requireSuccess(response, o.id());
             if (!o.id().equals(response.getOutTradeNo()))
                 throw PaymentErrors.invalid("支付宝关单响应与订单不匹配");
@@ -145,7 +145,8 @@ public class AlipayPaymentServiceImpl implements AlipayPaymentService {
                 return client.execute(request);
             } catch (AlipayApiException error) {
                 Throwable cause = rootCause(error);
-                if (attempt >= 2 || !(cause instanceof IOException)
+                if (attempt >= 2
+                        || !(cause instanceof IOException)
                         || cause instanceof javax.net.ssl.SSLException) throw error;
             }
         }

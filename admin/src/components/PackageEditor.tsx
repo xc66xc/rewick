@@ -13,7 +13,11 @@ export default function PackageEditor({ api, item: initialItem, onSaved, onDelet
   async function save() {
     if (draft.durationSeconds <= 0) { setError('套餐时长必须大于 0。'); return }
     setBusy(true); setError('')
-    try { const saved = await api.request(item ? `/admin/packages/${item.id}` : '/admin/packages', packageSchema, { method: item ? 'PUT' : 'POST', body: { ...draft, ...(item ? { version: item.version } : {}) } }); setItem(saved); onSaved(saved) }
+    try { const saved = await api.request(item ? `/admin/packages/${item.id}` : '/admin/packages', packageSchema, { method: item ? 'PUT' : 'POST', body: {
+      name: draft.name, description: draft.description, durationSeconds: draft.durationSeconds,
+      originalPriceCents: draft.originalPriceCents, discountBps: draft.discountBps,
+      sortOrder: draft.sortOrder, enabled: draft.enabled, ...(item ? { version: item.version } : {})
+    } }); setItem(saved); onSaved(saved) }
     catch (failure) { setError(message(failure)) } finally { setBusy(false) }
   }
   return <form onSubmit={event => { event.preventDefault(); void save() }}><fieldset className={styles.editorCard} disabled={busy}><legend>{item?.name ?? '新套餐'}</legend>

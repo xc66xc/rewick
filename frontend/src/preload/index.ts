@@ -15,6 +15,7 @@ function createBridge(accountScope?: string): DesktopBridge {
   createPaymentOrder: input => invoke('payments:create', input),
   refreshPaymentOrder: id => invoke('payments:refresh', id),
   cancelPaymentOrder: id => invoke('payments:cancel', id),
+  openPaymentCheckout: id => invoke('payments:openCheckout', id),
   getWallet: () => invoke('wallet:get'),
   startInterview: (requestId, environmentId) => invoke('interview:start', { requestId, environmentId }),
   endInterview: () => invoke('interview:end'),

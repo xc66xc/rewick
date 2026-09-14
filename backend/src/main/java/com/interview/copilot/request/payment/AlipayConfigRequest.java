@@ -9,5 +9,6 @@ public record AlipayConfigRequest(
         @Size(max = 64) String sellerId,
         @Size(max = 1000) String gatewayUrl,
         @Size(max = 1000) String notifyUrl,
+        @Size(max = 1000) String returnUrl,
         @Size(max = 16000) String appPrivateKey,
         @Size(max = 16000) String alipayPublicKey) {}

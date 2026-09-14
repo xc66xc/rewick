@@ -23,7 +23,7 @@ class PaymentProviderServiceTest {
     private final WechatPaymentService wechat = mock(WechatPaymentService.class);
     private final AlipayPaymentService alipay = mock(AlipayPaymentService.class);
     private final PaymentProviderServiceImpl service =
-            new PaymentProviderServiceImpl(wechatConfigs, alipayConfigs, wechat, alipay);
+            new PaymentProviderServiceImpl(wechatConfigs, alipayConfigs, wechat, alipay, mock(com.interview.copilot.service.payment.ZpayChannelService.class));
 
     @Test
     void availableMethods_onlyAlipayAvailable_returnsAlipayWithoutFallback() {
@@ -44,7 +44,8 @@ class PaymentProviderServiceTest {
         when(alipayConfigs.read())
                 .thenReturn(
                         new AlipayConfigResponse(
-                                4, false, true, "app", "seller", "gateway", "notify", true, true));
+                                4, false, true, "app", "seller", "gateway", "notify", "return",
+                                true, true));
 
         assertThatThrownBy(() -> service.activeVersion("alipay")).isInstanceOf(ApiException.class);
         verifyNoInteractions(wechatConfigs, wechat);
@@ -55,7 +56,7 @@ class PaymentProviderServiceTest {
         when(alipayConfigs.forOrder(4))
                 .thenReturn(
                         new AlipayConfigDTO(
-                                4, false, "app", "seller", "gateway", "notify", "private",
+                                4, false, "app", "seller", "gateway", "notify", "return", "private",
                                 "public"));
         var result =
                 new PaymentResultDTO(

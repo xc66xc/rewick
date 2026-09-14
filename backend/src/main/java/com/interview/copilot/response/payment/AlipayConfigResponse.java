@@ -8,5 +8,6 @@ public record AlipayConfigResponse(
         String sellerId,
         String gatewayUrl,
         String notifyUrl,
+        String returnUrl,
         boolean hasAppPrivateKey,
         boolean hasAlipayPublicKey) {}

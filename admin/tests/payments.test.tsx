@@ -30,6 +30,29 @@ describe('payment management', () => {
     expect(writes[0]).toMatchObject({ name: '周末套餐', originalPriceCents: 2099, discountBps: 8000, durationSeconds: 3600 })
     expect(writes[0]).not.toHaveProperty('priceCents')
   })
+  it('updates an existing package with only writable fields and the latest version', async () => {
+    const writes: Record<string, unknown>[] = []
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, options: RequestInit) => {
+      if (options.method === 'PUT') {
+        const body = data(options); writes.push(body)
+        return response({ ...item, ...body, version: item.version + writes.length, priceCents: 1 })
+      }
+      return response([item])
+    }))
+    const actor = userEvent.setup()
+    render(<PackagesPage api={new ApiClient('token')} />)
+    const price = await screen.findByLabelText('原价（元）')
+    await actor.clear(price); await actor.type(price, '0.1')
+    const discount = screen.getByLabelText('折扣（折，10 为原价）')
+    await actor.clear(discount); await actor.type(discount, '1')
+    await actor.click(screen.getByRole('button', { name: '保存套餐' }))
+    await screen.findByRole('status')
+    expect(writes[0]).toEqual({ version: 1, name: item.name, description: '', durationSeconds: 3600,
+      originalPriceCents: 10, discountBps: 1000, sortOrder: 0, enabled: true })
+    await actor.click(screen.getByRole('button', { name: '保存套餐' }))
+    await waitFor(() => expect(writes).toHaveLength(2))
+    expect(writes[1]).toEqual({ ...writes[0], version: 2 })
+  })
   it('preserves other package drafts when one package is saved', async () => {
     vi.stubGlobal('fetch', vi.fn(async (_url: string, options: RequestInit) => options.method === 'PUT' ? response({ ...item, version: 2 }) : response([item, { ...item, id: 2, name: '另一个套餐' }])))
     const actor = userEvent.setup()
@@ -85,7 +108,7 @@ describe('payment management', () => {
   })
 })
 
-const alipayConfig = { version: 1, enabled: false, configured: false, appId: '', sellerId: '', gatewayUrl: 'https://openapi.alipay.com/gateway.do', notifyUrl: '', hasAppPrivateKey: false, hasAlipayPublicKey: false }
+const alipayConfig = { version: 1, enabled: false, configured: false, appId: '', sellerId: '', gatewayUrl: 'https://openapi.alipay.com/gateway.do', notifyUrl: '', returnUrl: '', hasAppPrivateKey: false, hasAlipayPublicKey: false }
 describe('Alipay management', () => {
   it('saves Alipay independently with an explicit gateway and clears its secrets', async () => {
     const writes: Record<string, unknown>[] = []
@@ -148,4 +171,37 @@ it('selects the production gateway explicitly for an empty Alipay configuration'
   await actor.click(screen.getByRole('button', { name: '保存支付宝设置' }))
   await screen.findByText('支付宝设置已保存。')
   expect(writes[0]).toMatchObject({ appId: 'new-app', gatewayUrl: 'https://openapi.alipay.com/gateway.do' })
+})
+
+const zpayConfig = { version: 3, enabled: false, configured: false, pid: '', paymentType: 'alipay', gatewayUrl: '', queryUrl: '', notifyUrl: '', returnUrl: '', cid: '', hasMerchantKey: false }
+describe('ZPAY management', () => {
+  it('saves independent versioned ZPAY configuration and clears the secret on channel switch', async () => {
+    const writes: Record<string, unknown>[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+      if (!url.endsWith('/zpay')) return response(config)
+      if (options.method === 'PUT') { writes.push(data(options)); return response({ ...zpayConfig, version: 4, hasMerchantKey: true }) }
+      return response(zpayConfig)
+    }))
+    const actor = userEvent.setup()
+    render(<PaymentConfigPage api={new ApiClient('token')} />)
+    await actor.click(screen.getByRole('button', { name: 'ZPAY' }))
+    await actor.type(await screen.findByLabelText('ZPAY 商户 ID（PID）'), '12345')
+    await actor.selectOptions(screen.getByLabelText('ZPAY 收款方式'), 'wxpay')
+    await actor.type(screen.getByLabelText('ZPAY 商户密钥'), 'test-secret')
+    await actor.click(screen.getByRole('button', { name: '保存 ZPAY 设置' }))
+    await waitFor(() => expect(writes).toHaveLength(1))
+    expect(writes[0]).toEqual({ version: 3, enabled: false, pid: '12345', paymentType: 'wxpay', merchantKey: 'test-secret', gatewayUrl: 'https://zpayz.cn/submit.php', queryUrl: 'https://zpayz.cn/api.php', notifyUrl: 'https://api.junshi.icu/api/v1/payments/zpay/notify', returnUrl: 'https://junshi.icu/payment/result', cid: '' })
+    await screen.findByText('ZPAY 设置已保存。')
+    await actor.click(screen.getByRole('button', { name: '微信支付' }))
+    await actor.click(screen.getByRole('button', { name: 'ZPAY' }))
+    expect((await screen.findByLabelText('ZPAY 商户密钥') as HTMLInputElement).value).toBe('')
+    expect(screen.queryByRole('button', { name: '测试连接' })).toBeNull()
+  })
+  it('identifies ZPAY orders and supports filtering by channel', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => response([{ ...order, paymentMethod: 'zpay' }])))
+    render(<PaymentOrdersPage api={new ApiClient('token')} />)
+    await screen.findByText('ZPAY支付')
+    await userEvent.setup().type(screen.getByLabelText('筛选当前列表'), 'ZPAY')
+    expect(screen.getByText('test@example.com')).toBeTruthy()
+  })
 })

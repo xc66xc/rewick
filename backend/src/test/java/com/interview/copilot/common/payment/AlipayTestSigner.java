@@ -33,9 +33,14 @@ final class AlipayTestSigner {
         result.put("appId", "2026000000000001");
         result.put("sellerId", "2088000000000001");
         result.put("gatewayUrl", "https://openapi.alipay.com/gateway.do");
-        result.put("notifyUrl", "http://pay.example.com/api/v1/payments/alipay/notify");
-        result.put("appPrivateKey", Base64.getEncoder().encodeToString(keys.getPrivate().getEncoded()));
-        result.put("alipayPublicKey", Base64.getEncoder().encodeToString(keys.getPublic().getEncoded()));
+        result.put("notifyUrl", "https://pay.example.com/api/v1/payments/alipay/notify");
+        result.put("returnUrl", "https://pay.example.com/payment/result");
+        result.put(
+                "appPrivateKey",
+                Base64.getEncoder().encodeToString(keys.getPrivate().getEncoded()));
+        result.put(
+                "alipayPublicKey",
+                Base64.getEncoder().encodeToString(keys.getPublic().getEncoded()));
         return result;
     }
 
@@ -48,7 +53,9 @@ final class AlipayTestSigner {
         fields.put("trade_status", status);
         fields.put("total_amount", amount);
         fields.put("gmt_payment", "2026-09-12 10:00:00");
-        fields.put("notify_time", LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+        fields.put(
+                "notify_time",
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
         fields.put("notify_id", "notification-" + orderId);
         fields.put("notify_type", "trade_status_sync");
         fields.put("charset", "utf-8");
@@ -62,8 +69,11 @@ final class AlipayTestSigner {
         var sorted = new TreeMap<>(result);
         sorted.remove("sign");
         sorted.remove("sign_type");
-        String canonical = sorted.entrySet().stream().filter(item -> !item.getValue().isEmpty())
-                .map(item -> item.getKey() + "=" + item.getValue()).collect(Collectors.joining("&"));
+        String canonical =
+                sorted.entrySet().stream()
+                        .filter(item -> !item.getValue().isEmpty())
+                        .map(item -> item.getKey() + "=" + item.getValue())
+                        .collect(Collectors.joining("&"));
         try {
             Signature signature = Signature.getInstance("SHA256withRSA");
             signature.initSign(keys.getPrivate());

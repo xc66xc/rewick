@@ -62,6 +62,7 @@ public class AlipayConfigServiceImpl implements AlipayConfigService {
                         text(p.sellerId()),
                         text(p.gatewayUrl()),
                         text(p.notifyUrl()),
+                        text(p.returnUrl()),
                         secret("alipay-private", p.appPrivateKey(), old.appPrivateKey()),
                         secret("alipay-public", p.alipayPublicKey(), old.alipayPublicKey()));
         if (next.enabled()) validateEnabled(next);
@@ -75,20 +76,25 @@ public class AlipayConfigServiceImpl implements AlipayConfigService {
         URI uri;
         try {
             uri = URI.create(c.notifyUrl());
+            URI returned = URI.create(c.returnUrl());
+            if (!"https".equalsIgnoreCase(returned.getScheme())
+                    || returned.getHost() == null
+                    || returned.getUserInfo() != null
+                    || returned.getFragment() != null)
+                throw PaymentErrors.invalid("支付返回地址必须为有效的 HTTPS 地址");
         } catch (IllegalArgumentException e) {
             throw PaymentErrors.invalid("支付回调地址格式错误");
         }
-        if (!("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme()))
+        if (!"https".equalsIgnoreCase(uri.getScheme())
                 || uri.getHost() == null
                 || uri.getUserInfo() != null
-                || uri.getFragment() != null)
-            throw PaymentErrors.invalid("支付回调地址必须为有效的 HTTP 或 HTTPS 地址");
+                || uri.getFragment() != null) throw PaymentErrors.invalid("支付回调地址必须为有效的 HTTPS 地址");
         alipay.validate(decrypt(c));
     }
 
     private AlipayConfigEntity latest() {
         var c = mapper.latest();
-        return c == null ? new AlipayConfigEntity(0, false, "", "", "", "", "", "") : c;
+        return c == null ? new AlipayConfigEntity(0, false, "", "", "", "", "", "", "") : c;
     }
 
     private boolean configured(AlipayConfigEntity c) {
@@ -96,6 +102,7 @@ public class AlipayConfigServiceImpl implements AlipayConfigService {
                 && !c.sellerId().isBlank()
                 && !c.gatewayUrl().isBlank()
                 && !c.notifyUrl().isBlank()
+                && !c.returnUrl().isBlank()
                 && !c.appPrivateKey().isBlank()
                 && !c.alipayPublicKey().isBlank();
     }
@@ -109,6 +116,7 @@ public class AlipayConfigServiceImpl implements AlipayConfigService {
                 c.sellerId(),
                 c.gatewayUrl(),
                 c.notifyUrl(),
+                c.returnUrl(),
                 !c.appPrivateKey().isBlank(),
                 !c.alipayPublicKey().isBlank());
     }
@@ -121,6 +129,7 @@ public class AlipayConfigServiceImpl implements AlipayConfigService {
                 c.sellerId(),
                 c.gatewayUrl(),
                 c.notifyUrl(),
+                c.returnUrl(),
                 cipher.decrypt("alipay-private", c.appPrivateKey()),
                 cipher.decrypt("alipay-public", c.alipayPublicKey()));
     }

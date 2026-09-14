@@ -195,3 +195,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON client_downloads, client_download_upload
 ```
 
 三条固定平台记录初始关闭。安装包不进数据库，部署前挂载持久卷并更新 Nginx，详见 deploy/server/client-downloads.md。临时上传 24 小时后过期，每小时清理；不保留历史版本。
+
+### 20_alipay_page_pay.sql
+电脑网站支付：新增配置 return_url、一次性收银台票据、唯一活动订单索引。先关闭旧活动支付宝订单；脚本会关闭支付宝新订单入口，后台补齐返回地址后重新启用。授权和发布步骤见 `deploy/server/alipay-page-pay.md`。
+
+### 21_zpay_payments.sql
+独立 ZPAY 渠道：新增商户配置列，订单渠道约束增加 zpay。在 SQL20 之后执行。不会自动启用渠道；后台填写商户资料后保存启用。配置和验收说明见 `deploy/server/zpay.md`。

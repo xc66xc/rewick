@@ -4,19 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mockConstruction;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.alipay.api.AlipayApiException;
 import com.alipay.api.AlipayConfig;
 import com.alipay.api.DefaultAlipayClient;
-import com.alipay.api.domain.AlipayTradePrecreateModel;
+import com.alipay.api.domain.AlipayTradePagePayModel;
 import com.alipay.api.request.AlipayTradeCloseRequest;
-import com.alipay.api.request.AlipayTradePrecreateRequest;
+import com.alipay.api.request.AlipayTradePagePayRequest;
 import com.alipay.api.request.AlipayTradeQueryRequest;
 import com.alipay.api.response.AlipayTradeCloseResponse;
-import com.alipay.api.response.AlipayTradePrecreateResponse;
+import com.alipay.api.response.AlipayTradePagePayResponse;
 import com.alipay.api.response.AlipayTradeQueryResponse;
 import com.interview.copilot.dto.payment.AlipayConfigDTO;
 import com.interview.copilot.dto.payment.PaymentOrderDTO;
@@ -25,8 +25,8 @@ import com.interview.copilot.exception.ApiException;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-import java.security.KeyPairGenerator;
 import java.io.IOException;
+import java.security.KeyPairGenerator;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
@@ -40,10 +40,9 @@ class AlipayPaymentServiceTest {
 
     @Test
     void create_passesSnapshotAmountAndOriginalExpiryToRsa2Client() throws Exception {
-        var response = new AlipayTradePrecreateResponse();
+        var response = new AlipayTradePagePayResponse();
         response.setCode("10000");
-        response.setOutTradeNo(order.id());
-        response.setQrCode("https://qr.alipay.com/test");
+        response.setBody("<form>cashier</form>");
         try (var clients =
                 mockConstruction(
                         DefaultAlipayClient.class,
@@ -51,17 +50,21 @@ class AlipayPaymentServiceTest {
                             var settings = (AlipayConfig) context.arguments().getFirst();
                             assertThat(settings.getSignType()).isEqualTo("RSA2");
                             assertThat(settings.getAlipayPublicKey()).isNotBlank();
-                            when(client.execute(any(AlipayTradePrecreateRequest.class)))
+                            when(client.pageExecute(
+                                            any(AlipayTradePagePayRequest.class),
+                                            org.mockito.ArgumentMatchers.eq("POST")))
                                     .thenReturn(response);
                         })) {
-            assertThat(service.create(config, order)).isEqualTo("https://qr.alipay.com/test");
-            var request = ArgumentCaptor.forClass(AlipayTradePrecreateRequest.class);
-            verify(clients.constructed().getFirst()).execute(request.capture());
-            var model = (AlipayTradePrecreateModel) request.getValue().getBizModel();
+            assertThat(service.create(config, order)).isEqualTo("<form>cashier</form>");
+            var request = ArgumentCaptor.forClass(AlipayTradePagePayRequest.class);
+            verify(clients.constructed().getFirst())
+                    .pageExecute(request.capture(), org.mockito.ArgumentMatchers.eq("POST"));
+            var model = (AlipayTradePagePayModel) request.getValue().getBizModel();
             assertThat(model.getTotalAmount()).isEqualTo("15.99");
             assertThat(model.getTimeExpire()).isEqualTo("2026-09-12 10:15:00");
             assertThat(model.getOutTradeNo()).isEqualTo(order.id());
-            assertThat(model.getSellerId()).isEqualTo(config.sellerId());
+            assertThat(model.getProductCode()).isEqualTo("FAST_INSTANT_TRADE_PAY");
+            assertThat(request.getValue().getReturnUrl()).isEqualTo(config.returnUrl());
             assertThat(request.getValue().getNotifyUrl()).isEqualTo(config.notifyUrl());
         }
     }
@@ -103,10 +106,15 @@ class AlipayPaymentServiceTest {
     @Test
     void query_transientGatewayIoFailure_retriesReadOnlyQuery() throws Exception {
         var response = paidResponse("15.99", "TRADE_SUCCESS");
-        try (var clients = mockConstruction(DefaultAlipayClient.class, (client, context) ->
-                when(client.execute(any(AlipayTradeQueryRequest.class)))
-                        .thenThrow(new AlipayApiException(new IOException("404 Not Found")))
-                        .thenReturn(response))) {
+        try (var clients =
+                mockConstruction(
+                        DefaultAlipayClient.class,
+                        (client, context) ->
+                                when(client.execute(any(AlipayTradeQueryRequest.class)))
+                                        .thenThrow(
+                                                new AlipayApiException(
+                                                        new IOException("404 Not Found")))
+                                        .thenReturn(response))) {
             assertThat(service.query(config, order).state()).isEqualTo("SUCCESS");
             verify(clients.constructed().getFirst(), times(2))
                     .execute(any(AlipayTradeQueryRequest.class));
@@ -115,9 +123,14 @@ class AlipayPaymentServiceTest {
 
     @Test
     void query_persistentIoFailure_stopsAfterThreeAttempts() throws Exception {
-        try (var clients = mockConstruction(DefaultAlipayClient.class, (client, context) ->
-                when(client.execute(any(AlipayTradeQueryRequest.class)))
-                        .thenThrow(new AlipayApiException(new IOException("404 Not Found"))))) {
+        try (var clients =
+                mockConstruction(
+                        DefaultAlipayClient.class,
+                        (client, context) ->
+                                when(client.execute(any(AlipayTradeQueryRequest.class)))
+                                        .thenThrow(
+                                                new AlipayApiException(
+                                                        new IOException("404 Not Found"))))) {
             assertThatThrownBy(() -> service.query(config, order)).isInstanceOf(ApiException.class);
             verify(clients.constructed().getFirst(), times(3))
                     .execute(any(AlipayTradeQueryRequest.class));
@@ -126,9 +139,15 @@ class AlipayPaymentServiceTest {
 
     @Test
     void query_signatureFailure_doesNotRetry() throws Exception {
-        try (var clients = mockConstruction(DefaultAlipayClient.class, (client, context) ->
-                when(client.execute(any(AlipayTradeQueryRequest.class)))
-                        .thenThrow(new AlipayApiException("CHECK_SIGN_ERROR", "Invalid signature")))) {
+        try (var clients =
+                mockConstruction(
+                        DefaultAlipayClient.class,
+                        (client, context) ->
+                                when(client.execute(any(AlipayTradeQueryRequest.class)))
+                                        .thenThrow(
+                                                new AlipayApiException(
+                                                        "CHECK_SIGN_ERROR",
+                                                        "Invalid signature")))) {
             assertThatThrownBy(() -> service.query(config, order)).isInstanceOf(ApiException.class);
             verify(clients.constructed().getFirst()).execute(any(AlipayTradeQueryRequest.class));
         }
@@ -210,7 +229,9 @@ class AlipayPaymentServiceTest {
                 mockConstruction(
                         DefaultAlipayClient.class,
                         (client, context) ->
-                                when(client.execute(any(AlipayTradePrecreateRequest.class)))
+                                when(client.pageExecute(
+                                                any(AlipayTradePagePayRequest.class),
+                                                org.mockito.ArgumentMatchers.eq("POST")))
                                         .thenThrow(
                                                 new AlipayApiException(
                                                         "CONNECT", "upstream-secret-detail")))) {
@@ -230,6 +251,7 @@ class AlipayPaymentServiceTest {
                         config.sellerId(),
                         "https://example.com/gateway.do",
                         config.notifyUrl(),
+                        config.returnUrl(),
                         config.appPrivateKey(),
                         config.alipayPublicKey());
         try (var clients = mockConstruction(DefaultAlipayClient.class)) {
@@ -262,6 +284,7 @@ class AlipayPaymentServiceTest {
                     "2088000000000001",
                     "https://openapi.alipay.com/gateway.do",
                     "https://pay.example.com/api/v1/payments/alipay/notify",
+                    "https://pay.example.com/payment/result",
                     Base64.getEncoder().encodeToString(pair.getPrivate().getEncoded()),
                     Base64.getEncoder().encodeToString(pair.getPublic().getEncoded()));
         } catch (java.security.GeneralSecurityException error) {

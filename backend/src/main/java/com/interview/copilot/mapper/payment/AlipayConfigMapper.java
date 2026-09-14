@@ -10,7 +10,7 @@ import org.apache.ibatis.annotations.Select;
 public interface AlipayConfigMapper {
     String COLUMNS =
             "id,is_enabled AS"
-                + " enabled,app_id,seller_id,gateway_url,notify_url,app_private_key,alipay_public_key";
+                + " enabled,app_id,seller_id,gateway_url,notify_url,return_url,app_private_key,alipay_public_key";
 
     @Select(
             "SELECT "
@@ -30,7 +30,7 @@ public interface AlipayConfigMapper {
 
     @Insert(
             "INSERT INTO"
-                + " payment_config_versions(payment_method,is_enabled,app_id,seller_id,gateway_url,notify_url,app_private_key,alipay_public_key)"
-                + " VALUES('alipay',#{enabled},#{appId},#{sellerId},#{gatewayUrl},#{notifyUrl},#{appPrivateKey},#{alipayPublicKey})")
+                + " payment_config_versions(payment_method,is_enabled,app_id,seller_id,gateway_url,notify_url,return_url,app_private_key,alipay_public_key)"
+                + " VALUES('alipay',#{enabled},#{appId},#{sellerId},#{gatewayUrl},#{notifyUrl},#{returnUrl},#{appPrivateKey},#{alipayPublicKey})")
     void insert(AlipayConfigEntity p);
 }

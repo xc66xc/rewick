@@ -30,9 +30,12 @@ public interface PaymentOrderMapper {
     @Select("SELECT " + COLUMNS + JOIN + " WHERE o.order_id=#{id}")
     PaymentOrderEntity find(String id);
 
-    @Select("SELECT " + COLUMNS + JOIN
-            + " WHERE o.app_users_id=#{userId} AND o.status IN ('creating','pending')"
-            + " ORDER BY o.id LIMIT 1")
+    @Select(
+            "SELECT "
+                    + COLUMNS
+                    + JOIN
+                    + " WHERE o.app_users_id=#{userId} AND o.status IN"
+                    + " ('creating','pending','cancelling') ORDER BY o.id LIMIT 1")
     PaymentOrderEntity active(long userId);
 
     @Select("SELECT " + COLUMNS + JOIN + " WHERE o.order_id=#{id} FOR UPDATE OF o")
@@ -61,9 +64,19 @@ public interface PaymentOrderMapper {
     void create(@Param("o") PaymentOrderEntity o, @Param("requestId") String requestId);
 
     @Update(
+            "UPDATE payment_orders SET status='pending',updated_at=LOCALTIMESTAMP WHERE"
+                + " order_id=#{id} AND status='creating'")
+    void ready(String id);
+
+    @Update(
+            "UPDATE payment_orders SET status='cancelling',updated_at=LOCALTIMESTAMP WHERE"
+                + " order_id=#{id} AND status IN ('creating','pending')")
+    void cancelling(String id);
+
+    @Update(
             "UPDATE payment_orders SET last_query_at=#{now} WHERE order_id=#{id} AND (status IN"
-                    + " ('creating','pending') OR (status='paid' AND NOT is_credited)) AND"
-                    + " (last_query_at IS NULL OR last_query_at < #{threshold})")
+                + " ('creating','pending','cancelling') OR (status='paid' AND NOT is_credited) OR (status='closed' AND payment_method='zpay' AND NOT is_credited)) AND"
+                + " (last_query_at IS NULL OR last_query_at < #{threshold})")
     int claimQuery(
             @Param("id") String id,
             @Param("now") LocalDateTime now,
@@ -76,7 +89,7 @@ public interface PaymentOrderMapper {
 
     @Update(
             "UPDATE payment_orders SET status='closed',code_url=NULL,updated_at=LOCALTIMESTAMP"
-                    + " WHERE order_id=#{id} AND status IN ('creating','pending')")
+                    + " WHERE order_id=#{id} AND status IN ('creating','pending','cancelling')")
     void close(String id);
 
     @Update(
@@ -89,10 +102,20 @@ public interface PaymentOrderMapper {
             @Param("paidAt") LocalDateTime paidAt);
 
     @Select(
-            "SELECT order_id FROM payment_orders WHERE (status IN ('creating','pending') OR"
-                + " (status='paid' AND NOT is_credited)) AND (last_query_at IS NULL OR"
-                + " last_query_at < #{threshold}) ORDER BY last_query_at NULLS FIRST,id LIMIT 50")
+            "SELECT order_id FROM payment_orders WHERE (status IN"
+                + " ('creating','pending','cancelling') OR (status='paid' AND NOT is_credited)) AND"
+                + " (last_query_at IS NULL OR last_query_at < #{threshold}) ORDER BY last_query_at"
+                + " NULLS FIRST,id LIMIT 50")
     List<String> pending(LocalDateTime threshold);
+
+    @Select("SELECT o.order_id FROM payment_orders o WHERE o.payment_method='zpay'"
+            + " AND o.status='closed' AND NOT o.is_credited AND o.created_at>#{since}"
+            + " AND (o.last_query_at IS NULL OR o.last_query_at<#{threshold})"
+            + " AND EXISTS(SELECT 1 FROM payment_checkout_tickets t"
+            + " WHERE t.payment_orders_id=o.id AND t.is_consumed)"
+            + " ORDER BY o.last_query_at NULLS FIRST,o.id LIMIT 10")
+    List<String> closedZpay(@Param("since") LocalDateTime since,
+            @Param("threshold") LocalDateTime threshold);
 
     @Insert(
             "INSERT INTO"

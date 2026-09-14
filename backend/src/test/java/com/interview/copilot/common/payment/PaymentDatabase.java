@@ -49,7 +49,9 @@ final class PaymentDatabase extends PostgreSQLContainer<PaymentDatabase> {
                         "14_server_background.sql",
                         "15_user_preferences.sql",
                         "16_desktop_sessions.sql",
-                        "17_desktop_settings.sql")) {
+                        "17_desktop_settings.sql",
+                        "20_alipay_page_pay.sql",
+                        "21_zpay_payments.sql")) {
             command.add("-f");
             command.add("/tmp/sql/" + script);
         }

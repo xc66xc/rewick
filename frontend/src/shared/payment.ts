@@ -6,12 +6,12 @@ export const timePackageSchema = z.object({
   originalPriceCents: amount, discountBps: z.number().int().min(1).max(10000), priceCents: amount,
   sortOrder: z.number().int(), enabled: z.boolean()
 })
-export const paymentMethodSchema = z.enum(['wechat', 'alipay'])
+export const paymentMethodSchema = z.enum(['wechat', 'alipay', 'zpay'])
 export type PaymentMethod = z.infer<typeof paymentMethodSchema>
 export const packageCatalogSchema = z.object({ paymentAvailable: z.boolean(), paymentMethods: z.array(paymentMethodSchema), packages: z.array(timePackageSchema) })
 export const paymentOrderSchema = z.object({
   id: z.string().min(1).max(100), paymentMethod: paymentMethodSchema, userId: amount, displayName: z.string(), packageName: z.string(),
-  durationSeconds: amount, totalCents: amount, status: z.enum(['creating', 'pending', 'paid', 'closed']), credited: z.boolean(),
+  durationSeconds: amount, totalCents: amount, status: z.enum(['creating', 'pending', 'cancelling', 'paid', 'closed']), credited: z.boolean(),
   codeUrl: z.string().max(2048).nullable(), createdAt: z.string().datetime({ offset: true }), expiresAt: z.string().datetime({ offset: true }),
   paidAt: z.string().datetime({ offset: true }).nullable(), refundedCents: amount, deductedSeconds: amount
 })

@@ -7,5 +7,6 @@ public record AlipayConfigDTO(
         String sellerId,
         String gatewayUrl,
         String notifyUrl,
+        String returnUrl,
         String appPrivateKey,
         String alipayPublicKey) {}

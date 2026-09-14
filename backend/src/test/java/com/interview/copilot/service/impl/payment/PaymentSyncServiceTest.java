@@ -15,10 +15,11 @@ import com.interview.copilot.dto.payment.PaymentHeadersDTO;
 import com.interview.copilot.dto.payment.PaymentResultDTO;
 import com.interview.copilot.entity.payment.PaymentOrderEntity;
 import com.interview.copilot.exception.ApiException;
+import com.interview.copilot.mapper.payment.PaymentCheckoutMapper;
 import com.interview.copilot.mapper.payment.PaymentOrderMapper;
-import com.interview.copilot.service.payment.PaymentConfigService;
 import com.interview.copilot.service.payment.AlipayConfigService;
 import com.interview.copilot.service.payment.AlipayPaymentService;
+import com.interview.copilot.service.payment.PaymentConfigService;
 import com.interview.copilot.service.payment.PaymentFulfillmentService;
 import com.interview.copilot.service.payment.WechatPaymentService;
 import com.interview.copilot.util.ServerTime;
@@ -37,7 +38,17 @@ class PaymentSyncServiceTest {
     private final WechatPaymentService wechat = mock(WechatPaymentService.class);
     private final PaymentFulfillmentService fulfillment = mock(PaymentFulfillmentService.class);
     private final PaymentSyncServiceImpl service =
-            new PaymentSyncServiceImpl(orders, new PaymentProviderServiceImpl(configs, mock(AlipayConfigService.class), wechat, mock(AlipayPaymentService.class)), fulfillment, clock);
+            new PaymentSyncServiceImpl(
+                    orders,
+                    new PaymentProviderServiceImpl(
+                            configs,
+                            mock(AlipayConfigService.class),
+                            wechat,
+                            mock(AlipayPaymentService.class),
+                            mock(com.interview.copilot.service.payment.ZpayChannelService.class)),
+                    fulfillment,
+                    clock,
+                    mock(PaymentCheckoutMapper.class));
     private final PaymentConfigDTO config =
             new PaymentConfigDTO(
                     1,
@@ -60,6 +71,31 @@ class PaymentSyncServiceTest {
 
         verifyNoInteractions(fulfillment);
         verify(orders, never()).close(any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"pending", "closed"})
+    void sync_zpayOrderNotFound_preservesLocalStateWithoutCredit(String status) {
+        var provider = mock(com.interview.copilot.service.payment.PaymentProviderService.class);
+        var tickets = mock(PaymentCheckoutMapper.class);
+        var target = new PaymentSyncServiceImpl(orders, provider, fulfillment, clock, tickets);
+        var order = mock(PaymentOrderEntity.class);
+        when(order.id()).thenReturn("missing-order");
+        when(order.status()).thenReturn(status);
+        when(order.paymentMethod()).thenReturn("zpay");
+        when(order.expiresAt()).thenReturn(ServerTime.now(clock).plusMinutes(10));
+        when(orders.claimQuery(eq("missing-order"), any(), any())).thenReturn(1);
+        when(orders.find("missing-order")).thenReturn(order);
+        when(tickets.submitted("missing-order")).thenReturn(true);
+        when(provider.query(eq("zpay"), eq(0L), any())).thenReturn(new PaymentResultDTO(
+                "missing-order", "merchant", "alipay", null, "NOTFOUND", "CNY", 120, null, "zpay"));
+
+        target.sync("missing-order");
+
+        verify(provider).query(eq("zpay"), eq(0L), any());
+        verifyNoInteractions(fulfillment);
+        verify(orders, never()).close(any());
+        verify(orders, never()).ready(any());
     }
 
     @Test
@@ -148,7 +184,8 @@ class PaymentSyncServiceTest {
                         expired ? now.minusSeconds(1) : now.plusMinutes(10),
                         null,
                         0,
-                        0, "wechat");
+                        0,
+                        "wechat");
         when(orders.claimQuery(eq("order"), any(), any())).thenReturn(1);
         when(orders.find("order")).thenReturn(order);
         when(configs.forOrder(1)).thenReturn(config);
@@ -156,6 +193,14 @@ class PaymentSyncServiceTest {
 
     private PaymentResultDTO result(String orderId, String state) {
         return new PaymentResultDTO(
-                orderId, "merchant", "app", "transaction", state, "CNY", 100, clock.instant(), "wechat");
+                orderId,
+                "merchant",
+                "app",
+                "transaction",
+                state,
+                "CNY",
+                100,
+                clock.instant(),
+                "wechat");
     }
 }

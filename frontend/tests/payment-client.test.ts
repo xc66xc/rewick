@@ -43,3 +43,17 @@ describe('PaymentClient', () => {
   })
 
 })
+
+describe('browser checkout', () => {
+  const ticket = 'a'.repeat(64)
+  it.each(['alipay', 'zpay'])('uses authenticated order endpoint and returns a platform-only %s URL', async method => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ checkoutUrl: `/api/v1/payments/${method}/checkout?ticket=${ticket}` })))
+    vi.stubGlobal('fetch', fetcher)
+    expect(await new PaymentClient(connection).checkout('order-1')).toBe(`https://platform.example/api/v1/payments/${method}/checkout?ticket=${ticket}`)
+    expect(fetcher).toHaveBeenCalledWith('https://platform.example/api/v1/payment-orders/order-1/checkout', expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer test-token' }) }))
+  })
+  it.each(['https://evil.example/checkout', 'file:///tmp/checkout', 'http://platform.example/api/v1/payments/alipay/checkout', 'https://platform.example/admin', `/api/v1/payments/alipay/checkout?ticket=${ticket}&other=x`])('rejects unsafe cashier URL %s', async checkoutUrl => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ checkoutUrl }))))
+    await expect(new PaymentClient(connection).checkout('order-1')).rejects.toThrow('付款入口无效')
+  })
+})

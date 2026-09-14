@@ -10,6 +10,7 @@ import com.interview.copilot.service.payment.AlipayPaymentService;
 import com.interview.copilot.service.payment.PaymentConfigService;
 import com.interview.copilot.service.payment.PaymentProviderService;
 import com.interview.copilot.service.payment.WechatPaymentService;
+import com.interview.copilot.service.payment.ZpayChannelService;
 
 import org.springframework.stereotype.Service;
 
@@ -22,16 +23,19 @@ public class PaymentProviderServiceImpl implements PaymentProviderService {
     private final AlipayConfigService alipayConfigs;
     private final WechatPaymentService wechat;
     private final AlipayPaymentService alipay;
+    private final ZpayChannelService zpay;
 
     public PaymentProviderServiceImpl(
             PaymentConfigService wechatConfigs,
             AlipayConfigService alipayConfigs,
             WechatPaymentService wechat,
-            AlipayPaymentService alipay) {
+            AlipayPaymentService alipay,
+            ZpayChannelService zpay) {
         this.wechatConfigs = wechatConfigs;
         this.alipayConfigs = alipayConfigs;
         this.wechat = wechat;
         this.alipay = alipay;
+        this.zpay = zpay;
     }
 
     public PaymentResultDTO wechatNotification(String body, PaymentHeadersDTO headers) {
@@ -49,10 +53,12 @@ public class PaymentProviderServiceImpl implements PaymentProviderService {
         var methods = new ArrayList<String>();
         if (wechatConfigs.available()) methods.add("wechat");
         if (alipayConfigs.available()) methods.add("alipay");
+        if (zpay.available()) methods.add("zpay");
         return List.copyOf(methods);
     }
 
     public long activeVersion(String method) {
+        if ("zpay".equals(method)) return zpay.activeVersion();
         checkMethod(method);
         if ("alipay".equals(method)) {
             var c = alipayConfigs.read();
@@ -65,6 +71,7 @@ public class PaymentProviderServiceImpl implements PaymentProviderService {
     }
 
     public PaymentResultDTO query(String method, long version, PaymentOrderDTO order) {
+        if ("zpay".equals(method)) return zpay.query(version, order);
         checkMethod(method);
         return "alipay".equals(method)
                 ? alipay.query(alipayConfigs.forOrder(version), order)
@@ -72,6 +79,7 @@ public class PaymentProviderServiceImpl implements PaymentProviderService {
     }
 
     public String create(String method, long version, PaymentOrderDTO order) {
+        if ("zpay".equals(method)) return zpay.create(version, order);
         checkMethod(method);
         return "alipay".equals(method)
                 ? alipay.create(alipayConfigs.forOrder(version), order)
@@ -79,12 +87,17 @@ public class PaymentProviderServiceImpl implements PaymentProviderService {
     }
 
     public void close(String method, long version, PaymentOrderDTO order) {
+        if ("zpay".equals(method)) throw PaymentErrors.invalid("ZPAY 不支持渠道关单");
         checkMethod(method);
         if ("alipay".equals(method)) alipay.close(alipayConfigs.forOrder(version), order);
         else wechat.close(wechatConfigs.forOrder(version), order);
     }
 
     public void validateIdentity(String method, long version, PaymentResultDTO result) {
+        if ("zpay".equals(method)) {
+            zpay.validateIdentity(version, result);
+            return;
+        }
         checkMethod(method);
         String merchant;
         String app;
