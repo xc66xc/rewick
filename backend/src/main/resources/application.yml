@@ -26,8 +26,8 @@ spring:
       fail-on-unknown-properties: true
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 11MB
+      max-file-size: 500MB
+      max-request-size: 501MB
 management:
   endpoints:
     web:

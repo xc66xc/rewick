@@ -34,7 +34,11 @@ public class SecurityConfiguration {
                                         .requestMatchers(
                                                 HttpMethod.GET,
                                                 "/actuator/health",
-                                                "/api/v1/invitations/settings")
+                                                "/api/v1/invitations/settings",
+                                                "/api/v1/client-downloads",
+                                                "/downloads/*/*")
+                                        .permitAll()
+                                        .requestMatchers(HttpMethod.HEAD, "/downloads/*/*")
                                         .permitAll()
                                         .requestMatchers(
                                                 HttpMethod.POST,

@@ -28,6 +28,7 @@ services:
       context: ./backend
     volumes:
       - reference-files:/app/data/references
+      - client-download-files:/app/data/client-downloads
     depends_on:
       database:
         condition: service_healthy
@@ -47,6 +48,8 @@ services:
       COPILOT_EMAIL_REGISTRATION_ENABLED: ${COPILOT_EMAIL_REGISTRATION_ENABLED:-true}
       COPILOT_MAX_ASR_SESSION_SECONDS: ${COPILOT_MAX_ASR_SESSION_SECONDS:-3600}
   admin:
+    volumes:
+      - client-download-files:/usr/share/nginx/client-downloads:ro
     build:
       context: ./admin
     depends_on:
@@ -56,3 +59,4 @@ services:
 volumes:
   database-pg15-data:
   reference-files:
+  client-download-files:

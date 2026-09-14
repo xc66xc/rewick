@@ -74,3 +74,7 @@ Desktop.ini
 
 # Local Netlify folder
 .netlify
+
+# Runtime client installers (published and temporary uploads)
+/backend/data/client-downloads/
+/data/client-downloads/

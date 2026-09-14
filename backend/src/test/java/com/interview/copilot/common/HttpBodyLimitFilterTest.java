@@ -12,6 +12,53 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class HttpBodyLimitFilterTest {
     @Test
+    void filter_installerUsesSeparateLimitWithoutBufferingTheFile() throws Exception {
+        MockHttpServletRequest request =
+                new MockHttpServletRequest(
+                        "POST", "/api/v1/admin/client-downloads/macos-arm64/upload") {
+                    @Override
+                    public long getContentLengthLong() {
+                        return 100L * 1048576;
+                    }
+
+                    @Override
+                    public jakarta.servlet.ServletInputStream getInputStream() {
+                        throw new AssertionError("Must not buffer installer");
+                    }
+                };
+        request.setContentType("multipart/form-data; boundary=fixture");
+        AtomicBoolean called = new AtomicBoolean();
+        new HttpBodyLimitFilter(new ApiErrorWriter(new ObjectMapper()))
+                .doFilter(
+                        request,
+                        new MockHttpServletResponse(),
+                        (incoming, outgoing) -> called.set(true));
+        assertThat(called).isTrue();
+    }
+
+    @Test
+    void filter_installerOverLimitIsRejectedBeforeReading() throws Exception {
+        MockHttpServletRequest request =
+                new MockHttpServletRequest(
+                        "POST", "/api/v1/admin/client-downloads/windows-x64/upload") {
+                    @Override
+                    public long getContentLengthLong() {
+                        return 502L * 1048576;
+                    }
+                };
+        request.setContentType("multipart/form-data; boundary=fixture");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        new HttpBodyLimitFilter(new ApiErrorWriter(new ObjectMapper()))
+                .doFilter(
+                        request,
+                        response,
+                        (incoming, outgoing) -> {
+                            throw new AssertionError("Must reject oversized upload");
+                        });
+        assertThat(response.getStatus()).isEqualTo(413);
+    }
+
+    @Test
     void filter_multipartUpload_allowsDocumentBodyWithoutReadingStream() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/references");
         request.setContentType("multipart/form-data; boundary=fixture");

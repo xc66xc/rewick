@@ -1,7 +1,7 @@
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 RUN groupadd --system copilot && useradd --system --gid copilot copilot
-RUN mkdir -p /app/data/references && chown copilot:copilot /app/data/references
+RUN mkdir -p /app/data/references /app/data/client-downloads && chown copilot:copilot /app/data/references /app/data/client-downloads
 COPY backend.jar /app/backend.jar
 USER copilot
 EXPOSE 8080

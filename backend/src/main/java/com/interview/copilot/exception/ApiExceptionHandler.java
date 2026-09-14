@@ -27,7 +27,8 @@ public class ApiExceptionHandler {
         MethodArgumentNotValidException.class,
         HttpMessageNotReadableException.class,
         ConstraintViolationException.class,
-        IllegalArgumentException.class
+        IllegalArgumentException.class,
+        org.springframework.web.multipart.support.MissingServletRequestPartException.class
     })
     ResponseEntity<ApiError> invalidInput(Exception error) {
         return ResponseEntity.badRequest().body(new ApiError("invalid_request", "请求格式或参数无效。"));
@@ -37,6 +38,12 @@ public class ApiExceptionHandler {
     ResponseEntity<ApiError> notFound(Exception error) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(new ApiError("not_found", "接口不存在。"));
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    ResponseEntity<ApiError> uploadTooLarge() {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(new ApiError("upload_too_large", "上传文件超过接口容量限制。"));
     }
 
     @ExceptionHandler(Exception.class)

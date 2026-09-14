@@ -35,10 +35,17 @@ public class HttpBodyLimitFilter extends OncePerRequestFilter {
             HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         if ("POST".equals(request.getMethod())
-                && "/api/v1/references".equals(request.getRequestURI())
+                && ("/api/v1/references".equals(request.getRequestURI())
+                        || request.getRequestURI()
+                                .matches(
+                                        "/api/v1/admin/client-downloads/(macos-arm64|macos-x64|windows-x64)/upload"))
                 && request.getContentType() != null
                 && request.getContentType().startsWith("multipart/form-data")) {
-            if (request.getContentLengthLong() > 11L * MAX_BODY_BYTES) {
+            long multipartLimit =
+                    request.getRequestURI().startsWith("/api/v1/admin/client-downloads/")
+                            ? 501L * MAX_BODY_BYTES
+                            : 11L * MAX_BODY_BYTES;
+            if (request.getContentLengthLong() > multipartLimit) {
                 reject(response);
                 return;
             }
@@ -47,7 +54,10 @@ public class HttpBodyLimitFilter extends OncePerRequestFilter {
             chain.doFilter(request, response);
             return;
         }
-        int limit = request.getRequestURI().startsWith("/api/v1/session-records/") ? 5 * MAX_BODY_BYTES : MAX_BODY_BYTES;
+        int limit =
+                request.getRequestURI().startsWith("/api/v1/session-records/")
+                        ? 5 * MAX_BODY_BYTES
+                        : MAX_BODY_BYTES;
         if (request.getContentLengthLong() > limit) {
             reject(response);
             return;

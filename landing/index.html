@@ -14,10 +14,10 @@
 <meta property="og:title" content="掌灯 Rewick — AI 面试实时辅助桌面客户端" />
 <meta property="og:description" content="本地采集系统音频、实时转写，结合简历与参考资料给出可以直接说出口的回答；每条回答都能查看发送给模型的完整内容。Windows / macOS 桌面客户端。" />
 <meta name="twitter:card" content="summary_large_image" />
-<link rel="canonical" href="https://rewick.netlify.app/" />
-<meta property="og:url" content="https://rewick.netlify.app/" />
-<meta property="og:image" content="https://rewick.netlify.app/og-cover.png" />
-<meta name="twitter:image" content="https://rewick.netlify.app/og-cover.png" />
+<link rel="canonical" href="https://junshi.icu/" />
+<meta property="og:url" content="https://junshi.icu/" />
+<meta property="og:image" content="https://junshi.icu/og-cover.png" />
+<meta name="twitter:image" content="https://junshi.icu/og-cover.png" />
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -58,6 +58,7 @@
 <link href="vendor/tailwind.css" rel="stylesheet" />
 <script>document.documentElement.classList.add('motion-js');</script>
 <script src="vendor/lucide.min.js" defer></script>
+<script src="vendor/downloads.js" defer></script>
 <style>
   @keyframes eqbar { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
   .eq-bar { transform-origin: bottom; animation: eqbar 1.1s ease-in-out infinite; }
@@ -786,9 +787,11 @@
             <span class="text-[11.5px] text-faint">Windows 10 及以上（64 位）</span>
           </div>
         </div>
-        <a href="#" data-installer="windows" class="installer-pending flex h-[42px] items-center justify-center gap-2 rounded-md bg-accent text-[13.5px] font-medium text-white transition-opacity hover:opacity-90" aria-disabled="true">
-          <i data-lucide="download" class="h-4 w-4"></i>下载 Windows 版
-        </a>
+        <div data-download="windows-x64" class="flex flex-col gap-3">
+          <a aria-disabled="true" data-download-link class="installer-pending flex h-[42px] items-center justify-center gap-2 rounded-md bg-accent text-[13.5px] font-medium text-white">正在加载 Windows x64…</a>
+          <p data-download-info class="text-[12.5px] text-mute"></p>
+          <details data-download-notes hidden><summary>更新说明</summary><p class="text-[12.5px] text-body"></p></details>
+        </div>
         <div class="flex flex-col gap-[9px]">
           <div class="flex items-center gap-[9px]">
             <i data-lucide="check" class="h-3.5 w-3.5 shrink-0 text-accent-text"></i>
@@ -812,12 +815,19 @@
           </span>
           <div class="flex flex-col gap-1">
             <span class="text-[17px] font-semibold text-ink">macOS 版</span>
-            <span class="text-[11.5px] text-faint">macOS 12 及以上（Intel 与 Apple 芯片）</span>
+            <span class="text-[11.5px] text-faint">Apple Silicon 与 Intel 分别提供安装包</span>
           </div>
         </div>
-        <a href="#" data-installer="macos" class="installer-pending flex h-[42px] items-center justify-center gap-2 rounded-md bg-accent text-[13.5px] font-medium text-white transition-opacity hover:opacity-90" aria-disabled="true">
-          <i data-lucide="download" class="h-4 w-4"></i>下载 macOS 版
-        </a>
+        <div data-download="macos-arm64" class="flex flex-col gap-3">
+          <a aria-disabled="true" data-download-link class="installer-pending flex h-[42px] items-center justify-center gap-2 rounded-md bg-accent text-[13.5px] font-medium text-white">正在加载 Apple Silicon…</a>
+          <p data-download-info class="text-[12.5px] text-mute"></p>
+          <details data-download-notes hidden><summary>更新说明</summary><p class="text-[12.5px] text-body"></p></details>
+        </div>
+<div data-download="macos-x64" class="flex flex-col gap-3">
+          <a aria-disabled="true" data-download-link class="installer-pending flex h-[42px] items-center justify-center gap-2 rounded-md bg-accent text-[13.5px] font-medium text-white">正在加载 Intel…</a>
+          <p data-download-info class="text-[12.5px] text-mute"></p>
+          <details data-download-notes hidden><summary>更新说明</summary><p class="text-[12.5px] text-body"></p></details>
+        </div><p class="text-[12.5px] text-mute">点击苹果菜单 → 关于本机，查看芯片或处理器类型。</p>
         <div class="flex flex-col gap-[9px]">
           <div class="flex items-center gap-[9px]">
             <i data-lucide="check" class="h-3.5 w-3.5 shrink-0 text-accent-text"></i>
@@ -834,6 +844,8 @@
         </div>
       </div>
     </div>
+    <p id="download-status" role="status" class="text-[13px] text-body"></p>
+    <button id="download-retry" type="button" hidden>重新加载下载信息</button>
     <!-- Notes -->
     <div class="reveal grid grid-cols-1 gap-0 border-y border-line md:grid-cols-3">
       <div class="flex flex-col gap-[7px] py-[18px] pr-6 md:border-0">
@@ -1071,28 +1083,6 @@
 <script>
   // lucide.min.js 已 defer：等其执行完（DOMContentLoaded）再初始化页面脚本
   window.addEventListener('DOMContentLoaded', function () {
-  // ============ 安装包下载地址（拿到链接后填这里即可，按钮自动生效） ============
-  // 链接可能是安装包直链，也可能是跳转到其他网站（网盘 / GitHub Releases 等）的页面地址，
-  // 统一交给浏览器新标签打开：直链 → 自动开始下载并关掉新标签；网页 → 在新标签里继续，本页不跳走。
-  var INSTALLERS = {
-    windows: '', // 例：'https://your-host/rewick-setup-x64.exe'
-    macos: '',   // 例：'https://your-host/rewick.dmg'
-  };
-  document.querySelectorAll('a[data-installer]').forEach(function (a) {
-    var url = INSTALLERS[a.getAttribute('data-installer')];
-    if (url) {
-      a.setAttribute('href', url);
-      a.setAttribute('target', '_blank');
-      a.setAttribute('rel', 'noopener noreferrer');
-      a.removeAttribute('aria-disabled');
-      a.classList.remove('installer-pending');
-    } else {
-      a.setAttribute('title', '安装包准备中');
-      a.innerHTML = '<i data-lucide="clock" class="h-4 w-4"></i>待上线';
-      a.addEventListener('click', function (e) { e.preventDefault(); });
-    }
-  });
-
   lucide.createIcons();
 
   (function () {
