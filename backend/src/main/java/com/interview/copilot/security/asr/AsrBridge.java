@@ -26,8 +26,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
+/**
+ * @author Carl Wang
+ * @date 2026-09-20
+ * @description 转发语音任务并记录可关联的生命周期诊断。
+ */
 public final class AsrBridge {
     private final WebSocketSession downstream;
+    private final AsrDiagnostics diagnostics;
     private final UserPrincipal user;
     private final AsrProxy resources;
     private final Runnable release;
@@ -52,7 +58,8 @@ public final class AsrBridge {
         this.user = user;
         this.resources = resources;
         this.release = release;
-        phaseDeadline = resources.timers().schedule(this::fail, 10, TimeUnit.SECONDS);
+        diagnostics = new AsrDiagnostics(user.id(), downstream.getId());
+        phaseDeadline = resources.timers().schedule(() -> fail("client_start_timeout"), 10, TimeUnit.SECONDS);
     }
 
     public void text(String value) {
@@ -73,9 +80,10 @@ public final class AsrBridge {
                 finish();
                 return;
             }
-            fail();
+            fail("invalid_client_action");
         } catch (RuntimeException exception) {
-            fail();
+            diagnostics.detail("client_request_rejected", exception instanceof com.interview.copilot.exception.ApiException api ? api.code() : null, exception);
+            fail("client_request_rejected");
         }
     }
 
@@ -87,8 +95,9 @@ public final class AsrBridge {
         Map<String, Object> request = AsrProtocol.run(frame, upstreamId, config.getModel());
         clientId = taskId;
         String requestId = requestId();
+        diagnostics.started(requestId, upstreamId, resources.maximumSeconds(config));
         lease = resources.usage().startForSession(user.id(), requestId, "asr", user.tokenId());
-        lease.watch(() -> close("cancel"));
+        lease.watch(() -> terminate("cancel", null, "interview_lease_inactive"));
         resources.usage().describeModel(user.id(), requestId, "asr", config.getModel());
         if (ended.get()) {
             lease.cancel();
@@ -96,11 +105,11 @@ public final class AsrBridge {
         }
         phase = "connecting";
         phaseDeadline.cancel(false);
-        phaseDeadline = resources.timers().schedule(this::fail, 15, TimeUnit.SECONDS);
+        phaseDeadline = resources.timers().schedule(() -> fail("upstream_start_timeout"), 15, TimeUnit.SECONDS);
         deadline =
                 resources
                         .timers()
-                        .schedule(this::fail, resources.maximumSeconds(config), TimeUnit.SECONDS);
+                        .schedule(() -> fail("session_duration_limit"), resources.maximumSeconds(config), TimeUnit.SECONDS);
         String payload = resources.json().encode(request);
         connecting =
                 resources
@@ -114,7 +123,7 @@ public final class AsrBridge {
         connecting.whenComplete(
                 (socket, error) -> {
                     if (error != null) {
-                        fail();
+                        failure("upstream_connect_error", error);
                     } else if (ended.get()) {
                         socket.abort();
                     }
@@ -145,9 +154,10 @@ public final class AsrBridge {
                 || size > 65536
                 || size % 2 != 0
                 || !acceptRate(size)) {
-            fail();
+            fail("invalid_audio_or_rate_limit");
             return;
         }
+        diagnostics.audio(size);
         ByteBuffer copy = ByteBuffer.allocate(size);
         copy.put(value).flip();
         enqueue(copy, null);
@@ -168,7 +178,7 @@ public final class AsrBridge {
     private void enqueue(ByteBuffer audio, String text) {
         int size = text == null ? audio.remaining() : text.length() * 2;
         if (pendingBytes.addAndGet(size) > 128000) {
-            fail();
+            fail("upstream_send_backpressure");
             return;
         }
         sendLock.lock();
@@ -178,7 +188,7 @@ public final class AsrBridge {
                     (socket, error) -> {
                         pendingBytes.addAndGet(-size);
                         if (error != null) {
-                            fail();
+                            failure("upstream_send_error", error);
                         }
                     });
         } finally {
@@ -196,7 +206,7 @@ public final class AsrBridge {
 
     private void finish() {
         phase = "stopping";
-        phaseDeadline = resources.timers().schedule(this::fail, 8, TimeUnit.SECONDS);
+        phaseDeadline = resources.timers().schedule(() -> fail("upstream_finish_timeout"), 8, TimeUnit.SECONDS);
         enqueue(
                 ByteBuffer.wrap(new byte[0]),
                 resources.json().encode(AsrProtocol.finish(upstreamId)));
@@ -209,41 +219,61 @@ public final class AsrBridge {
         try {
             JsonNode frame = resources.json().parse(value);
             if (!upstreamId.equals(frame.path("header").path("task_id").asText())) {
-                fail();
+                fail("upstream_task_id_mismatch");
                 return;
             }
+            diagnostics.event();
             String event = frame.path("header").path("event").asText();
+            if ("task-failed".equals(event)) {
+                diagnostics.detail("upstream_task_failed", frame.path("header").path("error_code").asText(), null);
+                fail("upstream_task_failed");
+                return;
+            }
             if ("task-started".equals(event) && "connecting".equals(phase)) {
                 phase = "running";
                 phaseDeadline.cancel(false);
             }
             if ("task-finished".equals(event) && !"stopping".equals(phase)) {
-                fail();
+                fail("unexpected_upstream_finish");
                 return;
             }
             String message = resources.json().encode(AsrProtocol.event(frame, clientId));
             if ("task-finished".equals(event)) {
-                terminate("complete", message);
+                terminate("complete", message, "task_finished");
                 return;
             }
             downstream.sendMessage(new TextMessage(message));
         } catch (IOException | RuntimeException exception) {
-            fail();
+            failure("upstream_event_or_downstream_send_error", exception);
         }
     }
 
-    void fail() {
-        terminate("fail", resources.json().encode(AsrProtocol.failure(clientId)));
+    void fail(String reason) {
+        terminate("fail", resources.json().encode(AsrProtocol.failure(clientId)), reason);
+    }
+
+    void failure(String reason, Throwable error) {
+        if (ended.get()) return;
+        diagnostics.detail(reason, null, error);
+        fail(reason);
+    }
+
+    void transportClosed(String side, int code) {
+        if (ended.get()) return;
+        diagnostics.closed(side, code);
+        if ("upstream".equals(side)) fail("upstream_closed");
+        else close("cancel");
     }
 
     public void close(String outcome) {
-        terminate(outcome, null);
+        terminate(outcome, null, "local_" + outcome);
     }
 
-    private void terminate(String outcome, String message) {
+    private void terminate(String outcome, String message, String reason) {
         if (!ended.compareAndSet(false, true)) {
             return;
         }
+        diagnostics.ended(phase, outcome, reason);
         stopUpstream();
         String terminalMessage = finalizeUsage(outcome, message);
         release.run();

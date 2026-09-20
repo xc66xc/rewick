@@ -8,7 +8,11 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** A resource reservation, not a supplier-cost or payment ledger. */
+/**
+ * @author Carl Wang
+ * @date 2026-09-20
+ * @description 监控面试资源租约并记录状态失效原因。
+ */
 public final class UsageLease implements AutoCloseable {
     private final UsageService service;
     private final long userId;
@@ -44,13 +48,17 @@ public final class UsageLease implements AutoCloseable {
                         () -> {
                             if (finished.get()) return;
                             try {
-                                if (!isActive()) onExpired.run();
+                                if (!isActive()) {
+                                    org.slf4j.LoggerFactory.getLogger(UsageLease.class).info(
+                                            "Interview lease inactive user={} interview={} request={} capability={}",
+                                            userId, sessionId, requestId, capability);
+                                    onExpired.run();
+                                }
                             } catch (RuntimeException error) {
                                 org.slf4j.LoggerFactory.getLogger(UsageLease.class)
                                         .warn(
-                                                "Interview lease check failed for user {}",
-                                                userId,
-                                                error);
+                                                "Interview lease check failed user={} interview={} request={} capability={} exception={}",
+                                                userId, sessionId, requestId, capability, error.getClass().getSimpleName());
                                 onExpired.run();
                             }
                         },

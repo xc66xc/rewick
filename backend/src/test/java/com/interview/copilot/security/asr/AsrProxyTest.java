@@ -27,6 +27,9 @@ import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.socket.BinaryMessage;
 import org.springframework.web.socket.CloseStatus;
@@ -48,6 +51,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * @author Carl Wang
+ * @date 2026-09-20
+ * @description 验证转写代理生命周期、资源释放及诊断日志。
+ */
+@ExtendWith(OutputCaptureExtension.class)
 public class AsrProxyTest {
     private final ObjectMapper mapper = new ObjectMapper();
     private final ProviderJson json = new ProviderJson(mapper);
@@ -129,7 +138,7 @@ public class AsrProxyTest {
     }
 
     @Test
-    void session_maximumDuration_terminatesAndReleasesUsage() throws Exception {
+    void session_maximumDuration_terminatesAndReleasesUsage(CapturedOutput output) throws Exception {
         settings.getAsr().setMaxDurationSeconds(1);
         proxy.handleTextMessage(session, new TextMessage(run(16000)));
         next();
@@ -138,6 +147,8 @@ public class AsrProxyTest {
         assertThat(next()).contains("task-failed", "PLATFORM_ASR_ERROR");
         assertThat(disconnected.await(3, TimeUnit.SECONDS)).isTrue();
         verify(lease).fail();
+        assertThat(output.getAll()).contains("reason=session_duration_limit", "maximumSeconds=1")
+                .doesNotContain("server-secret", "provider-secret");
     }
 
     @Test

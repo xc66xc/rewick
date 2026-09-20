@@ -27,6 +27,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
+/**
+ * @author Carl Wang
+ * @date 2026-09-20
+ * @description 管理平台转写连接及脱敏连接诊断。
+ */
 @Component
 public class AsrProxy extends AbstractWebSocketHandler {
     private final DesktopSettingsService desktop;
@@ -64,6 +69,9 @@ public class AsrProxy extends AbstractWebSocketHandler {
         if (user == null
                 || !available(user.id(), session.getUri())
                 || users.putIfAbsent(user.id(), session.getId()) != null) {
+            org.slf4j.LoggerFactory.getLogger(AsrProxy.class).warn(
+                    "ASR connection rejected user={} reason=authentication_service_or_concurrency",
+                    user == null ? null : user.id());
             session.close(CloseStatus.POLICY_VIOLATION);
             return;
         }
@@ -109,7 +117,7 @@ public class AsrProxy extends AbstractWebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         AsrBridge bridge = sessions.get(session.getId());
         if (bridge != null) {
-            bridge.close("cancel");
+            bridge.transportClosed("downstream", status.getCode());
         }
     }
 
@@ -117,6 +125,9 @@ public class AsrProxy extends AbstractWebSocketHandler {
     public void handleTransportError(WebSocketSession session, Throwable exception) {
         AsrBridge bridge = sessions.get(session.getId());
         if (bridge != null) {
+            org.slf4j.LoggerFactory.getLogger(AsrProxy.class).warn(
+                    "ASR downstream transport error connection={} exception={}",
+                    session.getId(), exception.getClass().getSimpleName());
             bridge.close("cancel");
         }
     }

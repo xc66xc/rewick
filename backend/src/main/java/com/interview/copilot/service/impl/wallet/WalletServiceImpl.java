@@ -19,6 +19,11 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * @author Carl Wang
+ * @date 2026-09-20
+ * @description 管理面试计时结算并记录状态拒绝与自动结束原因。
+ */
 @Service
 @Transactional(noRollbackFor = ApiException.class)
 public class WalletServiceImpl implements WalletService {
@@ -99,8 +104,11 @@ public class WalletServiceImpl implements WalletService {
 
     public String requireActive(long userId) {
         var current = state(userId);
-        if (current.session() == null || !"active".equals(current.session().status()))
+        if (current.session() == null || !"active".equals(current.session().status())) {
+            org.slf4j.LoggerFactory.getLogger(WalletServiceImpl.class).warn(
+                    "Interview access rejected user={} reason=interview_required", userId);
             throw inactive();
+        }
         return current.session().id();
     }
 
@@ -143,6 +151,11 @@ public class WalletServiceImpl implements WalletService {
                         session.usedSeconds() + debit,
                         wallet.availableSeconds() - debit);
         repository.save(session, now);
+        if (!"active".equals(session.status())) {
+            org.slf4j.LoggerFactory.getLogger(WalletServiceImpl.class).info(
+                    "Interview auto-ended user={} interview={} reason={} usedSeconds={} remainingSeconds={}",
+                    userId, session.id(), session.endReason(), session.usedSeconds(), wallet.availableSeconds() - debit);
+        }
         return view(userId, session, now);
     }
 
