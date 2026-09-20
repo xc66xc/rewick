@@ -33,6 +33,20 @@ export const GROUPS = ['通用', '表单', '展示', '反馈'] as const
 
 export const componentDocs: ComponentDoc[] = [
   {
+    id: 'slider', name: 'Slider', title: '滑块', group: '表单', description: '连续值预览，指针松开、键盘调整结束或失焦后提交。',
+    props: [
+      { name: 'value', type: 'number', note: '受控数值' },
+      { name: 'min', type: 'number', def: '0', note: '最小值' },
+      { name: 'max', type: 'number', def: '100', note: '最大值' },
+      { name: 'step', type: 'number', def: '1', note: '步长' },
+      { name: 'disabled', type: 'boolean', note: '禁用调整' },
+      { name: 'aria-valuetext', type: 'string', note: '读屏数值说明' },
+      { name: 'onValueChange', type: '(value: number) => void', note: '实时预览' },
+      { name: 'onValueCommit', type: '(value: number) => void', note: '交互结束提交一次' },
+    ],
+    examples: [{ label: '背景不透明度', code: '<Slider value={value} max={80} onValueChange={setValue} onValueCommit={save} aria-label="背景不透明度" />' }],
+  },
+  {
     id: 'button',
     name: 'Button',
     title: '按钮族',

@@ -1,3 +1,4 @@
+import CompactStatus from './components/CompactStatus'
 import CompactAppearance from './components/CompactAppearance'
 import { defaultWindowPreferences, type WindowPreferences } from '../../shared/window-preferences'
 import type { CSSProperties } from 'react'
@@ -37,6 +38,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
   const [compact, setCompact] = useState(false)
   const [pinned, setPinned] = useState(false)
   const [appearance, setAppearance] = useState(defaultWindowPreferences)
+  const [opacityPreview, setOpacityPreview] = useState<number | null>(null)
   const [savingAppearance, setSavingAppearance] = useState(false)
   const [windowError, setWindowError] = useState('')
   useEffect(() => {
@@ -54,7 +56,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
     setSavingAppearance(true)
     try { setAppearance(await bridge.saveWindowPreferences(value)) }
     catch (reason) { setWindowError(errorMessage(reason)) }
-    finally { setSavingAppearance(false) }
+    finally { setOpacityPreview(null); setSavingAppearance(false) }
   }
   const main = useRef<HTMLElement>(null)
   const loggingOut = useRef(false)
@@ -104,20 +106,19 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
     if (!timer.active && page === 'workspace') setPage('preparation')
   }, [timer.active, page])
   const error = timer.error || session.error || config.error || windowError
-  const targetLabel = [config.settings.interviewTarget.companyName, config.settings.interviewTarget.roleName].filter(Boolean).join(' · ')
   const environment = config.settings.interviewEnvironment
   /* v30 骨架 §2:白色无缝 chrome(侧栏/顶栏无边框),主内容区是一张 12px 圆角 + 1px 边线的灰蓝画布卡,白卡浮在其上 */
-  return <ErrorBoundary><div className={cn('flex h-dvh min-h-[480px] flex-col overflow-hidden bg-page', compact && 'compact-surface')} style={compact ? { '--compact-opacity': appearance.backgroundOpacity / 100 } as CSSProperties : undefined}>
-    <Topbar compact={compact} pinned={pinned} onCompact={() => void handleCompact()} onPin={() => void handlePin()} onSettings={handleSettings} desktop={Boolean(bridge)} loggingOut={leaving} />
-    {compact && <CompactAppearance preferences={appearance} saving={savingAppearance} onChange={value => void saveAppearance(value)} />}
+  return <ErrorBoundary><div className={cn('flex h-dvh min-h-[480px] flex-col overflow-hidden bg-page', compact && 'compact-surface')} style={compact ? { '--compact-opacity': (opacityPreview ?? appearance.backgroundOpacity) / 100 } as CSSProperties : undefined}>
+    <Topbar compact={compact} pinned={pinned} onCompact={() => void handleCompact()} onPin={() => void handlePin()} onSettings={handleSettings} desktop={Boolean(bridge)} loggingOut={leaving} compactControls={<CompactAppearance preferences={{ ...appearance, backgroundOpacity: opacityPreview ?? appearance.backgroundOpacity }} onPreview={setOpacityPreview} saving={savingAppearance} onChange={value => void saveAppearance(value)}><AutoAnswerControls session={session} compact /></CompactAppearance>} />
     <div className="flex min-h-0 flex-1" inert={leaving}>{!compact && <Sidebar page={page} onChange={navigate} account={config.settings.platform?.user?.displayName} />}
       <main className="mb-3 mr-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-auto rounded-card border border-border bg-canvas" ref={main}>
         {error && <div className="flex shrink-0 items-center gap-2 border-b border-danger-line bg-danger-subtle px-5 py-2 text-sm text-danger" role="alert"><WarningCircle size={19} aria-hidden="true" /><span className="flex-1 [overflow-wrap:anywhere]">{error}</span><IconButton aria-label="关闭提示" title="关闭提示" onClick={() => { session.clearError(); setWindowError('') }}><X size={17} aria-hidden="true" /></IconButton></div>}
         {/* v30 session-bar:浅蓝底 + 蓝细边 + 蓝字,脉冲点,mono 时长(可用 ≤60s 转红),刷新钮移到右组 */}
-        {timer.active && <div className="mx-8 mt-4 mb-4 flex shrink-0 flex-wrap items-center justify-between gap-3.5 rounded-chip border border-accent-line bg-accent-subtle px-3.5 py-[9px] text-xs font-medium text-accent-text max-[820px]:mx-5 max-[820px]:mt-3">
+        {timer.active && !compact && <div className="mx-8 mt-4 mb-4 flex shrink-0 flex-wrap items-center justify-between gap-3.5 rounded-chip border border-accent-line bg-accent-subtle px-3.5 py-[9px] text-xs font-medium text-accent-text max-[820px]:mx-5 max-[820px]:mt-3">
           <div className="flex min-w-0 flex-1 items-center gap-2.5"><span aria-hidden="true" className="size-1.5 shrink-0 animate-pulse-dot rounded-full bg-accent" /><span className="min-w-0 truncate">面试进行中 · 已用 <b className="font-mono font-semibold tabular-nums">{formatDuration(timer.used)}</b> · 可用 <b className={cn('font-mono font-semibold tabular-nums', timer.remaining <= 60 && 'text-danger')}>{formatDuration(timer.remaining)}</b></span></div>
           <div className="flex shrink-0 items-center gap-2.5"><RefreshTimeButton className="size-[30px] text-accent-text hover:bg-accent/10" refreshing={timer.refreshing} onRefresh={timer.refresh} /><Button variant="primary" size="sm" disabled={timer.busy} onClick={() => void handleEnd()}>结束面试</Button></div>
         </div>}
+        {timer.active && compact && <CompactStatus session={session} remaining={timer.remaining} ending={timer.busy} onEnd={() => void handleEnd()} />}
         {timer.warning && timer.active && <p className={cn(formNoteClass, 'px-8 pt-1 max-[820px]:px-5')} role="status">{timer.warning}</p>}
         {page === 'preparation' && <InterviewPreparation bridge={bridge} settings={config.settings} timer={timer} isSessionActive={timer.active || session.busy || !['idle', 'error'].includes(session.status)} onPrepare={handlePrepare} onSave={session.saveEnvironment} onStarted={() => setPage('workspace')} onContext={handleContext} onSettings={handleSettings} onPurchase={() => setPage('purchase')} />}
         {page === 'workspace' && timer.active && <div className={cn('flex min-h-0 flex-1 flex-col', compact ? 'p-0' : 'px-8 pb-0')}>
@@ -130,12 +131,6 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
             <span className={cn('inline-flex h-[34px] min-w-0 max-w-[280px] shrink-0 items-center gap-[7px] rounded-chip border px-[11px] hover:border-border-hover', environment.referenceIds.length ? 'border-border bg-card' : 'border-dashed border-border-dashed')} title="已选参考资料"><Stack size={14} aria-hidden="true" className="shrink-0 text-text-muted" /><span className={cn('min-w-0 truncate', !environment.referenceIds.length && 'text-text-muted')}>{environment.referenceIds.length ? `${environment.referenceIds.length} 份参考资料` : '未选资料'}</span></span>
           </div></div>}
           {!compact && !config.loading && !isAsrReady(config.settings) && <div className="mb-5 flex items-center justify-between gap-4 rounded-chip border border-accent-line bg-accent-subtle px-4 py-3 text-xs text-text-primary max-[560px]:px-2 max-[560px]:py-2 max-[560px]:text-[10px]"><div className="flex items-center gap-2"><span className="size-1.5 shrink-0 rounded-full bg-accent" aria-hidden="true" /><span>准备开始？先连接转写服务和回答模型。</span></div><Button variant="quiet" size="sm" onClick={handleSettings}>完成配置<ArrowRight size={16} aria-hidden="true" /></Button></div>}
-          {compact && <div className="flex min-h-[35px] items-center gap-2 px-4 text-xs text-text-secondary"><span className={cn('size-1.5 shrink-0 rounded-full bg-border-strong', session.status === 'listening' && 'bg-success shadow-[0_0_0_3px_var(--color-success-subtle)]')} aria-hidden="true" />{session.status === 'listening' ? '转写持续进行中' : '紧凑工作台'}{['listening', 'connecting', 'stopping'].includes(session.status)
-              ? <Button variant="quiet" size="sm" className="ml-auto text-danger" disabled={!session.desktop || session.status === 'stopping'} onClick={() => void session.stop()}>停止转写</Button>
-              : <Button variant="quiet" size="sm" className="ml-auto text-accent-text" disabled={!session.desktop || session.status === 'stopping'} onClick={() => void session.start()}>开始转写</Button>}</div>}
-          {compact && targetLabel && <div className="flex items-center gap-2 pb-1 text-xs text-text-secondary max-[560px]:hidden">{targetLabel}</div>}
-          {compact && config.settings.interviewEnvironment && <div className="flex items-center gap-2 pb-1 text-xs text-text-secondary max-[560px]:hidden">环境：{config.settings.interviewEnvironment.name}</div>}
-          {compact && <AutoAnswerControls session={session} compact />}
           <div className={cn('grid min-h-0 flex-1 grid-cols-[minmax(280px,.72fr)_minmax(400px,1.28fr)] gap-5 wide:grid-cols-[minmax(300px,.75fr)_minmax(430px,1.55fr)] wide:gap-6 max-[1060px]:grid-cols-[minmax(260px,.68fr)_minmax(340px,1.32fr)] max-[1060px]:gap-4 max-[820px]:grid-cols-[minmax(0,1fr)] max-[820px]:overflow-y-auto',
             compact && 'flex overflow-hidden')}>{!compact && <TranscriptPanel session={session} />}<AnswerPanel session={session} settings={config.settings} onSettings={handleSettings} onContext={handleContext} compact={compact} /></div>
           {!compact && <footer className="flex min-h-[42px] shrink-0 items-center justify-between gap-4 text-[10px] text-text-muted max-[560px]:[&>span:last-child]:hidden"><span>声音不落盘 · 会话云端保存：{session.historySyncStatus}</span><span>系统音频可自动回答，也可随时手动生成</span></footer>}

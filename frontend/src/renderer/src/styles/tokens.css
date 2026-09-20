@@ -218,7 +218,7 @@ html.compact-transparent,
 html.compact-transparent body,
 html.compact-transparent #root { background: transparent; }
 .compact-surface {
-  background: rgb(255 255 255 / var(--compact-opacity, 0.35));
+  background: rgb(255 255 255 / var(--compact-opacity, 0.2));
 }
 .compact-surface :is(header, main, section, div).bg-page,
 .compact-surface :is(header, main, section, div).bg-canvas,
@@ -226,3 +226,32 @@ html.compact-transparent #root { background: transparent; }
 .compact-surface :is(header, main, section, div).bg-subtle,
 .compact-surface :is(header, main, section, div).bg-accent-subtle { background-color: transparent; }
 .compact-surface > div > main { margin: 0; border-radius: 0; }
+
+/* Transparent reading mode: strong ink, restrained sage controls, no page fill. */
+.compact-surface {
+  --color-text-primary: #20252b;
+  --color-text-heading: #20252b;
+  --color-text-regular: #353e46;
+  --color-text-secondary: #505a63;
+  --color-text-muted: #59636b;
+  --color-success: #24694f;
+  --color-success-subtle: #deeee5;
+  --color-accent: #b7dfcc;
+  --color-accent-hover: #a1d2bb;
+  --color-accent-active: #8ec4aa;
+  --color-accent-text: #205b44;
+  --color-text-on-fill: #183d2e;
+  --color-border: rgb(43 55 65 / 15%);
+  --color-border-strong: rgb(43 55 65 / 32%);
+  --shadow-focus-ring: 0 0 0 3px rgb(36 105 79 / 15%);
+  color: var(--color-text-primary);
+}
+.compact-answer__body {
+  font-size: 19px;
+  line-height: 1.75;
+  font-weight: 450;
+  color: var(--color-text-primary);
+}
+.compact-composer { margin: 8px 20px 16px; }
+
+.compact-composer:focus-within { border-color: var(--color-success); box-shadow: 0 0 0 2px var(--color-success-subtle); }

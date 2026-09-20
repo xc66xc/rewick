@@ -5,4 +5,4 @@ export const windowPreferencesSchema = z.object({
   contentProtection: z.boolean()
 }).strict()
 export type WindowPreferences = z.infer<typeof windowPreferencesSchema>
-export const defaultWindowPreferences: WindowPreferences = { backgroundOpacity: 35, contentProtection: true }
+export const defaultWindowPreferences: WindowPreferences = { backgroundOpacity: 20, contentProtection: true }

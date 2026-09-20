@@ -1,3 +1,4 @@
+import { Slider } from '@/components/ui/slider'
 /*
  * 演示画布:每组件若干带标签的示例(状态本地化),按 registry id 组织。
  * label 与 registry.ts 的 examples 一一对应(tests/ui/registry-drift.test.ts 钉死同步)。
@@ -729,7 +730,14 @@ function TokenDemo() {
 
 /* ── 注册表:label 与 registry.ts examples 一一对应 ── */
 
+function SliderDemo() {
+  const [value, setValue] = useState(20)
+  const [saved, setSaved] = useState(20)
+  return <div className="w-full space-y-2"><p>背景不透明度 {value}% · 已保存 {saved}%</p><Slider value={value} max={80} onValueChange={setValue} onValueCommit={setSaved} aria-label="背景不透明度" /></div>
+}
+
 export const demoExamples: Record<string, Array<{ label: string; component: ComponentType }>> = {
+  slider: [{ label: '背景不透明度', component: SliderDemo }],
   button: [
     { label: '基础变体', component: ButtonVariantsDemo },
     { label: '尺寸', component: ButtonSizesDemo },

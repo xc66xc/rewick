@@ -21,6 +21,7 @@ const ALLOWLIST = new Set(['ref', 'className', 'children', 'id', 'aria-label'])
 
 /** 受检组件:registry id → (文件, 主导出函数们) */
 const TARGETS: Array<{ id: string; file: string; fns: string[] }> = [
+  { id: 'slider', file: 'slider.tsx', fns: ['Slider'] },
   { id: 'button', file: 'button.tsx', fns: ['Button', 'IconButton', 'LinkButton', 'TextButton'] },
   { id: 'switch', file: 'switch.tsx', fns: ['ToggleSwitch'] },
   { id: 'segmented', file: 'segmented.tsx', fns: ['Segmented'] },

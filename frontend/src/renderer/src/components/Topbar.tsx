@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { ArrowsInSimple, ArrowsOutSimple, GearSix, PushPin, Waveform } from '@phosphor-icons/react'
 import { IconButton } from './ui/button'
 import { cn } from '../lib/cn'
@@ -10,18 +11,19 @@ import { cn } from '../lib/cn'
    env(titlebar-area-width) 让位(2026-09-14);mac 未启用 overlay,env 回退值即原 pr-8 / pr-2,两端间距不变。紧凑窗口独立无边框，不为原生窗口按钮留空。 */
 const isMacOS = navigator.userAgent.includes('Macintosh')
 const macInsetClass = 'pl-[90px] max-[560px]:pl-[90px]'
-interface TopbarProps { compact: boolean; pinned: boolean; onCompact: () => void; onPin: () => void; onSettings: () => void; desktop: boolean; loggingOut?: boolean }
-export default function Topbar({ compact, pinned, onCompact, onPin, onSettings, desktop, loggingOut = false }: TopbarProps) {
+interface TopbarProps { compactControls?: ReactNode; compact: boolean; pinned: boolean; onCompact: () => void; onPin: () => void; onSettings: () => void; desktop: boolean; loggingOut?: boolean }
+export default function Topbar({ compact, pinned, onCompact, onPin, onSettings, desktop, loggingOut = false, compactControls }: TopbarProps) {
   return <header className={cn('flex h-[50px] shrink-0 items-center justify-between bg-page select-none [-webkit-app-region:drag]',
     compact ? 'gap-0 pr-2' : 'gap-3 pr-[calc(100vw_-_env(titlebar-area-width,100vw)_+_2rem)]')}>
     {compact
-      ? <span className="pl-4 text-xs font-semibold text-text-heading">Interview Copilot</span>
+      ? <span className="flex items-center gap-2 pl-5 text-base font-semibold text-text-heading"><Waveform size={20} className="text-success" aria-hidden="true" />面试助手</span>
       : <div className={cn('flex items-center gap-2.5 pl-4', isMacOS && macInsetClass)} aria-label="Interview Copilot">
         <span className="grid size-6 shrink-0 place-items-center rounded-control bg-[linear-gradient(356deg,var(--color-accent)_0%,var(--color-violet)_103.24%)] text-text-on-fill"><Waveform size={16} aria-hidden="true" /></span>
         <strong className="text-[14px] font-semibold tracking-[-0.01em] text-text-primary">Interview Copilot</strong>
       </div>}
     <div className="flex items-center gap-2.5">
       <IconButton aria-label={pinned ? '取消置顶' : '窗口置顶'} title={pinned ? '取消置顶' : '窗口置顶'} aria-pressed={pinned} className={pinned ? 'bg-accent-subtle text-accent-text hover:bg-accent-subtle hover:text-accent-text' : undefined} onClick={onPin} disabled={!desktop || loggingOut}><PushPin size={17} /></IconButton>
+      {compact && compactControls}
       <IconButton aria-label="打开设置" title="打开设置" onClick={onSettings} disabled={loggingOut}><GearSix size={18} /></IconButton>
       <IconButton aria-label={compact ? '恢复完整窗口' : '紧凑模式'} title={compact ? '恢复完整窗口' : '紧凑模式'} onClick={onCompact} disabled={loggingOut}>{compact ? <ArrowsOutSimple size={17} /> : <ArrowsInSimple size={17} />}</IconButton>
     </div>
