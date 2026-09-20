@@ -5,17 +5,20 @@ import { routeService } from '../../src/main/services/service-routing'
 import { defaultSettings } from '../../src/shared/defaults'
 
 afterEach(() => vi.unstubAllGlobals())
-describe('platform TLS boundary', () => {
-  it.each(['http://203.0.113.10:8080', 'http://example.com', 'http://192.168.1.1', 'http://localhost.example.com', 'ws://example.com'])('rejects insecure remote address %s before a request', address => {
+describe('platform transport boundary', () => {
+  it.each(['http://example.com', 'http://localhost.example.com', 'http://203.0.113.10.example.com', 'ws://example.com'])('rejects insecure domain address %s before a request', address => {
     const fetch = vi.fn()
     vi.stubGlobal('fetch', fetch)
     expect(() => new PlatformClient(address)).toThrow('HTTPS')
     expect(fetch).not.toHaveBeenCalled()
   })
-  it.each([productionPlatformUrl, 'http://127.0.0.1:8080', 'http://localhost:8080', 'http://[::1]:8080'])('accepts TLS or explicit loopback %s', address => {
+  it.each([productionPlatformUrl, 'http://203.0.113.10:8080', 'http://192.168.1.1', 'http://[2001:db8::1]:8080', 'http://127.0.0.1:8080', 'http://localhost:8080', 'http://[::1]:8080'])('accepts TLS, explicit IP or localhost %s', address => {
     expect(() => assertPlatformTransport(address)).not.toThrow()
   })
-  it('routes platform ASR over WSS and rejects the old HTTP origin', () => {
+  it.each(['http://user:password@203.0.113.10', 'http://203.0.113.10?token=x', 'http://203.0.113.10#fragment', 'http://999.999.999.999'])('rejects malformed or credential-bearing IP address %s', address => {
+    expect(() => assertPlatformTransport(address)).toThrow()
+  })
+  it('routes HTTPS ASR over WSS and explicit HTTP IP ASR over WS', () => {
     const settings = structuredClone(defaultSettings)
     settings.platform = { ...settings.platform!, enabled: true, authenticated: true, advancedSettingsEnabled: true,
       baseUrl: productionPlatformUrl, expiresAt: new Date(Date.now() + 60000).toISOString(),
@@ -23,6 +26,6 @@ describe('platform TLS boundary', () => {
     const secrets = { platformAccessToken: 'test-token', asrApiKey: '', llmApiKey: '', remoteKnowledgeApiKey: '' }
     expect(routeService(settings, secrets, 'asr').settings.asr.url).toBe('wss://api.junshi.icu/api/v1/asr')
     settings.platform.baseUrl = 'http://203.0.113.10:8080'
-    expect(() => routeService(settings, secrets, 'asr')).toThrow('HTTPS')
+    expect(routeService(settings, secrets, 'asr').settings.asr.url).toBe('ws://203.0.113.10:8080/api/v1/asr')
   })
 })

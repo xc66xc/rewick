@@ -46,6 +46,12 @@ describe('PaymentClient', () => {
 
 describe('browser checkout', () => {
   const ticket = 'a'.repeat(64)
+  it('allows checkout on the explicitly configured HTTP IP origin', async () => {
+    const checkoutUrl = `/api/v1/payments/alipay/checkout?ticket=${ticket}`
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ checkoutUrl }))))
+    const client = new PaymentClient({ ...connection, baseUrl: 'http://203.0.113.10:8080' })
+    expect(await client.checkout('order-1')).toBe(`http://203.0.113.10:8080${checkoutUrl}`)
+  })
   it.each(['alipay'])('uses authenticated order endpoint and returns a platform-only %s URL', async method => {
     const fetcher = vi.fn(async () => new Response(JSON.stringify({ checkoutUrl: `/api/v1/payments/${method}/checkout?ticket=${ticket}` })))
     vi.stubGlobal('fetch', fetcher)

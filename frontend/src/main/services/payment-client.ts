@@ -16,7 +16,8 @@ export class PaymentClient {
     const id = z.string().min(1).max(100).regex(/^[a-zA-Z0-9_-]+$/).parse(input)
     const response = z.object({ checkoutUrl: z.string().max(2048) }).parse(await this.request(`/payment-orders/${id}/checkout`, {}))
     const url = new URL(response.checkoutUrl, this.connection.baseUrl)
-    if (url.protocol !== 'https:' || url.origin !== new URL(this.connection.baseUrl).origin
+    // request() has already validated the platform transport; require its exact origin.
+    if (url.origin !== new URL(this.connection.baseUrl).origin
       || url.pathname !== '/api/v1/payments/alipay/checkout' || url.username || url.password || url.hash
       || !/^[a-f0-9]{64}$/.test(url.searchParams.get('ticket') ?? '') || [...url.searchParams].length !== 1) {
       throw new Error('付款入口无效，请联系管理员。')
