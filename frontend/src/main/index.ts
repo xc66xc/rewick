@@ -334,9 +334,11 @@ function registerHandlers(): void {
         pending.finish()
         return
       }
-      if (pendingSignOut && !['asr:stop','answer:cancel','settings:get','platform:remembered-login'].includes(channel)) throw new Error('正在结束旧登录会话，请稍后重试。')
+      if (pendingSignOut && !['asr:stop','answer:cancel','settings:get','platform:remembered-login','window:scrim'].includes(channel)) throw new Error('正在结束旧登录会话，请稍后重试。')
       const owner = await syncAccount()
-      if (accountScope && owner?.id !== accountScope && !channel.startsWith('platform:') && channel !== 'settings:get') throw new Error('账户已切换，旧操作已取消。')
+      // window:scrim 是纯窗口外观位(弹窗遮罩着色),true/false 必须对称落地;若按账户作用域拦截,
+      // 恢复白底的那次调用会在账户切换瞬间被丢弃,原生标题条将卡在灰色(2026-09-20 Windows 实测)。
+      if (accountScope && owner?.id !== accountScope && !channel.startsWith('platform:') && channel !== 'settings:get' && channel !== 'window:scrim') throw new Error('账户已切换，旧操作已取消。')
       if (!publicChannels.has(channel) && (!owner || accountScope !== owner.id)) {
         disposeWork(); emit({ kind: 'settings-changed' })
         throw new Error('请先使用邮箱注册或登录。')
