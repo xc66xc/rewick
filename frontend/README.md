@@ -1,4 +1,4 @@
-# Interview Copilot
+# 掌灯 Rewick
 
 0.4.0 桌面客户端，面向 Apple Silicon Mac 的实时面试辅助工作台。阿里云流式转写、自定义回答模型与平台服务按能力独立使用。
 
@@ -12,7 +12,7 @@
 
 ## 使用
 
-1. 使用下方开发命令启动，或打开已在本机构建的 `../dist/mac-arm64/Interview Copilot.app`；现有安装包不会因源码修改自动更新。
+1. 使用下方开发命令启动，或打开新构建的 `../dist/mac-arm64/掌灯 Rewick.app`；现有安装包不会因源码修改自动更新。
 2. 在登录页注册或登录邮箱账号，然后在右上角设置选择平台转写或添加自己的转写服务。自定义转写预填北京地域 `fun-asr-realtime`，Key、模型与地域需要匹配；选择平台转写时由后端提供绑定模型与凭据。
 3. 在回答模型下拉框选择平台模型，或添加兼容 Chat Completions 的自定义服务。自定义回答预填 DeepSeek 接口；本机 Ollama 可使用 `http://localhost:11434/v1` 和已安装的模型名称。回答风格可选「简短口语」（通常 3–5 句）或「展开口语」（通常 2–3 段）。
 4. 在「个人背景」分别保存多份简历、目标岗位 JD 和参考资料；简历与 JD 可导入文字层 PDF、`.md`、`.txt`，核对预览后保存，也支持直接粘贴。
@@ -104,7 +104,7 @@ npm run pack
 
 `npm run pack` 生成本地 `.app`，`npm run dist` 可生成 DMG。当前应用采用本地 ad-hoc 签名，未做 Apple 公证；开发时修改的音频权限声明在打包后的 `.app` 中验证最可靠。
 
-ad-hoc 签名的应用更新后，macOS 旧录制授权可能失效，即使系统设置开关仍然开启。此时请完全退出应用，在「系统设置 → 隐私与安全性 → 录屏与系统录音」移除旧的 Interview Copilot，在录屏/仅系统录音列表用「＋」重新添加 `../dist/mac-arm64/Interview Copilot.app`，开启后重新启动。不能仅凭开关为开或父进程启动的自动化测试判断当前应用已授权；持续开发时建议使用稳定的 Apple Development 签名身份。
+ad-hoc 签名的应用更新后，macOS 旧录制授权可能失效，即使系统设置开关仍然开启。此时请完全退出应用，在「系统设置 → 隐私与安全性 → 录屏与系统录音」移除旧应用记录，在录屏/仅系统录音列表用「＋」重新添加 `../dist/mac-arm64/掌灯 Rewick.app`，开启后重新启动。不能仅凭开关为开或父进程启动的自动化测试判断当前应用已授权；持续开发时建议使用稳定的 Apple Development 签名身份。
 
 ## 已实现范围
 
@@ -226,3 +226,7 @@ node scripts/check-packaged-debugging.mjs '../dist/debug-hardened/mac-arm64/Inte
 node scripts/smoke-compact.mjs
 node scripts/smoke-compact-ui.mjs
 ```
+
+## 产品命名
+
+完整名称为「掌灯 Rewick」；紧凑模式显示 Rewick。安装后的应用和 DMG 标题使用完整名称，下载文件使用 `Rewick-版本-mac-arm64.dmg` / `Rewick-版本-win-x64-setup.exe`。现有图形图标沿用。应用 ID、IPC、环境变量、域名及正式/开发版数据目录保持不变。以下历史验收段落中的旧产物路径仅指当时的安装包。

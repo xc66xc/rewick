@@ -13,7 +13,7 @@ interface LoginScreenProps {
 export default function LoginScreen({ settings, bridge, checking, error: externalError, onSave, onAuthenticated, onRetry }: LoginScreenProps) {
   const { invitationCode, setInvitationCode, rememberMe, setRememberMe, mode, email, setEmail, password, setPassword, confirmation, setConfirmation, code, setCode, busy, error, notice, remaining, emailInput, perform, changeMode } = useEmailAuth({ settings, bridge, checking, onSave, onAuthenticated })
   return <main className={authStyles.screen}>
-    <div className={authStyles.dragBar}>Interview Copilot</div>
+    <div className={authStyles.dragBar}>掌灯 Rewick</div>
     <section className={authStyles.card} aria-labelledby="login-title" aria-busy={busy || checking}>
       <Sparkle className={authStyles.mark} size={30} weight="bold" aria-hidden="true" />
       <span className={styles.eyebrow}>为下一句，准备好思路</span><h1 id="login-title">{mode === 'reset' ? '找回密码' : '登录面试工作台'}</h1>

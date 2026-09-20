@@ -219,7 +219,7 @@ try {
   await request(baseUrl, `/api/v1/interview-sessions/${directSession}/end`, {}, accessToken)
   const environment = { ...process.env, COPILOT_USER_DATA: userData }
   delete environment.ELECTRON_RUN_AS_NODE
-  application = await _electron.launch({ executablePath: process.env.COPILOT_TEST_APP_PATH ? join(process.env.COPILOT_TEST_APP_PATH, 'Contents/MacOS/Interview Copilot') : electronPath, args: process.env.COPILOT_TEST_APP_PATH ? [] : ['.'], cwd: frontend, env: environment, timeout: 45000 })
+  application = await _electron.launch({ executablePath: process.env.COPILOT_TEST_APP_PATH ? join(process.env.COPILOT_TEST_APP_PATH, 'Contents/MacOS/掌灯 Rewick') : electronPath, args: process.env.COPILOT_TEST_APP_PATH ? [] : ['.'], cwd: frontend, env: environment, timeout: 45000 })
   page = await application.firstWindow()
   page.setDefaultTimeout(10000)
   await page.waitForFunction(() => Boolean(window.copilot))

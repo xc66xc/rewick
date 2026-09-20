@@ -1,4 +1,4 @@
-# Interview Copilot 管理端
+# 掌灯 Rewick 管理端
 
 独立 React Web 管理端，连接同源 `/api/v1` 后端。使用与桌面端一致的已锁版本：React 19.2.8、TypeScript 5.9.3、Vite 7.3.6。依赖与锁文件独立。
 

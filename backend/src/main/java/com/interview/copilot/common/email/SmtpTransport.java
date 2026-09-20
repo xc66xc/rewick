@@ -16,6 +16,11 @@ import java.util.Properties;
 import java.util.concurrent.Semaphore;
 import java.util.function.Function;
 
+/**
+ * @author Carl Wang
+ * @date 2026-09-20
+ * @description 发送掌灯 Rewick 注册与找回密码验证码邮件。
+ */
 @Component
 public class SmtpTransport {
     private final Semaphore sending = new Semaphore(4);
@@ -36,7 +41,7 @@ public class SmtpTransport {
         message.setFrom(smtp.from());
         message.setTo(email);
         String action = "password_reset".equals(purpose) ? "重置密码" : "注册";
-        message.setSubject("Interview Copilot " + action + "验证码");
+        message.setSubject("掌灯 Rewick " + action + "验证码");
         message.setText(
                 "你的"
                         + action

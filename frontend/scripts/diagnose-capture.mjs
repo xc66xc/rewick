@@ -44,7 +44,7 @@ function log(kind, message) {
 
 try {
   application = await _electron.launch({
-    executablePath: join(root, '../dist/mac-arm64/Interview Copilot.app/Contents/MacOS/Interview Copilot'),
+    executablePath: join(root, '../dist/mac-arm64/掌灯 Rewick.app/Contents/MacOS/掌灯 Rewick'),
     args: [], env, timeout: 30000,
   })
   application.process().stderr?.on('data', (chunk) => log('stderr', chunk.toString()))

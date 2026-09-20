@@ -17,6 +17,11 @@ import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
+/**
+ * @author Carl Wang
+ * @date 2026-09-20
+ * @description 验证品牌验证码邮件发送。
+ */
 public class SmtpTransportTest {
     @Test
     void send_configuredMail_composesCodeOnlyForTheRequestedRecipient() {
@@ -39,7 +44,7 @@ public class SmtpTransportTest {
                 .send(EmailTestData.smtp(), "alice@example.com", "582916", 600, "password_reset");
         var message = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mail).send(message.capture());
-        assertThat(message.getValue().getSubject()).isEqualTo("Interview Copilot 重置密码验证码");
+        assertThat(message.getValue().getSubject()).isEqualTo("掌灯 Rewick 重置密码验证码");
         assertThat(message.getValue().getText()).contains("重置密码", "582916").doesNotContain("注册");
     }
 

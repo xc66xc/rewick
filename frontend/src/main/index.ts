@@ -57,6 +57,8 @@ else if (!app.isPackaged) {
   mkdirSync(developmentData, { recursive: true })
   app.setPath('userData', developmentData)
 }
+else app.setPath('userData', join(app.getPath('appData'), 'Interview Copilot'))
+// Electron binds macOS Safe Storage to this name before ready. Keep the encryption identity stable.
 app.setName('Interview Copilot')
 const hasInstanceLock = app.requestSingleInstanceLock()
 if (!hasInstanceLock) app.exit(0)
@@ -650,6 +652,8 @@ app.on('second-instance', () => {
 })
 
 if (hasInstanceLock) app.whenReady().then(async () => {
+  // Keep the runtime encryption identity stable; expose the brand through UI and About metadata.
+  app.setAboutPanelOptions({ applicationName: '掌灯 Rewick' })
   session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
     const trusted = contents === window?.webContents
     const wantsCamera = 'mediaTypes' in details && Boolean(details.mediaTypes?.includes('video'))
@@ -663,7 +667,7 @@ if (hasInstanceLock) app.whenReady().then(async () => {
   // 开发模式加 DevTools 入口(自定义菜单顶掉了默认的 Ctrl+Shift+I 绑定);打包版不暴露
   if (!app.isPackaged) viewSubmenu.push({ type: 'separator' }, { role: 'reload', label: '重新加载' }, { role: 'toggleDevTools', label: '开发者工具' })
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { label: 'Interview Copilot', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },
+    { label: '掌灯 Rewick', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },
     { label: '编辑', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
     { label: '视图', submenu: viewSubmenu },
     { label: '窗口', submenu: [{ role: 'minimize' }, { role: 'front' }] }

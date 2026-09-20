@@ -7,7 +7,7 @@ import { createConnection } from 'node:net'
 import { setTimeout as delay } from 'node:timers/promises'
 
 // Use a fresh profile for every launch; never attach to the user's signed-in application.
-const executable = resolve(process.argv[2] || '../dist/debug-hardened/mac-arm64/Interview Copilot.app/Contents/MacOS/Interview Copilot')
+const executable = resolve(process.argv[2] || '../dist/debug-hardened/mac-arm64/掌灯 Rewick.app/Contents/MacOS/掌灯 Rewick')
 await access(executable)
 const ports = [39222, 39229, 9229]
 async function listening(port) {

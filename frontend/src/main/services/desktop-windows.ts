@@ -24,7 +24,7 @@ export class DesktopWindows {
     this.view.setBackgroundColor('#00000000')
     this.full = new DesktopHost({
       width: 1220, height: 820, minWidth: 900, minHeight: 640, show: false,
-      title: 'Interview Copilot', titleBarStyle: process.platform === 'win32' ? 'hidden' : 'hiddenInset',
+      title: '掌灯 Rewick', titleBarStyle: process.platform === 'win32' ? 'hidden' : 'hiddenInset',
       ...(process.platform === 'win32' ? { titleBarOverlay: { color: '#ffffff', symbolColor: '#2a2a2e', height: 50 } } : {}),
       trafficLightPosition: { x: 18, y: 20 }, backgroundColor: '#F7F6F3', autoHideMenuBar: true
     }, this.view)
@@ -52,7 +52,7 @@ export class DesktopWindows {
     if (value && !this.floating) {
       this.floating = new DesktopHost({ width: 480, height: 640, minWidth: 430, minHeight: 500,
         frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false,
-        show: false, title: 'Interview Copilot · 紧凑模式', resizable: true }, this.view)
+        show: false, title: '掌灯 Rewick · 紧凑模式', resizable: true }, this.view)
       this.floating.on('close', event => { if (!this.quitting) { event.preventDefault(); this.setCompact(false) } })
       this.watchSize(this.floating)
     }

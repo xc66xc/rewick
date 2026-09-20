@@ -5,7 +5,7 @@ interface CaptureDependencies {
   screenPermission(): string
 }
 
-export const screenPermissionMessage = 'macOS 未授权当前版本的录屏与系统录音。若开关已经开启，请退出应用，在系统设置 → 隐私与安全性 → 录屏与系统录音中移除旧的 Interview Copilot，再用「＋」添加当前应用并重新打开。'
+export const screenPermissionMessage = 'macOS 未授权当前版本的录屏与系统录音。若开关已经开启，请退出应用，在系统设置 → 隐私与安全性 → 录屏与系统录音中移除旧的 掌灯 Rewick，再用「＋」添加当前应用并重新打开。'
 
 /** Keep the real failure: Electron turns an empty display grant into Invalid capture constraints. */
 export class DisplayCaptureService {

@@ -166,7 +166,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
   async function generate(selected?: { question: string; transcript: string }, isAutomatic = false) {
     if (changingTarget.current) return
     if (!isAutomatic) automatic.coordinator.current?.acknowledge()
-    if (!bridge) { setError('请在 Interview Copilot 桌面应用中连接模型。'); return }
+    if (!bridge) { setError('请在 掌灯 Rewick 桌面应用中连接模型。'); return }
     if (!isAnswerModelReady(settingsRef.current)) {
       setError('请在设置中登录已开通回答的平台账号，或填写回答模型 API Key。'); return
     }

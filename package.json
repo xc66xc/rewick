@@ -1,7 +1,7 @@
 {
   "name": "interview-copilot-repository",
   "private": true,
-  "description": "Interview Copilot：桌面客户端、Web 管理端与 Java 后端",
+  "description": "掌灯 Rewick：桌面客户端、Web 管理端与 Java 后端",
   "scripts": {
     "install:frontend": "npm --prefix frontend ci",
     "install:admin": "npm --prefix admin ci",

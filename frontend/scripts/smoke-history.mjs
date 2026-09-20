@@ -15,7 +15,7 @@ const output = join(root, 'test-results')
 const directory = await mkdtemp(join(tmpdir(), 'copilot-history-e2e-'))
 const profile = join(directory, 'profile')
 const packaged = process.argv.includes('--packaged')
-const appBundle = process.env.COPILOT_TEST_APP_PATH ?? join(root, '../dist/mac-arm64/Interview Copilot.app')
+const appBundle = process.env.COPILOT_TEST_APP_PATH ?? join(root, '../dist/mac-arm64/掌灯 Rewick.app')
 const checked = expect.configure({ timeout: 15_000 })
 const report = {
   packaged, passed: false, liveProviderTested: false, realAudioCaptureTested: false,
@@ -34,7 +34,7 @@ async function launch() {
   const fakeMedia = ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream']
   const currentLaunch = ++launchNumber
   app = await _electron.launch({
-    executablePath: packaged ? join(appBundle, 'Contents/MacOS/Interview Copilot') : electronPath,
+    executablePath: packaged ? join(appBundle, 'Contents/MacOS/掌灯 Rewick') : electronPath,
     args: [...(packaged ? [] : ['.']), ...fakeMedia], cwd: root, env, timeout: 30_000,
   })
   const observed = new WeakSet()

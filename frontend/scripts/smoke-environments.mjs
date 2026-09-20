@@ -21,7 +21,7 @@ fixtures.resumeAlternate = join(directory, 'fixtures', 'synthetic-resume-b.txt')
 await writeFile(fixtures.jd, '# 合成岗位 JD\nJD_ENV_B_ONLY_53：关注 MySQL 慢查询与数据质量。\n')
 await writeFile(fixtures.resumeAlternate, 'RESUME_ENV_B_ONLY_92\n合成经历 B：参与演示数据平台的 MySQL 查询分析。\n')
 const packaged = process.argv.includes('--packaged')
-const appBundle = process.env.COPILOT_TEST_APP_PATH ?? join(root, '../dist/mac-arm64/Interview Copilot.app')
+const appBundle = process.env.COPILOT_TEST_APP_PATH ?? join(root, '../dist/mac-arm64/掌灯 Rewick.app')
 const mock = await startMockServices()
 const report = { packaged, passed: false, liveProviderTested: false, realAudioCaptureTested: false,
   realEmbeddingQualityTested: false, ...(packaged ? { appBundle } : {}), checks: [], screenshots: [] }
@@ -34,7 +34,7 @@ async function launch() {
   const env = { ...process.env, COPILOT_USER_DATA: profile }
   delete env.ELECTRON_RUN_AS_NODE
   app = await _electron.launch({ executablePath: packaged
-    ? join(appBundle, 'Contents/MacOS/Interview Copilot') : electronPath,
+    ? join(appBundle, 'Contents/MacOS/掌灯 Rewick') : electronPath,
   args: packaged ? [] : ['.'], cwd: root, env, timeout: 30_000 })
   page = await app.firstWindow()
   page.setDefaultTimeout(15_000)

@@ -18,7 +18,7 @@ const profile = join(directory, 'profile')
 const localReference = join(directory, 'synthetic-local-reference.txt')
 await writeFile(localReference, 'LOCAL_REFERENCE_ONLY_82：合成 Redis 缓存知识。应先排查缓存一致性，再分析慢查询和缓存失效。\n')
 const packaged = process.argv.includes('--packaged')
-const appBundle = process.env.COPILOT_TEST_APP_PATH ?? join(root, '../dist/mac-arm64/Interview Copilot.app')
+const appBundle = process.env.COPILOT_TEST_APP_PATH ?? join(root, '../dist/mac-arm64/掌灯 Rewick.app')
 const mock = await startMockServices()
 const remote = await startRemoteKnowledgeMock()
 const report = { packaged, passed: false, liveProviderTested: false, realAudioCaptureTested: false,
@@ -33,7 +33,7 @@ async function launch() {
   const env = { ...process.env, COPILOT_USER_DATA: profile }
   delete env.ELECTRON_RUN_AS_NODE
   app = await _electron.launch({ executablePath: packaged
-    ? join(appBundle, 'Contents/MacOS/Interview Copilot') : electronPath,
+    ? join(appBundle, 'Contents/MacOS/掌灯 Rewick') : electronPath,
   args: packaged ? [] : ['.'], cwd: root, env, timeout: 30_000 })
   page = await app.firstWindow()
   page.setDefaultTimeout(15_000)

@@ -195,7 +195,7 @@ export default function App() {
       <div className="flex min-h-dvh flex-col bg-page">
         <header className="sticky top-0 z-40 flex h-12 shrink-0 items-center gap-4 border-b border-border bg-page/95 px-6 backdrop-blur">
           <span className="font-mono text-[11px] font-bold tracking-[0.16em] text-accent-text uppercase">
-            Interview Copilot UI · V30
+            掌灯 Rewick UI · V30
           </span>
           <div className="relative ml-auto w-[220px]">
             <MagnifyingGlass className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-text-muted" />
