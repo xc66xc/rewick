@@ -73,6 +73,19 @@ export class DesktopWindows {
     next.focus()
   }
   setPinned(value: boolean): boolean { this.pinned = value; this.active.setAlwaysOnTop(value, 'floating'); return value }
+  /** 弹窗遮罩期把 WCO 标题条着色成遮罩合成色(tokens.css --color-scrim 45% 黑叠白底 ≈ #8c8c8c),
+      让原生按钮条与页面遮罩融为一体;关闭还原为创建时的原色。紧凑窗无 overlay,静默忽略。 */
+  setScrim(dimmed: boolean): boolean {
+    if (process.platform !== 'win32' || this.closed) return false
+    try {
+      this.active.setTitleBarOverlay(dimmed
+        ? { color: '#8c8c8c', symbolColor: '#565658' }
+        : { color: '#ffffff', symbolColor: '#2a2a2e' })
+      return true
+    } catch {
+      return false
+    }
+  }
   setPreferences(preferences: WindowPreferences): void {
     this.preferences = preferences
     this.floating?.setContentProtection(preferences.contentProtection)

@@ -317,6 +317,7 @@ export const componentDocs: ComponentDoc[] = [
       { name: 'hint', type: 'ReactNode', note: '控件下方固定说明(11px)' },
       { name: 'error', type: 'ReactNode', note: '校验错误:红边 + aria-invalid,显示时取代 hint' },
       { name: 'prefix / suffix', type: 'ReactNode', note: '控件内前置/后置图标(搜索框放大镜等),仅 TextField;传入后自动让出对应内边距' },
+      { name: 'requiredMark', type: 'boolean', note: '仅 TextField,required 红星开关(默认 true;登录页关闭以保持 label 文本纯净)' },
       { name: 'id', type: 'string', note: '传则建立 label↔控件关联' },
       { name: '…原生', type: 'InputHTMLAttributes / TextareaHTMLAttributes', note: 'type / rows / placeholder / required / disabled 等' },
       { name: 'controlClassName', type: 'string', note: '仅 TextareaField,覆盖控件样式' },

@@ -22,6 +22,8 @@ export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElemen
   prefix?: ReactNode
   /** 控件内后置图标/快捷键;传入后控件自动让出右内边距 */
   suffix?: ReactNode
+  /** required 星标开关(默认随 required 显示;登录页关闭,保持 label 文本纯净供 getByLabelText 精确匹配) */
+  requiredMark?: boolean
   className?: string
   ref?: Ref<HTMLInputElement>
 }
@@ -32,6 +34,7 @@ export function TextField({
   error,
   prefix,
   suffix,
+  requiredMark = true,
   className,
   id,
   ref,
@@ -52,7 +55,7 @@ export function TextField({
       {label !== undefined && (
         <Field.Label htmlFor={id} className="text-[12.5px] font-medium text-text-regular">
           {label}
-          {props.required && (
+          {props.required && requiredMark && (
             <span aria-hidden className="ml-0.5 text-danger">
               *
             </span>

@@ -7,14 +7,17 @@ import { cn } from '../lib/cn'
    账号与退出登录在侧栏 profile / 设置弹窗;设置入口统一为顶栏齿轮(常规与紧凑同构)。
    macOS hiddenInset 红绿灯(关闭/最小化/缩放)悬浮左上,常规品牌块让位:x:18 起三钮右缘 ≈70px,
    pl 90px → 与标题恒距 20px(2026-09-14 用户确认)。
-   Windows 无边框窗口:系统缩小/放大/关闭按钮(Window Controls Overlay)悬浮右上,右侧动作区用
-   env(titlebar-area-width) 让位(2026-09-14);mac 未启用 overlay,env 回退值即原 pr-8 / pr-2,两端间距不变。紧凑窗口独立无边框，不为原生窗口按钮留空。 */
+   Windows 无边框窗口:系统缩小/放大/关闭按钮(Window Controls Overlay,约 138px 宽)悬浮右上,
+   常规模式右侧动作区固定让位 170px(2026-09-20)。不能用 Tailwind 任意值包 env() calc——
+   含逗号时类名不生成、让位静默失效,故按平台写固定值。mac 无 overlay 保持 pr-8;
+   紧凑窗口独立无边框,不为原生窗口按钮留空。 */
 const isMacOS = navigator.userAgent.includes('Macintosh')
+const isWindows = navigator.userAgent.includes('Windows')
 const macInsetClass = 'pl-[90px] max-[560px]:pl-[90px]'
 interface TopbarProps { compactControls?: ReactNode; compact: boolean; pinned: boolean; onCompact: () => void; onPin: () => void; onSettings: () => void; desktop: boolean; loggingOut?: boolean }
 export default function Topbar({ compact, pinned, onCompact, onPin, onSettings, desktop, loggingOut = false, compactControls }: TopbarProps) {
   return <header className={cn('flex h-[50px] shrink-0 items-center justify-between bg-page select-none [-webkit-app-region:drag]',
-    compact ? 'gap-0 pr-2' : 'gap-3 pr-[calc(100vw_-_env(titlebar-area-width,100vw)_+_2rem)]')}>
+    compact ? 'gap-0 pr-2' : cn('gap-3', isWindows ? 'pr-[170px]' : 'pr-8'))}>
     {compact
       ? <span className="flex items-center gap-2 pl-5 text-base font-semibold text-text-heading"><Waveform size={20} className="text-success" aria-hidden="true" />Rewick</span>
       : <div className={cn('flex items-center gap-2.5 pl-4', isMacOS && macInsetClass)} aria-label="掌灯 Rewick">

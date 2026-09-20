@@ -1,13 +1,15 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { Dialog } from '@base-ui/react'
 import { X } from '@phosphor-icons/react'
 import { cn } from '../../lib/cn'
+import { pushWindowScrim } from '../../lib/window-scrim'
 import { Button, IconButton } from './button'
 
 /**
  * .modal 壳(spec §8):head/body/foot 三段;宽度 md=600(默认)/ lg=680(设置)。
  * Base UI Dialog:modal=true(焦点陷阱 + 滚动锁),Esc/点遮罩关闭。
  * body 结构可整体替换(设置弹窗是 168px 左导航网格),给 bodyClassName。
+ * 打开期间上报 window-scrim 信号(Windows 下主进程把 WCO 标题条着色成遮罩同色)。
  */
 export function Modal({
   open,
@@ -26,6 +28,11 @@ export function Modal({
   width?: 'md' | 'lg'
   bodyClassName?: string
 }) {
+  useEffect(() => {
+    if (!open) return
+    pushWindowScrim(true)
+    return () => pushWindowScrim(false)
+  }, [open])
   return (
     <Dialog.Root open={open} onOpenChange={(nextOpen) => onOpenChange(nextOpen)}>
       <Dialog.Portal>

@@ -63,6 +63,7 @@ function createBridge(accountScope?: string): DesktopBridge {
   cancelAnswer: () => invoke('answer:cancel'),
   setAlwaysOnTop: value => invoke('window:pin', value),
   setCompact: value => invoke('window:compact', value),
+  setWindowScrim: value => invoke('window:scrim', value),
   getWindowPreferences: () => invoke('window:preferences'),
   saveWindowPreferences: value => invoke('window:preferences-save', value),
   getHistoryPage: cursor => invoke('history:page', cursor),

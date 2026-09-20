@@ -319,7 +319,7 @@ function assertSender(event: IpcMainInvokeEvent): void {
 }
 
 function registerHandlers(): void {
-  const publicChannels = new Set(['invitation:settings', 'settings:get', 'settings:save', 'platform:remembered-login', 'platform:login', 'platform:register', 'platform:email-code', 'platform:password-reset-code', 'platform:password-reset', 'platform:logout', 'platform:refresh', 'asr:stop', 'answer:cancel', 'window:compact', 'window:pin'])
+  const publicChannels = new Set(['invitation:settings', 'settings:get', 'settings:save', 'platform:remembered-login', 'platform:login', 'platform:register', 'platform:email-code', 'platform:password-reset-code', 'platform:password-reset', 'platform:logout', 'platform:refresh', 'asr:stop', 'answer:cancel', 'window:compact', 'window:pin', 'window:scrim'])
   const handle = (channel: string, callback: (arg: unknown) => unknown): void => {
     ipcMain.handle(channel, async (event, envelope: unknown) => {
       assertSender(event)
@@ -595,6 +595,7 @@ function registerHandlers(): void {
   })
   handle('answer:cancel', () => cancelAnswerWork())
   handle('window:pin', input => desktopWindows?.setPinned(z.boolean().parse(input)) ?? false)
+  handle('window:scrim', input => desktopWindows?.setScrim(z.boolean().parse(input)) ?? false)
   handle('window:compact', input => {
     const value = z.boolean().parse(input)
     if (value) interviewTimer.assertActive()
