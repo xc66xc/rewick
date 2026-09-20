@@ -1,10 +1,11 @@
 import { z } from 'zod'
+import { interviewTypeSchema } from '../../shared/interview-type'
 import type { WalletState } from '../../shared/types'
 import { environmentSnapshotSchema } from './interview-validation'
 import { PlatformClient } from './platform-client'
 
 const timestamp = z.string().datetime({ offset: true })
-const backgroundSchema = z.object({ context: z.object({ name: z.string(), text: z.string().max(100_000) }), interviewTarget: z.object({ companyName: z.string(), roleName: z.string(), jobDescription: z.string().max(12_000) }), interviewEnvironment: environmentSnapshotSchema })
+const backgroundSchema = z.object({ context: z.object({ name: z.string(), text: z.string().max(100_000) }), interviewTarget: z.object({ companyName: z.string(), roleName: z.string(), jobDescription: z.string().max(12_000) }), interviewEnvironment: environmentSnapshotSchema.extend({ interviewType: interviewTypeSchema }) })
 export const walletSchema = z.object({
   background: backgroundSchema.nullable().optional(),
   availableSeconds: z.number().int().nonnegative(), version: z.number().int().nonnegative(), serverTime: timestamp,

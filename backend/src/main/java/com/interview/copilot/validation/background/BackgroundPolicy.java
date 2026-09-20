@@ -10,6 +10,11 @@ import org.springframework.http.HttpStatus;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * @author Carl Wang
+ * @date 2026-09-20
+ * @description 校验用户背景资料及面试类型
+ */
 public final class BackgroundPolicy {
     private BackgroundPolicy() {}
 
@@ -28,7 +33,7 @@ public final class BackgroundPolicy {
                 switch (kind) {
                     case resumes -> Set.of("name", "text");
                     case targets -> Set.of("name", "companyName", "roleName", "jobDescription");
-                    case environments -> Set.of("name", "resumeId", "targetId", "referenceIds");
+                    case environments -> Set.of("name", "interviewType", "resumeId", "targetId", "referenceIds");
                 };
         object.fieldNames()
                 .forEachRemaining(
@@ -45,6 +50,7 @@ public final class BackgroundPolicy {
                 text(object, "jobDescription", 12000);
             }
             case environments -> {
+                interviewType(object.path("interviewType"));
                 for (String key : Set.of("resumeId", "targetId")) {
                     if (!object.has(key)) throw invalid("请选择简历和岗位。");
                     if (!object.get(key).isNull()) id(object.get(key).asText());
@@ -65,6 +71,13 @@ public final class BackgroundPolicy {
     private static void text(ObjectNode node, String key, int max) {
         if (!node.path(key).isTextual() || node.path(key).asText().length() > max)
             throw invalid("资料字段长度或格式无效：" + key);
+    }
+
+    /** 校验面试类型，仅接受明确的技术面试或综合面试。 */
+    public static void interviewType(JsonNode value) {
+        if (!value.isTextual() || !Set.of("technical", "general").contains(value.asText())) {
+            throw invalid("请选择有效的面试类型：技术面试或综合面试。");
+        }
     }
 
     public static ApiException invalid(String message) {

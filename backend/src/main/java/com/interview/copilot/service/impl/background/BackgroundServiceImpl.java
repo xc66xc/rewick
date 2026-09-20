@@ -22,6 +22,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.ZoneId;
 import java.util.UUID;
 
+/**
+ * @author Carl Wang
+ * @date 2026-09-20
+ * @description 管理背景资料、面试类型与开始面试时的背景快照
+ */
 @Service
 @Transactional
 public class BackgroundServiceImpl implements BackgroundService {
@@ -104,7 +109,10 @@ public class BackgroundServiceImpl implements BackgroundService {
         }
         if ((previous == null ? 0 : previous.version()) != version)
             throw conflict("资料已被其他设备修改，请刷新后重新编辑；当前草稿未保存。");
-        if (kind == BackgroundKind.environments) validateEnvironment(user, content, false);
+        if (kind == BackgroundKind.environments) {
+            validateEnvironment(user, content, false);
+            requireEditableType(user, id, content);
+        }
         if (previous == null) {
             if (records.list(user, kind).size() >= kind.getLimit())
                 throw BackgroundPolicy.invalid("资料数量已达到上限：" + kind.getLimit());
@@ -174,7 +182,7 @@ public class BackgroundServiceImpl implements BackgroundService {
         for (String field : new String[] {"companyName", "roleName", "jobDescription"})
             jd.put(field, target == null ? "" : target.path(field).asText());
         ObjectNode env = snapshot.putObject("interviewEnvironment");
-        for (String field : new String[] {"id", "name", "resumeId", "targetId", "referenceIds"})
+        for (String field : new String[] {"id", "name", "interviewType", "resumeId", "targetId", "referenceIds"})
             env.set(field, environment.get(field));
         env.put("resumeName", resume.path("name").asText())
                 .put("targetName", target == null ? "" : target.path("name").asText());
@@ -193,6 +201,7 @@ public class BackgroundServiceImpl implements BackgroundService {
     }
 
     private void validateEnvironment(long user, JsonNode content, boolean ready) {
+        BackgroundPolicy.interviewType(content.path("interviewType"));
         for (BackgroundKind kind :
                 new BackgroundKind[] {BackgroundKind.resumes, BackgroundKind.targets}) {
             String id =
@@ -210,7 +219,11 @@ public class BackgroundServiceImpl implements BackgroundService {
         if (records.active(user) != null) return;
         String id = UUID.randomUUID().toString();
         ObjectNode env =
-                json.createObjectNode().put("name", "默认环境").putNull("resumeId").putNull("targetId");
+                json.createObjectNode()
+                        .put("name", "默认环境")
+                        .put("interviewType", "technical")
+                        .putNull("resumeId")
+                        .putNull("targetId");
         env.putArray("referenceIds");
         records.insert(
                 user,
@@ -223,6 +236,18 @@ public class BackgroundServiceImpl implements BackgroundService {
 
     private void lock(long user) {
         if (users.lockUser(user) == null) throw missing();
+    }
+
+    private void requireEditableType(long user, String environmentId, JsonNode content) {
+        var session = sessions.latest(user);
+        if (session == null || !"active".equals(session.status())) return;
+        String saved = records.snapshot(user, session.id());
+        if (saved == null) return;
+        JsonNode environment = parse(saved).path("interviewEnvironment");
+        if (environmentId.equals(environment.path("id").asText())
+                && !content.path("interviewType").equals(environment.path("interviewType"))) {
+            throw conflict("面试进行中，不能修改本场面试类型，请先结束面试。");
+        }
     }
 
     private BackgroundEntity require(long user, BackgroundKind kind, String id) {

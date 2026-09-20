@@ -4,6 +4,8 @@ import { Button } from './ui/button'
 import { Modal } from './ui/dialog'
 import { Dot } from './ui/pill'
 import { TextField } from './ui/field'
+import { ChoiceRow } from './ui/check-row'
+import { interviewTypeDescriptions, interviewTypeLabels } from '../../../shared/interview-type'
 import { AppSelect } from './ui/select'
 import { cn } from '../lib/cn'
 import { formNoteClass, inlineErrorClass } from '../lib/form'
@@ -51,12 +53,19 @@ export default function EnvironmentDialog({ open, onOpenChange, draft, dirty, li
         <Button variant="primary" disabled={fieldsDisabled || !dirty || !draft.name.trim() || missingResume || missingTarget} onClick={onSave}>{busy ? '保存中…' : '保存环境'}</Button>
       </>}>
       <form onSubmit={event => { event.preventDefault(); onSave() }} noValidate>
-        {editingBlocked && <p className="mb-4 rounded-chip border border-accent-line bg-accent-subtle px-4 py-3 text-xs leading-[1.8] text-text-secondary">正在转写或回答。停止后可进入其他环境或修改当前环境组合。</p>}
+        {editingBlocked && <p className="mb-4 rounded-chip border border-accent-line bg-accent-subtle px-4 py-3 text-xs leading-[1.8] text-text-secondary">面试进行中，当前面试准备已锁定。结束面试后可修改。</p>}
         {!settings.remoteKnowledge.enabled && !settings.retrieval.enabled && draft.referenceIds.length > 0 && <p className="mb-4 text-xs leading-[1.85] text-text-secondary">本地资料检索已关闭，需在个人背景 → 参考资料开启后使用。当前选择会保留。</p>}
         {!referencesReady && <p className={formNoteClass} role="status">正在读取可选参考资料…</p>}
         {error && <p className={cn(inlineErrorClass, 'mt-0 mb-4')} role="alert">{error}</p>}
         <fieldset className="m-0 min-w-0 border-0 p-0" disabled={fieldsDisabled}>
           <TextField className="mb-4" id="environment-name" label="环境名称" required maxLength={100} placeholder="例如：公司 A · 后端技术面" value={draft.name} disabled={fieldsDisabled} onChange={event => onChange({ ...draft, name: event.target.value })} />
+          <fieldset className="mb-4 border-0 p-0" disabled={fieldsDisabled}>
+            <legend className="text-sm font-medium text-text-regular">面试类型</legend>
+            {(['technical', 'general'] as const).map(type => <ChoiceRow key={type} name="interview-type" value={type}
+              label={interviewTypeLabels[type]} description={interviewTypeDescriptions[type]}
+              checked={draft.interviewType === type} disabled={fieldsDisabled}
+              onChange={checked => { if (checked) onChange({ ...draft, interviewType: type }) }} />)}
+          </fieldset>
           <div className="mb-4 flex flex-col gap-2">
             <label htmlFor="environment-resume" className="text-[12.5px] font-medium text-text-regular">环境简历</label>
             <AppSelect id="environment-resume" size="lg" value={draft.resumeId ?? ''} options={resumeOptions} aria-invalid={missingResume} disabled={fieldsDisabled} onValueChange={value => onChange({ ...draft, resumeId: value || null })} />

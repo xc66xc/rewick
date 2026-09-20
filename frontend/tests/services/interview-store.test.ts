@@ -2,8 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { InterviewStore } from '../../src/main/services/interview-store'
 import { defaultSettings } from '../../src/shared/defaults'
 import type { SettingsStore } from '../../src/main/services/settings-store'
+import { environmentInputSchema } from '../../src/main/services/interview-validation'
 
-const environment = { id: '11111111-1111-4111-8111-111111111111', name: '默认环境', resumeId: null, targetId: null, referenceIds: [], version: 1, createdAt: '2026-09-13T12:00:00+08:00', updatedAt: '2026-09-13T12:00:00+08:00' }
+const environment = { id: '11111111-1111-4111-8111-111111111111', name: '默认环境', interviewType: 'technical', resumeId: null, targetId: null, referenceIds: [], version: 1, createdAt: '2026-09-13T12:00:00+08:00', updatedAt: '2026-09-13T12:00:00+08:00' }
 const library = { resumes: [], targets: [], environments: [environment], activeEnvironmentId: environment.id }
 function setup() {
   const auth = vi.fn(async () => ({ settings: { ...defaultSettings, platform: { ...defaultSettings.platform, baseUrl: 'http://localhost:8080', authenticated: true } }, secrets: { platformAccessToken: 'session', asrApiKey: '', llmApiKey: '', remoteKnowledgeApiKey: '' } }))
@@ -11,6 +12,23 @@ function setup() {
 }
 afterEach(() => vi.unstubAllGlobals())
 describe('server background', () => {
+  it.each([undefined, '', 'hr', null])('rejects invalid interview type %s before save', interviewType => {
+    expect(environmentInputSchema.safeParse({ ...environment, interviewType }).success).toBe(false)
+  })
+  it('saves general interview type and resolves it into the answer context', async () => {
+    const saved = { ...environment, interviewType: 'general', version: 2 }
+    const fetcher = vi.fn(async (_url: string, init: RequestInit) => {
+      if (init.method === 'POST') {
+        expect(JSON.parse(String(init.body)).content.interviewType).toBe('general')
+        return Response.json(saved)
+      }
+      return Response.json({ ...library, environments: [saved] })
+    })
+    vi.stubGlobal('fetch', fetcher)
+    const { store } = setup()
+    await store.saveEnvironment({ id: environment.id, version: 1, name: environment.name, interviewType: 'general', resumeId: null, targetId: null, referenceIds: [] })
+    expect((await store.resolve(defaultSettings)).interviewEnvironment?.interviewType).toBe('general')
+  })
   it('reads the authenticated server library without creating or seeding local records', async () => {
     const fetcher = vi.fn().mockResolvedValue(Response.json(library)); vi.stubGlobal('fetch', fetcher)
     expect(await setup().store.list()).toEqual(library)

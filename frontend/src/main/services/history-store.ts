@@ -1,3 +1,4 @@
+import { interviewTypeLabels } from '../../shared/interview-type'
 import type { SessionRecord } from '../../shared/types'
 import { parseInput, sessionRecordSchema } from './validation'
 
@@ -10,6 +11,7 @@ export function sessionToMarkdown(record: SessionRecord): string {
   const session = parseInput(sessionRecordSchema, record)
   const lines = [`# ${session.title.replace(/[\r\n]/g, ' ')}`, '', `开始时间：${session.createdAt}`, '', '## 转写', '']
   if (session.interviewEnvironment) lines.splice(4, 0, `面试环境：${session.interviewEnvironment.name}`, `简历：${session.interviewEnvironment.resumeName || '未选择'}`, '')
+  if (session.interviewEnvironment?.interviewType) lines.splice(4, 0, `面试类型：${interviewTypeLabels[session.interviewEnvironment.interviewType]}`)
   for (const segment of session.segments) {
     lines.push(`**[${timecode(segment.startMs)}]${segment.isFinal ? '' : '（未定稿）'}** ${segment.text}`, '')
   }
@@ -19,6 +21,7 @@ export function sessionToMarkdown(record: SessionRecord): string {
     if (answer.status !== 'complete') lines.push(`状态：${{ streaming: '生成中', cancelled: '已停止', error: '出错' }[answer.status]}`, '')
     if (answer.error) lines.push(`错误：${answer.error}`, '')
     if (answer.interviewEnvironment) lines.push(`本次环境：${answer.interviewEnvironment.name} · 简历：${answer.interviewEnvironment.resumeName || '未选择'}`, '')
+    if (answer.interviewEnvironment?.interviewType) lines.push(`面试类型：${interviewTypeLabels[answer.interviewEnvironment.interviewType]}`, '')
     const target = answer.interviewTarget
     if (target && (target.companyName || target.roleName || target.jobDescription)) {
       lines.push('#### 本次目标岗位', '', `公司：${target.companyName || '未填写'}`, `岗位：${target.roleName || '未填写'}`, '')

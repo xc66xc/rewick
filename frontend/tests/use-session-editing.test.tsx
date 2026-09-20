@@ -29,8 +29,8 @@ function setup(fakeTimers = false) {
   let sessionId = 'asr-one'
   const createdAt = new Date().toISOString()
   const library: InterviewLibrary = { resumes: [], targets: [], activeEnvironmentId: 'environment-one', environments: [
-    { id: 'environment-one', name: '原环境', resumeId: null, targetId: null, referenceIds: [], createdAt, updatedAt: createdAt },
-    { id: 'environment-two', name: '新环境', resumeId: null, targetId: null, referenceIds: [], createdAt, updatedAt: createdAt },
+    { id: 'environment-one', name: '原环境', interviewType: 'technical' as const, resumeId: null, targetId: null, referenceIds: [], createdAt, updatedAt: createdAt },
+    { id: 'environment-two', name: '新环境', interviewType: 'technical' as const, resumeId: null, targetId: null, referenceIds: [], createdAt, updatedAt: createdAt },
   ] }
   const bridge = { invitationSettings: vi.fn(async () => ({ enabled: false, rewardSeconds: 0, version: 0 })), invitationMine: vi.fn(), invitationCreateCode: vi.fn(),
     getPackageCatalog: vi.fn(async () => ({ paymentAvailable: false, paymentMethods: [], packages: [] })),
@@ -616,7 +616,7 @@ describe('environment switching and answer reference snapshots', () => {
     await run(() => result.current.activateEnvironment('environment-one'))
     await run(() => result.current.start())
     await receive(segment('只属于原环境的问题', { isFinal: true, endMs: 1000 }))
-    const input = { id: 'environment-one', name: '修改后的环境', resumeId: null, targetId: null, referenceIds: [] }
+    const input = { id: 'environment-one', name: '修改后的环境', interviewType: 'technical' as const, resumeId: null, targetId: null, referenceIds: [] }
     await run(async () => { await expect(result.current.saveEnvironment(input)).rejects.toThrow('停止转写') })
     expect(bridge.saveEnvironment).not.toHaveBeenCalled()
     await run(() => result.current.stop())

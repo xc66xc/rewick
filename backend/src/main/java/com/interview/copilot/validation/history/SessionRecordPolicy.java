@@ -10,6 +10,11 @@ import java.time.DateTimeException;
 import java.time.OffsetDateTime;
 import java.util.Set;
 
+/**
+ * @author Carl Wang
+ * @date 2026-09-20
+ * @description 校验会话记录和历史面试信息
+ */
 public final class SessionRecordPolicy {
     private static final Set<String> FIELDS =
             Set.of(
@@ -41,6 +46,7 @@ public final class SessionRecordPolicy {
         array(content.path("answers"), 500);
         content.path("segments").forEach(SessionRecordPolicy::segment);
         content.path("answers").forEach(SessionRecordPolicy::answer);
+        environment(content.path("interviewEnvironment"));
         if (content.toString().getBytes(StandardCharsets.UTF_8).length > 4 * 1048576)
             throw invalid();
         rejectSecrets(content);
@@ -68,6 +74,15 @@ public final class SessionRecordPolicy {
         if (!Set.of("streaming", "complete", "cancelled", "error")
                 .contains(node.path("status").asText())) throw invalid();
         time(node.path("createdAt").asText());
+        environment(node.path("interviewEnvironment"));
+    }
+
+    private static void environment(JsonNode node) {
+        if (node.has("interviewType")
+                && (!node.path("interviewType").isTextual()
+                        || !Set.of("technical", "general").contains(node.path("interviewType").asText()))) {
+            throw invalid();
+        }
     }
 
     private static void rejectSecrets(JsonNode node) {

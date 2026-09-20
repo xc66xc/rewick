@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { interviewTypeSchema } from '../../shared/interview-type'
 
 const id = z.string().min(1).max(128)
 const timestamp = z.string().datetime({ offset: true })
@@ -15,9 +16,11 @@ const targetFields = {
 export const resumeInputSchema = z.object({ ...revision, id: id.optional(), name: profileName, text: z.string().max(100_000) })
 export const targetInputSchema = z.object({ ...revision, id: id.optional(), name: profileName, ...targetFields })
 export const environmentInputSchema = z.object({
+  interviewType: interviewTypeSchema,
   ...revision, id: id.optional(), name: environmentName, resumeId: id.nullable(), targetId: id.nullable(), referenceIds,
 })
 export const environmentSnapshotSchema = z.object({
+  interviewType: interviewTypeSchema.optional(),
   id, name: environmentName, resumeId: id.nullable(), resumeName: z.string().max(255),
   targetId: id.nullable(), targetName: z.string().max(255), referenceIds,
 })

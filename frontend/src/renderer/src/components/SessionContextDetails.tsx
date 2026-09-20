@@ -1,3 +1,4 @@
+import { interviewTypeLabels } from '../../../shared/interview-type'
 import { CaretDown } from '@phosphor-icons/react'
 import type { InterviewEnvironmentSnapshot, InterviewTarget, SessionRecord, Settings } from '../../../shared/types'
 
@@ -21,7 +22,7 @@ function collectContexts(record: SessionContextDetailsProps['record'], current: 
   record.answers.forEach((answer, index) => {
     const environment = answer.interviewEnvironment
     const target = answer.interviewTarget
-    const key = JSON.stringify([environment?.id, environment?.name, environment?.resumeId, environment?.resumeName,
+    const key = JSON.stringify([environment?.id, environment?.name, environment?.interviewType, environment?.resumeId, environment?.resumeName,
       environment?.targetId, environment?.targetName, environment ? [...environment.referenceIds].sort() : undefined,
       target?.companyName, target?.roleName, target?.jobDescription])
     let group = groups.get(key)
@@ -55,6 +56,7 @@ export default function SessionContextDetails({ record, current }: SessionContex
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 m-0">
             {group.environment && <>
               <dt className="text-text-muted">面试环境</dt><dd className="m-0 text-text-primary [overflow-wrap:anywhere]">{group.environment.name}</dd>
+              <dt className="text-text-muted">面试类型</dt><dd className="m-0 text-text-primary">{group.environment.interviewType ? interviewTypeLabels[group.environment.interviewType] : '未记录'}</dd>
               <dt className="text-text-muted">使用简历</dt><dd className="m-0 text-text-primary [overflow-wrap:anywhere]">{group.environment.resumeName || '未选择'}</dd>
               <dt className="text-text-muted">目标岗位</dt><dd className="m-0 text-text-primary [overflow-wrap:anywhere]">{group.environment.targetName || '未选择'}</dd>
               <dt className="text-text-muted">参考资料</dt><dd className="m-0 text-text-primary [overflow-wrap:anywhere]">已选择 {group.environment.referenceIds.length} 份</dd>

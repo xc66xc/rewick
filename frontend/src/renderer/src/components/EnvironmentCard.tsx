@@ -2,6 +2,7 @@ import { ArrowRight, Briefcase, FileText, PencilSimple, Stack, Trash } from '@ph
 import type { InterviewEnvironment, ResumeProfile, TargetProfile } from '../../../shared/types'
 import { Button } from './ui/button'
 import { Dot, Pill } from './ui/pill'
+import { interviewTypeLabels } from '../../../shared/interview-type'
 import { cn } from '../lib/cn'
 import { textButtonClass } from '../lib/form'
 
@@ -44,6 +45,7 @@ export default function EnvironmentCard({ environment, resume, target, current, 
         ? <Pill className="self-start border-success-line bg-card text-success"><Dot tone="success" />当前使用</Pill>
         : formatUpdatedAt(environment.updatedAt) && <span className="shrink-0 self-start text-[11px] text-text-muted">{formatUpdatedAt(environment.updatedAt)}</span>}
     </div>
+    <Pill className="mt-2 self-start">{interviewTypeLabels[environment.interviewType]}</Pill>
     <dl className="mt-3 border-t border-border text-xs text-text-regular">
       <div className="flex items-center gap-2 border-b border-border py-2.5"><FileText size={13} aria-hidden="true" className="shrink-0 text-text-muted" /><dd className="m-0 min-w-0 flex-1 truncate" title={resumeLabel}>{resumeLabel}</dd><dt className="shrink-0 text-[10px] text-text-muted">简历</dt></div>
       <div className="flex items-center gap-2 border-b border-border py-2.5"><Briefcase size={13} aria-hidden="true" className="shrink-0 text-text-muted" /><dd className="m-0 min-w-0 flex-1 truncate" title={targetLabel}>{targetLabel}</dd><dt className="shrink-0 text-[10px] text-text-muted">岗位</dt></div>

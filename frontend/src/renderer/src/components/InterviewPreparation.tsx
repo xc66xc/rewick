@@ -21,8 +21,8 @@ interface Props {
   onPrepare: (input: EnvironmentInput) => Promise<void>; onSave: (input: EnvironmentInput) => Promise<void>
   onStarted: () => void; onContext: () => void; onSettings: () => void; onPurchase?: () => void
 }
-const emptyEnvironment: EnvironmentInput = { name: '', resumeId: null, targetId: null, referenceIds: [] }
-function environmentInput({ id, name, resumeId, targetId, referenceIds, version }: InterviewEnvironment): EnvironmentInput { return { id, name, resumeId, targetId, referenceIds, version } }
+const emptyEnvironment: EnvironmentInput = { interviewType: 'technical', name: '', resumeId: null, targetId: null, referenceIds: [] }
+function environmentInput({ id, name, interviewType, resumeId, targetId, referenceIds, version }: InterviewEnvironment): EnvironmentInput { return { id, name, interviewType, resumeId, targetId, referenceIds, version } }
 /* v30 准备面试页:钱包页头 + 摘要卡 + 环境卡片网格,新建/编辑走弹窗(原「面试环境」页已并入) */
 export default function InterviewPreparation({ bridge, settings, timer, isSessionActive, onPrepare, onSave, onStarted, onContext, onSettings, onPurchase }: Props) {
   const data = useInterviewLibrary(bridge)
@@ -34,7 +34,7 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const activeId = data.library?.activeEnvironmentId
-  const editingBlocked = editor.draft.id !== undefined && editor.draft.id === activeId && isSessionActive
+  const editingBlocked = editor.draft.id !== undefined && editor.draft.id === activeId && (isSessionActive || timer.active)
   function openModal() { setNotice(''); setError(''); setDialogOpen(true) }
   function requestNew() { editor.request(() => { editor.replace(emptyEnvironment); openModal() }) }
   function requestEdit(environment: InterviewEnvironment) {
@@ -120,7 +120,7 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
         const startBlocked = !resumeReady ? ('resume' as const) : !timer.wallet || timer.remaining <= 0 ? ('wallet' as const) : false
         return <li key={environment.id} className="min-w-0">
           <EnvironmentCard environment={environment} resume={resume} target={target} current={environment.id === activeId}
-            resumeReady={resumeReady} startBlocked={startBlocked} busy={busy} timerActive={timer.active} sessionActive={isSessionActive}
+            resumeReady={resumeReady} startBlocked={startBlocked} busy={busy} timerActive={timer.active} sessionActive={isSessionActive || timer.active}
             onEdit={() => requestEdit(environment)}
             onDelete={() => setDeleteTarget(environment)}
             onStart={() => void start(environment)} onReturn={onStarted} onContext={onContext} />

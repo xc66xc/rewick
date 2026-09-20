@@ -10,6 +10,11 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * @author Carl Wang
+ * @date 2026-09-20
+ * @description 初始化独立集成测试数据库
+ */
 final class PaymentDatabase extends PostgreSQLContainer<PaymentDatabase> {
     PaymentDatabase() {
         super(
@@ -51,7 +56,7 @@ final class PaymentDatabase extends PostgreSQLContainer<PaymentDatabase> {
                         "16_desktop_sessions.sql",
                         "17_desktop_settings.sql",
                         "20_alipay_page_pay.sql",
-                        "21_zpay_payments.sql", "22_zpay_api_qr.sql")) {
+                        "21_zpay_payments.sql", "22_zpay_api_qr.sql", "23_interview_type.sql")) {
             command.add("-f");
             command.add("/tmp/sql/" + script);
         }

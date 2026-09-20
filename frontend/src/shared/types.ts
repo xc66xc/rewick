@@ -1,3 +1,4 @@
+import type { InterviewType } from './interview-type'
 import type { PackageCatalog, PaymentOrder, CreatePaymentOrder } from './payment'
 export type ServiceKind = 'llm' | 'asr' | 'knowledge'
 export interface ServiceSelection { source: 'platform' | 'custom'; id: string }
@@ -66,6 +67,7 @@ export interface InterviewTarget { companyName: string; roleName: string; jobDes
 export interface ResumeProfile { hasContent?: boolean; version?: number; bodyLoaded?: boolean; id: string; name: string; text: string; createdAt: string; updatedAt: string }
 export interface TargetProfile extends InterviewTarget { version?: number; bodyLoaded?: boolean; id: string; name: string; createdAt: string; updatedAt: string }
 export interface InterviewEnvironment {
+  interviewType: InterviewType
   version?: number; bodyLoaded?: boolean
   id: string; name: string; resumeId: string | null; targetId: string | null; referenceIds: string[]; createdAt: string; updatedAt: string
 }
@@ -73,11 +75,13 @@ export interface InterviewLibrary {
   resumes: ResumeProfile[]; targets: TargetProfile[]; environments: InterviewEnvironment[]; activeEnvironmentId: string
 }
 export interface InterviewEnvironmentSnapshot {
+  /** Historical records created before interview types have no type. */
+  interviewType?: InterviewType
   id: string; name: string; resumeId: string | null; resumeName: string; targetId: string | null; targetName: string; referenceIds: string[]
 }
 export interface ResumeInput { version?: number; bodyLoaded?: boolean; id?: string; name: string; text: string }
 export interface TargetInput extends InterviewTarget { version?: number; bodyLoaded?: boolean; id?: string; name: string }
-export interface EnvironmentInput { version?: number; bodyLoaded?: boolean; id?: string; name: string; resumeId: string | null; targetId: string | null; referenceIds: string[] }
+export interface EnvironmentInput { interviewType: InterviewType; version?: number; bodyLoaded?: boolean; id?: string; name: string; resumeId: string | null; targetId: string | null; referenceIds: string[] }
 export type ReferenceKind = 'technical' | 'personal'
 export interface ReferenceDocument {
   id: string

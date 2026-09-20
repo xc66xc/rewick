@@ -7,10 +7,10 @@ import { defaultSettings } from '../src/shared/defaults'
 import type { DesktopBridge, EnvironmentInput, InterviewLibrary } from '../src/shared/types'
 
 afterEach(cleanup)
-function setup(resumeId: string | null = 'resume', availableSeconds = 600, secondEnvironment = false, summaries = false) {
-  const library: InterviewLibrary = { resumes: [{ id: 'resume', name: '开发简历', text: '开发工程师经历', createdAt: '', updatedAt: '' }], targets: [], environments: [{ id: 'env', name: '默认环境', resumeId, targetId: null, referenceIds: [], createdAt: '', updatedAt: '' }], activeEnvironmentId: 'env' }
+function setup(resumeId: string | null = 'resume', availableSeconds = 600, secondEnvironment = false, summaries = false, active = false) {
+  const library: InterviewLibrary = { resumes: [{ id: 'resume', name: '开发简历', text: '开发工程师经历', createdAt: '', updatedAt: '' }], targets: [], environments: [{ id: 'env', name: '默认环境', interviewType: 'technical', resumeId, targetId: null, referenceIds: [], createdAt: '', updatedAt: '' }], activeEnvironmentId: 'env' }
   if (summaries) library.resumes = library.resumes.map(record => ({ ...record, text: '', bodyLoaded: false, hasContent: true }))
-  if (secondEnvironment) library.environments.push({ id: 'env-2', name: '备用环境', resumeId, targetId: null, referenceIds: [], createdAt: '', updatedAt: '' })
+  if (secondEnvironment) library.environments.push({ id: 'env-2', name: '备用环境', interviewType: 'technical', resumeId, targetId: null, referenceIds: [], createdAt: '', updatedAt: '' })
   const bridge = { invitationSettings: vi.fn(async () => ({ enabled: false, rewardSeconds: 0, version: 0 })),  getInterviewLibrary: vi.fn(async () => library), listReferences: vi.fn(async () => []), removeEnvironment: vi.fn(async (id: string) => ({ ...library, environments: library.environments.filter(record => record.id !== id) })), onEvent: () => () => undefined } as unknown as DesktopBridge
   const start = vi.fn(async () => undefined)
   const onPrepare = vi.fn(async (_input: EnvironmentInput) => undefined)
@@ -20,7 +20,7 @@ function setup(resumeId: string | null = 'resume', availableSeconds = 600, secon
     else library.environments = [...library.environments, { ...input, id: `env-${library.environments.length + 1}`, createdAt: '', updatedAt: '' }]
   })
   const onStarted = vi.fn()
-  const timer = { wallet: { availableSeconds, version: 0, serverTime: new Date().toISOString(), session: null }, active: false, busy: false, refreshing: false, error: '', warning: '', remaining: availableSeconds, used: 0, start, end: vi.fn(async () => undefined), refresh: vi.fn(async () => undefined) }
+  const timer = { wallet: { availableSeconds, version: 0, serverTime: new Date().toISOString(), session: null }, active, busy: false, refreshing: false, error: '', warning: '', remaining: availableSeconds, used: 0, start, end: vi.fn(async () => undefined), refresh: vi.fn(async () => undefined) }
   render(<InterviewPreparation bridge={bridge} settings={defaultSettings} timer={timer} isSessionActive={false} onPrepare={onPrepare} onSave={onSave} onStarted={onStarted} onContext={vi.fn()} onSettings={vi.fn()} />)
   return { actor: userEvent.setup(), start, onPrepare, onSave, onStarted, bridge }
 }
@@ -29,6 +29,26 @@ async function pickOption(actor: ReturnType<typeof userEvent.setup>, selectName:
   await actor.click(screen.getByRole('option', { name: optionName}))
 }
 describe('interview preparation', () => {
+  it('prevents editing the current preparation while the interview timer is active', async () => {
+    setup('resume', 600, false, false, true)
+    expect((await screen.findByRole('button', { name: '编辑环境 默认环境' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByRole('button', { name: '返回工作台' })).toBeTruthy()
+  })
+  it('defaults new preparations to technical and persists general interview selection', async () => {
+    const { actor, onSave } = setup()
+    await screen.findByRole('button', { name: '开始面试' })
+    await actor.click(screen.getByRole('button', { name: '新建面试准备' }))
+    const dialog = await screen.findByRole('dialog', { name: '新建面试准备' })
+    expect((within(dialog).getByRole('radio', { name: /技术面试/ }) as HTMLInputElement).checked).toBe(true)
+    await actor.type(within(dialog).getByLabelText(/环境名称/), '综合面准备')
+    await actor.click(within(dialog).getByRole('radio', { name: /综合面试/ }))
+    await actor.click(within(dialog).getByRole('button', { name: '保存环境' }))
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ interviewType: 'general' })))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(within(screen.getByRole('article', { name: '面试环境 综合面准备' })).getByText('综合面试')).toBeTruthy()
+    await actor.click(screen.getByRole('button', { name: '编辑环境 综合面准备' }))
+    expect((screen.getByRole('radio', { name: /综合面试/ }) as HTMLInputElement).checked).toBe(true)
+  })
   it('requires a resume; assigning one in the dialog unlocks starting', async () => {
     const { actor, start, onPrepare, onSave, onStarted } = setup(null)
     const blocked = await screen.findByRole('button', { name: '开始面试' })

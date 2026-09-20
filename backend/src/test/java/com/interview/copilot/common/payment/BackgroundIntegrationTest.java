@@ -12,6 +12,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * @author Carl Wang
+ * @date 2026-09-20
+ * @description 验证面试准备持久化、隔离及类型冻结
+ */
 class BackgroundIntegrationTest extends PaymentHttpFixture {
     private String uuid() {
         return UUID.randomUUID().toString();
@@ -36,10 +41,66 @@ class BackgroundIntegrationTest extends PaymentHttpFixture {
     private Map<String, Object> environment(String resume) {
         var content = new HashMap<String, Object>();
         content.put("name", "后端面试");
+        content.put("interviewType", "technical");
         content.put("resumeId", resume);
         content.put("targetId", null);
         content.put("referenceIds", List.of());
         return content;
+    }
+
+    @Test
+    void interviewType_requiresKnownValue_andSurvivesLibraryReload() {
+        var initial = library(aliceToken);
+        assertThat(initial.path("environments").get(0).path("interviewType").asText())
+                .isEqualTo("technical");
+        String env = initial.path("activeEnvironmentId").asText();
+        var content = environment(null);
+        for (String invalid : List.of("", "hr", "TECHNICAL")) {
+            content.put("interviewType", invalid);
+            assertThat(call(HttpMethod.POST, "/background/environments/" + env, aliceToken,
+                    saveBody(1, content)).getStatusCode().value()).isEqualTo(400);
+        }
+        content.remove("interviewType");
+        assertThat(call(HttpMethod.POST, "/background/environments/" + env, aliceToken,
+                saveBody(1, content)).getStatusCode().value()).isEqualTo(400);
+        content.put("interviewType", "general");
+        save("environments", env, saveBody(1, content));
+        assertThat(library(aliceToken).path("environments").get(0).path("interviewType").asText())
+                .isEqualTo("general");
+        assertThat(library(bobToken).path("environments").get(0).path("interviewType").asText())
+                .isEqualTo("technical");
+    }
+
+    @Test
+    void interviewType_isFrozenDuringSession_andHistorySurvivesLaterEdits() {
+        long user = jdbc.queryForObject("SELECT id FROM app_users WHERE display_name='alice'", Long.class);
+        jdbc.update("INSERT INTO time_wallets(app_users_id,available_seconds) VALUES(?,3600)", user);
+        String env = library(aliceToken).path("activeEnvironmentId").asText();
+        String resume = uuid();
+        save("resumes", resume, saveBody(0, Map.of("name", "简历", "text", "真实经历")));
+        var content = environment(resume);
+        content.put("interviewType", "general");
+        save("environments", env, saveBody(1, content));
+        var start = Map.of("requestId", uuid(), "environmentId", env);
+        var first = call(HttpMethod.POST, "/interview-sessions/start", aliceToken, start).getBody();
+        var snapshot = first.path("background").path("interviewEnvironment");
+        assertThat(snapshot.path("interviewType").asText()).isEqualTo("general");
+        content.put("interviewType", "technical");
+        assertThat(call(HttpMethod.POST, "/background/environments/" + env, aliceToken,
+                saveBody(2, content)).getStatusCode().value()).isEqualTo(409);
+        assertThat(call(HttpMethod.POST, "/interview-sessions/start", aliceToken, start)
+                .getBody().path("background").path("interviewEnvironment")).isEqualTo(snapshot);
+        var record = Map.of("id", "typed-session", "title", "综合面试", "createdAt", "2026-09-20T10:00:00+08:00",
+                "segments", List.of(), "answers", List.of(), "interviewEnvironment", snapshot);
+        assertThat(call(HttpMethod.POST, "/session-records/typed-session", aliceToken,
+                Map.of("version", 0, "mutationId", uuid(), "record", record)).getStatusCode().value()).isEqualTo(200);
+        String session = first.path("session").path("id").asText();
+        assertThat(call(HttpMethod.POST, "/interview-sessions/" + session + "/end", aliceToken,
+                Map.of()).getStatusCode().value()).isEqualTo(200);
+        save("environments", env, saveBody(2, content));
+        assertThat(call(HttpMethod.GET, "/session-records/typed-session", aliceToken, null)
+                .getBody().path("record").path("interviewEnvironment").path("interviewType").asText()).isEqualTo("general");
+        assertThat(library(aliceToken).path("environments").get(0).path("interviewType").asText()).isEqualTo("technical");
     }
 
     @Test

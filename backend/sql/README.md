@@ -4,6 +4,7 @@ PostgreSQL 15.19 / pgvector 0.8.6。脚本手动按编号执行；后端不使�
 
 | 文件 | 用途 |
 | --- | --- |
+| `23_interview_type.sql` | 面试准备类型及数据库约束；已有准备设为技术面试，历史回答不补造类型 |
 | `22_zpay_api_qr.sql` | ZPAY API 下单客户端 IP、一次性请求标记；停用旧表单地址配置，需管理端明确改为 mapi.php 后启用 |
 | `01_schema.sql` | 账号、令牌、额度与调用记录 |
 | `02_pgvector.sql` | 启用并检查 pgvector 0.8.6 |
@@ -202,3 +203,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON client_downloads, client_download_upload
 
 ### 21_zpay_payments.sql
 独立 ZPAY 渠道：新增商户配置列，订单渠道约束增加 zpay。在 SQL20 之后执行。不会自动启用渠道；后台填写商户资料后保存启用。配置和验收说明见 `deploy/server/zpay.md`。
+
+### 23_interview_type.sql
+在更新后端和桌面端前手动执行。类型存入现有 `interview_environments.content.interviewType` JSON 字段，不新增独立表或重复列。既有准备及仍活动的计时快照设为技术面试；已有会话记录和回答快照保持原样。新版本写入必须明确提供 `technical` 或 `general`，旧桌面端需同步更新。

@@ -34,6 +34,28 @@ afterEach(async () => {
 })
 
 describe('LlmClient', () => {
+  it.each([
+    ['technical', '本场为技术面试', false],
+    ['general', '本场为综合面试', false],
+    ['technical', '本场为技术面试', true],
+    ['general', '本场为综合面试', true],
+  ] as const)('sends %s focus and records the exact input (platform=%s)', async (interviewType, focus, platform) => {
+    const fetcher = vi.fn(async (_url: string | URL | Request, _options?: RequestInit) => Response.json({ choices: [{ message: { content: '我会先说明我的具体贡献。' } }] }))
+    vi.stubGlobal('fetch', fetcher)
+    const settings: Settings = { ...structuredClone(defaultSettings), interviewEnvironment: {
+      id: 'environment', name: '本场面试', interviewType, resumeId: null, resumeName: '', targetId: null, targetName: '', referenceIds: [],
+    } }
+    const events: AppEvent[] = []
+    client = new LlmClient(settings, 'test-key', event => events.push(event), platform)
+    await client.generate(request)
+    const payload = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))
+    expect(payload.messages[0].content).toContain(focus)
+    expect(payload.messages[0].content).toContain('当前问题始终优先')
+    expect(payload.messages[0].content).toContain('不得编造')
+    expect(JSON.parse(payload.messages[1].content).interviewType).toBe(interviewType)
+    const snapshot = events.find(event => event.kind === 'answer-request')
+    expect(snapshot?.kind === 'answer-request' && snapshot.modelInput.messages).toEqual(payload.messages)
+  })
   it('reports platform session replacement without treating custom-provider 401 as logout', async () => {
     const settings = await serve((_req, res) => {
       res.writeHead(401, { 'Content-Type': 'application/json' })
