@@ -4,7 +4,7 @@ import { startRemoteKnowledgeMock } from '../../scripts/mock-remote-knowledge.mj
 /** Real Electron/IPC with synthetic audio, manually controlled ASR and loopback-only model/RAG services. */
 export async function checkQuestionAssembly({ app, page, mock, checked, checkpoint, settingsPatch, screenshot, report }) {
   const saved = await page.evaluate(() => window.copilot.getSettings())
-  const originalBounds = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds())
+  const originalBounds = await app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).getBounds())
   const remote = await startRemoteKnowledgeMock()
   const composer = page.getByRole('textbox', { name: '当前问题', exact: true })
   const assembling = page.getByRole('status').filter({ hasText: /^正在合并问题$/ })
@@ -125,7 +125,7 @@ export async function checkQuestionAssembly({ app, page, mock, checked, checkpoi
       remoteKnowledge: { enabled: true, url: remote.url, agentId: 'synthetic-question-assembly-agent', apiKey: 'sk-question-assembly-synthetic-only' } })
     await page.reload()
     await page.waitForFunction(() => Boolean(window.copilot))
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1100, 760))
+    await app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).setSize(1100, 760))
 
     await checkpoint('joining transcript segments preserves an existing draft and click order without retrieval until one complete submission', async () => {
       await reset()
@@ -270,8 +270,8 @@ export async function checkQuestionAssembly({ app, page, mock, checked, checkpoi
       const question = `${draft}\n${segment}`
       await joined(0, question)
       await inputSize('normal-assembly', true)
-      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(900, 640))
-      await checked.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize())).toEqual([900, 640])
+      await app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).setSize(900, 640))
+      await checked.poll(() => app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).getSize())).toEqual([900, 640])
       await inputSize('small-window-assembly', true)
       await checked(page.getByRole('button', { name: '生成回答', exact: true })).toBeInViewport()
       const smallReading = await page.getByRole('region', { name: '回答与面试信息', exact: true }).evaluate(element => element.clientHeight)
@@ -279,7 +279,7 @@ export async function checkQuestionAssembly({ app, page, mock, checked, checkpoi
       await screenshot('question-assembly-small.png')
       await page.getByRole('button', { name: '紧凑模式', exact: true }).click()
       await checked(page.getByRole('button', { name: '恢复完整窗口', exact: true })).toBeVisible()
-      assert.deepEqual(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize()), [480, 640])
+      assert.deepEqual(await app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).getSize()), [480, 640])
       await checked(composer).toHaveValue(question)
       await inputSize('compact-assembly', true)
       const readingHeight = await page.getByRole('region', { name: '回答与面试信息', exact: true }).evaluate(element => element.clientHeight)
@@ -306,7 +306,7 @@ export async function checkQuestionAssembly({ app, page, mock, checked, checkpoi
         retrieval: saved.retrieval, remoteKnowledge: saved.remoteKnowledge })
       // The synthetic remote credential stays only in the runner's disposable profile and is removed with it.
       await page.getByRole('button', { name: '麦克风', exact: true }).click()
-      await app.evaluate(({ BrowserWindow }, bounds) => BrowserWindow.getAllWindows()[0].setBounds(bounds), originalBounds)
+      await app.evaluate(({ BaseWindow }, bounds) => BaseWindow.getAllWindows().find(window => window.isVisible()).setBounds(bounds), originalBounds)
     } finally { await remote.close() }
   }
 }

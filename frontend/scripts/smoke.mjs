@@ -130,8 +130,8 @@ try {
   await checkpoint('isolated Electron renderer and encrypted settings', async () => {
     report.version = await app.evaluate(({ app }) => app.getVersion())
     assert.deepEqual((await page.evaluate(() => window.copilot.getSettings())).autoAnswer, { enabled: true, pauseMs: 1500 })
-    const security = await app.evaluate(({ BrowserWindow }) => {
-      const preferences = BrowserWindow.getAllWindows()[0].webContents.getLastWebPreferences()
+    const security = await app.evaluate(({ BaseWindow }) => {
+      const preferences = BaseWindow.getAllWindows().find(window => window.isVisible()).webContents.getLastWebPreferences()
       return { nodeIntegration: preferences.nodeIntegration, contextIsolation: preferences.contextIsolation, sandbox: preferences.sandbox }
     })
     assert.equal(security.nodeIntegration, false)
@@ -565,11 +565,11 @@ try {
     await screenshot('history.png')
     await page.getByRole('button', { name: '工作台', exact: true }).click()
     await page.getByRole('button', { name: '紧凑模式', exact: true }).click()
-    const compactBounds = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds())
+    const compactBounds = await app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).getBounds())
     assert.ok(compactBounds.width <= 650)
     await screenshot('compact.png')
     await page.getByRole('button', { name: '恢复完整窗口', exact: true }).click()
-    const expandedBounds = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds())
+    const expandedBounds = await app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).getBounds())
     assert.ok(expandedBounds.width > compactBounds.width)
   })
 

@@ -68,7 +68,7 @@ function paragraphs(prefix, start, count) {
 /** Uses real Electron IPC, HTTP/SSE and user wheel/click actions; never opens audio or a live provider. */
 export async function checkAnswerScroll({ app, page, checked, checkpoint, settingsPatch, screenshot, report }) {
   const saved = await page.evaluate(() => window.copilot.getSettings())
-  const originalBounds = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds())
+  const originalBounds = await app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).getBounds())
   const originallyCompact = await page.getByRole('button', { name: '恢复完整窗口', exact: true }).count() > 0
   const provider = await startHeldAnswers()
   const viewport = page.getByRole('region', { name: '回答与面试信息', exact: true })
@@ -84,8 +84,8 @@ export async function checkAnswerScroll({ app, page, checked, checkpoint, settin
     await checked(page.getByRole('button', { name: '紧凑模式', exact: true })).toBeVisible()
   }
   async function resize(width, height) {
-    await app.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setSize(...size), [width, height])
-    await checked.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize())).toEqual([width, height])
+    await app.evaluate(({ BaseWindow }, size) => BaseWindow.getAllWindows().find(window => window.isVisible()).setSize(...size), [width, height])
+    await checked.poll(() => app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).getSize())).toEqual([width, height])
   }
   async function settledPosition() {
     // Read consecutive animation frames so a real wheel event has settled before taking its anchor.
@@ -136,7 +136,7 @@ export async function checkAnswerScroll({ app, page, checked, checkpoint, settin
     const metrics = await viewport.evaluate(element => ({ width: element.clientWidth, height: element.clientHeight,
       scrollHeight: element.scrollHeight, overflowAnchor: getComputedStyle(element).overflowAnchor }))
     const inputBounds = await composer.boundingBox()
-    const windowSize = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize())
+    const windowSize = await app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).getSize())
     const measured = { label, windowSize, ...metrics, composerHeight: inputBounds?.height }
     if (!compact) {
       const answer = await page.getByRole('region', { name: '回答辅助', exact: true }).boundingBox()
@@ -228,7 +228,7 @@ export async function checkAnswerScroll({ app, page, checked, checkpoint, settin
         await page.getByRole('button', { name: '紧凑模式', exact: true }).click()
         await checked(page.getByRole('button', { name: '恢复完整窗口', exact: true })).toBeVisible()
         // Exercise the actual default compact size; a wider test window could hide a layout regression.
-        const size = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize())
+        const size = await app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).getSize())
         assert.deepEqual(size, [480, 640])
       } else await resize(1100, 760)
       const label = mode === 'normal' ? '普通窗口' : '紧凑窗口'
@@ -312,7 +312,7 @@ export async function checkAnswerScroll({ app, page, checked, checkpoint, settin
       await settingsPatch({ llm: saved.llm, retrieval: saved.retrieval, remoteKnowledge: saved.remoteKnowledge })
       await page.getByRole('button', { name: '新会话', exact: true }).click()
       if (originallyCompact) await page.getByRole('button', { name: '紧凑模式', exact: true }).click()
-      await app.evaluate(({ BrowserWindow }, bounds) => BrowserWindow.getAllWindows()[0].setBounds(bounds), originalBounds)
+      await app.evaluate(({ BaseWindow }, bounds) => BaseWindow.getAllWindows().find(window => window.isVisible()).setBounds(bounds), originalBounds)
     } finally { await provider.close() }
   }
 }

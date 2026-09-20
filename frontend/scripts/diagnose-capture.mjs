@@ -73,7 +73,7 @@ try {
   console.log(JSON.stringify({ stage: 'environment', ...report.environment }))
 
   if (instrumented) {
-    await application.evaluate(({ BrowserWindow, desktopCapturer, session }) => {
+    await application.evaluate(({ BaseWindow, desktopCapturer, session }) => {
       globalThis.__captureDiagnosticEvents = []
       const events = globalThis.__captureDiagnosticEvents
       const record = (event) => {
@@ -81,7 +81,7 @@ try {
         console.log(JSON.stringify({ stage: 'handler-event', ...event }))
       }
       session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
-        const mainFrame = BrowserWindow.getAllWindows()[0]?.webContents.mainFrame
+        const mainFrame = BaseWindow.getAllWindows().find(window => window.isVisible())?.webContents.mainFrame
         record({ kind: 'request', frameMatches: request.frame === mainFrame,
           framePresent: Boolean(request.frame), frameProcessId: request.frame?.processId,
           frameRoutingId: request.frame?.routingId, mainProcessId: mainFrame?.processId,

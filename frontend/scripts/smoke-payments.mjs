@@ -57,7 +57,7 @@ try {
   application = await _electron.launch({ executablePath: electronPath, args: ['.'], cwd: root, env })
   const page = await application.firstWindow()
   page.setDefaultTimeout(10000)
-  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1360, 960))
+  await application.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).setSize(1360, 960))
   await loginForSmoke(page, { llmBaseUrl: baseUrl })
   await page.getByRole('button', { name: '购买时长', exact: true }).first().click()
   await expect(page.getByRole('heading', { name: '支付暂未开放' })).toBeVisible()

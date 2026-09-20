@@ -159,6 +159,7 @@ export interface WalletState {
   session: { id: string; status: 'active' | 'ended'; startedAt: string; expiresAt: string; endedAt: string | null; usedSeconds: number; endReason: string | null } | null
 }
 export type AppEvent =
+  | { kind: 'window-mode'; compact: boolean }
   | { kind: 'session-stopping'; nonce: string }
   | { kind: 'session-ended'; message: string }
   | { kind: 'session-paused'; message: string }
@@ -232,6 +233,8 @@ export interface DesktopBridge {
   cancelAnswer(): Promise<void>
   setAlwaysOnTop(value: boolean): Promise<boolean>
   setCompact(value: boolean): Promise<void>
+  getWindowPreferences(): Promise<import('./window-preferences').WindowPreferences>
+  saveWindowPreferences(value: import('./window-preferences').WindowPreferences): Promise<import('./window-preferences').WindowPreferences>
   getHistoryPage(cursor?: number): Promise<{ records: SessionRecord[]; nextCursor: number | null }>
   getHistoryDetail(id: string): Promise<SessionRecord>
   getHistorySyncStatus(): Promise<string>

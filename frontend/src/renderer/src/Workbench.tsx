@@ -1,3 +1,6 @@
+import CompactAppearance from './components/CompactAppearance'
+import { defaultWindowPreferences, type WindowPreferences } from '../../shared/window-preferences'
+import type { CSSProperties } from 'react'
 import { interviewTypeLabels } from '../../shared/interview-type'
 import { Pill } from './components/ui/pill'
 import PurchasePage from './components/payment/PurchasePage'
@@ -33,7 +36,26 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [compact, setCompact] = useState(false)
   const [pinned, setPinned] = useState(false)
+  const [appearance, setAppearance] = useState(defaultWindowPreferences)
+  const [savingAppearance, setSavingAppearance] = useState(false)
   const [windowError, setWindowError] = useState('')
+  useEffect(() => {
+    let current = true
+    void bridge.getWindowPreferences().then(value => { if (current) setAppearance(value) })
+      .catch(reason => { if (current) setWindowError(errorMessage(reason)) })
+    const unsubscribe = bridge.onEvent(event => { if (event.kind === 'window-mode') setCompact(event.compact) })
+    return () => { current = false; unsubscribe() }
+  }, [bridge])
+  useEffect(() => {
+    document.documentElement.classList.toggle('compact-transparent', compact)
+    return () => document.documentElement.classList.remove('compact-transparent')
+  }, [compact])
+  async function saveAppearance(value: WindowPreferences) {
+    setSavingAppearance(true)
+    try { setAppearance(await bridge.saveWindowPreferences(value)) }
+    catch (reason) { setWindowError(errorMessage(reason)) }
+    finally { setSavingAppearance(false) }
+  }
   const main = useRef<HTMLElement>(null)
   const loggingOut = useRef(false)
   const [leaving, setLeaving] = useState(false)
@@ -85,8 +107,9 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
   const targetLabel = [config.settings.interviewTarget.companyName, config.settings.interviewTarget.roleName].filter(Boolean).join(' · ')
   const environment = config.settings.interviewEnvironment
   /* v30 骨架 §2:白色无缝 chrome(侧栏/顶栏无边框),主内容区是一张 12px 圆角 + 1px 边线的灰蓝画布卡,白卡浮在其上 */
-  return <ErrorBoundary><div className="flex h-dvh min-h-[480px] flex-col overflow-hidden bg-page">
+  return <ErrorBoundary><div className={cn('flex h-dvh min-h-[480px] flex-col overflow-hidden bg-page', compact && 'compact-surface')} style={compact ? { '--compact-opacity': appearance.backgroundOpacity / 100 } as CSSProperties : undefined}>
     <Topbar compact={compact} pinned={pinned} onCompact={() => void handleCompact()} onPin={() => void handlePin()} onSettings={handleSettings} desktop={Boolean(bridge)} loggingOut={leaving} />
+    {compact && <CompactAppearance preferences={appearance} saving={savingAppearance} onChange={value => void saveAppearance(value)} />}
     <div className="flex min-h-0 flex-1" inert={leaving}>{!compact && <Sidebar page={page} onChange={navigate} account={config.settings.platform?.user?.displayName} />}
       <main className="mb-3 mr-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-auto rounded-card border border-border bg-canvas" ref={main}>
         {error && <div className="flex shrink-0 items-center gap-2 border-b border-danger-line bg-danger-subtle px-5 py-2 text-sm text-danger" role="alert"><WarningCircle size={19} aria-hidden="true" /><span className="flex-1 [overflow-wrap:anywhere]">{error}</span><IconButton aria-label="关闭提示" title="关闭提示" onClick={() => { session.clearError(); setWindowError('') }}><X size={17} aria-hidden="true" /></IconButton></div>}

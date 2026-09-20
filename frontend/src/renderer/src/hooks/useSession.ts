@@ -211,6 +211,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
       void bridge?.stageSessionForLogout(event.nonce, recordHasContent(saved) ? saved : null).catch(reason => setError(errorMessage(reason)))
       return
     }
+    if (event.kind === 'window-mode') return
     if (event.kind === 'session-ended' || event.kind === 'session-paused' || event.kind === 'session-restored') return
     if (event.kind === 'wallet-changed') {
       if (event.wallet.session?.status !== 'active') { void stop(); void cancel(); void persist(true).catch(reason => setError(errorMessage(reason))) }

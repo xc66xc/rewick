@@ -1,3 +1,5 @@
+import { DesktopWindows, type DesktopHost } from './services/desktop-windows'
+import { defaultWindowPreferences, windowPreferencesSchema } from '../shared/window-preferences'
 import { randomUUID } from 'node:crypto'
 import { invitationSettingsSchema, invitationSummarySchema } from '../shared/invitation'
 import { DesktopSessionMonitor } from './services/desktop-session-monitor'
@@ -6,8 +8,8 @@ import { PaymentClient } from './services/payment-client'
 import { InterviewTimer } from './services/interview-timer'
 import { AccountWorkspaces } from './services/account-workspace'
 import { platformBaseUrl } from '../shared/defaults'
-import { app, shell, BrowserWindow, Menu, dialog, globalShortcut, ipcMain, safeStorage, session, powerMonitor, systemPreferences, desktopCapturer } from 'electron'
-import type { IpcMainInvokeEvent, Rectangle } from 'electron'
+import { app, shell, BaseWindow, Menu, dialog, globalShortcut, ipcMain, safeStorage, session, powerMonitor, systemPreferences, desktopCapturer } from 'electron'
+import type { IpcMainInvokeEvent } from 'electron'
 import { basename, join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
 import { mkdirSync } from 'node:fs'
@@ -24,7 +26,7 @@ import { applyDesktopDefaults, assertAllowedSettings, hasAdvancedSettings, prese
 import type { PlatformCapability } from './services/service-routing'
 import { InterviewStore } from './services/interview-store'
 import { environmentInputSchema } from './services/interview-validation'
-import { SerialQueue } from './services/storage'
+import { SerialQueue, readJson, writeJsonAtomic } from './services/storage'
 import { sessionToMarkdown } from './services/history-store'
 import { AsrClient } from './services/asr-client'
 import { LlmClient } from './services/llm-client'
@@ -59,13 +61,13 @@ app.setName('Interview Copilot')
 const hasInstanceLock = app.requestSingleInstanceLock()
 if (!hasInstanceLock) app.exit(0)
 let pendingActivation = false
-let window: BrowserWindow | null = null
+let window: DesktopHost | null = null
+let desktopWindows: DesktopWindows | null = null
+let windowPreferences = { ...defaultWindowPreferences }
+const windowPreferencesPath = join(app.getPath('userData'), 'window-preferences.json')
+const windowPreferencesQueue = new SerialQueue()
 let asr: AsrClient | null = null
 let llm: LlmClient | null = null
-let fullBounds: Rectangle | null = null
-let fullMaximized = false
-let fullFullScreen = false
-let compact = false
 let startingAsr = false
 let asrEpoch = 0
 let answerEpoch = 0
@@ -86,7 +88,7 @@ const platform = new PlatformService(authSettings)
 const accounts = new AccountWorkspaces(app.getPath('userData'), secretStorage, () => emit({ kind: 'documents-changed' }), () => authSettings.getConnectionSnapshot(), async token => {
   await accounts.context.exit(() => finishInvalidSession(token, '登录已失效，请重新登录。', true))
 })
-const interviewTimer = new InterviewTimer(wallet => emit({ kind: 'wallet-changed', wallet }), () => disposeWork())
+const interviewTimer = new InterviewTimer(wallet => emit({ kind: 'wallet-changed', wallet }), () => { desktopWindows?.setCompact(false); disposeWork() })
 async function walletConnection() {
   const snapshot = await authSettings.getConnectionSnapshot()
   if (!snapshot.settings.platform?.authenticated || !snapshot.secrets.platformAccessToken) throw new Error('请先登录。')
@@ -590,34 +592,20 @@ function registerHandlers(): void {
     } finally { if (retrievalController === controller) retrievalController = null }
   })
   handle('answer:cancel', () => cancelAnswerWork())
-  handle('window:pin', input => {
-    const value = z.boolean().parse(input)
-    window?.setAlwaysOnTop(value, 'floating')
-    return value
-  })
+  handle('window:pin', input => desktopWindows?.setPinned(z.boolean().parse(input)) ?? false)
   handle('window:compact', input => {
     const value = z.boolean().parse(input)
-    if (!window || value === compact) return
-    compact = value
-    if (value) {
-      // setSize is ignored while maximized/fullscreen: capture the flags, leave those
-      // states first, and re-apply them when returning to the full window.
-      fullBounds = window.getBounds()
-      fullMaximized = window.isMaximized()
-      fullFullScreen = window.isFullScreen()
-      window.setMinimumSize(430, 500)
-      if (fullMaximized) window.unmaximize()
-      if (fullFullScreen) window.setFullScreen(false)
-      window.setSize(480, 640)
-      // setSize keeps the top-left corner; re-center so the compact window lands mid-screen.
-      window.center()
-    } else {
-      window.setMinimumSize(900, 640)
-      if (fullBounds) window.setBounds(fullBounds)
-      if (fullMaximized) window.maximize()
-      if (fullFullScreen) window.setFullScreen(true)
-    }
+    if (value) interviewTimer.assertActive()
+    desktopWindows?.setCompact(value)
   })
+  handle('window:preferences', () => windowPreferences)
+  handle('window:preferences-save', input => windowPreferencesQueue.run(async () => {
+    const value = windowPreferencesSchema.parse(input)
+    await writeJsonAtomic(windowPreferencesPath, value)
+    desktopWindows?.setPreferences(value)
+    windowPreferences = value
+    return value
+  }))
   handle('history:page', cursor => history.page(parseInput(z.number().int().positive().optional(), cursor)))
   handle('history:detail', id => history.detail(String(id)))
   handle('history:status', () => history.status())
@@ -640,22 +628,18 @@ function registerHandlers(): void {
 }
 
 async function createWindow(): Promise<void> {
-  window = new BrowserWindow({
-    width: 1220, height: 820, minWidth: 900, minHeight: 640,
-    // mac 沿用 hiddenInset(红绿灯悬浮左上);Windows 隐藏原生标题栏,改用系统窗口控制按钮悬浮右上(Window Controls Overlay)
-    title: 'Interview Copilot', titleBarStyle: process.platform === 'win32' ? 'hidden' : 'hiddenInset',
-    ...(process.platform === 'win32' ? { titleBarOverlay: { color: '#ffffff', symbolColor: '#2a2a2e', height: 50 } } : {}),
-    trafficLightPosition: { x: 18, y: 20 }, backgroundColor: '#F7F6F3', show: false,
-    // Windows 隐藏顶部菜单栏(按 Alt 可临时呼出),菜单角色快捷键仍有效;无边框窗口下菜单条会破坏顶栏布局,开发版同样隐藏。mac 不变
-    autoHideMenuBar: process.platform === 'win32',
-    webPreferences: { preload: join(directory, '../preload/index.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, devTools: !app.isPackaged, backgroundThrottling: false }
-  })
+  windowPreferences = windowPreferencesSchema.parse(await readJson(windowPreferencesPath, 4096) ?? defaultWindowPreferences)
+  desktopWindows = new DesktopWindows({ preload: join(directory, '../preload/index.cjs'), contextIsolation: true,
+    sandbox: true, nodeIntegration: false, devTools: !app.isPackaged, backgroundThrottling: false }, windowPreferences,
+    (active, compact) => { window = active; emit({ kind: 'window-mode', compact }) },
+    () => { window = null; interviewTimer.dispose(); disposeWork() })
+  window = desktopWindows.full
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', event => event.preventDefault())
-  window.on('closed', () => { interviewTimer.dispose(); disposeWork(); window = null; compact = false; fullBounds = null; fullMaximized = false; fullFullScreen = false })
-  window.once('ready-to-show', () => { window?.show(); if (pendingActivation) { window?.focus(); pendingActivation = false } })
-  if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) await window.loadURL(process.env.ELECTRON_RENDERER_URL)
-  else await window.loadFile(join(directory, '../renderer/index.html'))
+  if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) await window.webContents.loadURL(process.env.ELECTRON_RENDERER_URL)
+  else await window.webContents.loadFile(join(directory, '../renderer/index.html'))
+  window.show()
+  if (pendingActivation) { window.focus(); pendingActivation = false }
 }
 
 app.on('second-instance', () => {
@@ -695,8 +679,8 @@ if (hasInstanceLock) app.whenReady().then(async () => {
   powerMonitor.on('resume', () => { void sessionMonitor.check().catch(() => console.error('无法读取登录状态')) })
   window?.on('focus', () => { void sessionMonitor.check().catch(() => console.error('无法读取登录状态')) })
   globalShortcut.register('CommandOrControl+Shift+Enter', () => emit({ kind: 'shortcut', action: 'answer' }))
-  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) void createWindow() })
+  app.on('activate', () => { if (BaseWindow.getAllWindows().length === 0) void createWindow() })
 }).catch(error => { dialog.showErrorBox('启动失败', error instanceof Error ? error.message : '无法启动应用'); app.quit() })
 
-app.on('before-quit', () => { clearInterval(catalogRefreshTimer); sessionMonitor.dispose(); unsubscribeSessionFault(); interviewTimer.dispose(); disposeWork(); accounts.dispose(); globalShortcut.unregisterAll() })
+app.on('before-quit', () => { desktopWindows?.prepareQuit(); clearInterval(catalogRefreshTimer); sessionMonitor.dispose(); unsubscribeSessionFault(); interviewTimer.dispose(); disposeWork(); accounts.dispose(); globalShortcut.unregisterAll() })
 app.on('window-all-closed', () => app.quit())

@@ -205,10 +205,10 @@ export async function checkInterviewEnvironments(options) {
     assert.deepEqual(environmentA.referenceIds, [referenceA.id])
     assert.deepEqual(environmentB.referenceIds, [referenceB.id])
     assert.deepEqual(emptyEnvironment.referenceIds, [])
-    const bounds = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds())
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(900, 820))
+    const bounds = await app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).getBounds())
+    await app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).setSize(900, 820))
     try { await screenshot('environments-library-900.png') }
-    finally { await app.evaluate(({ BrowserWindow }, bounds) => BrowserWindow.getAllWindows()[0].setBounds(bounds), bounds) }
+    finally { await app.evaluate(({ BaseWindow }, bounds) => BaseWindow.getAllWindows().find(window => window.isVisible()).setBounds(bounds), bounds) }
   })
 
   await checkpoint('entering each environment clears the old draft and sends only its selected resume, JD, and reference candidates', async () => {

@@ -235,17 +235,17 @@ export async function checkRemoteKnowledge(options) {
       await details.locator('summary').click()
     } finally { await page.getByRole('button', { name: '恢复完整窗口', exact: true }).click() }
     report.compactUnifiedContextTested = true
-    const fullBounds = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds())
+    const fullBounds = await app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).getBounds())
     try {
-      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(900, 640))
-      await checked.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getSize())).toEqual([900, 640])
+      await app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).setSize(900, 640))
+      await checked.poll(() => app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).getSize())).toEqual([900, 640])
       const details = page.locator('details[aria-label="面试信息"]')
       await details.locator('summary').click()
       await screenshot('remote-knowledge-normal-small-context.png')
       await assertAnswerScrollable(originalAnswer, '900x640 normal')
       await screenshot('remote-knowledge-normal-small-answer.png')
       await details.locator('summary').click()
-    } finally { await app.evaluate(({ BrowserWindow }, bounds) => BrowserWindow.getAllWindows()[0].setBounds(bounds), fullBounds) }
+    } finally { await app.evaluate(({ BaseWindow }, bounds) => BaseWindow.getAllWindows().find(window => window.isVisible()).setBounds(bounds), fullBounds) }
     report.smallNormalUnifiedContextTested = true
     const card = page.getByRole('article').last()
     await card.getByText('本次检索资料', { exact: true }).click()

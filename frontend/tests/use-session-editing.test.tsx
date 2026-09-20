@@ -97,6 +97,8 @@ function setup(fakeTimers = false) {
     }),
     removeSession: vi.fn(async (id: string) => { records = records.filter(record => record.id !== id) }),
     exportSession: vi.fn(async (_record: SessionRecord) => true),
+    getWindowPreferences: vi.fn(async () => ({ backgroundOpacity: 35, contentProtection: true })),
+    saveWindowPreferences: vi.fn(async value => value),
     onEvent: (listener: (event: AppEvent) => void) => { listeners.add(listener); return () => { listeners.delete(listener) } },
   } satisfies DesktopBridge
   let action: () => void | Promise<void> = () => undefined

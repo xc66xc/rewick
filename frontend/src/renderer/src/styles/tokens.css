@@ -211,3 +211,18 @@
     }
   }
 }
+
+/* One translucent surface avoids stacking alpha; text/controls keep full opacity.
+   Portalled menus and dialogs retain their normal opaque tokens for readability. */
+html.compact-transparent,
+html.compact-transparent body,
+html.compact-transparent #root { background: transparent; }
+.compact-surface {
+  background: rgb(255 255 255 / var(--compact-opacity, 0.35));
+}
+.compact-surface :is(header, main, section, div).bg-page,
+.compact-surface :is(header, main, section, div).bg-canvas,
+.compact-surface :is(header, main, section, div).bg-card,
+.compact-surface :is(header, main, section, div).bg-subtle,
+.compact-surface :is(header, main, section, div).bg-accent-subtle { background-color: transparent; }
+.compact-surface > div > main { margin: 0; border-radius: 0; }

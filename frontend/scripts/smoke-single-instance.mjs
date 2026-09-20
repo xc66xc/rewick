@@ -17,10 +17,10 @@ let second
 try {
   first = await _electron.launch({ executablePath: electronPath, args: ['.'], cwd: root, env })
   await first.firstWindow()
-  await first.evaluate(({ app, BrowserWindow }) => {
+  await first.evaluate(({ app, BaseWindow }) => {
     globalThis.secondInstanceSeen = false
     app.once('second-instance', () => { globalThis.secondInstanceSeen = true })
-    BrowserWindow.getAllWindows()[0].minimize()
+    BaseWindow.getAllWindows()[0].minimize()
   })
   second = spawn(electronPath, ['.'], { cwd: root, env, stdio: 'ignore' })
   const code = await new Promise((resolve, reject) => {
@@ -29,11 +29,11 @@ try {
     second.once('exit', code => { clearTimeout(timeout); resolve(code) })
   })
   assert.equal(code, 0)
-  await expect.poll(() => first.evaluate(({ BrowserWindow }) => ({
+  await expect.poll(() => first.evaluate(({ BaseWindow }) => ({
     notified: globalThis.secondInstanceSeen,
-    count: BrowserWindow.getAllWindows().length,
-    minimized: BrowserWindow.getAllWindows()[0].isMinimized(),
-    visible: BrowserWindow.getAllWindows()[0].isVisible()
+    count: BaseWindow.getAllWindows().length,
+    minimized: BaseWindow.getAllWindows()[0].isMinimized(),
+    visible: BaseWindow.getAllWindows()[0].isVisible()
   }))).toEqual({ notified: true, count: 1, minimized: false, visible: true })
   console.log('PASS: repeated launch exits and restores the existing desktop window')
 } finally {

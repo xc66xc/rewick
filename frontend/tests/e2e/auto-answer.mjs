@@ -192,8 +192,8 @@ export async function checkAutoAnswers({ app, page, mock, checked, checkpoint, s
 
   await checkpoint('editing an unfinished sentence keeps it manual after native and same-field window blur', async () => {
     const connection = await start()
-    await app.evaluate(({ app, BrowserWindow }) => { app.focus({ steal: true }); BrowserWindow.getAllWindows()[0].focus() })
-    await checked.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isFocused())).toBe(true)
+    await app.evaluate(({ app, BaseWindow }) => { app.focus({ steal: true }); BaseWindow.getAllWindows().find(window => window.isVisible()).focus() })
+    await checked.poll(() => app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).isFocused())).toBe(true)
     const baseline = mock.requests.length
     await sentence(connection, 0, '你如何设计容灾', false)
     const editor = page.getByRole('textbox', { name: '转写文字 1', exact: true })
@@ -201,11 +201,11 @@ export async function checkAutoAnswers({ app, page, mock, checked, checkpoint, s
     await editor.fill(edited)
     mock.sendSentence(connection, { sentenceId: 0, text: '你如何设计容灾？', isFinal: true })
     await noNewAnswer(baseline)
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].blur())
-    await checked.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isFocused())).toBe(false)
+    await app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).blur())
+    await checked.poll(() => app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).isFocused())).toBe(false)
     await noNewAnswer(baseline)
     report.nativeWindowBlurDismissalTested = true
-    await app.evaluate(({ app, BrowserWindow }) => { app.focus({ steal: true }); BrowserWindow.getAllWindows()[0].focus() })
+    await app.evaluate(({ app, BaseWindow }) => { app.focus({ steal: true }); BaseWindow.getAllWindows().find(window => window.isVisible()).focus() })
     await sentence(connection, 1, '你如何保证数据库迁移', false)
     const sameEditor = page.getByRole('textbox', { name: '转写文字 2', exact: true })
     await sameEditor.fill('你如何保证数据库迁移的数据一致性？')

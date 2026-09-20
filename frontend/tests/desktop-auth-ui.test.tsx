@@ -39,6 +39,8 @@ function setup(initial = structuredClone(defaultSettings), strict = false, remem
   const bridge = { invitationSettings: vi.fn(async () => ({ enabled: false, rewardSeconds: 0, version: 0 })), invitationMine: vi.fn(), invitationCreateCode: vi.fn(), getRememberedLogin: vi.fn(async () => remembered), getSettings, saveSettings, platformLogin, platformLogout, platformRegister, refreshPlatform, requestEmailCode, requestPasswordResetCode, resetPassword,
     getWallet, startInterview, endInterview, getInterviewLibrary: vi.fn(async () => library), listReferences: vi.fn(async () => []), saveEnvironment: vi.fn(async () => library), activateEnvironment: vi.fn(async () => current),
     getHistory, stopAsr, cancelAnswer, setCompact, setAlwaysOnTop, saveSession: vi.fn(async () => undefined),
+    getWindowPreferences: vi.fn(async () => ({ backgroundOpacity: 35, contentProtection: true })),
+    saveWindowPreferences: vi.fn(async value => value),
     onEvent: (listener: (event: AppEvent) => void) => { listeners.add(listener); return () => { listeners.delete(listener) } },
   } as unknown as DesktopBridge
   const mount = () => render(strict ? <StrictMode><App bridge={bridge} /></StrictMode> : <App bridge={bridge} />)
@@ -123,6 +125,16 @@ describe('desktop account gate', () => {
     expect(stopAsr.mock.invocationCallOrder[0]).toBeLessThan(platformLogout.mock.invocationCallOrder[0])
     expect(cancelAnswer.mock.invocationCallOrder[0]).toBeLessThan(platformLogout.mock.invocationCallOrder[0])
     expect(refreshPlatform).toHaveBeenCalledOnce()
+  })
+  it('restores the full UI when the native compact window closes', async () => {
+    const { mount, user, notify } = setup(account())
+    mount()
+    await user.click(await screen.findByRole('button', { name: '开始面试' }))
+    await user.click(await screen.findByRole('button', { name: '紧凑模式' }))
+    expect(document.documentElement.classList.contains('compact-transparent')).toBe(true)
+    notify({ kind: 'window-mode', compact: false })
+    expect(screen.getByRole('button', { name: '紧凑模式' })).toBeTruthy()
+    expect(document.documentElement.classList.contains('compact-transparent')).toBe(false)
   })
   it.each(['logout', 'expiry'] as const)('resets native compact/pinned state on %s before another account workbench mounts', async outcome => {
     const { mount, user, change, nativeWindow } = setup(account())
