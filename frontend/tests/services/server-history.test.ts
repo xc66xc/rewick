@@ -65,3 +65,15 @@ it('writes newer drafts immediately while an upload is waiting on the network', 
   await vi.waitFor(() => expect(history.status()).toBe('已同步'))
   expect(calls).toBe(2)
 })
+it.each(['TimeoutError', 'AbortError'])('explains detail %s without exposing the transport exception', async name => {
+  vi.stubGlobal('fetch', vi.fn(async () => { throw new DOMException('transport timeout', name) }))
+  const history = new ServerHistory(directory, crypto, auth)
+  await expect(history.detail('one')).rejects.toThrow('会话详情加载超时，请检查网络后重试。服务器中的记录仍然保留。')
+})
+it('handles a timeout after the detail response headers have arrived', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(new ReadableStream({
+    start(controller) { controller.error(new DOMException('body timeout', 'AbortError')) }
+  }))))
+  const history = new ServerHistory(directory, crypto, auth)
+  await expect(history.detail('one')).rejects.toThrow('会话详情加载超时')
+})

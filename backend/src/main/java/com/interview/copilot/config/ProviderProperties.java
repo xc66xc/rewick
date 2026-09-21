@@ -120,7 +120,7 @@ public class ProviderProperties {
         }
 
         public int getMaxOutputTokens() {
-            return Math.clamp(maxOutputTokens, 1, 8192);
+            return Math.clamp(maxOutputTokens, 1, 32768);
         }
 
         public void setMaxOutputTokens(int value) {

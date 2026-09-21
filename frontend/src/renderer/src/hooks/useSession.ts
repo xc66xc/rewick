@@ -1,3 +1,4 @@
+import type { SessionExportOptions } from '../../../shared/types'
 import { useEffect, useRef, useState } from 'react'
 import type { AppEvent, AsrStatus, DesktopBridge, EnvironmentInput, SessionRecord, Settings, SettingsInput } from '../../../shared/types'
 import { resolveInterviewSettings } from '../../../shared/interview-settings'
@@ -343,8 +344,8 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
       await changeEnvironment(async () => resolveInterviewSettings(settingsRef.current, await bridge.saveEnvironment(input)))
     } else { await bridge.saveEnvironment(input) }
   }
-  async function exportRecord(value = recordRef.current) {
-    try { await bridge?.exportSession(snapshotForSave(value)) } catch (reason) { setError(errorMessage(reason)) }
+  async function exportRecord(value = recordRef.current, options: SessionExportOptions = { includeAiAnswers: true, includeTranscript: true, includeInterviewInfo: true }) {
+    try { await bridge?.exportSession(snapshotForSave(value), options) } catch (reason) { setError(errorMessage(reason)) }
   }
   async function removeSession(id: string): Promise<void> {
     if (!bridge) throw new Error('请在桌面应用中删除会话记录。')

@@ -1,3 +1,4 @@
+export interface SessionExportOptions { includeAiAnswers: boolean; includeTranscript: boolean; includeInterviewInfo: boolean }
 import type { InterviewType } from './interview-type'
 import type { PackageCatalog, PaymentOrder, CreatePaymentOrder } from './payment'
 export type ServiceKind = 'llm' | 'asr' | 'knowledge'
@@ -243,7 +244,7 @@ export interface DesktopBridge {
   getHistory(): Promise<SessionRecord[]>
   saveSession(record: SessionRecord, accountScope?: string): Promise<void>
   removeSession(id: string): Promise<void>
-  exportSession(record: SessionRecord): Promise<boolean>
+  exportSession(record: SessionRecord, options: SessionExportOptions): Promise<boolean>
   onEvent(callback: (event: AppEvent) => void): () => void
 }
 declare global { interface Window { copilot?: DesktopBridge } }

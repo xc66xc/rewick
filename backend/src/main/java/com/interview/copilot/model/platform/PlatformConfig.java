@@ -65,7 +65,7 @@ public record PlatformConfig(
             @NotBlank @Pattern(regexp = "[A-Za-z0-9_.-]{1,64}") String providerId,
             @NotBlank @Size(max = 200) String model,
             boolean enabled,
-            @Min(1) @Max(8192) int maxOutputTokens) {}
+            @Min(1) @Max(32768) int maxOutputTokens) {}
 
     public record Embedding(
             boolean enabled,

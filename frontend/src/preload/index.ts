@@ -73,7 +73,7 @@ function createBridge(accountScope?: string): DesktopBridge {
   stageSessionForLogout: (nonce, record) => invoke('session:stage', { nonce, record }),
   saveSession: (record, owner) => invoke('history:save', { record, accountScope: owner ?? accountScope ?? latestScope }),
   removeSession: id => invoke('history:remove', id),
-  exportSession: record => invoke('history:export', record),
+  exportSession: (record, options) => invoke('history:export', { record, options }),
   onEvent: callback => {
     const listener = (_event: Electron.IpcRendererEvent, data: AppEvent): void => callback(data)
     ipcRenderer.on('copilot:event', listener)

@@ -640,13 +640,13 @@ function registerHandlers(): void {
     return history.save({ ...value.record, interviewSessionId: value.record.interviewSessionId ?? interviewTimer.sessionId })
   })
   handle('history:remove', id => history.remove(parseInput(z.string().min(1).max(128), id)))
-  handle('history:export', async record => {
+  handle('history:export', async input => {
     if (!window) return false
-    // Save validates the public record before it can become an exported document.
-    sessionToMarkdown(record as SessionRecord)
+    const { record, options } = parseInput(z.object({ record: z.unknown(), options: z.object({ includeAiAnswers: z.boolean(), includeTranscript: z.boolean(), includeInterviewInfo: z.boolean() }) }), input)
+    const markdown = sessionToMarkdown(record as SessionRecord, options)
     const result = await dialog.showSaveDialog(window, { title: '导出会话', defaultPath: `面试记录-${new Date().toISOString().slice(0, 10)}.md`, filters: [{ name: 'Markdown', extensions: ['md'] }] })
     if (result.canceled || !result.filePath) return false
-    await writeFile(result.filePath, sessionToMarkdown(record as SessionRecord), 'utf8')
+    await writeFile(result.filePath, markdown, 'utf8')
     return true
   })
 }

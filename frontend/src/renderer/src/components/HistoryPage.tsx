@@ -1,11 +1,12 @@
 import { interviewTypeLabels } from '../../../shared/interview-type'
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ClockCounterClockwise, DownloadSimple, Eye, TextAlignLeft, Trash } from '@phosphor-icons/react'
-import type { DesktopBridge, SessionRecord } from '../../../shared/types'
+import type { DesktopBridge, SessionRecord, SessionExportOptions } from '../../../shared/types'
 import AnswerCard from './AnswerCard'
 import SessionContextDetails from './SessionContextDetails'
 import DeleteSessionDialog from './DeleteSessionDialog'
 import { Button, buttonDangerClass } from './ui/button'
+import ExportSessionDialog from './ExportSessionDialog'
 import { Eyebrow } from './ui/pill'
 import { EmptyState } from './ui/empty-state'
 import { cn } from '../lib/cn'
@@ -13,12 +14,13 @@ import { textButtonClass } from '../lib/form'
 
 interface HistoryPageProps {
   bridge?: DesktopBridge; records: SessionRecord[]; activeSessionId: string; activeSessionLocked: boolean
-  onExport: (record: SessionRecord) => Promise<void>; onDelete: (id: string) => Promise<void>
+  onExport: (record: SessionRecord, options: SessionExportOptions) => Promise<void>; onDelete: (id: string) => Promise<void>
 }
 function formatDate(value: string) { return new Date(value).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) }
 export default function HistoryPage({ bridge, records: initialRecords, activeSessionId, activeSessionLocked, onExport, onDelete }: HistoryPageProps) {
   const [records, setRecords] = useState(initialRecords)
   const [selected, setSelected] = useState<SessionRecord | null>(null)
+  const [exporting, setExporting] = useState(false)
   const [loading, setLoading] = useState(false)
   const [cursors, setCursors] = useState<(number | undefined)[]>([undefined])
   const [nextCursor, setNextCursor] = useState<number | null>(null)
@@ -58,7 +60,7 @@ export default function HistoryPage({ bridge, records: initialRecords, activeSes
     {bridge && !selected && <div className="mb-4 flex items-center gap-3"><Button disabled={loading} onClick={() => void loadPage(cursor)}>刷新</Button><Button disabled={loading || cursors.length === 1} onClick={() => setCursors(values => values.slice(0, -1))}>上一页</Button><Button disabled={loading || nextCursor === null} onClick={() => { if (nextCursor !== null) setCursors(values => [...values, nextCursor]) }}>下一页</Button>{loading && <span role="status">加载中…</span>}</div>}
     {notice && <p className="mb-4 text-xs text-success [overflow-wrap:anywhere]" role="status">{notice}</p>}
     {selected ? <div className="rounded-card border border-border bg-card p-6"><div className="mb-6 flex items-center justify-between gap-4"><button className={textButtonClass} onClick={() => setSelected(null)}><ArrowLeft size={17} />返回记录</button>
-      <div className="flex flex-wrap items-center justify-end gap-3"><Button onClick={() => void onExport(selected)}><DownloadSimple size={17} aria-hidden="true" />导出 Markdown</Button>
+      <div className="flex flex-wrap items-center justify-end gap-3"><Button onClick={() => setExporting(true)}><DownloadSimple size={17} aria-hidden="true" />导出 Markdown</Button>
         <Button variant="default" size="sm" className={cn(buttonDangerClass, 'text-danger')} disabled={locked(selected.id)} title={locked(selected.id) ? lockedHint : undefined} onClick={() => handleDeleteRequest(selected)}><Trash aria-hidden="true" />删除会话</Button></div></div>
       <h2 className="mb-2 text-xl">{selected.title}</h2><p className="mb-5 text-xs text-text-muted">{formatDate(selected.createdAt)} · {selected.answers.length} 个回答</p>
       <SessionContextDetails record={selected} />
@@ -84,6 +86,7 @@ export default function HistoryPage({ bridge, records: initialRecords, activeSes
         </div> })}
       </div>
         : <EmptyState icon={<ClockCounterClockwise weight="duotone" />} title="你的第一场会话，即将开始" description="结束转写或完成回答后，会话会自动保存在这里。" className="min-h-[400px] justify-center rounded-card border border-dashed border-border-strong" />}
+    {exporting && selected && <ExportSessionDialog onClose={() => setExporting(false)} onExport={options => { setExporting(false); void onExport(selected, options) }} />}
     {pendingDelete && <DeleteSessionDialog record={pendingDelete} isCurrent={pendingDelete.id === activeSessionId} locked={locked(pendingDelete.id)} onDelete={onDelete} onClose={() => setPendingDelete(null)} onDeleted={handleDeleted} />}
   </section>
 }

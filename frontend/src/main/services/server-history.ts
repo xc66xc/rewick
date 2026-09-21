@@ -25,12 +25,12 @@ export class ServerHistory {
   start() { if (!this.timer) this.timer = setInterval(() => { void this.flush().catch(() => undefined) }, 15000); void this.flush().catch(() => undefined) }
   dispose() { if (this.timer) clearInterval(this.timer); this.timer = undefined }
   status() { return this.state }
-  private async request(path: string, body?: unknown): Promise<unknown> {
+  private async request(path: string, body?: unknown, timeoutMs = 15000): Promise<unknown> {
     const snapshot = await this.auth()
     if (!snapshot.settings.platform?.authenticated) throw new Error('请先登录。')
     assertPlatformTransport(snapshot.settings.platform.baseUrl)
     const response = await fetch(`${snapshot.settings.platform.baseUrl}/api/v1/session-records${path}`, {
-      method: body === undefined ? 'GET' : 'POST', redirect: 'error', signal: AbortSignal.timeout(15000),
+      method: body === undefined ? 'GET' : 'POST', redirect: 'error', signal: AbortSignal.timeout(timeoutMs),
       headers: { Authorization: `Bearer ${snapshot.secrets.platformAccessToken}`, 'Content-Type': 'application/json' },
       ...(body === undefined ? {} : { body: JSON.stringify(body) })
     })
@@ -61,7 +61,16 @@ export class ServerHistory {
     return z.object({ records: z.array(summarySchema), nextCursor: z.number().nullable() }).parse(await this.request(cursor ? `?cursor=${cursor}` : ''))
   }
   async list(): Promise<SessionRecord[]> { return (await this.page()).records }
-  async detail(id: string): Promise<SessionRecord> { return responseSchema.parse(await this.request(`/${encodeURIComponent(id)}`)).record }
+  async detail(id: string): Promise<SessionRecord> {
+    try {
+      return responseSchema.parse(await this.request(`/${encodeURIComponent(id)}`, undefined, 60000)).record
+    } catch (error) {
+      if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+        throw new Error('会话详情加载超时，请检查网络后重试。服务器中的记录仍然保留。')
+      }
+      throw error
+    }
+  }
   async save(record: SessionRecord): Promise<void> {
     await this.saveDraft(record)
     void this.flush().catch(() => undefined)

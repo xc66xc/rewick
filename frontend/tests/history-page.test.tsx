@@ -130,3 +130,23 @@ describe('server history', () => {
     expect(getHistoryPage).toHaveBeenLastCalledWith(123)
   })
 })
+
+it('selects export sections in a dialog and cancels without exporting', async () => {
+  const onExport = vi.fn(async () => undefined)
+  const user = userEvent.setup()
+  render(<HistoryPage records={initialRecords} activeSessionId="current" activeSessionLocked={false} onDelete={vi.fn()} onExport={onExport} />)
+  await user.click(screen.getByRole('button', { name: '查看详情：上一场面试' }))
+  await user.click(screen.getByRole('button', { name: '导出 Markdown' }))
+  const dialog = screen.getByRole('dialog', { name: '导出 Markdown' })
+  for (const label of ['AI回答', '转写', '面试信息']) {
+    const checkbox = within(dialog).getByRole('checkbox', { name: label }) as HTMLInputElement
+    expect(checkbox.checked).toBe(true)
+    await user.click(checkbox)
+  }
+  expect(onExport).not.toHaveBeenCalled()
+  await user.click(within(dialog).getByRole('button', { name: '确认导出' }))
+  expect(onExport).toHaveBeenLastCalledWith(initialRecords[1], { includeAiAnswers: false, includeTranscript: false, includeInterviewInfo: false })
+  await user.click(screen.getByRole('button', { name: '导出 Markdown' }))
+  await user.click(screen.getByRole('button', { name: '取消' }))
+  expect(onExport).toHaveBeenCalledTimes(1)
+})
