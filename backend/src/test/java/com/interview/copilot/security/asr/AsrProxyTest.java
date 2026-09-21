@@ -346,8 +346,35 @@ public class AsrProxyTest {
                 .bindNow();
     }
 
+    @Test
+    void realtime_sourceCaptionsAndFinish_useTextAudioProtocol() throws Exception {
+        settings.getAsr().setModel(com.interview.copilot.model.asr.LiveTranslateSession.MODEL);
+        settings.getAsr().setUrl("ws://127.0.0.1:" + server.port() + "/api-ws/v1/realtime");
+        proxy.handleTextMessage(session, new TextMessage(run(16000)));
+        assertThat(next()).contains("task-started");
+        assertThat(next()).contains("caption", "sentence_end");
+        proxy.handleBinaryMessage(session, new BinaryMessage(new byte[3200]));
+        proxy.handleTextMessage(session, new TextMessage(finish()));
+        assertThat(next()).contains("task-finished");
+        assertThat(audioBytes.get()).isEqualTo(3200);
+        verify(lease).complete();
+    }
+
     private void reply(String text, Sinks.Many<String> replies) {
         JsonNode request = json.parse(text);
+        if (request.has("type")) {
+            switch (request.path("type").asText()) {
+                case "session.update" -> {
+                    replies.tryEmitNext("{\"type\":\"session.created\"}");
+                    replies.tryEmitNext("{\"type\":\"session.updated\"}");
+                    replies.tryEmitNext("{\"type\":\"conversation.item.input_audio_transcription.completed\",\"item_id\":\"one\",\"transcript\":\"caption\"}");
+                }
+                case "input_audio_buffer.append" -> audioBytes.addAndGet(java.util.Base64.getDecoder().decode(request.path("audio").asText()).length);
+                case "session.finish" -> replies.tryEmitNext("{\"type\":\"session.finished\"}");
+                default -> throw new AssertionError("Unexpected event");
+            }
+            return;
+        }
         String id = request.path("header").path("task_id").asText();
         if ("run-task".equals(request.path("header").path("action").asText())) {
             upstreamRequest.set(request);

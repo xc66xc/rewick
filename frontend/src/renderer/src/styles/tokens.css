@@ -259,7 +259,6 @@ html.compact-transparent #root { background: transparent; }
   --compact-question-fill: rgb(188 213 255 / calc(var(--compact-opacity, 0.2) * 0.85));
   --compact-reply-fill: rgb(255 255 255 / var(--compact-opacity, 0.2));
 }
-.compact-chat__heading { margin: 0; padding: 10px 18px; font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--color-border); }
 .compact-answer { padding: 18px 16px 10px; }
 .compact-answer__question { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; margin-bottom: 18px; }
 .compact-answer__question-bubble { max-width: 88%; margin: 0; padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: var(--compact-question-fill); font-size: 17px; line-height: 1.6; font-weight: 500; text-align: left; }

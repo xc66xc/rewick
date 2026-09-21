@@ -181,7 +181,7 @@ export async function checkQuestionAssembly({ app, page, mock, checked, checkpoi
       const before = counts()
       const question = '你如何设计数据库的索引？'
       await sentence(connection, 0, question)
-      await checked(page.getByRole('status').filter({ hasText: /^问题已定稿，等待停顿$/ })).toBeVisible()
+      await checked(page.getByRole('status').filter({ hasText: /^转写已定稿，等待停顿$/ })).toBeVisible()
       // Let most of the real silence window elapse, then join before its scheduled submission.
       await new Promise(resolve => setTimeout(resolve, 900))
       await joined(0, question)

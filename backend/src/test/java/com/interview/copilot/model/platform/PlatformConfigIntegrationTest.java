@@ -1,6 +1,7 @@
 package com.interview.copilot.model.platform;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.github.dockerjava.api.command.InspectContainerResponse;
 import com.interview.copilot.common.platform.PlatformConfigFixture;
@@ -29,10 +30,16 @@ import org.testcontainers.utility.MountableFile;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 
+/**
+ * @author Carl Wang
+ * @date 2026-09-21
+ * @description 验证平台服务发布与桌面默认服务切换的事务一致性。
+ */
 @Tag("integration")
 @Testcontainers
 @org.springframework.test.annotation.DirtiesContext(
@@ -63,6 +70,7 @@ public class PlatformConfigIntegrationTest {
 
     @BeforeEach
     void reset() {
+        jdbc.update("UPDATE desktop_settings SET version=0,llm_model_id='',asr_service_id='',retrieval_mode='local',knowledge_service_id='' WHERE id=1");
         jdbc.execute(
                 "TRUNCATE audit_events, auth_tokens, usage_events, app_users RESTART IDENTITY"
                         + " CASCADE");
@@ -115,6 +123,64 @@ public class PlatformConfigIntegrationTest {
                 .isEqualTo(1L);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_events", Integer.class))
                 .isEqualTo(1);
+    }
+
+    @Test
+    void publish_replacingDefaultAsr_updatesBothVersionsAtomically() {
+        prepareDefaultAsr();
+        service.publish(1, asrConfig(1, "new-asr", true));
+        assertThat(service.get().asr().providerId()).isEqualTo("new-asr");
+        assertThat(mapper.desktopDefaults().asrServiceId()).isEqualTo("new-asr");
+        assertThat(mapper.desktopDefaults().version()).isEqualTo(1);
+        assertThat(service.get().version()).isEqualTo(2);
+    }
+
+    @Test
+    void publish_disablingDefaultAsrWithoutReplacement_rejectsAndKeepsDefaults() {
+        prepareDefaultAsr();
+        assertThatThrownBy(() -> service.publish(1, asrConfig(1, "old-asr", false)))
+                .isInstanceOf(ApiException.class).extracting("code")
+                .isEqualTo("DESKTOP_DEFAULT_UNAVAILABLE");
+        assertThat(mapper.desktopDefaults().asrServiceId()).isEqualTo("old-asr");
+        assertThat(service.get().version()).isEqualTo(1);
+    }
+
+    @Test
+    void publish_auditFails_rollsBackBothConfigurationAndDefault() {
+        prepareDefaultAsr();
+        jdbc.execute("ALTER TABLE audit_events ADD CONSTRAINT reject_switch_test CHECK (action <> 'desktop.defaults.update')");
+        try {
+            assertThatThrownBy(() -> service.publish(1, asrConfig(1, "new-asr", true)))
+                    .isInstanceOf(RuntimeException.class);
+            assertThat(service.get().asr().providerId()).isEqualTo("old-asr");
+            assertThat(service.get().version()).isEqualTo(1);
+            assertThat(mapper.desktopDefaults().asrServiceId()).isEqualTo("old-asr");
+            assertThat(mapper.desktopDefaults().version()).isZero();
+        } finally {
+            jdbc.execute("ALTER TABLE audit_events DROP CONSTRAINT reject_switch_test");
+        }
+    }
+
+    @Test
+    void publish_noExplicitDefault_doesNotAssignOneDuringReplacement() {
+        service.publish(1, asrConfig(0, "old-asr", true));
+        service.publish(1, asrConfig(1, "new-asr", true));
+        assertThat(mapper.desktopDefaults().asrServiceId()).isEmpty();
+        assertThat(mapper.desktopDefaults().version()).isZero();
+    }
+
+    private void prepareDefaultAsr() {
+        service.publish(1, asrConfig(0, "old-asr", true));
+        jdbc.update("UPDATE desktop_settings SET asr_service_id='old-asr' WHERE id=1");
+    }
+
+    private PlatformConfig asrConfig(long version, String id, boolean enabled) {
+        PlatformConfig base = PlatformConfigFixture.config(version, "fixture-key");
+        var providers = new ArrayList<>(base.providers());
+        providers.add(new PlatformConfig.Provider(id, id, "asr",
+                "wss://example.test/asr", enabled, false, "fixture-asr-key"));
+        return new PlatformConfig(version, providers, base.models(), base.defaultModelId(),
+                new PlatformConfig.Asr(enabled, id, "paraformer-realtime-v1"), base.knowledge());
     }
 
     private Callable<Boolean> publishAfter(CountDownLatch start, String key) {

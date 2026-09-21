@@ -26,6 +26,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * @author Carl Wang
+ * @date 2026-09-21
+ * @description 校验语音协议配置并验证实时语音服务的完整生命周期。
+ */
 public class AsrProviderProbeTest {
     private final ProviderJson json = new ProviderJson(new ObjectMapper());
     private final AsrProviderProbe probe = new AsrProviderProbe(json);
@@ -80,6 +85,30 @@ public class AsrProviderProbeTest {
         assertThat(requests).hasSize(1);
     }
 
+    @Test
+    void test_realtime_sendsBase64AudioAndWaitsForFinish() {
+        server = server(false);
+        ProviderProperties.Asr endpoint = realtimeEndpoint();
+        probe.test(endpoint);
+        assertThat(requests).hasSize(3);
+        assertThat(requests.getFirst().path("type").asText()).isEqualTo("session.update");
+        assertThat(requests.getLast().path("type").asText()).isEqualTo("session.finish");
+        assertThat(audioBytes.get()).isEqualTo(16000);
+    }
+
+    @Test
+    void test_realtimeError_doesNotTreatHandshakeAsSuccess() {
+        server = server(true);
+        assertThatThrownBy(() -> probe.test(realtimeEndpoint())).isInstanceOf(ApiException.class);
+    }
+
+    private ProviderProperties.Asr realtimeEndpoint() {
+        ProviderProperties.Asr endpoint = endpoint();
+        endpoint.setModel(com.interview.copilot.model.asr.LiveTranslateSession.MODEL);
+        endpoint.setUrl("ws://127.0.0.1:" + server.port() + "/api-ws/v1/realtime");
+        return endpoint;
+    }
+
     private ProviderProperties.Asr endpoint() {
         ProviderProperties.Asr endpoint = new ProviderProperties.Asr();
         endpoint.setUrl("ws://127.0.0.1:" + server.port() + "/asr?mode=manual");
@@ -106,7 +135,7 @@ public class AsrProviderProbeTest {
                                                                                         .countDown())
                                                                 .subscribe());
                                         return output.sendString(
-                                                        input.receiveFrames()
+                                                        input.aggregateFrames().receiveFrames()
                                                                 .map(
                                                                         frame -> {
                                                                             if (frame
@@ -139,6 +168,18 @@ public class AsrProviderProbeTest {
     private String reply(String text, boolean failTask) {
         JsonNode request = json.parse(text);
         requests.add(request);
+        if (request.has("type")) {
+            if (failTask) return "{\"type\":\"error\",\"error\":{\"code\":\"InvalidApiKey\"}}";
+            return switch (request.path("type").asText()) {
+                case "session.update" -> "{\"type\":\"session.updated\"}";
+                case "input_audio_buffer.append" -> {
+                    audioBytes.addAndGet(java.util.Base64.getDecoder().decode(request.path("audio").asText()).length);
+                    yield "";
+                }
+                case "session.finish" -> "{\"type\":\"session.finished\"}";
+                default -> throw new AssertionError("Unexpected event");
+            };
+        }
         String action = request.path("header").path("action").asText();
         boolean missingAudio = action.equals("finish-task") && audioBytes.get() == 0;
         String event =

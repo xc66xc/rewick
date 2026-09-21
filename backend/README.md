@@ -171,3 +171,18 @@ ASR 连接测试会等待 `task-started`，发送半秒合成静音 PCM（16 kHz
 `/api/v1/background` 管理登录用户的简历、岗位 JD、环境与默认选择。正文和关联存 PostgreSQL，保存使用 `version` 和 `mutationId`；跨用户引用、覆盖旧版本、删除被引用资料均被拒绝。列表只携带默认环境所需正文，其他正文按需查询。
 
 `POST /api/v1/interview-sessions/start` 现在需要 `requestId` 和 `environmentId`。开始前验证非空简历、资料归属与就绪状态，随后在同一事务创建计时会话并保存背景快照，返回 `background`。重复请求返回原会话及原快照。升级执行 `sql/14_server_background.sql` 并更新桌面端；不导入旧桌面背景、不存原始简历文件、不向量化简历。
+
+### Qwen3.8 LiveTranslate 原文转写
+
+平台语音服务支持 `qwen3.8-livetranslate-flash-realtime`。该模型使用 Realtime
+接口，管理端填写 `wss://<服务主机>/api-ws/v1/realtime`（不带 query）；模型名由
+后端作为查询参数发送。原 Paraformer 的 `/api-ws/v1/inference` 地址不能用于该模型，
+保存时会提示错误，不自动修改地址。更换地址后需重新填写 API Key。
+
+后端将 16kHz PCM16 编码为 Base64 发送，接收原文识别增量与最终字幕，忽略翻译输出。
+仅请求文本输出；这仍是供应商的翻译模型调用，不代表关闭了上游翻译计费。
+“测试连接”会发送半秒合成静音并等待会话结束；它验证协议和权限，不验证真实语音准确率。
+桌面平台转写无需更改协议或重新打包；自定义 Key 直连暂未增加此模型适配。
+
+协议参考：https://help.aliyun.com/zh/model-studio/live-translator-client-events
+与 https://help.aliyun.com/zh/model-studio/live-translator-server-events 。

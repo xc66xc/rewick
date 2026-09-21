@@ -14,6 +14,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * @author Carl Wang
+ * @date 2026-09-21
+ * @description 校验语音协议配置并验证实时语音服务的完整生命周期。
+ */
 @Component
 public final class PlatformConfigValidator {
     private final Validator validator;
@@ -119,6 +124,9 @@ public final class PlatformConfigValidator {
             return;
         }
         PlatformConfig.Provider provider = reference(providers, providerId, kind);
+        if (enabled && "asr".equals(kind)) {
+            com.interview.copilot.model.asr.LiveTranslateSession.endpoint(provider.url(), model);
+        }
         if (enabled && (!provider.enabled() || model.isBlank())) {
             throw PlatformConfigErrors.invalid("启用服务前请填写模型或知识库标识，并启用对应提供商。");
         }

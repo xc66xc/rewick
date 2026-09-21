@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { ComponentProps } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import AnswerPanel from '../src/renderer/src/components/AnswerPanel'
 import { defaultSettings } from '../src/shared/defaults'
@@ -31,17 +31,19 @@ function setup(answers: Answer[]) {
   return { viewport, update, user: userEvent.setup() }
 }
 
-describe('reading answers without automatic scrolling', () => {
+describe('answer scrolling', () => {
   it('keeps both chat turns and the reading position while the compact reply streams', async () => {
     const first = answer('one', '第一轮已完成。', 'complete')
     const next = answer('two', '第二轮正在输出。')
     const { viewport, update, user } = setup([first])
     update([first, next], true)
-    expect(screen.getByRole('heading', { name: '面试对话' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: '面试问题 one' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: '面试问题 two' })).toBeTruthy()
     expect(screen.getByText('第一轮已完成。')).toBeTruthy()
+    Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 1200 })
+    Object.defineProperty(viewport, 'clientHeight', { configurable: true, value: 400 })
     viewport.scrollTop = 80
+    fireEvent.scroll(viewport)
     update([first, { ...next, text: '第二轮正在输出。继续补充。' }], true)
     expect(viewport.scrollTop).toBe(80)
     expect(screen.getByRole('button', { name: '停止生成' })).toBeTruthy()
@@ -51,6 +53,27 @@ describe('reading answers without automatic scrolling', () => {
     await user.click(screen.getAllByRole('button', { name: '复制回答' })[0])
     expect(screen.getByRole('button', { name: '已复制回答' })).toBeTruthy()
   })
+  it('follows compact streaming, pauses on manual scroll and resumes with latest answer', async () => {
+    const first = answer('one', '正在生成。')
+    const { viewport, update, user } = setup([first])
+    Object.defineProperty(viewport, 'clientHeight', { configurable: true, value: 400 })
+    Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 1000 })
+    update([first], true)
+    expect(viewport.scrollTop).toBe(600)
+    Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 1400 })
+    update([{ ...first, text: '正在生成。新内容。' }], true)
+    expect(viewport.scrollTop).toBe(1000)
+    viewport.scrollTop = 200
+    fireEvent.scroll(viewport)
+    update([{ ...first, text: '继续生成。' }], true)
+    expect(viewport.scrollTop).toBe(200)
+    await user.click(screen.getByRole('button', { name: '查看最新回答' }))
+    expect(viewport.scrollTop).toBe(1000)
+    Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 1800 })
+    update([{ ...first, text: '最后一段。', status: 'complete' }], true)
+    expect(viewport.scrollTop).toBe(1400)
+  })
+
   it('keeps the reading position as a streaming answer grows, even when initially at the bottom', () => {
     const { viewport, update } = setup([answer('one', '第一段回答。')])
     Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 1000 })
@@ -66,7 +89,7 @@ describe('reading answers without automatic scrolling', () => {
     expect(viewport.scrollTop).toBe(120)
   })
 
-  it('preserves earlier-answer reading when a new answer arrives or compact mode changes', () => {
+  it('preserves normal reading and follows the latest answer when entering compact mode', () => {
     const first = answer('one', '用户正在阅读的旧答案。', 'complete')
     const { viewport, update } = setup([first])
     Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 2000 })
@@ -76,7 +99,7 @@ describe('reading answers without automatic scrolling', () => {
     update(next)
     expect(viewport.scrollTop).toBe(180)
     update(next, true)
-    expect(viewport.scrollTop).toBe(180)
+    expect(viewport.scrollTop).toBe(2000)
   })
 
   it('moves to the latest answer start only when requested and keeps that position during later output', async () => {

@@ -309,59 +309,23 @@ describe('automatic answers after a finished interviewer question', () => {
     expect(answer.mock.calls[0][0].transcript).not.toContain('不应进入本题上下文')
   })
 
-  it.each([
-    '如何保证缓存一致性', '为什么选择 Kafka', '线程池有哪些关键参数', '你是否使用过 PostgreSQL',
-    '请介绍一下你自己', '讲讲你的项目', '解释一下消息重复投递', '设计一个秒杀系统',
-    '你觉得这个方案怎么样', 'Redis 和 Memcached 有什么区别', '你用过 Redis 吗', '你好，请介绍一下自己',
-    'What is a deadlock', 'How would you design a cache', 'Can you explain the tradeoffs',
-    'Please describe your last project', 'Walk me through the request lifecycle', 'Design a distributed queue',
-    '给定一个数组，如何找出重复元素', '缓存雪崩？',
-    '做个简单自我介绍吧', '所以说这个项目你担任了什么角色，然后难点有哪些', '你在项目里担任了什么角色',
-    '可以介绍一下你自己', '能讲讲你的项目吗', '这个方案的延迟是多少', '还有没有别的方案',
-    '这是怎么实现的', '你能不能讲一下项目', '这个操作是不是线程安全的',
-    '先简单自介介绍一下自己。', '先简单介绍一下自己', '先做个自我介绍', '嗯那个先简单介绍下你自己',
-  ])('recognizes a question or interview request: %s', text => {
+  it.each(['你好', '我们使用 Redis 缓存热点数据', '线程池这一块结合项目展开一下', 'Can you hear me?', 'Design patterns are useful'])('answers any non-empty finalized transcript without question classification: %s', text => {
     const { receive, answer } = setup()
     receive(segment('one', text))
-    vi.advanceTimersByTime(1500)
-    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: text, transcript: text })
-  })
-
-  it.each([
-    '你好', '您好！', '谢谢你', '好的', 'Hello?', 'Good morning', 'Can you hear me?',
-    '你能听到我的声音吗？', '我们使用 Redis 缓存热点数据', '系统已经上线',
-    '我知道如何设计缓存', '我们解释了为什么使用缓存', '设计模式很重要',
-    'I know how Redis works', 'This explains why we use a cache', 'Design patterns are useful', 'You can use a cache',
-    '我负责设计订单系统', '我们讨论了如何优化',
-    '我先简单介绍一下自己', '接下来我介绍项目',
-    '你介绍了项目背景', '你解释了缓存策略',
-  ])('ignores greetings and ordinary statements: %s', text => {
-    const { receive, answer, onState } = setup()
-    receive(segment('one', text))
-    vi.advanceTimersByTime(1500)
-    expect(answer).not.toHaveBeenCalled()
-    expect(onState).toHaveBeenLastCalledWith('skipped')
-  })
-
-  it('keeps the skipped explanation until a new spoken request arrives and then resumes automatic answers', () => {
-    const { coordinator, receive, answer, onState } = setup()
-    receive(segment('statement', '我先简单介绍一下自己'))
-    vi.advanceTimersByTime(1500)
-    expect(answer).not.toHaveBeenCalled()
-    expect(onState).toHaveBeenLastCalledWith('skipped')
-    coordinator.refresh()
-    vi.advanceTimersByTime(5000)
-    expect(onState).toHaveBeenLastCalledWith('skipped')
-
-    const question = '先简单自介介绍一下自己。'
-    receive(segment('request', question, false))
-    expect(onState).toHaveBeenLastCalledWith('finalizing')
-    receive(segment('request', question))
-    expect(onState).toHaveBeenLastCalledWith('waiting')
     vi.advanceTimersByTime(1499)
     expect(answer).not.toHaveBeenCalled()
     vi.advanceTimersByTime(1)
-    expect(answer).toHaveBeenCalledExactlyOnceWith({ question, transcript: `我先简单介绍一下自己\n${question}` })
+    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: text, transcript: text })
+  })
+
+  it('ignores an empty batch and continues with subsequent speech', () => {
+    const { receive, answer, onState } = setup()
+    receive(segment('blank', '  \n  '))
+    vi.advanceTimersByTime(1500)
+    expect(answer).not.toHaveBeenCalled()
     expect(onState).toHaveBeenLastCalledWith('listening')
+    receive(segment('next', '接下来讲一下项目背景'))
+    vi.advanceTimersByTime(1500)
+    expect(answer).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,9 +1,10 @@
-import { useRef } from 'react'
+import { useCompactAnswerScroll } from '../hooks/useCompactAnswerScroll'
 import { ArrowDown, ChatTeardropText, Sparkle } from '@phosphor-icons/react'
 import type { Settings } from '../../../shared/types'
 import { answerModelLabel } from '../hooks/serviceChoices'
 import type { SessionController } from '../hooks/useSession'
 import AnswerCard from './AnswerCard'
+import CompactTranscript from './CompactTranscript'
 import SessionContextDetails from './SessionContextDetails'
 import QuestionComposer, { type QuestionComposerController } from './QuestionComposer'
 import { Button } from './ui/button'
@@ -12,9 +13,10 @@ import { cn } from '../lib/cn'
 
 interface AnswerPanelProps { session: QuestionComposerController & Pick<SessionController, 'record'>; settings: Settings; onSettings: () => void; onContext: () => void; compact?: boolean }
 export default function AnswerPanel({ session, settings, compact = false }: AnswerPanelProps) {
-  const viewport = useRef<HTMLDivElement>(null)
+  const { viewport, handleScroll, followLatest } = useCompactAnswerScroll(compact, session.record.answers)
   const model = answerModelLabel(settings)
   function handleLatestAnswer() {
+    if (compact) { followLatest(); return }
     const scroll = viewport.current
     const latest = scroll?.querySelectorAll<HTMLElement>(':scope > article').item(session.record.answers.length - 1)
     if (scroll && latest) scroll.scrollTop += latest.getBoundingClientRect().top - scroll.getBoundingClientRect().top
@@ -26,8 +28,8 @@ export default function AnswerPanel({ session, settings, compact = false }: Answ
         {/* v30 answer-model(纯展示版):Sparkle + mono 模型名,完整显示不截断,不可点击 */}
         <span className="flex shrink-0 items-center gap-1.5 text-[11.5px] font-medium text-text-secondary"><Sparkle size={13} aria-hidden="true" className="shrink-0" /><span className="whitespace-nowrap font-mono text-[10.5px]">{model || '待配置模型'}</span></span>
       </div></header>}
-    {compact && <h2 className="compact-chat__heading">面试对话</h2>}
-    <div className="min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]" ref={viewport} role="region" aria-label="回答与面试信息" tabIndex={0}>
+    {compact && <CompactTranscript segment={session.record.segments.at(-1)} />}
+    <div className="min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]" ref={viewport} onScroll={handleScroll} role="region" aria-label="回答与面试信息" tabIndex={0}>
       {!compact && <SessionContextDetails record={session.record} current={settings} />}
       {session.record.answers.length ? session.record.answers.map((answer, index) => <AnswerCard key={answer.id} answer={answer} index={index + 1} compact={compact} />)
         : compact ? <div className="flex min-h-full flex-col justify-center gap-3 px-6 py-8 text-text-secondary"><h2 id="answer-title" className="text-lg font-semibold text-text-primary">准备好，听下一个问题。</h2><p className="text-sm leading-relaxed">开始转写，或在下方输入问题。<br />生成后，回答会显示在这里。</p></div> : <div className="flex min-h-full flex-col"><EmptyState className="m-auto" tone="success" icon={<ChatTeardropText weight="duotone" />}

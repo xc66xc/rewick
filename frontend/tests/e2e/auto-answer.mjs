@@ -83,7 +83,7 @@ export async function checkAutoAnswers({ app, page, mock, checked, checkpoint, s
     await checked(page.getByRole('textbox', { name: '转写文字 1', exact: true })).toHaveCount(0)
   }
 
-  await checkpoint('automatic-answer preferences save through the UI and greetings do not trigger an answer', async () => {
+  await checkpoint('automatic-answer preferences save through the UI and statements trigger an answer after the pause', async () => {
     await checked(toggle).toBeChecked()
     await checked(page.getByText('等待停顿 1.5 秒', { exact: true })).toBeVisible()
     await setPauseMs(2500)
@@ -91,8 +91,8 @@ export async function checkAutoAnswers({ app, page, mock, checked, checkpoint, s
     const connection = await start()
     const baseline = mock.requests.length
     await sentence(connection, 0, '你好，今天网络很稳定。', true)
-    await noNewAnswer(baseline)
-    await checked(page.getByRole('status').filter({ hasText: '这段未识别为提问，可手动生成回答' })).toBeVisible()
+    await completed(baseline + 1)
+    assert.equal(payload(mock.requests.at(-1)).question, '你好，今天网络很稳定。')
     await stop()
     await reset()
   })
@@ -128,7 +128,7 @@ export async function checkAutoAnswers({ app, page, mock, checked, checkpoint, s
     await checked(page.getByRole('status').filter({ hasText: '等待语音转写定稿' })).toBeVisible()
     await noNewAnswer(baseline, 1800)
     mock.sendFunAsrSentence(connection, { sentenceId: 0, text: question, endMs: 1000 })
-    await checked(page.getByRole('status').filter({ hasText: '问题已定稿，等待停顿' })).toBeVisible()
+    await checked(page.getByRole('status').filter({ hasText: '转写已定稿，等待停顿' })).toBeVisible()
     await noNewAnswer(baseline, 200)
     await completed(baseline + 1)
     assert.equal(payload(mock.requests.at(-1)).question, question)
@@ -167,7 +167,7 @@ export async function checkAutoAnswers({ app, page, mock, checked, checkpoint, s
     const baseline = mock.requests.length
     await sentence(connection, 0, '请介绍你负责的订单系统。', true)
     await sentence(connection, 1, '你如何设计订单系统的幂等接口？', true)
-    await checked(page.getByRole('status').filter({ hasText: '问题已定稿，等待停顿' })).toBeVisible()
+    await checked(page.getByRole('status').filter({ hasText: '转写已定稿，等待停顿' })).toBeVisible()
     const editor = page.getByRole('textbox', { name: '转写文字 1', exact: true })
     await editor.click()
     await noNewAnswer(baseline)

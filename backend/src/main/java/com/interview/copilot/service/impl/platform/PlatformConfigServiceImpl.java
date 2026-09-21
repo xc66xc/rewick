@@ -3,6 +3,7 @@ package com.interview.copilot.service.impl.platform;
 import com.interview.copilot.config.ProviderProperties;
 import com.interview.copilot.converter.platform.PlatformConfigCodec;
 import com.interview.copilot.entity.platform.PlatformConfigRow;
+import com.interview.copilot.entity.platform.DesktopSettingsEntity;
 import com.interview.copilot.exception.platform.PlatformConfigErrors;
 import com.interview.copilot.mapper.platform.PlatformConfigMapper;
 import com.interview.copilot.model.platform.PlatformConfig;
@@ -19,6 +20,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * @author Carl Wang
+ * @date 2026-09-21
+ * @description 原子发布平台服务并同步被替换的桌面默认语音服务。
+ */
 @Service
 public class PlatformConfigServiceImpl implements PlatformConfigService {
     private final PlatformConfigMapper mapper;
@@ -56,11 +62,20 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
     @Transactional
     public PlatformConfig publish(long actorId, PlatformConfig input) {
         mapper.lock();
+        PlatformConfig previous = get();
         PlatformSnapshot prepared = draft(input);
+        DesktopSettingsEntity defaults = mapper.desktopDefaults();
+        DesktopSettingsEntity nextDefaults = replacedAsrDefault(previous, prepared, defaults);
         com.interview.copilot.validation.platform.DesktopDefaultsValidator.validate(
-                mapper.desktopDefaults(), prepared);
+                nextDefaults, prepared);
         if (mapper.publish(input.version(), codec.encode(prepared)) != 1) {
             throw PlatformConfigErrors.conflict();
+        }
+        if (nextDefaults != defaults) {
+            if (mapper.replaceDefaultAsr(defaults.version(), nextDefaults.asrServiceId()) != 1) {
+                throw PlatformConfigErrors.conflict();
+            }
+            audit.record(actorId, "desktop.defaults.update", "version:" + (defaults.version() + 1));
         }
         audit.record(actorId, "platform.config.publish", "version:" + (input.version() + 1));
         PlatformConfig view = prepared.view();
@@ -72,6 +87,21 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
                 view.asr(),
                 view.knowledge(),
                 view.embedding());
+    }
+
+    private DesktopSettingsEntity replacedAsrDefault(
+            PlatformConfig previous, PlatformSnapshot prepared, DesktopSettingsEntity defaults) {
+        String oldId = previous.asr().providerId();
+        String newId = prepared.view().asr().providerId();
+        boolean replacement = !oldId.isEmpty() && !oldId.equals(newId)
+                && oldId.equals(defaults.asrServiceId())
+                && prepared.availableAsrServices().stream().anyMatch(item -> item.id().equals(newId));
+        if (!replacement) {
+            return defaults;
+        }
+        return new DesktopSettingsEntity(
+                defaults.version(), defaults.llmModelId(), defaults.temperature(), newId,
+                defaults.retrievalMode(), defaults.knowledgeServiceId());
     }
 
     public PlatformSnapshot draft(PlatformConfig input) {

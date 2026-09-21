@@ -6,6 +6,7 @@ import com.interview.copilot.config.ProviderProperties;
 import com.interview.copilot.exception.ai.ProviderErrors;
 import com.interview.copilot.security.auth.UserPrincipal;
 import com.interview.copilot.util.asr.AsrProtocol;
+import com.interview.copilot.model.asr.LiveTranslateSession;
 
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -41,6 +42,7 @@ public final class AsrBridge {
     private final AtomicInteger pendingBytes = new AtomicInteger();
     private final ReentrantLock sendLock = new ReentrantLock();
     private final String upstreamId = UUID.randomUUID().toString();
+    private LiveTranslateSession realtime;
     private volatile String clientId = "platform";
     private volatile String phase = "new";
     private volatile WebSocket upstream;
@@ -93,6 +95,11 @@ public final class AsrBridge {
             throw ProviderErrors.unavailable();
         }
         Map<String, Object> request = AsrProtocol.run(frame, upstreamId, config.getModel());
+        URI endpoint = LiveTranslateSession.endpoint(config.getUrl(), config.getModel());
+        if (LiveTranslateSession.MODEL.equals(config.getModel())) {
+            realtime = new LiveTranslateSession();
+            request = realtime.run();
+        }
         clientId = taskId;
         String requestId = requestId();
         diagnostics.started(requestId, upstreamId, resources.maximumSeconds(config));
@@ -118,7 +125,7 @@ public final class AsrBridge {
                         .connectTimeout(Duration.ofSeconds(10))
                         .header("Authorization", "Bearer " + config.getApiKey())
                         .buildAsync(
-                                URI.create(config.getUrl()),
+                                endpoint,
                                 new AsrUpstreamListener(this, payload));
         connecting.whenComplete(
                 (socket, error) -> {
@@ -201,6 +208,9 @@ public final class AsrBridge {
         if (ended.get() || socket == null) {
             return CompletableFuture.failedFuture(ProviderErrors.failed());
         }
+        if (text == null && realtime != null) {
+            return socket.sendText(resources.json().encode(realtime.audio(audio)), true);
+        }
         return text == null ? socket.sendBinary(audio, true) : socket.sendText(text, true);
     }
 
@@ -209,7 +219,7 @@ public final class AsrBridge {
         phaseDeadline = resources.timers().schedule(() -> fail("upstream_finish_timeout"), 8, TimeUnit.SECONDS);
         enqueue(
                 ByteBuffer.wrap(new byte[0]),
-                resources.json().encode(AsrProtocol.finish(upstreamId)));
+                resources.json().encode(realtime == null ? AsrProtocol.finish(upstreamId) : realtime.finish()));
     }
 
     void received(String value) {
@@ -218,6 +228,11 @@ public final class AsrBridge {
         }
         try {
             JsonNode frame = resources.json().parse(value);
+            if (realtime != null) {
+                var normalized = realtime.receive(frame, upstreamId);
+                if (normalized.isEmpty()) return;
+                frame = normalized.get();
+            }
             if (!upstreamId.equals(frame.path("header").path("task_id").asText())) {
                 fail("upstream_task_id_mismatch");
                 return;

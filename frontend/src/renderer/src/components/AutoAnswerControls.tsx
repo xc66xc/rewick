@@ -9,10 +9,9 @@ interface AutoAnswerControlsProps { session: SessionController; compact?: boolea
 interface AutoAnswerPreference { enabled: boolean; pauseMs: number }
 const stateLabels = {
   off: '自动回答已暂停',
-  listening: '正在听，问题结束后自动回答',
+  listening: '正在听，停顿后自动回答',
   finalizing: '等待语音转写定稿',
-  waiting: '问题已定稿，等待停顿',
-  skipped: '这段未识别为提问，可手动生成回答',
+  waiting: '转写已定稿，等待停顿',
   queued: '等当前回答完成',
   editing: '编辑中暂缓自动回答',
   manual: '已取消这次自动回答，可点击“回答这句”手动生成'

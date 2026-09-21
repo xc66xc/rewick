@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.interview.copilot.config.ProviderProperties;
 import com.interview.copilot.exception.ai.ProviderErrors;
 import com.interview.copilot.util.ai.ProviderJson;
+import com.interview.copilot.model.asr.LiveTranslateSession;
 
 import jakarta.annotation.PreDestroy;
 
@@ -22,6 +23,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+/**
+ * @author Carl Wang
+ * @date 2026-09-21
+ * @description 校验语音协议配置并验证实时语音服务的完整生命周期。
+ */
 @Component
 public final class AsrProviderProbe {
     private final ProviderJson json;
@@ -44,7 +50,7 @@ public final class AsrProviderProbe {
                 client.newWebSocketBuilder()
                         .connectTimeout(Duration.ofSeconds(3))
                         .header("Authorization", "Bearer " + endpoint.getApiKey())
-                        .buildAsync(URI.create(endpoint.getUrl()), listener);
+                        .buildAsync(LiveTranslateSession.endpoint(endpoint.getUrl(), endpoint.getModel()), listener);
         try {
             connecting.thenCompose(socket -> listener.finished).get(10, TimeUnit.SECONDS);
         } catch (InterruptedException error) {
@@ -66,6 +72,7 @@ public final class AsrProviderProbe {
     private final class ProbeListener implements WebSocket.Listener {
         private final String id = UUID.randomUUID().toString();
         private final String model;
+        private final LiveTranslateSession realtime;
         private final CompletableFuture<Void> finished = new CompletableFuture<>();
         private final StringBuilder buffer = new StringBuilder();
         private volatile WebSocket socket;
@@ -74,6 +81,7 @@ public final class AsrProviderProbe {
 
         private ProbeListener(String model) {
             this.model = model;
+            this.realtime = LiveTranslateSession.MODEL.equals(model) ? new LiveTranslateSession() : null;
         }
 
         @Override
@@ -91,7 +99,7 @@ public final class AsrProviderProbe {
                                     Map.of("format", "pcm", "sample_rate", 16000),
                                     "input",
                                     Map.of()));
-            send(json.encode(AsrProtocol.run(json.parse(json.encode(input)), id, model)));
+            send(json.encode(realtime == null ? AsrProtocol.run(json.parse(json.encode(input)), id, model) : realtime.run()));
             webSocket.request(1);
         }
 
@@ -113,6 +121,11 @@ public final class AsrProviderProbe {
         private void receive(String text) {
             try {
                 JsonNode frame = json.parse(text);
+                if (realtime != null) {
+                    var normalized = realtime.receive(frame, id);
+                    if (normalized.isEmpty()) return;
+                    frame = normalized.get();
+                }
                 if (++events > 8 || !id.equals(frame.path("header").path("task_id").asText())) {
                     fail();
                     return;
@@ -137,15 +150,17 @@ public final class AsrProviderProbe {
 
         private void sendProbeAudio() {
             // Half a second of mono 16-bit PCM at 16 kHz; never uses microphone data.
-            socket.sendBinary(ByteBuffer.allocate(16000), true)
-                    .whenComplete(
+            CompletableFuture<WebSocket> sending = realtime == null
+                    ? socket.sendBinary(ByteBuffer.allocate(16000), true)
+                    : socket.sendText(json.encode(realtime.audio(ByteBuffer.allocate(16000))), true);
+            sending.whenComplete(
                             (value, error) -> {
                                 if (error != null) {
                                     fail();
                                     return;
                                 }
                                 if (!finished.isDone()) {
-                                    send(json.encode(AsrProtocol.finish(id)));
+                                    send(json.encode(realtime == null ? AsrProtocol.finish(id) : realtime.finish()));
                                 }
                             });
         }
