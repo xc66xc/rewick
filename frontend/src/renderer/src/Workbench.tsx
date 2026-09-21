@@ -123,7 +123,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
         </div>}
         {timer.active && compact && <CompactStatus session={session} remaining={timer.remaining} ending={timer.busy} onEnd={() => void handleEnd()} />}
         {timer.warning && timer.active && <p className={cn(formNoteClass, 'px-8 pt-1 max-[820px]:px-5')} role="status">{timer.warning}</p>}
-        {page === 'preparation' && <InterviewPreparation bridge={bridge} settings={config.settings} timer={timer} isSessionActive={timer.active || session.busy || !['idle', 'error'].includes(session.status)} onPrepare={handlePrepare} onSave={session.saveEnvironment} onStarted={() => setPage('workspace')} onContext={handleContext} onSettings={handleSettings} onPurchase={() => setPage('purchase')} />}
+        {page === 'preparation' && <InterviewPreparation bridge={bridge} settings={config.settings} timer={timer} isSessionActive={timer.active || session.busy || !['idle', 'error'].includes(session.status)} onPrepare={handlePrepare} onSave={session.saveEnvironment} onStarted={() => setPage('workspace')} onContext={handleContext} onSettings={handleSettings} onPurchase={() => setPage('purchase')} onHistory={() => setPage('history')} />}
         {page === 'workspace' && timer.active && <div className={cn('flex min-h-0 flex-1 flex-col', compact ? 'p-0' : 'px-8 pb-0')}>
           {/* 工作台顶部仅展示面试名称与面试类型 */}
           {!compact && environment && <div className="mb-3 flex shrink-0 items-center justify-between gap-3 text-xs"><div className="flex min-w-0 flex-1 items-center gap-2">

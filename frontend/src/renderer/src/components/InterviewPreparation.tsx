@@ -18,12 +18,12 @@ import { cn } from '../lib/cn'
 interface Props {
   bridge: DesktopBridge; settings: Settings; timer: ReturnType<typeof useInterviewTime>; isSessionActive: boolean
   onPrepare: (input: EnvironmentInput) => Promise<void>; onSave: (input: EnvironmentInput) => Promise<void>
-  onStarted: () => void; onContext: () => void; onSettings: () => void; onPurchase?: () => void
+  onStarted: () => void; onContext: () => void; onSettings: () => void; onPurchase?: () => void; onHistory?: () => void
 }
 const emptyEnvironment: EnvironmentInput = { interviewType: 'technical', name: '', resumeId: null, targetId: null, referenceIds: [] }
 function environmentInput({ id, name, interviewType, resumeId, targetId, referenceIds, version }: InterviewEnvironment): EnvironmentInput { return { id, name, interviewType, resumeId, targetId, referenceIds, version } }
 /* v30 准备面试页:钱包页头 + 摘要卡 + 环境卡片网格,新建/编辑走弹窗(原「面试环境」页已并入) */
-export default function InterviewPreparation({ bridge, settings, timer, isSessionActive, onPrepare, onSave, onStarted, onContext, onSettings, onPurchase }: Props) {
+export default function InterviewPreparation({ bridge, settings, timer, isSessionActive, onPrepare, onSave, onStarted, onContext, onSettings, onPurchase, onHistory }: Props) {
   const data = useInterviewLibrary(bridge)
   const records = data.library?.environments.map(environmentInput) ?? []
   const editor = useLibraryDraft<EnvironmentInput>(records, emptyEnvironment, Boolean(data.library), settings.interviewEnvironment?.id, 'environment-library')
@@ -75,39 +75,42 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
   }
   const count = data.library?.environments.length ?? 0
   return <section className="flex flex-1 flex-col p-8 max-[820px]:p-5" aria-labelledby="preparation-title">
-    <header className="mb-8 flex items-center justify-between gap-5 max-[820px]:items-start max-[560px]:flex-wrap">
+    <header className="mb-5 flex flex-wrap items-center justify-between gap-4">
       <div>
-        <h1 id="preparation-title" tabIndex={-1} className="mb-2 text-[28px] leading-[1.3] font-semibold tracking-[-0.04em] max-[820px]:text-2xl">准备面试</h1>
+        <h1 id="preparation-title" tabIndex={-1} className="text-[28px] leading-[1.3] font-semibold tracking-[-0.04em] max-[820px]:text-2xl">准备面试</h1>
       </div>
-      <div className="flex flex-col items-end gap-3 max-[560px]:items-start">
+      <div className="flex flex-wrap items-center gap-3">
         {/* v30 .prep-wallet:标签次要小字,时长值 mono 蓝色强调(≤60s 转红),刷新钮 30px */}
         <div className="flex items-center gap-[9px]"><strong className="text-xs font-medium text-text-secondary">可用时长</strong><span className={cn('font-mono text-[13px] font-semibold tabular-nums text-accent-text', timer.remaining <= 60 && 'text-danger')}>{formatDuration(timer.remaining)}</span><RefreshTimeButton className="size-[30px] text-accent-text hover:bg-accent/10" refreshing={timer.refreshing} onRefresh={timer.refresh} /></div>
         <InviteFriendsButton bridge={bridge} />
         {onPurchase && <Button onClick={onPurchase}>购买时长</Button>}
       </div>
     </header>
-    {timer.wallet?.session?.status === 'ended' && <p className={cn(successNoticeClass, 'mt-0 mb-3')}>上次面试已结束 · 使用 {formatDuration(timer.wallet.session.usedSeconds)}。可前往会话记录查看回答。</p>}
     {(error || timer.error || data.error) && <p className={inlineErrorClass} role="alert">{error || timer.error || data.error}</p>}
     {data.error && <button type="button" className={textButtonClass} disabled={busy} onClick={() => void data.retry()}>重新读取环境资料</button>}
     {timer.wallet?.session?.status === 'active' && !timer.active && <p className={formNoteClass}>该账号已有正在进行的面试，请先在原窗口结束；异常关闭后最多等待 30 秒再开始。</p>}
     {isSessionActive && <p className="mb-5 rounded-chip border border-accent-line bg-accent-subtle px-4 py-3 text-xs leading-[1.8] text-text-secondary">正在转写或回答。停止后可进入其他环境或修改当前环境组合。</p>}
     {data.loading && <p className={formNoteClass} role="status">正在读取面试资料…</p>}
     {timer.wallet && timer.remaining === 0 && <p className={formNoteClass}>暂无可用时长，可前往「购买时长」选择套餐。</p>}
-    <div className="flex flex-wrap items-center justify-between gap-4 rounded-card border border-border bg-card p-[18px] max-[820px]:flex-col max-[820px]:items-start">
-      <div className="min-w-0">
-        <h2 className="text-sm font-semibold text-text-heading">连接已就绪，随时可以开始</h2>
+    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-control border border-border bg-card px-4 py-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="flex items-center gap-2 text-xs font-semibold text-text-heading"><span className="size-2 rounded-full bg-accent" aria-hidden="true" />连接已就绪</h2>
+        <span className="h-4 border-l border-border" aria-hidden="true" />
+        <Button variant="quiet" size="xs" className="text-accent-text" onClick={onSettings}>模型与设置</Button>
       </div>
-      <div className="flex shrink-0 items-center gap-1.5 text-xs text-text-secondary"><button type="button" className={cn(textButtonClass, 'text-accent-text')} onClick={onSettings}>模型与设置</button></div>
+      {timer.wallet?.session?.status === 'ended' && <div className="flex flex-wrap items-center gap-3 text-xs text-text-muted">
+        <span>上次使用 {formatDuration(timer.wallet.session.usedSeconds)}</span>
+        {onHistory && <Button variant="quiet" size="xs" className="text-accent-text" onClick={onHistory}>查看记录</Button>}
+      </div>}
     </div>
-    <div className="mb-3.5 mt-7 flex flex-wrap items-baseline gap-2.5">
+    <div className="mb-3.5 mt-6 flex flex-wrap items-baseline gap-2.5">
       <h2 className="text-base font-semibold tracking-[-0.01em] text-text-heading">我的面试准备</h2>
       <span aria-hidden="true" className="font-mono text-xs font-bold text-accent-text">{String(count).padStart(2, '0')}</span>
-      <span className="ml-auto text-[11px] text-text-muted">每套准备独立选择资料</span>
     </div>
     {editor.pending && <DraftChangeNotice onKeep={editor.keepDraft} onDiscard={editor.discardAndContinue} />}
     {editor.restored && <p className="mb-4 text-xs leading-[1.85] text-text-secondary" role="status">已恢复尚未保存的环境草稿，保留到本次关闭应用前。保存环境后才会生效。</p>}
     {notice && <p className={cn(successNoticeClass, 'mt-0 mb-3')} role="status"><CheckCircle size={18} />{notice}</p>}
-    {data.library && <ul aria-label="已保存面试环境" className="m-0 grid list-none grid-cols-4 gap-4 p-0 max-[1600px]:grid-cols-3 max-[950px]:grid-cols-2 max-[730px]:grid-cols-1">
+    {data.library && <ul aria-label="已保存面试环境" className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-4 p-0">
       {data.library.environments.map(environment => {
         const resume = data.library?.resumes.find(item => item.id === environment.resumeId)
         const target = data.library?.targets.find(item => item.id === environment.targetId)

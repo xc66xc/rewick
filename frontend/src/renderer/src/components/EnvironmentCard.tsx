@@ -1,7 +1,7 @@
 import { ArrowRight, Briefcase, FileText, PencilSimple, Stack, Trash } from '@phosphor-icons/react'
 import type { InterviewEnvironment, ResumeProfile, TargetProfile } from '../../../shared/types'
 import { Button } from './ui/button'
-import { Dot, Pill } from './ui/pill'
+import { Pill } from './ui/pill'
 import { interviewTypeLabels } from '../../../shared/interview-type'
 import { cn } from '../lib/cn'
 import { textButtonClass } from '../lib/form'
@@ -38,11 +38,11 @@ export default function EnvironmentCard({ environment, resume, target, current, 
         {environment.name.trim().charAt(0).toUpperCase() || '面'}
       </span>
       <div className="min-w-0 flex-1">
-        <h3 className="truncate text-[15px] font-[650] text-text-heading" title={environment.name}>{environment.name}</h3>
+        <h3 className="line-clamp-2 break-words text-[15px] font-[650] text-text-heading" title={environment.name}>{environment.name}</h3>
         <p className="mt-0.5 truncate text-xs text-text-secondary" title={targetLine}>{targetLine}</p>
       </div>
       {current
-        ? <Pill className="self-start border-success-line bg-card text-success"><Dot tone="success" />当前使用</Pill>
+        ? <Pill className="self-start border-accent-line bg-card text-accent-text"><span className="size-1.5 rounded-full bg-accent" aria-hidden="true" />当前使用</Pill>
         : formatUpdatedAt(environment.updatedAt) && <span className="shrink-0 self-start text-[11px] text-text-muted">{formatUpdatedAt(environment.updatedAt)}</span>}
     </div>
     <Pill className="mt-2 self-start">{interviewTypeLabels[environment.interviewType]}</Pill>
