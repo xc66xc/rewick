@@ -70,17 +70,16 @@ export default function HistoryPage({ bridge, records: initialRecords, activeSes
           <span>面试 / 会话</span><span>时间</span><span>转写</span><span>回答</span><span>操作</span>
         </div>
         {records.map(record => {
-          /* 占位标题降级为灰斜体;有环境时环境名升为主行,提高无题记录的辨识度(纯展示调整) */
-          const unnamed = record.title === '未命名会话'
+          const displayTitle = record.interviewEnvironment?.name || record.title
           return <div key={record.id} className="grid grid-cols-[minmax(0,2.2fr)_minmax(120px,1fr)_minmax(72px,0.7fr)_minmax(72px,0.7fr)_minmax(168px,1fr)] items-center gap-4 border-b border-border px-6 py-5 last:border-b-0 hover:bg-subtle max-[820px]:px-5 max-[560px]:grid-cols-[minmax(0,1fr)_auto] max-[560px]:gap-3 max-[560px]:px-4">
           <button type="button" className="flex min-w-0 items-center gap-3 bg-transparent text-left text-inherit" onClick={() => { void openRecord(record) }}>
-            <span className="min-w-0 flex-1"><h2 className={cn('truncate text-sm font-medium', unnamed && 'font-normal italic text-text-muted')}>{unnamed && record.interviewEnvironment ? record.interviewEnvironment.name : record.title}</h2>{unnamed ? record.interviewEnvironment && <p className="mt-1 truncate text-xs font-normal italic text-text-muted">未命名会话</p> : record.interviewEnvironment && <p className="mt-1 truncate text-xs text-text-muted">面试环境：{record.interviewEnvironment.name}</p>}{record.interviewEnvironment?.interviewType && <p className="mt-1 text-xs text-text-secondary">{interviewTypeLabels[record.interviewEnvironment.interviewType]}</p>}</span></button>
+            <span className="min-w-0 flex-1"><h2 className="truncate text-sm font-medium">{displayTitle}</h2>{record.interviewEnvironment?.interviewType && <p className="mt-1 text-xs text-text-secondary">{interviewTypeLabels[record.interviewEnvironment.interviewType]}</p>}</span></button>
           <span className="text-xs text-text-secondary max-[560px]:hidden">{formatDate(record.createdAt)}</span>
           <span className="text-xs text-text-secondary max-[560px]:hidden">{record.segmentCount ?? record.segments.length} 段</span>
           <span className="text-xs text-text-secondary max-[560px]:hidden">{record.answerCount ?? record.answers.length} 个</span>
           <div className="flex items-center gap-2">
-            <Button size="sm" aria-label={`查看详情：${record.title}`} onClick={() => { void openRecord(record) }}><Eye aria-hidden="true" />查看详情</Button>
-            <Button variant="default" size="sm" className={cn(buttonDangerClass, 'text-danger')} aria-label={`删除会话：${record.title}`} disabled={locked(record.id)} title={locked(record.id) ? lockedHint : '删除会话'} onClick={() => handleDeleteRequest(record)}><Trash aria-hidden="true" />删除</Button>
+            <Button size="sm" aria-label={`查看详情：${displayTitle}`} onClick={() => { void openRecord(record) }}><Eye aria-hidden="true" />查看详情</Button>
+            <Button variant="default" size="sm" className={cn(buttonDangerClass, 'text-danger')} aria-label={`删除会话：${displayTitle}`} disabled={locked(record.id)} title={locked(record.id) ? lockedHint : '删除会话'} onClick={() => handleDeleteRequest(record)}><Trash aria-hidden="true" />删除</Button>
           </div>
         </div> })}
       </div>
