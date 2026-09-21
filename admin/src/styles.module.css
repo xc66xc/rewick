@@ -2,7 +2,7 @@
 .sidebar { padding: var(--space-8) var(--space-5); border-right: 1px solid var(--color-border); display: flex; flex-direction: column; gap: var(--space-12); background: var(--color-surface); }
 .brand { display: flex; align-items: center; gap: var(--space-3); font-size: var(--text-base); font-weight: 650; line-height: 1.5; }
 .brand small { display: block; font-weight: 400; }
-.brandMark { display: grid; place-items: center; flex: 0 0 36px; height: 36px; background: var(--color-primary); color: var(--color-surface); border-radius: var(--radius-sm); font-size: var(--text-sm); letter-spacing: 1px; }
+.brandMark { display: block; flex: 0 0 36px; width: 36px; height: 36px; object-fit: contain; }
 .navigation { display: flex; flex-direction: column; gap: var(--space-2); }
 .navButton, .navActive { display: flex; gap: var(--space-3); align-items: center; padding: var(--space-3) var(--space-4); border: 0; border-radius: var(--radius-sm); background: transparent; text-align: left; color: var(--color-muted); }
 .navActive { background: var(--color-success-bg); color: var(--color-primary); font-weight: 650; }

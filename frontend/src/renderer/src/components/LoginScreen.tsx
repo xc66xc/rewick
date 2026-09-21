@@ -1,9 +1,9 @@
+import brandIcon from '../assets/rewick-icon.png'
 import InvitationField from './invitation/InvitationField'
 import { CheckRow } from './ui/check-row'
 import { Eyebrow } from './ui/pill'
 import { Button, LinkButton } from './ui/button'
 import { TextField } from './ui/field'
-import { Waveform } from '@phosphor-icons/react'
 import type { DesktopBridge, Settings, SettingsInput } from '../../../shared/types'
 import { useEmailAuth } from '../hooks/useEmailAuth'
 import { cn } from '../lib/cn'
@@ -20,7 +20,7 @@ export default function LoginScreen({ settings, bridge, checking, error: externa
   const { invitationCode, setInvitationCode, rememberMe, setRememberMe, mode, email, setEmail, password, setPassword, confirmation, setConfirmation, code, setCode, busy, error, notice, remaining, emailInput, perform, changeMode } = useEmailAuth({ settings, bridge, checking, onSave, onAuthenticated })
   return <main className="flex min-h-dvh flex-col bg-canvas">
     <div className={cn('flex h-[50px] shrink-0 items-center gap-2.5 bg-page pl-4 select-none [-webkit-app-region:drag]', isMacOS && 'pl-[90px]')} aria-label="掌灯 Rewick">
-      <span className="brand-gradient grid size-6 shrink-0 place-items-center rounded-control text-text-on-fill"><Waveform size={16} aria-hidden="true" /></span>
+      <img src={brandIcon} alt="" className="size-6 shrink-0" draggable={false} />
       <strong className="text-[14px] font-semibold tracking-[-0.01em] text-text-primary">掌灯 Rewick</strong>
     </div>
     <div className="flex flex-1 items-center justify-center px-6 py-10">

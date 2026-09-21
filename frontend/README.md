@@ -230,3 +230,5 @@ node scripts/smoke-compact-ui.mjs
 ## 产品命名
 
 完整名称为「掌灯 Rewick」；紧凑模式显示 Rewick。安装后的应用和 DMG 标题使用完整名称，下载文件使用 `Rewick-版本-mac-arm64.dmg` / `Rewick-版本-win-x64-setup.exe`。现有图形图标沿用。应用 ID、IPC、环境变量、域名及正式/开发版数据目录保持不变。以下历史验收段落中的旧产物路径仅指当时的安装包。
+
+品牌图标源文件与再生成说明见 `../assets/branding/README.md`；运行 `node scripts/create-brand-icons.mjs` 可从确认原图生成 ICNS/ICO 与各端图片（需要 macOS）。

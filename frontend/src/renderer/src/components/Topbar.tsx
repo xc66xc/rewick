@@ -1,5 +1,6 @@
+import brandIcon from '../assets/rewick-icon.png'
 import type { ReactNode } from 'react'
-import { ArrowsInSimple, ArrowsOutSimple, GearSix, PushPin, Waveform } from '@phosphor-icons/react'
+import { ArrowsInSimple, ArrowsOutSimple, GearSix, PushPin } from '@phosphor-icons/react'
 import { IconButton } from './ui/button'
 import { cn } from '../lib/cn'
 
@@ -19,9 +20,9 @@ export default function Topbar({ compact, pinned, onCompact, onPin, onSettings, 
   return <header className={cn('flex h-[50px] shrink-0 items-center justify-between bg-page select-none [-webkit-app-region:drag]',
     compact ? 'gap-0 pr-2' : cn('gap-3', isWindows ? 'pr-[170px]' : 'pr-8'))}>
     {compact
-      ? <span className="flex items-center gap-2 pl-5 text-base font-semibold text-text-heading"><Waveform size={20} className="text-success" aria-hidden="true" />Rewick</span>
+      ? <span className="flex items-center gap-2 pl-5 text-base font-semibold text-text-heading"><img src={brandIcon} alt="" className="size-6 shrink-0" draggable={false} />Rewick</span>
       : <div className={cn('flex items-center gap-2.5 pl-4', isMacOS && macInsetClass)} aria-label="掌灯 Rewick">
-        <span className="grid size-6 shrink-0 place-items-center rounded-control bg-[linear-gradient(356deg,var(--color-accent)_0%,var(--color-violet)_103.24%)] text-text-on-fill"><Waveform size={16} aria-hidden="true" /></span>
+        <img src={brandIcon} alt="" className="size-6 shrink-0" draggable={false} />
         <strong className="text-[14px] font-semibold tracking-[-0.01em] text-text-primary">掌灯 Rewick</strong>
       </div>}
     <div className="flex items-center gap-2.5">
