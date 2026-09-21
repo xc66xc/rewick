@@ -18,6 +18,7 @@ mac:
   identity: '-'
   hardenedRuntime: false
   extendInfo:
+    LSUIElement: true
     LSMinimumSystemVersion: '14.2'
     NSAudioCaptureUsageDescription: 采集会议软件播放的声音，用于你启动的实时面试转写。
     NSMicrophoneUsageDescription: 当你选择麦克风输入时，将声音用于实时语音转写。

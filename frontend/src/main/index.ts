@@ -1,3 +1,4 @@
+import { MenuBar } from './services/menu-bar'
 import { DesktopWindows, type DesktopHost } from './services/desktop-windows'
 import { defaultWindowPreferences, windowPreferencesSchema } from '../shared/window-preferences'
 import { randomUUID } from 'node:crypto'
@@ -8,7 +9,7 @@ import { PaymentClient } from './services/payment-client'
 import { InterviewTimer } from './services/interview-timer'
 import { AccountWorkspaces } from './services/account-workspace'
 import { platformBaseUrl } from '../shared/defaults'
-import { app, shell, BaseWindow, Menu, dialog, globalShortcut, ipcMain, safeStorage, session, powerMonitor, systemPreferences, desktopCapturer } from 'electron'
+import { app, shell, Menu, dialog, globalShortcut, ipcMain, safeStorage, session, powerMonitor, systemPreferences, desktopCapturer } from 'electron'
 import type { IpcMainInvokeEvent } from 'electron'
 import { basename, join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
@@ -65,6 +66,20 @@ if (!hasInstanceLock) app.exit(0)
 let pendingActivation = false
 let window: DesktopHost | null = null
 let desktopWindows: DesktopWindows | null = null
+let menuBar: MenuBar | null = null
+let closeNoticeShown = false
+function revealDesktop(): void {
+  menuBar?.restore()
+  desktopWindows?.show()
+}
+function notifyHidden(): void {
+  if (closeNoticeShown) return
+  closeNoticeShown = true
+  void dialog.showMessageBox({ type: 'info', title: '掌灯 Rewick 仍在运行',
+    message: '应用仍在后台运行；面试期间会继续计时。',
+    detail: '点击菜单栏图标或按 ⌘⇧R 可恢复窗口。需要结束使用时，请从菜单栏选择“退出掌灯 Rewick”。',
+    buttons: ['知道了'] }).catch(() => undefined)
+}
 let windowPreferences = { ...defaultWindowPreferences }
 const windowPreferencesPath = join(app.getPath('userData'), 'window-preferences.json')
 const windowPreferencesQueue = new SerialQueue()
@@ -323,6 +338,7 @@ function registerHandlers(): void {
   const handle = (channel: string, callback: (arg: unknown) => unknown): void => {
     ipcMain.handle(channel, async (event, envelope: unknown) => {
       assertSender(event)
+      if (quitPending && ['interview:start', 'asr:start', 'answer:generate', 'platform:login', 'platform:register'].includes(channel)) throw new Error('应用正在退出，请重新打开后操作。')
       const { payload: arg, accountScope } = parseInput(z.object({ payload: z.unknown().optional(), accountScope: z.string().optional() }), envelope)
       const dispatch = channel === 'answer:generate' || channel === 'answer:cancel' ? ++answerDispatchEpoch : answerDispatchEpoch
       const asrDispatch = asrEpoch
@@ -637,7 +653,8 @@ async function createWindow(): Promise<void> {
   desktopWindows = new DesktopWindows({ preload: join(directory, '../preload/index.cjs'), contextIsolation: true,
     sandbox: true, nodeIntegration: false, devTools: !app.isPackaged, backgroundThrottling: false }, windowPreferences,
     (active, compact) => { window = active; emit({ kind: 'window-mode', compact }) },
-    () => { window = null; interviewTimer.dispose(); disposeWork() })
+    () => { window = null; interviewTimer.dispose(); disposeWork() },
+    process.platform === 'darwin' ? notifyHidden : undefined)
   window = desktopWindows.full
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', event => event.preventDefault())
@@ -649,14 +666,13 @@ async function createWindow(): Promise<void> {
 
 app.on('second-instance', () => {
   pendingActivation = true
-  if (window?.isMinimized()) window.restore()
-  window?.show()
-  window?.focus()
+  revealDesktop()
 })
 
 if (hasInstanceLock) app.whenReady().then(async () => {
   // Keep the runtime encryption identity stable; expose the brand through UI and About metadata.
   app.setAboutPanelOptions({ applicationName: '掌灯 Rewick' })
+  if (process.platform === 'darwin') app.dock?.hide()
   session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {
     const trusted = contents === window?.webContents
     const wantsCamera = 'mediaTypes' in details && Boolean(details.mediaTypes?.includes('video'))
@@ -680,14 +696,45 @@ if (hasInstanceLock) app.whenReady().then(async () => {
   if (startupSettings.platform?.baseUrl !== platformBaseUrl) await authSettings.saveSettings({ ...startupSettings, platform: { ...startupSettings.platform, enabled: true, baseUrl: platformBaseUrl } })
   await syncAccount()
   registerHandlers()
+  if (process.platform === 'darwin') {
+    menuBar = new MenuBar(() => desktopWindows?.show(), () => desktopWindows?.hide(), () => app.quit())
+    menuBar.restore()
+  }
   await createWindow()
+  if (process.platform === 'darwin' && !globalShortcut.register('CommandOrControl+Shift+R', revealDesktop)) {
+    void dialog.showMessageBox({ type: 'warning', title: '恢复快捷键不可用',
+      message: '⌘⇧R 已被占用，无法注册恢复窗口快捷键。',
+      detail: '仍可点击菜单栏图标，或从 Finder 再次打开掌灯 Rewick 来恢复窗口。' }).catch(() => undefined)
+  }
   sessionMonitor.start()
   catalogRefreshTimer = setInterval(() => { void refreshCatalog() }, 30_000)
   powerMonitor.on('resume', () => { void sessionMonitor.check().catch(() => console.error('无法读取登录状态')) })
   window?.on('focus', () => { void sessionMonitor.check().catch(() => console.error('无法读取登录状态')) })
   globalShortcut.register('CommandOrControl+Shift+Enter', () => emit({ kind: 'shortcut', action: 'answer' }))
-  app.on('activate', () => { if (BaseWindow.getAllWindows().length === 0) void createWindow() })
+  app.on('activate', revealDesktop)
 }).catch(error => { dialog.showErrorBox('启动失败', error instanceof Error ? error.message : '无法启动应用'); app.quit() })
 
-app.on('before-quit', () => { desktopWindows?.prepareQuit(); clearInterval(catalogRefreshTimer); sessionMonitor.dispose(); unsubscribeSessionFault(); interviewTimer.dispose(); disposeWork(); accounts.dispose(); globalShortcut.unregisterAll() })
+let quitPending = false
+let quitReady = false
+app.on('before-quit', event => {
+  if (quitReady) return
+  event.preventDefault()
+  if (quitPending) return
+  quitPending = true
+  clearInterval(catalogRefreshTimer)
+  sessionMonitor.dispose()
+  unsubscribeSessionFault()
+  disposeWork()
+  // PlatformClient bounds the settlement request to eight seconds.
+  void interviewTimer.end().catch(() => {
+    console.error('退出时面试结算未确认，将由服务端心跳超时结算。')
+  }).finally(() => {
+    desktopWindows?.prepareQuit()
+    accounts.dispose()
+    globalShortcut.unregisterAll()
+    menuBar?.hide()
+    quitReady = true
+    app.quit()
+  })
+})
 app.on('window-all-closed', () => app.quit())

@@ -19,7 +19,8 @@ export class DesktopWindows {
   get active(): DesktopHost { return this.compact && this.floating ? this.floating : this.full }
   constructor(webPreferences: WebPreferences, private preferences: WindowPreferences,
     private readonly changed: (window: DesktopHost, compact: boolean) => void,
-    private readonly disposed: () => void) {
+    private readonly disposed: () => void,
+    private readonly hiddenOnClose?: () => void) {
     this.view = new WebContentsView({ webPreferences })
     this.view.setBackgroundColor('#00000000')
     this.full = new DesktopHost({
@@ -30,7 +31,13 @@ export class DesktopWindows {
     }, this.view)
     this.full.contentView.addChildView(this.view)
     this.watchSize(this.full)
-    this.full.on('close', () => { this.quitting = true })
+    this.full.on('close', event => {
+      if (!this.quitting && this.hiddenOnClose) {
+        event.preventDefault()
+        this.hide()
+        this.hiddenOnClose()
+      } else this.quitting = true
+    })
     this.full.on('closed', () => {
       this.closed = true
       this.floating?.destroy()
@@ -57,6 +64,7 @@ export class DesktopWindows {
       this.watchSize(this.floating)
     }
     const previous = this.active
+    const wasVisible = previous.isVisible()
     const next = value ? this.floating! : this.full
     // Protect before attaching the renderer or making it visible.
     next.setContentProtection(value && this.preferences.contentProtection)
@@ -68,10 +76,15 @@ export class DesktopWindows {
     const [width, height] = next.getContentSize()
     this.view.setBounds({ x: 0, y: 0, width, height })
     this.changed(next, value)
-    if (next.isMinimized()) next.restore()
-    next.show()
-    next.focus()
+    if (wasVisible) this.show()
   }
+  show(): void {
+    if (this.closed || this.quitting) return
+    if (this.active.isMinimized()) this.active.restore()
+    this.active.show()
+    this.active.focus()
+  }
+  hide(): void { if (!this.closed) this.active.hide() }
   setPinned(value: boolean): boolean { this.pinned = value; this.active.setAlwaysOnTop(value, 'floating'); return value }
   /** 弹窗遮罩期把 WCO 标题条着色成遮罩合成色(tokens.css --color-scrim 45% 黑叠白底 ≈ #8c8c8c),
       让原生按钮条与页面遮罩融为一体;关闭还原为创建时的原色。紧凑窗无 overlay,静默忽略。 */
