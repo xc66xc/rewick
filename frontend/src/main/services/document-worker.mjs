@@ -20,8 +20,8 @@ async function extract(path) {
     const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs')
     const packageUrl = import.meta.resolve('pdfjs-dist/package.json')
     const loading = getDocument({ data: new Uint8Array(bytes), isEvalSupported: false, useSystemFonts: false, disableFontFace: true,
-      standardFontDataUrl: fileURLToPath(new URL('./standard_fonts/', packageUrl)),
-      cMapUrl: fileURLToPath(new URL('./cmaps/', packageUrl)), cMapPacked: true, verbosity: 0 })
+      standardFontDataUrl: fileURLToPath(new URL('./standard_fonts/', packageUrl)).replaceAll('\\', '/'),
+      cMapUrl: fileURLToPath(new URL('./cmaps/', packageUrl)).replaceAll('\\', '/'), cMapPacked: true, verbosity: 0 })
     let pdf
     try {
       pdf = await loading.promise
