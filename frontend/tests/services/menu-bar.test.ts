@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
 
-const state = vi.hoisted(() => ({ trays: [] as any[], menu: [] as any[] }))
+const state = vi.hoisted(() => ({ trays: [] as any[], menu: [] as any[], template: vi.fn(), resize: vi.fn() }))
 vi.mock('electron', () => ({
   Tray: class extends EventEmitter {
     destroyed = false
@@ -12,16 +12,27 @@ vi.mock('electron', () => ({
     popUpContextMenu(menu: any[]) { state.menu = menu }
   },
   Menu: { buildFromTemplate: (items: any[]) => items },
-  nativeImage: { createFromDataURL: () => ({ addRepresentation() {}, setTemplateImage() {} }) }
+  nativeImage: { createFromDataURL: () => {
+    const image = { addRepresentation() {}, setTemplateImage: state.template, resize: (size: unknown) => { state.resize(size); return image } }
+    return image
+  } }
 }))
 import { MenuBar } from '../../src/main/services/menu-bar'
 
-beforeEach(() => { state.trays = []; state.menu = [] })
-describe('macOS menu bar', () => {
-  it('shows on left click and keeps hiding the window separate from hiding the icon', () => {
+const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+afterEach(() => Object.defineProperty(process, 'platform', platform))
+beforeEach(() => { state.trays = []; state.menu = []; state.template.mockClear(); state.resize.mockClear() })
+describe('desktop tray', () => {
+  it.each(['darwin', 'win32'])('%s: shows on click, hides independently and restores a single icon', platform => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: platform })
     const show = vi.fn(), hide = vi.fn(), quit = vi.fn()
     const bar = new MenuBar(show, hide, quit)
     bar.restore()
+    if (platform === 'darwin') expect(state.template).toHaveBeenCalledWith(true)
+    else {
+      expect(state.template).not.toHaveBeenCalled()
+      expect(state.resize).toHaveBeenCalledWith({ width: 32, height: 32 })
+    }
     const tray = state.trays[0]
     tray.emit('click')
     expect(show).toHaveBeenCalledOnce()
@@ -29,7 +40,7 @@ describe('macOS menu bar', () => {
     state.menu.find(item => item.label === '隐藏窗口').click()
     expect(hide).toHaveBeenCalledOnce()
     expect(tray.destroyed).toBe(false)
-    state.menu.find(item => item.label === '隐藏菜单栏图标').click()
+    state.menu.find(item => item.label === (platform === 'darwin' ? '隐藏菜单栏图标' : '隐藏托盘图标')).click()
     expect(tray.destroyed).toBe(true)
     expect(hide).toHaveBeenCalledOnce()
     expect(quit).not.toHaveBeenCalled()

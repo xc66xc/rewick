@@ -57,7 +57,7 @@ try {
     await window.copilot.saveSettings({ ...settings, platform: { enabled: true, baseUrl } })
     await window.copilot.platformLogin({ identifier: 'compact@example.test', password: 'isolated-test-password' })
   }, `http://127.0.0.1:${server.address().port}`)
-  assert.equal(await app.evaluate(({ app }) => app.dock.isVisible()), false)
+  if (process.platform === 'darwin') assert.equal(await app.evaluate(({ app }) => app.dock.isVisible()), false)
   assert.equal(await app.evaluate(({ globalShortcut }) => globalShortcut.isRegistered('CommandOrControl+Shift+R')), true)
   await page.getByRole('button', { name: '开始面试', exact: true }).click()
   await expect(page.getByRole('button', { name: '结束面试', exact: true })).toBeVisible()
@@ -84,7 +84,7 @@ try {
   await app.close()
   app = undefined
   assert.equal(settled, 2)
-  console.log('PASS: Dock hidden, restore shortcut registered, close preserves interview, activation restores, hidden end stays hidden, quit awaits settlement')
+  console.log('PASS: resident desktop, restore shortcut registered, close preserves interview, activation restores, hidden end stays hidden, quit awaits settlement')
 } finally {
   await app?.close()
   await new Promise(resolve => server.close(resolve))

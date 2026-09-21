@@ -67,6 +67,9 @@ let pendingActivation = false
 let window: DesktopHost | null = null
 let desktopWindows: DesktopWindows | null = null
 let menuBar: MenuBar | null = null
+const supportsTray = process.platform === 'darwin' || process.platform === 'win32'
+const restoreShortcutLabel = process.platform === 'darwin' ? '⌘⇧R' : 'Ctrl+Shift+R'
+const trayLocation = process.platform === 'darwin' ? '菜单栏' : '系统托盘'
 let closeNoticeShown = false
 function revealDesktop(): void {
   menuBar?.restore()
@@ -77,7 +80,7 @@ function notifyHidden(): void {
   closeNoticeShown = true
   void dialog.showMessageBox({ type: 'info', title: '掌灯 Rewick 仍在运行',
     message: '应用仍在后台运行；面试期间会继续计时。',
-    detail: '点击菜单栏图标或按 ⌘⇧R 可恢复窗口。需要结束使用时，请从菜单栏选择“退出掌灯 Rewick”。',
+    detail: `点击${trayLocation}图标或按 ${restoreShortcutLabel} 可恢复窗口。需要结束使用时，请从${trayLocation}选择“退出掌灯 Rewick”。`,
     buttons: ['知道了'] }).catch(() => undefined)
 }
 let windowPreferences = { ...defaultWindowPreferences }
@@ -654,7 +657,7 @@ async function createWindow(): Promise<void> {
     sandbox: true, nodeIntegration: false, devTools: !app.isPackaged, backgroundThrottling: false }, windowPreferences,
     (active, compact) => { window = active; emit({ kind: 'window-mode', compact }) },
     () => { window = null; interviewTimer.dispose(); disposeWork() },
-    process.platform === 'darwin' ? notifyHidden : undefined)
+    supportsTray ? notifyHidden : undefined)
   window = desktopWindows.full
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', event => event.preventDefault())
@@ -696,15 +699,15 @@ if (hasInstanceLock) app.whenReady().then(async () => {
   if (startupSettings.platform?.baseUrl !== platformBaseUrl) await authSettings.saveSettings({ ...startupSettings, platform: { ...startupSettings.platform, enabled: true, baseUrl: platformBaseUrl } })
   await syncAccount()
   registerHandlers()
-  if (process.platform === 'darwin') {
+  if (supportsTray) {
     menuBar = new MenuBar(() => desktopWindows?.show(), () => desktopWindows?.hide(), () => app.quit())
     menuBar.restore()
   }
   await createWindow()
-  if (process.platform === 'darwin' && !globalShortcut.register('CommandOrControl+Shift+R', revealDesktop)) {
+  if (supportsTray && !globalShortcut.register('CommandOrControl+Shift+R', revealDesktop)) {
     void dialog.showMessageBox({ type: 'warning', title: '恢复快捷键不可用',
-      message: '⌘⇧R 已被占用，无法注册恢复窗口快捷键。',
-      detail: '仍可点击菜单栏图标，或从 Finder 再次打开掌灯 Rewick 来恢复窗口。' }).catch(() => undefined)
+      message: `${restoreShortcutLabel} 已被占用，无法注册恢复窗口快捷键。`,
+      detail: `仍可点击${trayLocation}图标，或再次打开掌灯 Rewick 来恢复窗口。` }).catch(() => undefined)
   }
   sessionMonitor.start()
   catalogRefreshTimer = setInterval(() => { void refreshCatalog() }, 30_000)

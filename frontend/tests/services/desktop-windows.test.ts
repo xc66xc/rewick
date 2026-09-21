@@ -1,8 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
+
+const state = vi.hoisted(() => ({ options: [] as Electron.BaseWindowConstructorOptions[] }))
+const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+afterEach(() => { Object.defineProperty(process, 'platform', platform); state.options = [] })
 
 vi.mock('electron', () => ({
   BaseWindow: class extends EventEmitter {
+    constructor(options: Electron.BaseWindowConstructorOptions) { super(); state.options.push(options) }
     visible = false
     destroyed = false
     contentView = { addChildView() {}, removeChildView() {} }
@@ -29,6 +34,20 @@ import { DesktopWindows } from '../../src/main/services/desktop-windows'
 import { defaultWindowPreferences } from '../../src/shared/window-preferences'
 
 describe('resident desktop windows', () => {
+  it('excludes both Windows hosts from the taskbar, including after restoring', () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const windows = new DesktopWindows({}, defaultWindowPreferences, vi.fn(), vi.fn(), vi.fn())
+    windows.show()
+    windows.setCompact(true)
+    windows.hide()
+    windows.show()
+    windows.setCompact(false)
+    expect(state.options).toHaveLength(2)
+    expect(state.options.every(options => options.skipTaskbar === true)).toBe(true)
+    windows.full.close()
+    expect(windows.full.isDestroyed()).toBe(false)
+    expect(windows.full.isVisible()).toBe(false)
+  })
   it('hides ordinary close without disposing the renderer; quits when prepared', () => {
     const disposed = vi.fn(), notice = vi.fn()
     const windows = new DesktopWindows({}, defaultWindowPreferences, vi.fn(), disposed, notice)
