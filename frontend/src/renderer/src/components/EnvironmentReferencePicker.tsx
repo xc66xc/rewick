@@ -8,7 +8,7 @@ export default function EnvironmentReferencePicker({ documents, selected, disabl
   const missing = selected.filter(id => !documents.some(document => document.id === id))
   function handleToggle(id: string, checked: boolean) { onChange(checked ? [...selected, id] : selected.filter(value => value !== id)) }
   return <fieldset className="my-5 m-0 min-w-0 border-0 p-0" disabled={disabled}><legend className="mb-2 text-xs font-medium">环境参考资料</legend>
-    <p className="mb-4 text-xs leading-[1.85] text-text-secondary">已选 {selected.length} / 30 份本地资料。百炼远程知识库开启时暂停平台资料检索，这些选择会保留。远程关闭后，仅在本地开关开启时检索已勾选、已启用且索引可用的资料；不勾选时不检索平台个人资料。</p>
+    <p className="mb-4 text-xs leading-[1.85] text-text-secondary">已选 {selected.length} / 30 份本地资料。</p>
     {documents.length ? <div className="flex max-h-[300px] flex-col gap-2 overflow-y-auto rounded-chip border border-border p-3">{documents.map(document => <CheckRow key={document.id} className="items-start gap-3 rounded-chip p-2"
       aria-label={`选择资料 ${document.name}`} checked={selected.includes(document.id)} disabled={!selected.includes(document.id) && selected.length >= 30}
       onChange={checked => handleToggle(document.id, checked)}

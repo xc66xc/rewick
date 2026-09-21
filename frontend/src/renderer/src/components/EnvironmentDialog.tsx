@@ -74,7 +74,6 @@ export default function EnvironmentDialog({ open, onOpenChange, draft, dirty, li
             <label htmlFor="environment-target" className="text-[12.5px] font-medium text-text-regular">环境目标岗位</label>
             <AppSelect id="environment-target" size="lg" value={draft.targetId ?? ''} options={targetOptions} aria-invalid={missingTarget} disabled={fieldsDisabled} onValueChange={value => onChange({ ...draft, targetId: value || null })} />
           </div>
-          {(!draft.resumeId || !draft.targetId) && <p className="mb-4 text-xs leading-[1.85] text-text-secondary">{!draft.resumeId ? '未选择简历，不会提供个人经历。' : ''}{!draft.targetId ? '未选择岗位，不会提供公司和 JD。' : ''}不会使用其他环境的内容。</p>}
           {(missingResume || missingTarget) && <p className={cn(inlineErrorClass, 'mt-0 mb-4')} role="alert">存在失效的简历或岗位，请重新选择或改为不选择后保存。</p>}
           <EnvironmentReferencePicker documents={references} selected={draft.referenceIds} disabled={fieldsDisabled} onChange={referenceIds => onChange({ ...draft, referenceIds })} />
         </fieldset>

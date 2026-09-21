@@ -13,8 +13,13 @@ import java.util.List;
 
 @Mapper
 public interface SessionRecordMapper {
+    String USED_SECONDS =
+            "(SELECT used_seconds FROM interview_sessions WHERE id=session_records.interview_sessions_id"
+                    + " AND app_users_id=session_records.app_users_id)";
     String COLUMNS =
-            "id,record_id,version,mutation_id::text,content::text,deleted_at IS NOT NULL AS"
+            "id,record_id,version,mutation_id::text,(content || jsonb_build_object('usedSeconds',"
+                    + USED_SECONDS
+                    + "))::text AS content,deleted_at IS NOT NULL AS"
                 + " deleted";
 
     @Select(
@@ -25,7 +30,9 @@ public interface SessionRecordMapper {
 
     @Select(
             "SELECT"
-                + " id,record_id,version,mutation_id::text,jsonb_build_object('id',record_id,'title',title,'createdAt',content->'createdAt','segments','[]'::jsonb,'answers','[]'::jsonb,'segmentCount',jsonb_array_length(content->'segments'),'answerCount',jsonb_array_length(content->'answers'),'interviewEnvironment',content->'interviewEnvironment')::text"
+                + " id,record_id,version,mutation_id::text,jsonb_build_object('id',record_id,'title',title,'createdAt',content->'createdAt','segments','[]'::jsonb,'answers','[]'::jsonb,'segmentCount',jsonb_array_length(content->'segments'),'answerCount',jsonb_array_length(content->'answers'),'interviewEnvironment',content->'interviewEnvironment','usedSeconds',"
+                + USED_SECONDS
+                + ")::text"
                 + " AS content,false AS deleted FROM session_records WHERE app_users_id=#{user} AND"
                 + " deleted_at IS NULL AND id < #{cursor} ORDER BY id DESC LIMIT 21")
     List<SessionRecordEntity> page(@Param("user") long user, @Param("cursor") long cursor);

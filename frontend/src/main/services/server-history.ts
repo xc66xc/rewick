@@ -13,8 +13,9 @@ type Crypto = ConstructorParameters<typeof SettingsStore>[1]
 const draftSchema = z.object({ record: sessionRecordSchema, version: z.number().int().nonnegative(), mutationId: z.string().uuid(), next: sessionRecordSchema.optional() })
 const journalSchema = z.object({ drafts: z.record(z.string(), draftSchema), versions: z.record(z.string(), z.number()), removed: z.array(z.string()) })
 type Journal = z.infer<typeof journalSchema>
-const responseSchema = z.object({ version: z.number(), record: sessionRecordSchema })
-const summarySchema = sessionRecordSchema.extend({ interviewEnvironment: sessionRecordSchema.shape.interviewEnvironment.nullish().transform(value => value ?? undefined), segmentCount: z.number(), answerCount: z.number() })
+const historyRecordSchema = sessionRecordSchema.extend({ usedSeconds: z.number().int().nonnegative().nullish().transform(value => value ?? undefined) })
+const responseSchema = z.object({ version: z.number(), record: historyRecordSchema })
+const summarySchema = historyRecordSchema.extend({ interviewEnvironment: sessionRecordSchema.shape.interviewEnvironment.nullish().transform(value => value ?? undefined), segmentCount: z.number(), answerCount: z.number() })
 export class ServerHistory {
   private readonly queue = new SerialQueue()
   private readonly path: string

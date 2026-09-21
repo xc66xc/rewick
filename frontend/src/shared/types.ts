@@ -144,6 +144,7 @@ export interface SessionRecord {
   createdAt: string
   title: string
   interviewSessionId?: string
+  usedSeconds?: number
   segmentCount?: number
   answerCount?: number
   segments: TranscriptSegment[]

@@ -73,7 +73,6 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
     catch (reason) { setError(errorMessage(reason)) }
     finally { setBusy(false) }
   }
-  const count = data.library?.environments.length ?? 0
   return <section className="flex flex-1 flex-col p-8 max-[820px]:p-5" aria-labelledby="preparation-title">
     <header className="mb-5 flex flex-wrap items-center justify-between gap-4">
       <div>
@@ -105,7 +104,6 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
     </div>
     <div className="mb-3.5 mt-6 flex flex-wrap items-baseline gap-2.5">
       <h2 className="text-base font-semibold tracking-[-0.01em] text-text-heading">我的面试准备</h2>
-      <span aria-hidden="true" className="font-mono text-xs font-bold text-accent-text">{String(count).padStart(2, '0')}</span>
     </div>
     {editor.pending && <DraftChangeNotice onKeep={editor.keepDraft} onDiscard={editor.discardAndContinue} />}
     {editor.restored && <p className="mb-4 text-xs leading-[1.85] text-text-secondary" role="status">已恢复尚未保存的环境草稿，保留到本次关闭应用前。保存环境后才会生效。</p>}

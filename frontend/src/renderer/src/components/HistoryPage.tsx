@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ClockCounterClockwise, DownloadSimple, Eye, TextAlignLeft, Trash } from '@phosphor-icons/react'
 import type { DesktopBridge, SessionRecord, SessionExportOptions } from '../../../shared/types'
 import AnswerCard from './AnswerCard'
+import { formatDuration } from '../hooks/useInterviewTime'
 import SessionContextDetails from './SessionContextDetails'
 import DeleteSessionDialog from './DeleteSessionDialog'
 import { Button, buttonDangerClass } from './ui/button'
@@ -16,6 +17,7 @@ interface HistoryPageProps {
   bridge?: DesktopBridge; records: SessionRecord[]; activeSessionId: string; activeSessionLocked: boolean
   onExport: (record: SessionRecord, options: SessionExportOptions) => Promise<void>; onDelete: (id: string) => Promise<void>
 }
+function usage(record: SessionRecord) { return record.usedSeconds === undefined ? '—' : formatDuration(record.usedSeconds) }
 function formatDate(value: string) { return new Date(value).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) }
 export default function HistoryPage({ bridge, records: initialRecords, activeSessionId, activeSessionLocked, onExport, onDelete }: HistoryPageProps) {
   const [records, setRecords] = useState(initialRecords)
@@ -62,21 +64,22 @@ export default function HistoryPage({ bridge, records: initialRecords, activeSes
     {selected ? <div className="rounded-card border border-border bg-card p-6"><div className="mb-6 flex items-center justify-between gap-4"><button className={textButtonClass} onClick={() => setSelected(null)}><ArrowLeft size={17} />返回记录</button>
       <div className="flex flex-wrap items-center justify-end gap-3"><Button onClick={() => setExporting(true)}><DownloadSimple size={17} aria-hidden="true" />导出 Markdown</Button>
         <Button variant="default" size="sm" className={cn(buttonDangerClass, 'text-danger')} disabled={locked(selected.id)} title={locked(selected.id) ? lockedHint : undefined} onClick={() => handleDeleteRequest(selected)}><Trash aria-hidden="true" />删除会话</Button></div></div>
-      <h2 className="mb-2 text-xl">{selected.title}</h2><p className="mb-5 text-xs text-text-muted">{formatDate(selected.createdAt)} · {selected.answers.length} 个回答</p>
+      <h2 className="mb-2 text-xl">{selected.title}</h2><p className="mb-5 text-xs text-text-muted">{formatDate(selected.createdAt)} · {selected.answers.length} 个回答 · 使用时长 {usage(selected)}</p>
       <SessionContextDetails record={selected} />
       {selected.segments.length > 0 && <details className="my-5 rounded-chip border border-border p-4 text-xs"><summary className="cursor-pointer [&_svg]:mr-2 [&_svg]:align-middle"><TextAlignLeft size={17} />查看转写全文</summary><div>{selected.segments.map(segment => <p key={segment.id} className="mt-3 whitespace-pre-wrap">{segment.text}</p>)}</div></details>}
       {selected.answers.map((answer, index) => <AnswerCard key={answer.id} answer={answer.status === 'streaming' && selected.id !== activeSessionId ? { ...answer, status: 'cancelled' } : answer} index={index + 1} />)}</div>
       : records.length ? <div className="overflow-hidden rounded-card border border-border bg-card">
-        {/* v30 表格卡:表头行(面试/会话|时间|转写|回答|操作) + grid 列行;≤560px 收为「标题 + 删除」两列 */}
-        <div className="grid grid-cols-[minmax(0,2.2fr)_minmax(120px,1fr)_minmax(72px,0.7fr)_minmax(72px,0.7fr)_minmax(168px,1fr)] gap-4 border-b border-border bg-subtle px-6 py-3 text-xs text-text-muted max-[820px]:px-5 max-[560px]:hidden">
-          <span>面试 / 会话</span><span>时间</span><span>转写</span><span>回答</span><span>操作</span>
+        {/* v30 表格卡:表头行(面试/会话|开始时间|使用时长|转写|回答|操作) + grid 列行;≤560px 收为「标题 + 删除」两列 */}
+        <div className="grid grid-cols-[minmax(0,2.2fr)_minmax(100px,0.9fr)_minmax(80px,0.8fr)_minmax(48px,0.5fr)_minmax(48px,0.5fr)_minmax(168px,1fr)] gap-4 border-b border-border bg-subtle px-6 py-3 text-xs text-text-muted max-[820px]:px-5 max-[560px]:hidden">
+          <span>面试 / 会话</span><span>开始时间</span><span>使用时长</span><span>转写</span><span>回答</span><span>操作</span>
         </div>
         {records.map(record => {
           const displayTitle = record.interviewEnvironment?.name || record.title
-          return <div key={record.id} className="grid grid-cols-[minmax(0,2.2fr)_minmax(120px,1fr)_minmax(72px,0.7fr)_minmax(72px,0.7fr)_minmax(168px,1fr)] items-center gap-4 border-b border-border px-6 py-5 last:border-b-0 hover:bg-subtle max-[820px]:px-5 max-[560px]:grid-cols-[minmax(0,1fr)_auto] max-[560px]:gap-3 max-[560px]:px-4">
+          return <div key={record.id} className="grid grid-cols-[minmax(0,2.2fr)_minmax(100px,0.9fr)_minmax(80px,0.8fr)_minmax(48px,0.5fr)_minmax(48px,0.5fr)_minmax(168px,1fr)] items-center gap-4 border-b border-border px-6 py-5 last:border-b-0 hover:bg-subtle max-[820px]:px-5 max-[560px]:grid-cols-[minmax(0,1fr)_auto] max-[560px]:gap-3 max-[560px]:px-4">
           <button type="button" className="flex min-w-0 items-center gap-3 bg-transparent text-left text-inherit" onClick={() => { void openRecord(record) }}>
-            <span className="min-w-0 flex-1"><h2 className="truncate text-sm font-medium">{displayTitle}</h2>{record.interviewEnvironment?.interviewType && <p className="mt-1 text-xs text-text-secondary">{interviewTypeLabels[record.interviewEnvironment.interviewType]}</p>}</span></button>
+            <span className="min-w-0 flex-1"><h2 className="truncate text-sm font-medium">{displayTitle}</h2>{record.interviewEnvironment?.interviewType && <p className="mt-1 text-xs text-text-secondary">{interviewTypeLabels[record.interviewEnvironment.interviewType]}</p>}<p className="mt-1 text-xs text-text-secondary min-[561px]:hidden">使用时长 {usage(record)}</p></span></button>
           <span className="text-xs text-text-secondary max-[560px]:hidden">{formatDate(record.createdAt)}</span>
+          <span className="text-xs text-text-secondary tabular-nums max-[560px]:hidden">{usage(record)}</span>
           <span className="text-xs text-text-secondary max-[560px]:hidden">{record.segmentCount ?? record.segments.length} 段</span>
           <span className="text-xs text-text-secondary max-[560px]:hidden">{record.answerCount ?? record.answers.length} 个</span>
           <div className="flex items-center gap-2">

@@ -150,3 +150,17 @@ it('selects export sections in a dialog and cancels without exporting', async ()
   await user.click(screen.getByRole('button', { name: '取消' }))
   expect(onExport).toHaveBeenCalledTimes(1)
 })
+
+it('shows billed duration including zero and leaves legacy duration unknown', async () => {
+  const records = [
+    { ...record('timed', '已结束面试'), usedSeconds: 3661 },
+    { ...record('zero', '刚开始面试'), usedSeconds: 0 },
+    record('legacy', '旧记录'),
+  ]
+  render(<HistoryPage records={records} activeSessionId="" activeSessionLocked={false} onDelete={vi.fn(async () => undefined)} onExport={vi.fn(async () => undefined)} />)
+  expect(screen.getAllByText('使用时长 01:01:01').length).toBeGreaterThan(0)
+  expect(screen.getAllByText('使用时长 00:00:00').length).toBeGreaterThan(0)
+  expect(screen.getAllByText('使用时长 —').length).toBeGreaterThan(0)
+  await userEvent.click(screen.getByRole('button', { name: '查看详情：已结束面试' }))
+  expect(screen.getByText(/个回答 · 使用时长 01:01:01/)).toBeDefined()
+})
