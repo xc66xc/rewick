@@ -25,7 +25,7 @@ export default function AnswerCard({ answer, index, compact = false }: AnswerCar
       {compact ? <p className="text-xs font-medium text-text-secondary">当前问题</p> : <Badge className="border-transparent bg-success-subtle font-mono text-[10px] text-success">Q{String(index).padStart(2, '0')}</Badge>}
       <h3 className={cn('font-semibold whitespace-pre-wrap [overflow-wrap:anywhere]', compact ? 'compact-answer__question-bubble' : 'text-sm leading-[1.75]')}>{answer.question}</h3>
     </header>
-    {!compact && <ModelInputDetails modelInput={answer.modelInput} pending={answer.status === 'streaming'} />}
+    {import.meta.env.DEV && !compact && <ModelInputDetails modelInput={answer.modelInput} pending={answer.status === 'streaming'} />}
     {compact && <p className="compact-answer__label">口语回答</p>}
     <div className={compact ? 'compact-answer__reply' : undefined}>
     <div className={cn('mb-3 flex min-h-[30px] items-center gap-2 text-xs', compact ? 'compact-answer__status text-text-secondary' : 'text-success')}>{!compact && <Sparkle size={15} aria-hidden="true" />}{!compact && <span>口语回答</span>}<span className={compact ? 'text-xs text-text-secondary' : 'ml-auto text-[10px] text-text-muted'}>{answer.status === 'streaming' ? '正在生成' : answer.status === 'cancelled' ? '已停止' : answer.status === 'error' ? '生成失败' : '已完成'}</span>
@@ -36,6 +36,6 @@ export default function AnswerCard({ answer, index, compact = false }: AnswerCar
     {answer.error && <p className={inlineErrorClass} role="alert">{answer.error}</p>}
     {copyError && <p className={inlineErrorClass}>无法访问剪贴板，请选择文字复制。</p>}
     </div>
-    {compact ? <Collapse summary="本次发送内容与检索资料" className="compact-answer__details mt-2 border-0 px-0 py-1"><ModelInputDetails modelInput={answer.modelInput} pending={answer.status === 'streaming'} />{answer.retrieval && <ReferenceSources retrieval={answer.retrieval} />}</Collapse> : answer.retrieval && <ReferenceSources retrieval={answer.retrieval} />}
+    {import.meta.env.DEV && (compact ? <Collapse summary="本次发送内容与检索资料" className="compact-answer__details mt-2 border-0 px-0 py-1"><ModelInputDetails modelInput={answer.modelInput} pending={answer.status === 'streaming'} />{answer.retrieval && <ReferenceSources retrieval={answer.retrieval} />}</Collapse> : answer.retrieval && <ReferenceSources retrieval={answer.retrieval} />)}
   </article>
 }

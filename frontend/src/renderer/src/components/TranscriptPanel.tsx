@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { ArrowDown, ArrowUpRight, Ear, Microphone, Monitor, TextAlignLeft } from '@phosphor-icons/react'
+import { ArrowUpRight, Ear, Microphone, Monitor, TextAlignLeft } from '@phosphor-icons/react'
 import type { SessionController } from '../hooks/useSession'
 import { formatTime } from '../hooks/sessionHelpers'
 import RecordingControls from './RecordingControls'
@@ -70,6 +70,6 @@ export default function TranscriptPanel({ session }: TranscriptPanelProps) {
           </div>
         </EmptyState></div>}
     </div>
-    <footer className="flex shrink-0 items-center gap-2 border-t border-border px-5 py-3 text-[10px] text-text-muted [&_svg]:ml-auto" id="transcript-help"><span className="size-1 rounded-full bg-border-strong" aria-hidden="true" /><span>点击文字直接修改，已修改的句子保留你的版本</span><ArrowDown size={14} aria-hidden="true" /></footer>
+    <footer className="flex shrink-0 items-center gap-2 border-t border-border px-5 py-3 text-[10px] text-text-muted" id="transcript-help"><span className="size-1 rounded-full bg-border-strong" aria-hidden="true" /><span>点击文字直接修改，已修改的句子保留你的版本</span></footer>
   </section>
 }

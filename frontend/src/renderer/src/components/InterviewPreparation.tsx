@@ -1,6 +1,6 @@
 import InviteFriendsButton from './invitation/InviteFriendsButton'
 import { useState } from 'react'
-import { CheckCircle, Plus, PlusCircle } from '@phosphor-icons/react'
+import { CheckCircle, PlusCircle } from '@phosphor-icons/react'
 import type { DesktopBridge, EnvironmentInput, InterviewEnvironment, Settings } from '../../../shared/types'
 import { errorMessage } from '../hooks/useSettings'
 import useInterviewLibrary from '../hooks/useInterviewLibrary'
@@ -12,7 +12,6 @@ import EnvironmentCard from './EnvironmentCard'
 import EnvironmentDialog from './EnvironmentDialog'
 import { Button } from './ui/button'
 import { ConfirmModal } from './ui/dialog'
-import { Eyebrow } from './ui/pill'
 import { formNoteClass, inlineErrorClass, successNoticeClass, textButtonClass } from '../lib/form'
 import { cn } from '../lib/cn'
 
@@ -78,16 +77,13 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
   return <section className="flex flex-1 flex-col p-8 max-[820px]:p-5" aria-labelledby="preparation-title">
     <header className="mb-8 flex items-center justify-between gap-5 max-[820px]:items-start max-[560px]:flex-wrap">
       <div>
-        <Eyebrow>准备好之后再开始计时</Eyebrow>
         <h1 id="preparation-title" tabIndex={-1} className="mb-2 text-[28px] leading-[1.3] font-semibold tracking-[-0.04em] max-[820px]:text-2xl">准备面试</h1>
-        <p className="text-xs text-text-muted">简历必填，岗位 JD 和参考资料选填。</p>
       </div>
       <div className="flex flex-col items-end gap-3 max-[560px]:items-start">
         {/* v30 .prep-wallet:标签次要小字,时长值 mono 蓝色强调(≤60s 转红),刷新钮 30px */}
         <div className="flex items-center gap-[9px]"><strong className="text-xs font-medium text-text-secondary">可用时长</strong><span className={cn('font-mono text-[13px] font-semibold tabular-nums text-accent-text', timer.remaining <= 60 && 'text-danger')}>{formatDuration(timer.remaining)}</span><RefreshTimeButton className="size-[30px] text-accent-text hover:bg-accent/10" refreshing={timer.refreshing} onRefresh={timer.refresh} /></div>
         <InviteFriendsButton bridge={bridge} />
         {onPurchase && <Button onClick={onPurchase}>购买时长</Button>}
-        <Button variant="primary" disabled={!data.library || busy} onClick={requestNew}><Plus size={18} aria-hidden="true" />新建面试准备</Button>
       </div>
     </header>
     {timer.wallet?.session?.status === 'ended' && <p className={cn(successNoticeClass, 'mt-0 mb-3')}>上次面试已结束 · 使用 {formatDuration(timer.wallet.session.usedSeconds)}。可前往会话记录查看回答。</p>}
@@ -100,7 +96,6 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
     <div className="flex flex-wrap items-center justify-between gap-4 rounded-card border border-border bg-card p-[18px] max-[820px]:flex-col max-[820px]:items-start">
       <div className="min-w-0">
         <h2 className="text-sm font-semibold text-text-heading">连接已就绪，随时可以开始</h2>
-        <p className="mt-1.5 text-[11.5px] leading-[1.7] text-text-muted">点击开始后持续扣减面试时长，自带 Key 同样扣时。停止转写不会停止计时；面试结束请点击「结束面试」。</p>
       </div>
       <div className="flex shrink-0 items-center gap-1.5 text-xs text-text-secondary"><button type="button" className={cn(textButtonClass, 'text-accent-text')} onClick={onSettings}>模型与设置</button></div>
     </div>
@@ -127,11 +122,11 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
         </li>
       })}
       <li className="min-w-0">
-        <button type="button" onClick={requestNew} disabled={!data.library || busy} className="flex min-h-[160px] w-full flex-col items-center justify-center gap-1.5 rounded-card border border-dashed border-border-dashed bg-card p-5 text-center text-text-muted transition-colors hover:border-accent hover:text-accent-text">
+        <Button variant="quiet" aria-label="新建面试准备" onClick={requestNew} disabled={!data.library || busy} className="flex h-full min-h-[160px] w-full flex-col items-center justify-center gap-1.5 rounded-card border border-dashed border-border-dashed bg-card p-5 text-center text-text-muted transition-colors hover:border-accent hover:text-accent-text">
           <PlusCircle size={22} aria-hidden="true" />
           <span className="text-[13.5px] font-semibold text-text-secondary">为下一次机会做准备</span>
           <span className="text-[11.5px]">选择简历、岗位与参考资料</span>
-        </button>
+        </Button>
       </li>
     </ul>}
     <EnvironmentDialog open={dialogOpen} onOpenChange={setDialogOpen} draft={editor.draft} dirty={editor.dirty} library={data.library}

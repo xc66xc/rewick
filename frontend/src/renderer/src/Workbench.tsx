@@ -7,7 +7,7 @@ import { interviewTypeLabels } from '../../shared/interview-type'
 import { Pill } from './components/ui/pill'
 import PurchasePage from './components/payment/PurchasePage'
 import { useMemo, useEffect, useRef, useState } from 'react'
-import { ArrowRight, Briefcase, FileText, Stack, WarningCircle, X } from '@phosphor-icons/react'
+import { ArrowRight, Briefcase, WarningCircle, X } from '@phosphor-icons/react'
 import RefreshTimeButton from './components/RefreshTimeButton'
 import InterviewPreparation from './components/InterviewPreparation'
 import { useInterviewTime, formatDuration } from './hooks/useInterviewTime'
@@ -125,13 +125,10 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
         {timer.warning && timer.active && <p className={cn(formNoteClass, 'px-8 pt-1 max-[820px]:px-5')} role="status">{timer.warning}</p>}
         {page === 'preparation' && <InterviewPreparation bridge={bridge} settings={config.settings} timer={timer} isSessionActive={timer.active || session.busy || !['idle', 'error'].includes(session.status)} onPrepare={handlePrepare} onSave={session.saveEnvironment} onStarted={() => setPage('workspace')} onContext={handleContext} onSettings={handleSettings} onPurchase={() => setPage('purchase')} />}
         {page === 'workspace' && timer.active && <div className={cn('flex min-h-0 flex-1 flex-col', compact ? 'p-0' : 'px-8 pb-0')}>
-          {/* v30 workspace-context:环境胶囊(渐变磁片+600 名称)+ 简历/岗位/资料胶囊;未选态虚线边 + muted */}
+          {/* 工作台顶部仅展示面试名称与面试类型 */}
           {!compact && environment && <div className="mb-3 flex shrink-0 items-center justify-between gap-3 text-xs"><div className="flex min-w-0 flex-1 items-center gap-2">
             <span className="inline-flex h-[34px] min-w-0 max-w-[280px] shrink-0 items-center gap-[7px] rounded-chip border border-border bg-card px-[11px] hover:border-border-hover max-[1180px]:max-w-[220px]" title="面试环境 · 在「面试准备」中修改"><span aria-hidden="true" className="grid size-[22px] shrink-0 place-items-center rounded-[5px] brand-gradient text-text-on-fill"><Briefcase size={12} aria-hidden="true" /></span><span className="min-w-0 truncate font-semibold">{environment.name}</span></span>
             {environment.interviewType && <Pill>{interviewTypeLabels[environment.interviewType]}</Pill>}
-            <span className={cn('inline-flex h-[34px] min-w-0 max-w-[280px] shrink-0 items-center gap-[7px] rounded-chip border px-[11px] hover:border-border-hover', environment.targetName ? 'border-border bg-card' : 'border-dashed border-border-dashed')} title="已选岗位"><Briefcase size={14} aria-hidden="true" className="shrink-0 text-text-muted" /><span className={cn('min-w-0 truncate', !environment.targetName && 'text-text-muted')}>{environment.targetName || '未选岗位'}</span></span>
-            <span className={cn('inline-flex h-[34px] min-w-0 max-w-[280px] shrink-0 items-center gap-[7px] rounded-chip border px-[11px] hover:border-border-hover', environment.resumeName ? 'border-border bg-card' : 'border-dashed border-border-dashed')} title="已选简历"><FileText size={14} aria-hidden="true" className="shrink-0 text-text-muted" /><span className={cn('min-w-0 truncate', !environment.resumeName && 'text-text-muted')}>{environment.resumeName || '未选简历'}</span></span>
-            <span className={cn('inline-flex h-[34px] min-w-0 max-w-[280px] shrink-0 items-center gap-[7px] rounded-chip border px-[11px] hover:border-border-hover', environment.referenceIds.length ? 'border-border bg-card' : 'border-dashed border-border-dashed')} title="已选参考资料"><Stack size={14} aria-hidden="true" className="shrink-0 text-text-muted" /><span className={cn('min-w-0 truncate', !environment.referenceIds.length && 'text-text-muted')}>{environment.referenceIds.length ? `${environment.referenceIds.length} 份参考资料` : '未选资料'}</span></span>
           </div></div>}
           {!compact && !config.loading && !isAsrReady(config.settings) && <div className="mb-5 flex items-center justify-between gap-4 rounded-chip border border-accent-line bg-accent-subtle px-4 py-3 text-xs text-text-primary max-[560px]:px-2 max-[560px]:py-2 max-[560px]:text-[10px]"><div className="flex items-center gap-2"><span className="size-1.5 shrink-0 rounded-full bg-accent" aria-hidden="true" /><span>准备开始？先连接转写服务和回答模型。</span></div><Button variant="quiet" size="sm" onClick={handleSettings}>完成配置<ArrowRight size={16} aria-hidden="true" /></Button></div>}
           <div className={cn('grid min-h-0 flex-1 grid-cols-[minmax(280px,.72fr)_minmax(400px,1.28fr)] gap-5 wide:grid-cols-[minmax(300px,.75fr)_minmax(430px,1.55fr)] wide:gap-6 max-[1060px]:grid-cols-[minmax(260px,.68fr)_minmax(340px,1.32fr)] max-[1060px]:gap-4 max-[820px]:grid-cols-[minmax(0,1fr)] max-[820px]:overflow-y-auto',

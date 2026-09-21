@@ -75,15 +75,11 @@ export default function ReferenceLibrary({ settings, bridge, onSave }: Reference
       <Button disabled={!bridge || importBusy} onClick={() => void handleImport()}><FileArrowUp size={18} aria-hidden="true" />导入参考资料</Button></header>
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-chip border border-border bg-subtle px-4 py-3"><ToggleSwitch checked={settings.retrieval.enabled} disabled={!bridge || busy} onCheckedChange={handleEnabled} label="使用参考资料" />
       <span className="text-xs text-text-secondary">{readyCount} 份已启用且可用 · 共 {documents.length} 份</span></div>
-    {settings.remoteKnowledge.enabled && <p className={formNoteClass} role="status">当前只检索百炼远程知识库，平台检索已暂停。这里的开关和环境选择会保留，关闭远程知识库后按这些设置恢复。</p>}
-    <div className="mb-4 rounded-chip border border-accent-line bg-accent-subtle px-4 py-4"><p className="text-xs leading-[1.85] text-text-secondary [overflow-wrap:anywhere]">资料上传到平台，由平台完成解析和索引；回答时仅使用当前环境选择的相关片段。</p></div>
-    <p className={formNoteClass}>此开关控制平台参考资料，在百炼远程知识库关闭时生效。远程开启时不会使用平台检索，简历和岗位 JD 仍照常提供。「技术参考」帮助解释知识，仅将亲自参与的材料标为「我的项目经历」。</p>
     {error && <p className={inlineErrorClass} role="alert">{error}</p>}{notice && <p className={successNoticeClass} role="status"><CheckCircle size={18} />{notice}</p>}
     {loading && <p className={formNoteClass} role="status">正在读取资料库…</p>}
     {importBusy && <p className={formNoteClass} role="status">正在导入资料，已出现的资料可以预览或移除。</p>}
     {documents.length ? <div className="mt-5 mb-4 overflow-hidden rounded-chip border border-border">{documents.map(document => <ReferenceDocumentRow key={document.id} document={document} busy={documentBusy.has(document.id)} removing={removing.has(document.id)} onPreview={setPreview} onUpdate={handleUpdate} onReindex={handleReindex} onRemove={id => void handleRemove(id)} />)}</div>
       : !loading && <EmptyState icon={<Books weight="duotone" />} title="为回答准备一些参考" description={<span>支持含文字的 PDF、TXT、MD，可一次选择多份。<br />每份不超过 10 MB，数量和总容量以平台配额为准。</span>} className="my-5 rounded-chip border border-dashed border-border-strong" />}
-    <p className={formNoteClass}>关闭百炼远程知识库后，平台检索按此开关恢复，只使用当前环境中已勾选、已启用且可用的资料。新增平台资料后请到面试环境中选择；这里的选择和移除不改变远程 Agent 的范围，也不改变历史回答和摘录。</p>
     {preview && bridge && <ReferencePreviewDialog document={preview} bridge={bridge} onClose={() => setPreview(null)} />}
   </section>
 }

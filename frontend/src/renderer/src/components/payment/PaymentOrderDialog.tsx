@@ -39,8 +39,6 @@ export default function PaymentOrderDialog({ order, busy, onClose, onRefresh, on
       {payable && <p className="text-xs text-text-secondary">{order.paymentMethod === 'alipay' ? '请在浏览器完成支付，随后返回客户端' : order.paymentMethod === 'zpay' ? '请使用对应的支付宝或微信扫码付款' : '请使用手机微信扫码'} · {order.paymentMethod === 'zpay' ? '本次付款入口剩余' : '剩余'} {formatDuration(remaining)}</p>}
       {!payable && !order.credited && order.status !== 'closed' && <p className="text-xs text-text-secondary">{remaining === 0 ? '支付时间已到，正在核实订单最终状态。' : '正在核实订单，请稍候。'}</p>}
       <p role="status" className="text-sm font-medium">{orderStatus(order)}</p>
-      <p className="text-xs leading-relaxed text-text-muted">关闭窗口不会取消订单，可在购买记录继续查看。时长到账后不会自动开始面试。</p>
-      {order.paymentMethod === 'zpay' && <p className="text-xs leading-relaxed text-text-muted">取消或超时仅关闭本地订单，原 ZPAY 付款链接可能仍然有效，请勿重复支付。已付款的订单核实后仍会到账。</p>}
       <p className="break-all font-mono text-xs text-text-muted">订单号：{order.id}</p>
     </div>
   </Modal>

@@ -20,11 +20,10 @@ export default function CompactAppearance({ preferences, saving, onChange, onPre
       <p className="flex items-center gap-2 text-sm text-text-secondary">{preferences.contentProtection ? <ShieldCheck aria-hidden="true" /> : <ShieldSlash aria-hidden="true" />}{preferences.contentProtection ? '共享保护已开启（尽力保护）' : '共享保护未开启'}</p>
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-3"><label htmlFor="compact-opacity" className="text-sm text-text-primary">背景不透明度</label><output htmlFor="compact-opacity" className="font-mono text-sm tabular-nums text-text-primary">{preferences.backgroundOpacity}%</output></div>
-        <Slider id="compact-opacity" value={preferences.backgroundOpacity} min={0} max={80} step={1} disabled={saving}
+        <Slider className="accent-accent" id="compact-opacity" value={preferences.backgroundOpacity} min={0} max={80} step={1} disabled={saving}
           aria-valuetext={`背景不透明度 ${preferences.backgroundOpacity}%`}
           onValueChange={onPreview} onValueCommit={value => onChange({ ...preferences, backgroundOpacity: value })} />
         <div className="flex justify-between text-xs text-text-secondary"><span>0% · 全透明</span><span>80% · 更清晰</span></div>
-        <p className="text-xs text-text-secondary">仅改变背景，文字保持清晰。可拖动顶部移动窗口，拖动边缘调整大小。</p>
       </div>
       <ContentProtectionControl checked={preferences.contentProtection} disabled={saving}
         onChange={value => onChange({ ...preferences, contentProtection: value })} />

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { CheckCircle, Key } from '@phosphor-icons/react'
+import { CheckCircle } from '@phosphor-icons/react'
 import type { CustomServiceProfile, DesktopBridge, ServiceKind, Settings, SettingsInput } from '../../../shared/types'
 import { errorMessage, settingsInput } from '../hooks/useSettings'
 import { selectionFor, serviceLabels } from '../hooks/serviceChoices'
@@ -83,7 +83,6 @@ export default function SettingsDialog({ settings, bridge, onSave, onApply, onLo
             <ServicePreferences advanced={advanced} kind={kind} draft={draft} onChange={setDraft} />
           </fieldset>)}
         </fieldset>
-        <p className="flex items-start gap-2 text-xs leading-[1.8] text-text-muted [&_svg]:mt-0.5 [&_svg]:size-4 [&_svg]:shrink-0"><Key aria-hidden="true" />{advanced ? '平台服务选择和使用偏好随账号同步，自定义服务选择仅在本机生效。自定义 Key 和登录凭证加密保存在本机。平台服务由后端中转；音频、问题和参考内容发送到所选服务。' : '使用偏好随账号同步。回答、转写和检索服务由平台统一配置。'}</p>
         {notice && <p className={successNoticeClass} role="status"><CheckCircle size={18} aria-hidden="true" />{notice}</p>}{error && <p className={inlineErrorClass} role="alert">{error}</p>}
       </form>
     </Modal>

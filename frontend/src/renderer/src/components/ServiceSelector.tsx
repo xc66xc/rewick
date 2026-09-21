@@ -30,14 +30,13 @@ export default function ServiceSelector({ kind, settings, selection, onChange, o
     : [...platformOptions, ...customOptions]
   return <div>
     <label className={fieldClass} htmlFor={id}>{serviceLabels[kind]}<AppSelect id={id} value={value || null} placeholder="请选择服务" options={options}
-      newItem={{ value: 'new', label: '自定义模型/服务…' }} aria-describedby={`${id}-note`} aria-invalid={invalid || undefined}
+      newItem={{ value: 'new', label: '自定义模型/服务…' }} aria-describedby={invalid ? `${id}-note` : undefined} aria-invalid={invalid || undefined}
       onValueChange={next => {
         if (next === 'new') { onCustom(); return }
         const [source, ...parts] = next.split(':')
         if (source === 'platform' || source === 'custom') onChange({ source, id: parts.join(':') })
       }} /></label>
-    <p id={`${id}-note`} className={selection && !available ? inlineErrorClass : '-mt-2 mb-4 text-xs leading-[1.8] text-text-muted'} role={selection && !available ? 'alert' : undefined}>
-      {selection && !available ? '原服务已删除或下架，请明确选择其他服务后保存。' : '按所选服务连接；平台配置由管理员维护。'}</p>
+    {invalid && <p id={`${id}-note`} className={inlineErrorClass} role="alert">原服务已删除或下架，请明确选择其他服务后保存。</p>}
     {profile && <div className="mb-4 flex flex-wrap gap-2">
       <Button size="sm" onClick={() => onCustom(profile)}>编辑{serviceLabels[kind]}</Button>
       <Button size="sm" variant="quiet" className="text-danger hover:bg-danger-subtle" onClick={() => onRemove(profile)}>删除{serviceLabels[kind]}</Button>
