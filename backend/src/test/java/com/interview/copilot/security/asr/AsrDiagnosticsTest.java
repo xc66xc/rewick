@@ -42,6 +42,15 @@ class AsrDiagnosticsTest {
     }
 
     @Test
+    void safeCode_realtimeCodes_retainsIdentifiersButRejectsSecretsAndFreeText() {
+        assertThat(AsrDiagnostics.safeCode("session_expired")).isEqualTo("session_expired");
+        assertThat(AsrDiagnostics.safeCode("invalid_request_error")).isEqualTo("invalid_request_error");
+        assertThat(AsrDiagnostics.safeCode("sk-private-key")).isEqualTo("unrecognized_or_absent");
+        assertThat(AsrDiagnostics.safeCode("private transcript\nline")).isEqualTo("unrecognized_or_absent");
+        assertThat(AsrDiagnostics.safeCode("x".repeat(81))).isEqualTo("unrecognized_or_absent");
+    }
+
+    @Test
     void safeCode_knownProviderError_preservesDiagnosticCode() {
         assertThat(AsrDiagnostics.safeCode("AllocationQuota.FreeTierOnly"))
                 .isEqualTo("AllocationQuota.FreeTierOnly");

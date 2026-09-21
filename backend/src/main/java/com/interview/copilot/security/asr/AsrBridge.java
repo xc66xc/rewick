@@ -24,8 +24,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * @author Carl Wang
@@ -39,8 +37,7 @@ public final class AsrBridge {
     private final AsrProxy resources;
     private final Runnable release;
     private final AtomicBoolean ended = new AtomicBoolean();
-    private final AtomicInteger pendingBytes = new AtomicInteger();
-    private final ReentrantLock sendLock = new ReentrantLock();
+    private final AsrSendQueue sendQueue;
     private final String upstreamId = UUID.randomUUID().toString();
     private LiveTranslateSession realtime;
     private volatile String clientId = "platform";
@@ -48,7 +45,6 @@ public final class AsrBridge {
     private volatile WebSocket upstream;
     private volatile UsageLease lease;
     private volatile CompletableFuture<WebSocket> connecting;
-    private CompletableFuture<WebSocket> outgoing = CompletableFuture.completedFuture(null);
     private volatile ScheduledFuture<?> deadline;
     private volatile ScheduledFuture<?> phaseDeadline;
     private long lastAudioNanos = System.nanoTime();
@@ -61,6 +57,8 @@ public final class AsrBridge {
         this.resources = resources;
         this.release = release;
         diagnostics = new AsrDiagnostics(user.id(), downstream.getId());
+        // 16 seconds of PCM storage; each item must finish within 15 seconds of enqueue.
+        sendQueue = new AsrSendQueue(512000, Duration.ofSeconds(15), this::sendFailure);
         phaseDeadline = resources.timers().schedule(() -> fail("client_start_timeout"), 10, TimeUnit.SECONDS);
     }
 
@@ -184,23 +182,13 @@ public final class AsrBridge {
 
     private void enqueue(ByteBuffer audio, String text) {
         int size = text == null ? audio.remaining() : text.length() * 2;
-        if (pendingBytes.addAndGet(size) > 128000) {
-            fail("upstream_send_backpressure");
-            return;
-        }
-        sendLock.lock();
-        try {
-            outgoing = outgoing.thenCompose(previous -> send(audio, text));
-            outgoing.whenComplete(
-                    (socket, error) -> {
-                        pendingBytes.addAndGet(-size);
-                        if (error != null) {
-                            failure("upstream_send_error", error);
-                        }
-                    });
-        } finally {
-            sendLock.unlock();
-        }
+        sendQueue.enqueue(size, () -> send(audio, text));
+    }
+
+    private void sendFailure(String reason, Throwable error) {
+        if (ended.get()) return;
+        diagnostics.queue(sendQueue.pendingBytes());
+        failure(reason, error);
     }
 
     private CompletableFuture<WebSocket> send(ByteBuffer audio, String text) {
@@ -241,6 +229,10 @@ public final class AsrBridge {
             String event = frame.path("header").path("event").asText();
             if ("task-failed".equals(event)) {
                 diagnostics.detail("upstream_task_failed", frame.path("header").path("error_code").asText(), null);
+                if (realtime != null) {
+                    diagnostics.detail("upstream_error_type", frame.path("header").path("error_type").asText(), null);
+                    diagnostics.detail("upstream_error_event", frame.path("header").path("error_event").asText(), null);
+                }
                 fail("upstream_task_failed");
                 return;
             }

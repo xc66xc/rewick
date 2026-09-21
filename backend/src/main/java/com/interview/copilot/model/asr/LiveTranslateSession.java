@@ -113,7 +113,10 @@ public final class LiveTranslateSession {
 
     private ObjectNode failure(JsonNode input, String taskId) {
         ObjectNode result = event("task-failed", taskId);
-        result.withObject("/header").put("error_code", input.path("error").path("code").asText());
+        result.withObject("/header")
+                .put("error_code", input.path("error").path("code").asText())
+                .put("error_type", input.path("error").path("type").asText())
+                .put("error_event", input.path("type").asText());
         return result;
     }
 

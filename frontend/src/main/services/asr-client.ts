@@ -160,7 +160,7 @@ export class AsrClient {
       this.emit({ kind: 'asr-status', sessionId: state.id, status: 'idle' })
     } else if (header.event === 'task-failed') {
       const authentication = /auth|denied|forbidden|invalidapikey/i.test(header.error_code ?? '')
-      this.fail(state, authentication ? '转写认证失败，请检查 API Key、服务地域和模型权限。' : '转写任务失败，请检查模型名称、音频格式和账户额度。')
+      this.fail(state, authentication ? '转写认证失败，请检查 API Key、服务地域和模型权限。' : '转写服务返回错误，请重新开始转写；如反复出现，请联系管理员查看错误日志。')
     }
   }
 

@@ -55,6 +55,11 @@ final class AsrDiagnostics {
                 error == null || error.getCause() == null ? "none" : error.getCause().getClass().getSimpleName());
     }
 
+    void queue(int bytes) {
+        LOG.warn("ASR send backlog user={} connection={} request={} pendingBytes={} estimatedAudioMs={}",
+                userId, connectionId, requestId, bytes, bytes / 32);
+    }
+
     void closed(String side, int code) {
         LOG.info("ASR transport close user={} connection={} request={} side={} closeCode={}",
                 userId, connectionId, requestId, side, code);
@@ -69,7 +74,9 @@ final class AsrDiagnostics {
     }
 
     static String safeCode(String code) {
-        return SAFE_CODES.contains(code == null ? "" : code) ? code : "unrecognized_or_absent";
+        if (code == null || code.isEmpty()) return "unrecognized_or_absent";
+        return SAFE_CODES.contains(code) || code.matches("[A-Za-z][A-Za-z_.]{0,79}|[0-9]{3}")
+                ? code : "unrecognized_or_absent";
     }
 
     private static long age(long now, long previous) {
