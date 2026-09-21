@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CheckCircle, Key } from '@phosphor-icons/react'
 import type { CustomServiceProfile, DesktopBridge, ServiceKind, Settings, SettingsInput } from '../../../shared/types'
 import { errorMessage, settingsInput } from '../hooks/useSettings'
@@ -13,6 +13,7 @@ import { toast } from './ui/toast'
 import { formNoteClass, inlineErrorClass, successNoticeClass } from '../lib/form'
 
 interface SettingsDialogProps {
+  windowControls?: ReactNode
   settings: Settings; bridge: DesktopBridge | undefined; onSave: (input: SettingsInput) => Promise<Settings>
   onApply?: (settings: Settings) => void; onLogout?: () => Promise<void>; onClose: () => void
 }
@@ -21,7 +22,7 @@ const groupClass = 'm-0 mb-6 min-w-0 border-0 border-b border-border p-0 pb-6'
 function initialDraft(settings: Settings): SettingsInput {
   return { ...settingsInput(settings), serviceSelections: Object.fromEntries(kinds.map(kind => [kind, selectionFor(settings, kind)])) }
 }
-export default function SettingsDialog({ settings, bridge, onSave, onApply, onLogout, onClose }: SettingsDialogProps) {
+export default function SettingsDialog({ settings, bridge, onSave, onApply, onLogout, onClose, windowControls }: SettingsDialogProps) {
   const form = useRef<HTMLFormElement>(null)
   const inFlight = useRef(false)
   const returnFocus = useRef(document.activeElement)
@@ -70,6 +71,7 @@ export default function SettingsDialog({ settings, bridge, onSave, onApply, onLo
         <Button disabled={busy} onClick={requestClose}>关闭</Button>
         <Button variant="primary" disabled={busy || !bridge} onClick={() => void perform('save')}>{busy ? '处理中…' : '保存设置'}</Button>
       </>}>
+      {windowControls && <section aria-label="窗口与隐私" className={groupClass}><h3 className="mb-4 text-sm font-semibold">窗口与隐私</h3>{windowControls}</section>}
       <form ref={form} onSubmit={event => { event.preventDefault(); void perform('save') }}>
         <fieldset className="m-0 min-w-0 border-0 p-0" disabled={busy || !bridge}>
           <section aria-label="当前账号" className={groupClass}><h3 className="mb-2 text-sm font-semibold">当前账号</h3><p className={formNoteClass}>{catalog.platform?.user?.displayName || '尚未登录'}</p>

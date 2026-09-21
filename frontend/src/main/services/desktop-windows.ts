@@ -29,6 +29,7 @@ export class DesktopWindows {
       ...(process.platform === 'win32' ? { titleBarOverlay: { color: '#ffffff', symbolColor: '#2a2a2e', height: 50 } } : {}),
       trafficLightPosition: { x: 18, y: 20 }, backgroundColor: '#F7F6F3', autoHideMenuBar: true
     }, this.view)
+    this.full.setContentProtection(this.preferences.contentProtection)
     this.full.contentView.addChildView(this.view)
     this.watchSize(this.full)
     this.full.on('close', event => {
@@ -67,7 +68,7 @@ export class DesktopWindows {
     const wasVisible = previous.isVisible()
     const next = value ? this.floating! : this.full
     // Protect before attaching the renderer or making it visible.
-    next.setContentProtection(value && this.preferences.contentProtection)
+    next.setContentProtection(this.preferences.contentProtection)
     next.setAlwaysOnTop(this.pinned, 'floating')
     previous.hide()
     previous.contentView.removeChildView(this.view)
@@ -101,6 +102,8 @@ export class DesktopWindows {
   }
   setPreferences(preferences: WindowPreferences): void {
     this.preferences = preferences
+    if (this.closed) return
+    this.full.setContentProtection(preferences.contentProtection)
     this.floating?.setContentProtection(preferences.contentProtection)
   }
   prepareQuit(): void { this.quitting = true }

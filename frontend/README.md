@@ -230,7 +230,7 @@ node scripts/check-packaged-debugging.mjs '../dist/debug-hardened/mac-arm64/Inte
 
 开始面试后，点击右上角「紧凑模式」进入透明窗口；「透明与共享设置」可通过滑块以 1% 步长调整 0%–80% 的背景不透明度，拖动即时预览、松开保存，支持键盘方向键微调（默认 20%，淡色半透明；已保存的设置保持原值），文字不会一起变淡。拖动顶栏移动窗口，拖动边缘调整大小。设置保存在本机用户数据目录的 `window-preferences.json`。
 
-共享保护默认开启，仅保护紧凑窗口。它依赖操作系统捕获排除能力，不能保证所有会议软件都隐藏窗口，尤其是 macOS 的 ScreenCaptureKit 捕获方式。共享前请在实际会议软件中验证效果。退出紧凑模式、结束面试或时长耗尽会恢复完整窗口。
+共享保护默认开启，常规与紧凑窗口共用一份本机设置。常规模式从「模型与设置 → 窗口与隐私」调整，紧凑模式从「透明与共享设置」调整；任一入口修改后立即自动保存并同步应用到两个窗口，退出紧凑模式、结束面试和重启均保留该选择。它依赖操作系统捕获排除能力，不能保证所有会议软件都隐藏窗口，尤其是 macOS 的 ScreenCaptureKit 捕获方式。共享前请在实际会议软件中验证效果。退出紧凑模式、结束面试或时长耗尽会恢复完整窗口。
 
 完整窗口和紧凑窗口共用一个 `WebContentsView`，切换不重新创建页面。原生窗口与真实应用流程的隔离验收命令（先执行 `npm run build`）：
 
@@ -244,3 +244,5 @@ node scripts/smoke-compact-ui.mjs
 完整名称为「掌灯 Rewick」；紧凑模式显示 Rewick。安装后的应用和 DMG 标题使用完整名称，下载文件使用 `Rewick-版本-mac-arm64.dmg` / `Rewick-版本-win-x64-setup.exe`。现有图形图标沿用。应用 ID、IPC、环境变量、域名及正式/开发版数据目录保持不变。以下历史验收段落中的旧产物路径仅指当时的安装包。
 
 品牌图标源文件与再生成说明见 `../assets/branding/README.md`；运行 `node scripts/create-brand-icons.mjs` 可从确认原图生成 ICNS/ICO 与各端图片（需要 macOS）。
+
+共享保护同步验收（先构建）：`node frontend/scripts/smoke-content-protection.mjs`。测试检查原生窗口保护标志、两个入口与重启持久化；会议软件实际捕获效果仍需在对应系统验证。

@@ -1,3 +1,4 @@
+import ContentProtectionControl from './components/ContentProtectionControl'
 import CompactStatus from './components/CompactStatus'
 import CompactAppearance from './components/CompactAppearance'
 import { defaultWindowPreferences, type WindowPreferences } from '../../shared/window-preferences'
@@ -40,10 +41,12 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
   const [appearance, setAppearance] = useState(defaultWindowPreferences)
   const [opacityPreview, setOpacityPreview] = useState<number | null>(null)
   const [savingAppearance, setSavingAppearance] = useState(false)
+  const [appearanceReady, setAppearanceReady] = useState(false)
   const [windowError, setWindowError] = useState('')
   useEffect(() => {
     let current = true
-    void bridge.getWindowPreferences().then(value => { if (current) setAppearance(value) })
+    setAppearanceReady(false)
+    void bridge.getWindowPreferences().then(value => { if (current) { setAppearance(value); setAppearanceReady(true) } })
       .catch(reason => { if (current) setWindowError(errorMessage(reason)) })
     const unsubscribe = bridge.onEvent(event => { if (event.kind === 'window-mode') setCompact(event.compact) })
     return () => { current = false; unsubscribe() }
@@ -55,7 +58,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
   async function saveAppearance(value: WindowPreferences) {
     setSavingAppearance(true)
     try { setAppearance(await bridge.saveWindowPreferences(value)) }
-    catch (reason) { setWindowError(errorMessage(reason)) }
+    catch (reason) { toast.show(errorMessage(reason), { type: 'error' }) }
     finally { setOpacityPreview(null); setSavingAppearance(false) }
   }
   const main = useRef<HTMLElement>(null)
@@ -109,7 +112,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
   const environment = config.settings.interviewEnvironment
   /* v30 骨架 §2:白色无缝 chrome(侧栏/顶栏无边框),主内容区是一张 12px 圆角 + 1px 边线的灰蓝画布卡,白卡浮在其上 */
   return <ErrorBoundary><div className={cn('flex h-dvh min-h-[480px] flex-col overflow-hidden bg-page', compact && 'compact-surface')} style={compact ? { '--compact-opacity': (opacityPreview ?? appearance.backgroundOpacity) / 100 } as CSSProperties : undefined}>
-    <Topbar compact={compact} pinned={pinned} onCompact={() => void handleCompact()} onPin={() => void handlePin()} onSettings={handleSettings} desktop={Boolean(bridge)} loggingOut={leaving} compactControls={<CompactAppearance preferences={{ ...appearance, backgroundOpacity: opacityPreview ?? appearance.backgroundOpacity }} onPreview={setOpacityPreview} saving={savingAppearance} onChange={value => void saveAppearance(value)}><AutoAnswerControls session={session} compact /></CompactAppearance>} />
+    <Topbar compact={compact} pinned={pinned} onCompact={() => void handleCompact()} onPin={() => void handlePin()} onSettings={handleSettings} desktop={Boolean(bridge)} loggingOut={leaving} compactControls={<CompactAppearance preferences={{ ...appearance, backgroundOpacity: opacityPreview ?? appearance.backgroundOpacity }} onPreview={setOpacityPreview} saving={savingAppearance || !appearanceReady} onChange={value => void saveAppearance(value)}><AutoAnswerControls session={session} compact /></CompactAppearance>} />
     <div className="flex min-h-0 flex-1" inert={leaving}>{!compact && <Sidebar page={page} onChange={navigate} account={config.settings.platform?.user?.displayName} />}
       <main className="mb-3 mr-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-auto rounded-card border border-border bg-canvas" ref={main}>
         {error && <div className="flex shrink-0 items-center gap-2 border-b border-danger-line bg-danger-subtle px-5 py-2 text-sm text-danger" role="alert"><WarningCircle size={19} aria-hidden="true" /><span className="flex-1 [overflow-wrap:anywhere]">{error}</span><IconButton aria-label="关闭提示" title="关闭提示" onClick={() => { session.clearError(); setWindowError('') }}><X size={17} aria-hidden="true" /></IconButton></div>}
@@ -140,6 +143,6 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
         {page === 'history' && <HistoryPage bridge={bridge} records={session.history} activeSessionId={session.record.id} activeSessionLocked={timer.active || session.busy || !['idle', 'error'].includes(session.status)} onExport={session.exportRecord} onDelete={session.removeSession} />}
       </main>
     </div>
-    {settingsOpen && <SettingsDialog settings={config.settings} bridge={bridge} onSave={config.save} onApply={config.apply} onLogout={handleLogout} onClose={() => setSettingsOpen(false)} />}
+    {settingsOpen && <SettingsDialog windowControls={<ContentProtectionControl checked={appearance.contentProtection} disabled={savingAppearance || !appearanceReady} onChange={value => void saveAppearance({ ...appearance, contentProtection: value })} />} settings={config.settings} bridge={bridge} onSave={config.save} onApply={config.apply} onLogout={handleLogout} onClose={() => setSettingsOpen(false)} />}
   </div></ErrorBoundary>
 }

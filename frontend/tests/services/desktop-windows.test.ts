@@ -21,7 +21,9 @@ vi.mock('electron', () => ({
     focus() {}
     destroy() { this.destroyed = true; this.emit('closed') }
     close() { const event = { preventDefault: vi.fn() }; this.emit('close', event); if (!event.preventDefault.mock.calls.length) this.destroy() }
-    setContentProtection() {}
+    protectedContent = false
+    setContentProtection(value: boolean) { this.protectedContent = value }
+    isContentProtected() { return this.protectedContent }
     setAlwaysOnTop() {}
   },
   WebContentsView: class {
@@ -34,6 +36,32 @@ import { DesktopWindows } from '../../src/main/services/desktop-windows'
 import { defaultWindowPreferences } from '../../src/shared/window-preferences'
 
 describe('resident desktop windows', () => {
+  it('protects the normal window from creation and synchronizes both hosts across mode changes', () => {
+    const windows = new DesktopWindows({}, defaultWindowPreferences, vi.fn(), vi.fn(), vi.fn())
+    expect(windows.full.isContentProtected()).toBe(true)
+    windows.show()
+    windows.setCompact(true)
+    const compact = windows.active
+    expect(compact.isContentProtected()).toBe(true)
+    windows.setPreferences({ ...defaultWindowPreferences, contentProtection: false })
+    expect(windows.full.isContentProtected()).toBe(false)
+    expect(compact.isContentProtected()).toBe(false)
+    windows.setCompact(false)
+    windows.setPreferences(defaultWindowPreferences)
+    expect(windows.full.isContentProtected()).toBe(true)
+    expect(compact.isContentProtected()).toBe(true)
+    windows.hide()
+    windows.setCompact(true)
+    windows.setCompact(false)
+    expect(windows.full.isContentProtected()).toBe(true)
+    expect(windows.full.isVisible()).toBe(false)
+  })
+  it('honors a saved disabled value on startup and first compact creation', () => {
+    const windows = new DesktopWindows({}, { ...defaultWindowPreferences, contentProtection: false }, vi.fn(), vi.fn())
+    expect(windows.full.isContentProtected()).toBe(false)
+    windows.setCompact(true)
+    expect(windows.active.isContentProtected()).toBe(false)
+  })
   it('excludes both Windows hosts from the taskbar, including after restoring', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const windows = new DesktopWindows({}, defaultWindowPreferences, vi.fn(), vi.fn(), vi.fn())

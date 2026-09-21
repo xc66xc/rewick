@@ -4,7 +4,7 @@ import type { WindowPreferences } from '../../../shared/window-preferences'
 import { IconButton } from './ui/button'
 import { Modal } from './ui/dialog'
 import { Slider } from './ui/slider'
-import { ToggleSwitch } from './ui/switch'
+import ContentProtectionControl from './ContentProtectionControl'
 
 export default function CompactAppearance({ preferences, saving, onChange, onPreview, children }: {
   children?: ReactNode
@@ -26,9 +26,8 @@ export default function CompactAppearance({ preferences, saving, onChange, onPre
         <div className="flex justify-between text-xs text-text-secondary"><span>0% · 全透明</span><span>80% · 更清晰</span></div>
         <p className="text-xs text-text-secondary">仅改变背景，文字保持清晰。可拖动顶部移动窗口，拖动边缘调整大小。</p>
       </div>
-      <ToggleSwitch label="共享保护" checked={preferences.contentProtection} disabled={saving}
-        onCheckedChange={value => onChange({ ...preferences, contentProtection: value })} />
-      <p className="text-xs leading-relaxed text-text-secondary">共享保护仅对紧凑窗口生效，无法保证所有录屏或会议软件都隐藏窗口。macOS 使用 ScreenCaptureKit 的共享方式可能仍可捕获。共享前请用会议软件预览或另一台设备验证。</p>
+      <ContentProtectionControl checked={preferences.contentProtection} disabled={saving}
+        onChange={value => onChange({ ...preferences, contentProtection: value })} />
       {children}
     </Modal>
   </>
