@@ -32,6 +32,25 @@ function setup(answers: Answer[]) {
 }
 
 describe('reading answers without automatic scrolling', () => {
+  it('keeps both chat turns and the reading position while the compact reply streams', async () => {
+    const first = answer('one', '第一轮已完成。', 'complete')
+    const next = answer('two', '第二轮正在输出。')
+    const { viewport, update, user } = setup([first])
+    update([first, next], true)
+    expect(screen.getByRole('heading', { name: '面试对话' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '面试问题 one' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '面试问题 two' })).toBeTruthy()
+    expect(screen.getByText('第一轮已完成。')).toBeTruthy()
+    viewport.scrollTop = 80
+    update([first, { ...next, text: '第二轮正在输出。继续补充。' }], true)
+    expect(viewport.scrollTop).toBe(80)
+    expect(screen.getByRole('button', { name: '停止生成' })).toBeTruthy()
+    update([first, { ...next, status: 'error', error: '连接中断，请重试。' }], true)
+    expect(screen.getByRole('alert').textContent).toContain('连接中断')
+    expect(screen.getByRole('button', { name: '发送问题' })).toBeTruthy()
+    await user.click(screen.getAllByRole('button', { name: '复制回答' })[0])
+    expect(screen.getByRole('button', { name: '已复制回答' })).toBeTruthy()
+  })
   it('keeps the reading position as a streaming answer grows, even when initially at the bottom', () => {
     const { viewport, update } = setup([answer('one', '第一段回答。')])
     Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 1000 })

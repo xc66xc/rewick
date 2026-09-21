@@ -26,6 +26,7 @@ export default function AnswerPanel({ session, settings, compact = false }: Answ
         {/* v30 answer-model(纯展示版):Sparkle + mono 模型名,完整显示不截断,不可点击 */}
         <span className="flex shrink-0 items-center gap-1.5 text-[11.5px] font-medium text-text-secondary"><Sparkle size={13} aria-hidden="true" className="shrink-0" /><span className="whitespace-nowrap font-mono text-[10.5px]">{model || '待配置模型'}</span></span>
       </div></header>}
+    {compact && <h2 className="compact-chat__heading">面试对话</h2>}
     <div className="min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]" ref={viewport} role="region" aria-label="回答与面试信息" tabIndex={0}>
       {!compact && <SessionContextDetails record={session.record} current={settings} />}
       {session.record.answers.length ? session.record.answers.map((answer, index) => <AnswerCard key={answer.id} answer={answer} index={index + 1} compact={compact} />)
@@ -33,7 +34,7 @@ export default function AnswerPanel({ session, settings, compact = false }: Answ
           title="下一句，用你的话回答。" description="结合当前问题与你的真实经历，生成可以直接说出口的口语回答。" />
         </div>}
     </div>
-    {compact && session.record.answers.length > 0 && <div className="flex shrink-0 justify-end px-5"><Button variant="quiet" size="sm" className="text-xs" onClick={handleLatestAnswer} aria-label="查看最新回答"><ArrowDown aria-hidden="true" />最新回答</Button></div>}
+    {compact && session.record.answers.length > 0 && <div className="compact-chat__latest flex shrink-0 justify-end"><Button variant="quiet" size="sm" className="text-xs" onClick={handleLatestAnswer} aria-label="查看最新回答"><ArrowDown aria-hidden="true" />最新回答</Button></div>}
     <QuestionComposer session={session} compact={compact} />
   </section>
 }

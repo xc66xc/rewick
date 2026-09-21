@@ -212,7 +212,7 @@
   }
 }
 
-/* One translucent surface avoids stacking alpha; text/controls keep full opacity.
+/* Translucent window and chat surfaces; text/controls keep full opacity.
    Portalled menus and dialogs retain their normal opaque tokens for readability. */
 html.compact-transparent,
 html.compact-transparent body,
@@ -227,7 +227,7 @@ html.compact-transparent #root { background: transparent; }
 .compact-surface :is(header, main, section, div).bg-accent-subtle { background-color: transparent; }
 .compact-surface > div > main { margin: 0; border-radius: 0; }
 
-/* Transparent reading mode: strong ink, restrained sage controls, no page fill. */
+/* Transparent reading mode: strong ink and blue chat controls. */
 .compact-surface {
   --color-text-primary: #20252b;
   --color-text-heading: #20252b;
@@ -236,11 +236,11 @@ html.compact-transparent #root { background: transparent; }
   --color-text-muted: #59636b;
   --color-success: #24694f;
   --color-success-subtle: #deeee5;
-  --color-accent: #b7dfcc;
-  --color-accent-hover: #a1d2bb;
-  --color-accent-active: #8ec4aa;
-  --color-accent-text: #205b44;
-  --color-text-on-fill: #183d2e;
+  --color-accent: #245bff;
+  --color-accent-hover: #174bea;
+  --color-accent-active: #123cc2;
+  --color-accent-text: #204fc7;
+  --color-text-on-fill: #ffffff;
   --color-border: rgb(43 55 65 / 15%);
   --color-border-strong: rgb(43 55 65 / 32%);
   --shadow-focus-ring: 0 0 0 3px rgb(36 105 79 / 15%);
@@ -252,6 +252,23 @@ html.compact-transparent #root { background: transparent; }
   font-weight: 450;
   color: var(--color-text-primary);
 }
-.compact-composer { margin: 8px 20px 16px; }
 
-.compact-composer:focus-within { border-color: var(--color-success); box-shadow: 0 0 0 2px var(--color-success-subtle); }
+
+/* Compact chat: one shared opacity setting, dark ink and alternating bubbles. */
+.compact-surface {
+  --compact-question-fill: rgb(188 213 255 / calc(var(--compact-opacity, 0.2) * 0.85));
+  --compact-reply-fill: rgb(255 255 255 / var(--compact-opacity, 0.2));
+}
+.compact-chat__heading { margin: 0; padding: 10px 18px; font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--color-border); }
+.compact-answer { padding: 18px 16px 10px; }
+.compact-answer__question { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; margin-bottom: 18px; }
+.compact-answer__question-bubble { max-width: 88%; margin: 0; padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: var(--compact-question-fill); font-size: 17px; line-height: 1.6; font-weight: 500; text-align: left; }
+.compact-answer__label { margin: 0 0 6px 2px; font-size: 12px; color: var(--color-text-secondary); }
+.compact-answer__reply { display: flex; flex-direction: column; width: 94%; min-width: 0; padding: 14px 16px 8px; border-radius: 16px 16px 16px 4px; background: var(--compact-reply-fill); }
+.compact-answer__status { order: 2; margin: 4px 0 0; }
+.compact-answer__body p:last-child { margin-bottom: 0; }
+.compact-answer__details { width: 94%; font-size: 11px; color: var(--color-text-secondary); }
+.compact-chat__latest { padding: 4px 16px; }
+.compact-surface .compact-composer.bg-card { margin: 4px 12px 12px; background: var(--compact-reply-fill); }
+.compact-composer:focus-within { border-color: var(--color-accent); box-shadow: var(--shadow-focus-ring); }
+.compact-composer textarea { max-height: 110px; }
