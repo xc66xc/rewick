@@ -16,7 +16,7 @@ export default function CompactTranscript({ segment }: CompactTranscriptProps) {
       <span>{segment ? segment.isFinal ? '已识别' : '识别中…' : '等待语音'}</span>
     </div>
     <p ref={viewport} tabIndex={0} aria-label="最新转写文字" aria-live="polite" aria-atomic="true"
-      className="m-0 max-h-24 overflow-y-auto whitespace-pre-wrap break-words text-sm leading-relaxed text-text-primary">
+      className="compact-transcript__text m-0 max-h-24 overflow-y-auto whitespace-pre-wrap break-words text-sm leading-relaxed text-text-primary">
       {segment?.text || '开始转写后，识别文字会实时显示在这里。'}
     </p>
   </section>

@@ -1,7 +1,7 @@
 import ContentProtectionControl from './components/ContentProtectionControl'
 import CompactStatus from './components/CompactStatus'
 import CompactAppearance from './components/CompactAppearance'
-import { defaultWindowPreferences, type WindowPreferences } from '../../shared/window-preferences'
+import { defaultCompactFontSize, defaultWindowPreferences, type WindowPreferences } from '../../shared/window-preferences'
 import type { CSSProperties } from 'react'
 import { interviewTypeLabels } from '../../shared/interview-type'
 import { Pill } from './components/ui/pill'
@@ -39,6 +39,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
   const [compact, setCompact] = useState(false)
   const [pinned, setPinned] = useState(false)
   const [appearance, setAppearance] = useState(defaultWindowPreferences)
+  const [fontPreview, setFontPreview] = useState<number | null>(null)
   const [opacityPreview, setOpacityPreview] = useState<number | null>(null)
   const [savingAppearance, setSavingAppearance] = useState(false)
   const [appearanceReady, setAppearanceReady] = useState(false)
@@ -59,7 +60,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
     setSavingAppearance(true)
     try { setAppearance(await bridge.saveWindowPreferences(value)) }
     catch (reason) { toast.show(errorMessage(reason), { type: 'error' }) }
-    finally { setOpacityPreview(null); setSavingAppearance(false) }
+    finally { setFontPreview(null); setOpacityPreview(null); setSavingAppearance(false) }
   }
   const main = useRef<HTMLElement>(null)
   const loggingOut = useRef(false)
@@ -111,8 +112,8 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
   const error = timer.error || session.error || config.error || windowError
   const environment = config.settings.interviewEnvironment
   /* v30 骨架 §2:白色无缝 chrome(侧栏/顶栏无边框),主内容区是一张 12px 圆角 + 1px 边线的灰蓝画布卡,白卡浮在其上 */
-  return <ErrorBoundary><div className={cn('flex h-dvh min-h-[480px] flex-col overflow-hidden bg-page', compact && 'compact-surface')} style={compact ? { '--compact-opacity': (opacityPreview ?? appearance.backgroundOpacity) / 100 } as CSSProperties : undefined}>
-    <Topbar compact={compact} pinned={pinned} onCompact={() => void handleCompact()} onPin={() => void handlePin()} onSettings={handleSettings} desktop={Boolean(bridge)} loggingOut={leaving} compactControls={<CompactAppearance preferences={{ ...appearance, backgroundOpacity: opacityPreview ?? appearance.backgroundOpacity }} onPreview={setOpacityPreview} saving={savingAppearance || !appearanceReady} onChange={value => void saveAppearance(value)}><AutoAnswerControls session={session} compact /></CompactAppearance>} />
+  return <ErrorBoundary><div className={cn('flex h-dvh min-h-[480px] flex-col overflow-hidden bg-page', compact && 'compact-surface')} style={compact ? { '--compact-opacity': (opacityPreview ?? appearance.backgroundOpacity) / 100, '--compact-font-size': `${fontPreview ?? appearance.fontSize ?? defaultCompactFontSize}px` } as CSSProperties : undefined}>
+    <Topbar compact={compact} pinned={pinned} onCompact={() => void handleCompact()} onPin={() => void handlePin()} onSettings={handleSettings} desktop={Boolean(bridge)} loggingOut={leaving} compactControls={<CompactAppearance onFontPreview={setFontPreview} preferences={{ ...appearance, fontSize: fontPreview ?? appearance.fontSize, backgroundOpacity: opacityPreview ?? appearance.backgroundOpacity }} onPreview={setOpacityPreview} saving={savingAppearance || !appearanceReady} onChange={value => void saveAppearance(value)}><AutoAnswerControls session={session} compact /></CompactAppearance>} />
     <div className="flex min-h-0 flex-1" inert={leaving}>{!compact && <Sidebar page={page} onChange={navigate} account={config.settings.platform?.user?.displayName} />}
       <main className="mb-3 mr-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-auto rounded-card border border-border bg-canvas" ref={main}>
         {error && <div className="flex shrink-0 items-center gap-2 border-b border-danger-line bg-danger-subtle px-5 py-2 text-sm text-danger" role="alert"><WarningCircle size={19} aria-hidden="true" /><span className="flex-1 [overflow-wrap:anywhere]">{error}</span><IconButton aria-label="关闭提示" title="关闭提示" onClick={() => { session.clearError(); setWindowError('') }}><X size={17} aria-hidden="true" /></IconButton></div>}

@@ -6,6 +6,29 @@ import CompactAppearance from '../src/renderer/src/components/CompactAppearance'
 import { defaultWindowPreferences, windowPreferencesSchema } from '../src/shared/window-preferences'
 
 afterEach(cleanup)
+it('previews font size and commits it without changing other preferences', async () => {
+  const change = vi.fn()
+  const preview = vi.fn()
+  const user = userEvent.setup()
+  const preferences = { ...defaultWindowPreferences, fontSize: 23 }
+  const { rerender } = render(<CompactAppearance preferences={preferences} saving={false} onChange={change} onPreview={vi.fn()} onFontPreview={preview} />)
+  await user.click(screen.getByRole('button', { name: '透明与共享设置' }))
+  const slider = screen.getByRole('slider', { name: '字体大小' })
+  expect((slider as HTMLInputElement).value).toBe('23')
+  fireEvent.change(slider, { target: { value: '28' } })
+  expect(preview).toHaveBeenLastCalledWith(28)
+  expect(change).not.toHaveBeenCalled()
+  rerender(<CompactAppearance preferences={{ ...preferences, fontSize: 28 }} saving={false} onChange={change} onPreview={vi.fn()} onFontPreview={preview} />)
+  fireEvent.pointerUp(slider)
+  expect(change).toHaveBeenLastCalledWith({ ...preferences, fontSize: 28 })
+})
+
+it('accepts old preferences and rejects out-of-range font sizes', () => {
+  expect(windowPreferencesSchema.safeParse(defaultWindowPreferences).success).toBe(true)
+  for (const fontSize of [13, 29, 18.5, NaN]) {
+    expect(windowPreferencesSchema.safeParse({ ...defaultWindowPreferences, fontSize }).success).toBe(false)
+  }
+})
 it('changes background opacity with a separate protection toggle', async () => {
   const change = vi.fn()
   const preview = vi.fn()
