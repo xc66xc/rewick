@@ -15,7 +15,10 @@ export function runRecordingReview(options: {
 }): Promise<{ path: string }> {
   if (options.signal.aborted) return Promise.reject(new Error('已取消复盘导出。'))
   return new Promise((resolve, reject) => {
-    const child = spawn(options.pythonPath, ['-I', options.scriptPath], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
+    const child = spawn(options.pythonPath, ['-I', options.scriptPath], {
+      stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true,
+      env: { ...process.env, ORT_DISABLE_TELEMETRY: '1' }
+    })
     let pending = ''
     let result = false
     let failure = ''
@@ -43,12 +46,14 @@ export function runRecordingReview(options: {
     child.stderr.resume()
     child.stdin.on('error', () => {})
     child.once('error', () => { failure = '无法启动复盘运行环境，请重新安装客户端。' })
-    child.once('close', code => {
+    child.once('close', (code, signal) => {
       clearTimeout(timeout)
       options.signal.removeEventListener('abort', cancel)
       if (options.signal.aborted) reject(new Error('已取消复盘导出。'))
       else if (code === 0 && result && !failure) resolve({ path: options.outputPath })
-      else reject(new Error(failure || '面试复盘失败，请检查模型配置后重试。'))
+      else reject(new Error(failure || (signal
+        ? `本地复盘进程异常退出（${signal}），请重试；若仍失败，请更新客户端。`
+        : `本地复盘进程未完成（退出码 ${code ?? '未知'}），请检查本地运行环境后重试。`)))
     })
     child.stdin.end(JSON.stringify({ audioPath: options.audioPath, outputPath: options.outputPath, baseUrl: options.baseUrl, token: options.token, modelPath: options.modelPath }))
   })

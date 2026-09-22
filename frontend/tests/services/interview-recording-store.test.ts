@@ -86,7 +86,7 @@ describe('review process launcher', () => {
     const { writeFile } = await import('node:fs/promises')
     const { runRecordingReview } = await import('../../src/main/services/interview-recording-review')
     const script = join(root, 'fixture.py')
-    await writeFile(script, `import json, sys\nc=json.load(sys.stdin)\nassert c['token']=='test-secret'\nassert 'test-secret' not in str(sys.argv)\nprint(json.dumps({'type':'progress','stage':'summarizing','completed':0,'total':1}), flush=True)\nprint(json.dumps({'type':'result'}), flush=True)\n`)
+    await writeFile(script, `import json, sys, os\nassert os.environ.get("ORT_DISABLE_TELEMETRY")=="1"\nc=json.load(sys.stdin)\nassert c['token']=='test-secret'\nassert 'test-secret' not in str(sys.argv)\nprint(json.dumps({'type':'progress','stage':'summarizing','completed':0,'total':1}), flush=True)\nprint(json.dumps({'type':'result'}), flush=True)\n`)
     const events: unknown[] = []
     const result = await runRecordingReview({ pythonPath: process.env.REWICK_PYTHON ?? 'python3', scriptPath: script, audioPath: 'unused', outputPath: join(root, 'out.md'), baseUrl: 'https://example.invalid', token: 'test-secret', sessionId: 's', onProgress: event => events.push(event), signal: new AbortController().signal })
     expect(result.path).toBe(join(root, 'out.md'))
@@ -105,6 +105,6 @@ describe('review process launcher', () => {
     const { runRecordingReview } = await import('../../src/main/services/interview-recording-review')
     const script = join(root, 'fixture.py')
     await writeFile(script, `import sys\nprint('sensitive transcript',file=sys.stderr)\nsys.exit(2)\n`)
-    await expect(runRecordingReview({ pythonPath: process.env.REWICK_PYTHON ?? 'python3', scriptPath: script, audioPath: 'unused', outputPath: join(root, 'out.md'), baseUrl: 'https://example.invalid', token: 'test-secret', sessionId: 's', onProgress: () => {}, signal: new AbortController().signal })).rejects.toThrow('面试复盘失败，请检查模型配置后重试。')
+    await expect(runRecordingReview({ pythonPath: process.env.REWICK_PYTHON ?? 'python3', scriptPath: script, audioPath: 'unused', outputPath: join(root, 'out.md'), baseUrl: 'https://example.invalid', token: 'test-secret', sessionId: 's', onProgress: () => {}, signal: new AbortController().signal })).rejects.toThrow('本地复盘进程未完成（退出码 2）')
   })
 })

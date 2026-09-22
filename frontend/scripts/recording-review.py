@@ -95,6 +95,9 @@ def load_local_model(config: dict):
         raise ValueError("缺少本地语音模型，请安装包含离线识别模型的新版客户端。")
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+    # Must precede importing faster-whisper/ONNX: the native telemetry worker
+    # can abort on macOS during shutdown, bypassing Python exception handling.
+    os.environ["ORT_DISABLE_TELEMETRY"] = "1"
     try:
         from faster_whisper import WhisperModel
         return WhisperModel(

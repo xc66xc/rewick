@@ -1,6 +1,7 @@
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -27,6 +28,7 @@ class ReviewTests(unittest.TestCase):
             self.assertTrue(options["local_files_only"])
             self.assertEqual(options["device"], "cpu")
             self.assertEqual(options["compute_type"], "int8")
+            self.assertEqual(os.environ["ORT_DISABLE_TELEMETRY"], "1")
             self.assertLessEqual(options["cpu_threads"], 4)
 
     def make_audio(self, path: Path, seconds: int) -> None:
