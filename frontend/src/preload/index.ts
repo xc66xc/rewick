@@ -10,6 +10,15 @@ function createBridge(accountScope?: string): DesktopBridge {
   }
   return {
   withAccountScope: scope => createBridge(scope),
+  recordings: {
+    start: sessionId => invoke('recordings:start', sessionId),
+    append: (sessionId, audio) => invoke('recordings:append', { sessionId, audio }),
+    stop: sessionId => invoke('recordings:stop', sessionId),
+    info: sessionId => invoke('recordings:info', sessionId),
+    remove: sessionId => invoke('recordings:remove', sessionId),
+    exportReview: sessionId => invoke('recordings:export', sessionId),
+    cancelExport: sessionId => invoke('recordings:cancel-export', sessionId)
+  },
   getPackageCatalog: () => invoke('payments:catalog'),
   getPaymentOrders: () => invoke('payments:list'),
   createPaymentOrder: input => invoke('payments:create', input),

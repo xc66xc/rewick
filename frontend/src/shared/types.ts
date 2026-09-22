@@ -162,6 +162,7 @@ export interface WalletState {
   session: { id: string; status: 'active' | 'ended'; startedAt: string; expiresAt: string; endedAt: string | null; usedSeconds: number; endReason: string | null } | null
 }
 export type AppEvent =
+  | ({ kind: 'recording-progress' } & import('./recording-types').RecordingProgress)
   | { kind: 'window-mode'; compact: boolean }
   | { kind: 'session-stopping'; nonce: string }
   | { kind: 'session-ended'; message: string }
@@ -181,6 +182,15 @@ export type AppEvent =
   | { kind: 'answer-error'; requestId: string; message: string }
   | { kind: 'shortcut'; action: 'answer' }
 export interface DesktopBridge {
+  recordings?: {
+    start(sessionId: string): Promise<void>
+    append(sessionId: string, audio: ArrayBuffer): Promise<void>
+    stop(sessionId: string): Promise<import('./recording-types').RecordingInfo>
+    info(sessionId: string): Promise<import('./recording-types').RecordingInfo | null>
+    remove(sessionId: string): Promise<void>
+    exportReview(sessionId: string): Promise<{ path: string } | null>
+    cancelExport(sessionId: string): Promise<void>
+  }
   invitationSettings(): Promise<import('./invitation').InvitationSettings>
   invitationMine(): Promise<import('./invitation').InvitationSummary>
   invitationCreateCode(): Promise<import('./invitation').InvitationSummary>

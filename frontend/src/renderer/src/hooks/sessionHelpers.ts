@@ -23,5 +23,5 @@ export function formatTime(ms: number): string {
 }
 
 export function recordHasContent(record: SessionRecord): boolean {
-  return record.segments.length > 0 || record.answers.length > 0
+  return Boolean(record.interviewSessionId) || record.segments.length > 0 || record.answers.length > 0
 }

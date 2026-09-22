@@ -1,5 +1,21 @@
 # 单机部署（复用现有 PostgreSQL）
 
+## 2026-09-22 16:31 录音上传 413 修复
+
+补齐 HttpBodyLimitFilter 的录音专用 3,840,000 字节上限；原来通用 1 MiB 限制会拦截超过约 32 秒的录音分段。355 项后端测试通过后发布，容器 healthy。经线上 Nginx 验证：1,824,000 和 3,840,000 字节的未认证请求返回 401（通过大小检查），3,840,001 字节返回 413。没有调用真实供应商。
+
+当前 JAR SHA256：`f56da62b76edfb20252a3f53ad7ab838bc12ebea518a6b68a0980271fc786a68`。回滚文件在 `releases/recording-413-20260922-1630/backend-before.jar`，镜像 `interview-copilot-backend:rollback-recording-413-20260922-1630`。
+
+客户端补充两小时合成 WAV 回归：230,400,044 字节文件分为 60 段，每段 3,840,000 字节，模型请求使用测试替身。并未宣称两小时真实供应商全链路验收通过。
+
+## 2026-09-22 16:10 录音复盘发布
+
+- 发布本机录音复盘后端接口和 Nginx 的 240 秒复盘请求超时；无数据库迁移，未发布桌面安装包。
+- Java 21 生产构建 `clean verify -P!macos-arm64`：351 项测试通过。
+- 当前 JAR SHA256：`a19044192377b976bfbd4b7ab84fbda070e60e2110e1e0b59e315e7c0b83ffc1`，已核对容器内产物。
+- 备份：`/home/ubuntu/interview-copilot/releases/recording-review-20260922-1608/` 下的 `backend-before.jar`、`nginx-before.conf`；旧镜像 `interview-copilot-backend:rollback-recording-20260922-1608`。
+- 后端容器 healthy；服务器访问 HTTPS 健康检查 UP，两项复盘 POST 未登录返回 401；Nginx 配置测试成功并热重载。本机 curl 访问 API 域名仍出现连接重置，未验证真实录音/供应商调用。桌面端需重新构建或打包。
+
 此目录用于部署已编译的 Java JAR 和管理端静态文件。服务器运行 Java 21 镜像，不需要安装宿主机 JDK。`compose.yaml` 通过 Nginx 提供管理后台 HTTPS 443，HTTP 80 对管理域名跳转 HTTPS；保留 IP:8080 原入口。
 
 ## 准备发布文件

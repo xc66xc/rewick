@@ -1,4 +1,6 @@
 import { MenuBar } from './services/menu-bar'
+import { InterviewRecordingStore } from './services/interview-recording-store'
+import { recordingReviewRuntime, runRecordingReview } from './services/interview-recording-review'
 import { DesktopWindows, type DesktopHost } from './services/desktop-windows'
 import { defaultWindowPreferences, windowPreferencesSchema } from '../shared/window-preferences'
 import { randomUUID } from 'node:crypto'
@@ -86,6 +88,9 @@ function notifyHidden(): void {
 let windowPreferences = { ...defaultWindowPreferences }
 const windowPreferencesPath = join(app.getPath('userData'), 'window-preferences.json')
 const windowPreferencesQueue = new SerialQueue()
+const recordings = new InterviewRecordingStore(join(app.getPath('userData'), 'interview-recordings'))
+const reviewJobs = new Map<string, AbortController>()
+let recordingCleanup: Promise<void> = Promise.resolve()
 let asr: AsrClient | null = null
 let llm: LlmClient | null = null
 let startingAsr = false
@@ -276,6 +281,8 @@ function cancelAnswerWork(): void {
 const serviceTests = new Set<AbortController>()
 
 function disposeWork(): void {
+  for (const controller of reviewJobs.values()) controller.abort()
+  recordingCleanup = recordingCleanup.then(() => recordings.closeAll()).catch(() => console.error('录音关闭失败，将在下次读取时尝试恢复。'))
   answerDispatchEpoch++
   for (const controller of serviceTests) controller.abort(new Error('登录状态已改变，连接测试已取消。'))
   serviceTests.clear()
@@ -341,7 +348,7 @@ function registerHandlers(): void {
   const handle = (channel: string, callback: (arg: unknown) => unknown): void => {
     ipcMain.handle(channel, async (event, envelope: unknown) => {
       assertSender(event)
-      if (quitPending && ['interview:start', 'asr:start', 'answer:generate', 'platform:login', 'platform:register'].includes(channel)) throw new Error('应用正在退出，请重新打开后操作。')
+      if (quitPending && ['interview:start', 'asr:start', 'answer:generate', 'recordings:start', 'recordings:export', 'platform:login', 'platform:register'].includes(channel)) throw new Error('应用正在退出，请重新打开后操作。')
       const { payload: arg, accountScope } = parseInput(z.object({ payload: z.unknown().optional(), accountScope: z.string().optional() }), envelope)
       const dispatch = channel === 'answer:generate' || channel === 'answer:cancel' ? ++answerDispatchEpoch : answerDispatchEpoch
       const asrDispatch = asrEpoch
@@ -362,7 +369,7 @@ function registerHandlers(): void {
         disposeWork(); emit({ kind: 'settings-changed' })
         throw new Error('请先使用邮箱注册或登录。')
       }
-      if (!publicChannels.has(channel) && channel !== 'history:save') sessionMonitor.assertVerified((await authSettings.getSecrets()).platformAccessToken)
+      if (!publicChannels.has(channel) && !['history:save', 'recordings:append', 'recordings:stop', 'recordings:info', 'recordings:cancel-export'].includes(channel)) sessionMonitor.assertVerified((await authSettings.getSecrets()).platformAccessToken)
       if (channel === 'answer:generate' && dispatch !== answerDispatchEpoch) {
         const request = parseInput(answerRequestSchema, arg)
         emit({ kind: 'answer-done', requestId: request.requestId, cancelled: true })
@@ -640,7 +647,60 @@ function registerHandlers(): void {
     if (!value.accountScope || value.accountScope !== accounts.current().id) throw new Error('会话不属于当前登录账户。')
     return history.save({ ...value.record, interviewSessionId: value.record.interviewSessionId ?? interviewTimer.sessionId })
   })
-  handle('history:remove', id => history.remove(parseInput(z.string().min(1).max(128), id)))
+  handle('history:remove', async id => {
+    const sessionId = parseInput(z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/), id)
+    const info = await recordings.info(accounts.current().id, sessionId)
+    if (info?.status === 'recording') throw new Error('请先停止录音。')
+    if (reviewJobs.has(`${accounts.current().id}:${sessionId}`)) throw new Error('请先取消复盘导出。')
+    await history.remove(sessionId)
+    await recordings.remove(accounts.current().id, sessionId)
+  })
+  const recordingId = (value: unknown) => parseInput(z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/), value)
+  handle('recordings:start', async input => {
+    await recordingCleanup
+    interviewTimer.assertActive()
+    const owner = accounts.current()
+    const sessionId = recordingId(input)
+    await recordings.start(owner.id, sessionId)
+    if (accounts.active !== owner || !interviewTimer.active || quitPending) {
+      await recordings.stop(owner.id, sessionId)
+      throw new Error('面试已结束，录音已停止。')
+    }
+  })
+  handle('recordings:append', input => {
+    const value = parseInput(z.object({ sessionId: z.string(), audio: z.instanceof(ArrayBuffer) }), input)
+    return recordings.append(accounts.current().id, recordingId(value.sessionId), value.audio)
+  })
+  handle('recordings:stop', input => recordings.stop(accounts.current().id, recordingId(input)))
+  handle('recordings:info', input => recordings.info(accounts.current().id, recordingId(input)))
+  handle('recordings:remove', input => {
+    const sessionId = recordingId(input)
+    if (reviewJobs.has(`${accounts.current().id}:${sessionId}`)) throw new Error('请先取消复盘导出。')
+    return recordings.remove(accounts.current().id, sessionId)
+  })
+  handle('recordings:cancel-export', input => { reviewJobs.get(`${accounts.current().id}:${recordingId(input)}`)?.abort() })
+  handle('recordings:export', async input => {
+    if (!window) return null
+    const owner = accounts.current()
+    const sessionId = recordingId(input)
+    const key = `${owner.id}:${sessionId}`
+    if (reviewJobs.size) throw new Error('已有复盘正在生成，请完成或取消后重试。')
+    const controller = new AbortController()
+    reviewJobs.set(key, controller)
+    try {
+      const audioPath = await recordings.audioPath(owner.id, sessionId)
+      const result = await dialog.showSaveDialog(window, { title: '导出面试复盘', defaultPath: `面试复盘-${new Date().toISOString().slice(0, 10)}.md`, filters: [{ name: 'Markdown', extensions: ['md'] }] })
+      if (result.canceled || !result.filePath) return null
+      if (accounts.active !== owner || controller.signal.aborted) throw new Error('账户已切换，导出已取消。')
+      const connection = await walletConnection()
+      if (accounts.active !== owner || controller.signal.aborted) throw new Error('账户已切换，导出已取消。')
+      return await runRecordingReview({
+        ...recordingReviewRuntime({ isPackaged: app.isPackaged, resourcesPath: process.resourcesPath, appPath: app.getAppPath() }),
+        ...connection, audioPath, outputPath: result.filePath, sessionId, signal: controller.signal,
+        onProgress: progress => emit({ kind: 'recording-progress', ...progress })
+      })
+    } finally { reviewJobs.delete(key) }
+  })
   handle('history:export', async input => {
     if (!window) return false
     const { record, options } = parseInput(z.object({ record: z.unknown(), options: z.object({ includeAiAnswers: z.boolean(), includeTranscript: z.boolean(), includeInterviewInfo: z.boolean() }) }), input)
@@ -732,7 +792,8 @@ app.on('before-quit', event => {
   // PlatformClient bounds the settlement request to eight seconds.
   void interviewTimer.end().catch(() => {
     console.error('退出时面试结算未确认，将由服务端心跳超时结算。')
-  }).finally(() => {
+  }).finally(async () => {
+    await recordingCleanup
     desktopWindows?.prepareQuit()
     accounts.dispose()
     globalShortcut.unregisterAll()

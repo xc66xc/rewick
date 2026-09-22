@@ -1,3 +1,5 @@
+import InterviewRecordingControl from './components/InterviewRecordingControl'
+import { useInterviewRecording } from './hooks/useInterviewRecording'
 import ContentProtectionControl from './components/ContentProtectionControl'
 import CompactStatus from './components/CompactStatus'
 import CompactAppearance from './components/CompactAppearance'
@@ -34,6 +36,11 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
   const bridge = useMemo(() => unscopedBridge.withAccountScope?.(config.settings.accountScope ?? '') ?? unscopedBridge, [unscopedBridge, config.settings.accountScope])
   const timer = useInterviewTime(bridge)
   const session = useSession(bridge, config.settings, config.save, config.apply)
+  const recording = useInterviewRecording(bridge, session.record.id, timer.active, async () => {
+    const id = timer.wallet?.session?.id
+    if (!id) throw new Error('请先开始面试。')
+    await session.prepareRecording(id)
+  })
   const [page, setPage] = useState<Page>('preparation')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [compact, setCompact] = useState(false)
@@ -68,7 +75,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
   async function handleLogout() {
     if (loggingOut.current) return
     loggingOut.current = true; setLeaving(true)
-    try { await Promise.all([timer.end(), session.stop(), session.cancel()]); await session.saveHistory(); await onLogout() }
+    try { await recording.stop(); await Promise.all([timer.end(), session.stop(), session.cancel()]); await session.saveHistory(); await onLogout() }
     finally { loggingOut.current = false; setLeaving(false) }
   }
   useEffect(() => { main.current?.querySelector<HTMLElement>('h1')?.focus() }, [page])
@@ -97,6 +104,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
   function handleSettings() { setSettingsOpen(true) }
   function handleContext() { setPage('context') }
   async function handleEnd() {
+    await recording.stop()
     await Promise.all([timer.end(), session.stop(), session.cancel()])
     await session.saveHistory().catch(reason => setWindowError(`面试已停止计时，但会话保存失败：${errorMessage(reason)}`))
     setPage('preparation')
@@ -126,6 +134,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
         {timer.warning && timer.active && <p className={cn(formNoteClass, 'px-8 pt-1 max-[820px]:px-5')} role="status">{timer.warning}</p>}
         {page === 'preparation' && <InterviewPreparation bridge={bridge} settings={config.settings} timer={timer} isSessionActive={timer.active || session.busy || !['idle', 'error'].includes(session.status)} onPrepare={handlePrepare} onSave={session.saveEnvironment} onStarted={() => setPage('workspace')} onContext={handleContext} onSettings={handleSettings} onPurchase={() => setPage('purchase')} onHistory={() => setPage('history')} />}
         {page === 'workspace' && timer.active && <div className={cn('flex min-h-0 flex-1 flex-col', compact ? 'p-0' : 'px-8 pb-0')}>
+          <InterviewRecordingControl recording={recording} />
           {/* 工作台顶部仅展示面试名称与面试类型 */}
           {!compact && environment && <div className="mb-3 flex shrink-0 items-center justify-between gap-3 text-xs"><div className="flex min-w-0 flex-1 items-center gap-2">
             <span className="inline-flex h-[34px] min-w-0 max-w-[280px] shrink-0 items-center gap-[7px] rounded-chip border border-border bg-card px-[11px] hover:border-border-hover max-[1180px]:max-w-[220px]" title="面试环境 · 在「面试准备」中修改"><span aria-hidden="true" className="grid size-[22px] shrink-0 place-items-center rounded-[5px] brand-gradient text-text-on-fill"><Briefcase size={12} aria-hidden="true" /></span><span className="min-w-0 truncate font-semibold">{environment.name}</span></span>
@@ -134,7 +143,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
           {!compact && !config.loading && !isAsrReady(config.settings) && <div className="mb-5 flex items-center justify-between gap-4 rounded-chip border border-accent-line bg-accent-subtle px-4 py-3 text-xs text-text-primary max-[560px]:px-2 max-[560px]:py-2 max-[560px]:text-[10px]"><div className="flex items-center gap-2"><span className="size-1.5 shrink-0 rounded-full bg-accent" aria-hidden="true" /><span>准备开始？先连接转写服务和回答模型。</span></div><Button variant="quiet" size="sm" onClick={handleSettings}>完成配置<ArrowRight size={16} aria-hidden="true" /></Button></div>}
           <div className={cn('grid min-h-0 flex-1 grid-cols-[minmax(280px,.72fr)_minmax(400px,1.28fr)] gap-5 wide:grid-cols-[minmax(300px,.75fr)_minmax(430px,1.55fr)] wide:gap-6 max-[1060px]:grid-cols-[minmax(260px,.68fr)_minmax(340px,1.32fr)] max-[1060px]:gap-4 max-[820px]:grid-cols-[minmax(0,1fr)] max-[820px]:overflow-y-auto',
             compact && 'flex overflow-hidden')}>{!compact && <TranscriptPanel session={session} />}<AnswerPanel session={session} settings={config.settings} onSettings={handleSettings} onContext={handleContext} compact={compact} /></div>
-          {!compact && <footer className="flex min-h-[42px] shrink-0 items-center justify-between gap-4 text-[10px] text-text-muted max-[560px]:[&>span:last-child]:hidden"><span>声音不落盘 · 会话云端保存：{session.historySyncStatus}</span><span>系统音频可自动回答，也可随时手动生成</span></footer>}
+          {!compact && <footer className="flex min-h-[42px] shrink-0 items-center justify-between gap-4 text-[10px] text-text-muted max-[560px]:[&>span:last-child]:hidden"><span>会话云端保存：{session.historySyncStatus}</span><span>系统音频可自动回答，也可随时手动生成</span></footer>}
         </div>}
         {page === 'purchase' && <PurchasePage key={config.settings.accountScope} bridge={bridge} scope={config.settings.accountScope ?? ''} remaining={timer.remaining} onCredited={timer.refresh} />}
         {page === 'context' && <ContextPage settings={config.settings} bridge={bridge} onSave={config.save} />}

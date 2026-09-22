@@ -12,5 +12,6 @@ const step = (cmd, args) => {
   const res = spawnSync(cmd, args, { stdio: 'inherit', shell: true })
   if (res.status !== 0) process.exit(res.status ?? 1)
 }
+step('node', ['scripts/prepare-recording-python.mjs', platform, arch ?? (platform === 'mac' ? 'arm64' : 'x64')])
 step('npm', ['run', 'build'])
 step('npx', ['electron-builder', `--${platform}`, target, ...(arch ? [`--${arch}`] : [])])

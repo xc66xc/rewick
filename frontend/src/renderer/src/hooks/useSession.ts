@@ -212,7 +212,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
       void bridge?.stageSessionForLogout(event.nonce, recordHasContent(saved) ? saved : null).catch(reason => setError(errorMessage(reason)))
       return
     }
-    if (event.kind === 'window-mode') return
+    if (event.kind === 'window-mode' || event.kind === 'recording-progress') return
     if (event.kind === 'session-ended' || event.kind === 'session-paused' || event.kind === 'session-restored') return
     if (event.kind === 'wallet-changed') {
       if (event.wallet.session?.status !== 'active') { void stop(); void cancel(); void persist(true).catch(reason => setError(errorMessage(reason))) }
@@ -344,6 +344,12 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
       await changeEnvironment(async () => resolveInterviewSettings(settingsRef.current, await bridge.saveEnvironment(input)))
     } else { await bridge.saveEnvironment(input) }
   }
+  async function prepareRecording(interviewSessionId: string) {
+    attachEnvironment()
+    updateRecord(current => ({ ...current, interviewSessionId,
+      title: current.title === '未命名会话' ? settingsRef.current.interviewEnvironment?.name ?? '面试录音' : current.title }))
+    await persist()
+  }
   async function exportRecord(value = recordRef.current, options: SessionExportOptions = { includeAiAnswers: true, includeTranscript: true, includeInterviewInfo: true }) {
     try { await bridge?.exportSession(snapshotForSave(value), options) } catch (reason) { setError(errorMessage(reason)) }
   }
@@ -372,7 +378,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
     autoAnswer: settings.autoAnswer, autoAnswerState: automatic.state, autoAnswerSaving: automatic.saving,
     setAutoAnswer: automatic.setPreferences, autoAnswerModelReady: isAnswerModelReady(settings),
     historySyncStatus, history, elapsed, busy, start, stop, generate, answerSegment, beginSegmentEdit, editSegment, finishSegmentEdit,
-    saveHistory: () => persist(true), cancel, reset, activateEnvironment, saveEnvironment, exportRecord, removeSession, desktop: Boolean(bridge) }
+    saveHistory: () => persist(true), prepareRecording, cancel, reset, activateEnvironment, saveEnvironment, exportRecord, removeSession, desktop: Boolean(bridge) }
 }
 
 export type SessionController = ReturnType<typeof useSession>
