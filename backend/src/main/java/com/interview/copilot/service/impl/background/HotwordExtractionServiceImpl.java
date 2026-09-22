@@ -10,6 +10,7 @@ import com.interview.copilot.service.background.HotwordSourceService;
 import com.interview.copilot.service.platform.PlatformRuntimeService;
 import com.interview.copilot.util.ai.ProviderHttpClient;
 import com.interview.copilot.validation.background.HotwordPolicy;
+import com.interview.copilot.validation.ai.LlmRequestPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -40,15 +41,19 @@ public class HotwordExtractionServiceImpl implements HotwordExtractionService {
         try (var permit = concurrency.acquire(user, config.getMaxConcurrent())) {
             String source = sources.read(user, resumeId, targetId, referenceIds);
             try {
-                var response = http.json(config, Map.of(
+                var body = LlmRequestPolicy.request(json.valueToTree(Map.of(
                         "model", config.getModel(), "stream", false, "temperature", 0,
                         "max_tokens", Math.min(2048, config.getMaxOutputTokens()),
                         "messages", List.of(
                                 Map.of("role", "system", "content", instruction()),
-                                Map.of("role", "user", "content", source))),
+                                Map.of("role", "user", "content", source)))), config);
+                var response = http.json(config, body,
                         Duration.ofSeconds(Math.min(30, config.getTotalTimeoutSeconds()))).block();
                 return candidates(response, source);
             } catch (RuntimeException | JsonProcessingException error) {
+                if (error instanceof ApiException api && "HOTWORD_EXTRACTION_FAILED".equals(api.code())) {
+                    throw api;
+                }
                 log.error("Hotword extraction failed user={} failureType={}", user, error.getClass().getSimpleName());
                 throw new ApiException(HttpStatus.BAD_GATEWAY, "HOTWORD_EXTRACTION_FAILED",
                         "专业术语提取失败，请稍后重试或手动填写。");
@@ -58,7 +63,17 @@ public class HotwordExtractionServiceImpl implements HotwordExtractionService {
 
     private List<String> candidates(JsonNode response, String source) throws JsonProcessingException {
         if (response == null) throw new IllegalArgumentException("Empty provider response");
-        String content = response.path("choices").path(0).path("message").path("content").asText();
+        JsonNode choice = response.path("choices").path(0);
+        String content = choice.path("message").path("content").asText("");
+        boolean truncated = "length".equals(choice.path("finish_reason").asText());
+        if (truncated || content.isBlank()) {
+            log.error("Hotword extraction missing output truncated={} contentLength={} reasoningLength={}",
+                    truncated, content.length(),
+                    choice.path("message").path("reasoning_content").asText("").length());
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "HOTWORD_EXTRACTION_FAILED", truncated
+                    ? "专业术语提取结果被截断，请减少所选资料或联系管理员调整模型输出限制。"
+                    : "模型未返回专业术语结果，请稍后重试或手动填写。");
+        }
         JsonNode parsed = json.readTree(content);
         if (parsed == null || !parsed.isObject()) throw new IllegalArgumentException("Invalid extraction result");
         JsonNode words = parsed.path("hotwords");

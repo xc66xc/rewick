@@ -18,7 +18,8 @@ interface Session {
   finishTimer?: ReturnType<typeof setTimeout>
   pingTimer?: ReturnType<typeof setInterval>
   alive: boolean
-  finalized: Set<number>
+  finalized: Map<number, string>
+  pending?: { id: string; starts: Set<number> }
 }
 const frameSchema = z.object({
   header: z.object({ task_id: z.string(), event: z.string(), error_code: z.string().optional() }),
@@ -45,7 +46,7 @@ export class AsrClient {
       headers: this.apiKey.trim() ? { Authorization: `Bearer ${this.apiKey.trim()}` } : {},
       handshakeTimeout: 15_000, maxPayload: 1_048_576, followRedirects: false,
     })
-    const state: Session = { id: randomUUID(), socket, phase: 'connecting', alive: true, finalized: new Set() }
+    const state: Session = { id: randomUUID(), socket, phase: 'connecting', alive: true, finalized: new Map() }
     this.active = state
     const promise = new Promise<{ sessionId: string }>((resolve, reject) => {
       state.resolveStart = resolve
@@ -147,11 +148,25 @@ export class AsrClient {
         ? sentence.end_time : undefined
       // Fun-ASR SDKs also mark completed sentences with end_time when sentence_end is absent.
       const isFinal = sentence.sentence_end ?? (endMs !== undefined)
-      if (!isFinal && state.finalized.has(sentence.begin_time)) return
-      if (isFinal) state.finalized.add(sentence.begin_time)
+      const completedId = state.finalized.get(sentence.begin_time)
+      if (!isFinal && completedId !== undefined) return
+      // Streaming timestamps can be corrected before finalization. Keep one identity
+      // for the open sentence; completed revisions must not consume the next sentence.
+      const current = completedId === undefined
+        ? state.pending ?? { id: `${state.id}:${sentence.begin_time}`, starts: new Set<number>() }
+        : undefined
+      current?.starts.add(sentence.begin_time)
+      const segmentId = completedId ?? current?.id
+      if (segmentId === undefined) return
+      if (isFinal && current) {
+        for (const start of current.starts) state.finalized.set(start, segmentId)
+        state.pending = undefined
+      } else if (current) {
+        state.pending = current
+      }
       this.emit({
         kind: 'transcript', sessionId: state.id,
-        segment: { id: `${state.id}:${sentence.begin_time}`, text: sentence.text, startMs: sentence.begin_time, endMs, isFinal },
+        segment: { id: segmentId, text: sentence.text, startMs: sentence.begin_time, endMs, isFinal },
       })
     } else if (header.event === 'task-finished') {
       if (state.phase === 'connecting') { this.fail(state, '转写任务未启动就结束，请检查模型及服务配置。'); return }

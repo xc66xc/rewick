@@ -3,6 +3,8 @@ import { WebSocketServer, type WebSocket } from 'ws'
 import { defaultSettings } from '../../src/shared/defaults'
 import type { AppEvent } from '../../src/shared/types'
 import { AsrClient } from '../../src/main/services/asr-client'
+import { mergeSegment } from '../../src/renderer/src/hooks/sessionHelpers'
+import type { TranscriptSegment } from '../../src/shared/types'
 
 let server: WebSocketServer | undefined
 let client: AsrClient | undefined
@@ -31,6 +33,39 @@ afterEach(async () => {
 })
 
 describe('AsrClient', () => {
+  it('replaces timestamp-shifting partials and keeps adjacent sentences distinct', async () => {
+    const url = await serve(socket => socket.on('message', raw => {
+      const packet = JSON.parse(raw.toString()) as { header: { action: string; task_id: string } }
+      if (packet.header.action !== 'run-task') return
+      const id = packet.header.task_id
+      event(socket, id, 'task-started')
+      sentence(socket, id, { begin_time: 0, text: '你那个虚练良子', sentence_end: false })
+      sentence(socket, id, { begin_time: 120, text: '你那个虚拟量测', sentence_end: false })
+      sentence(socket, id, { begin_time: 80, end_time: 5000, text: '虚拟量测 Agent 的难点在哪里？', sentence_end: true })
+      sentence(socket, id, { begin_time: 12000, text: '你那个', sentence_end: false })
+      // A repeated previous final and late partial must not steal the new open sentence.
+      sentence(socket, id, { begin_time: 80, end_time: 5000, text: '虚拟量测 Agent 的难点在哪里？', sentence_end: true })
+      sentence(socket, id, { begin_time: 0, text: '旧临时结果', sentence_end: false })
+      sentence(socket, id, { heartbeat: true, begin_time: 12000 })
+      sentence(socket, id, { begin_time: 12160, end_time: 17000, text: '第二个问题。', sentence_end: true })
+      event(socket, id, 'task-finished')
+    }))
+    let segments: TranscriptSegment[] = []
+    const events: AppEvent[] = []
+    client = new AsrClient({ ...defaultSettings.asr, url }, '', value => {
+      events.push(value)
+      if (value.kind === 'transcript') segments = mergeSegment(segments, value.segment)
+    })
+    await client.start()
+    await vi.waitFor(() => expect(events.at(-1)).toMatchObject({ kind: 'asr-status', status: 'idle' }))
+
+    expect(segments).toHaveLength(2)
+    expect(segments.map(({ text, isFinal, startMs }) => ({ text, isFinal, startMs }))).toEqual([
+      { text: '虚拟量测 Agent 的难点在哪里？', isFinal: true, startMs: 80 },
+      { text: '第二个问题。', isFinal: true, startMs: 12160 },
+    ])
+  })
+
   it('finalizes Fun-ASR sentences with end_time but no sentence_end while listening and rejects later partial revisions', async () => {
     let peer: WebSocket | undefined
     const url = await serve((socket) => {
