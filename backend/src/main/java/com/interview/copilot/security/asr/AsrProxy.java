@@ -1,6 +1,7 @@
 package com.interview.copilot.security.asr;
 
-import com.interview.copilot.config.PlatformLimitsProperties;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.interview.copilot.service.asr.AsrSessionService;
 import com.interview.copilot.config.ProviderProperties;
 import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.exception.ai.ProviderErrors;
@@ -38,7 +39,7 @@ public class AsrProxy extends AbstractWebSocketHandler {
     private final PlatformRuntimeService providers;
     private final ProviderJson json;
     private final UsageService usage;
-    private final PlatformLimitsProperties limits;
+    private final AsrSessionService sessionService;
     private final ConcurrentHashMap<String, AsrBridge> sessions = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long, String> users = new ConcurrentHashMap<>();
     private final HttpClient client =
@@ -54,13 +55,13 @@ public class AsrProxy extends AbstractWebSocketHandler {
             PlatformRuntimeService providers,
             ProviderJson json,
             UsageService usage,
-            PlatformLimitsProperties limits,
+            AsrSessionService sessionService,
             DesktopSettingsService desktop) {
         this.desktop = desktop;
         this.providers = providers;
         this.json = json;
         this.usage = usage;
-        this.limits = limits;
+        this.sessionService = sessionService;
     }
 
     @Override
@@ -150,6 +151,10 @@ public class AsrProxy extends AbstractWebSocketHandler {
         }
     }
 
+    public JsonNode withHotwords(long user, String sessionId, String model, JsonNode frame) {
+        return sessionService.withHotwords(user, sessionId, model, frame);
+    }
+
     public ProviderJson json() {
         return json;
     }
@@ -167,7 +172,7 @@ public class AsrProxy extends AbstractWebSocketHandler {
     }
 
     public int maximumSeconds(ProviderProperties.Asr config) {
-        return Math.min(config.getMaxDurationSeconds(), limits.maxAsrSessionSeconds());
+        return sessionService.maximumSeconds(config.getMaxDurationSeconds());
     }
 
     @PreDestroy

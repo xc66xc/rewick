@@ -125,7 +125,7 @@ public final class PlatformConfigValidator {
         }
         PlatformConfig.Provider provider = reference(providers, providerId, kind);
         if (enabled && "asr".equals(kind)) {
-            com.interview.copilot.model.asr.LiveTranslateSession.endpoint(provider.url(), model);
+            com.interview.copilot.util.asr.AsrEndpoint.resolve(provider.url(), model);
         }
         if (enabled && (!provider.enabled() || model.isBlank())) {
             throw PlatformConfigErrors.invalid("启用服务前请填写模型或知识库标识，并启用对应提供商。");

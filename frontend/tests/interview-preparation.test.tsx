@@ -29,6 +29,17 @@ async function pickOption(actor: ReturnType<typeof userEvent.setup>, selectName:
   await actor.click(screen.getByRole('option', { name: optionName}))
 }
 describe('interview preparation', () => {
+  it('saves edited hotwords and restores them when reopening the preparation', async () => {
+    const { actor, onSave } = setup()
+    await actor.click(await screen.findByRole('button', { name: '编辑环境 默认环境' }))
+    await actor.type(screen.getByRole('textbox', { name: '专业术语（选填）' }), 'Agent\n虚拟量测')
+    await actor.click(screen.getByRole('button', { name: '保存环境' }))
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ hotwords: ['Agent', '虚拟量测'] })))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await actor.click(screen.getByRole('button', { name: '编辑环境 默认环境' }))
+    expect((screen.getByRole('textbox', { name: '专业术语（选填）' }) as HTMLTextAreaElement).value).toBe('Agent\n虚拟量测')
+  })
+
   it('prevents editing the current preparation while the interview timer is active', async () => {
     setup('resume', 600, false, false, true)
     expect((await screen.findByRole('button', { name: '编辑环境 默认环境' }) as HTMLButtonElement).disabled).toBe(true)

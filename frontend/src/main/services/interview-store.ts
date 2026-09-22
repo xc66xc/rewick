@@ -1,9 +1,10 @@
 import { assertPlatformTransport } from '../../shared/platform-transport'
 import { sessionFault } from './session-fault'
+import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
 import type { EnvironmentInput, InterviewLibrary, ResumeInput, Settings, TargetInput } from '../../shared/types'
 import { resolveInterviewSettings } from '../../shared/interview-settings'
-import { environmentInputSchema, interviewIdSchema, interviewLibrarySchema, resumeInputSchema, targetInputSchema } from './interview-validation'
+import { environmentHotwordsSchema, environmentHotwordSourcesSchema, environmentInputSchema, interviewIdSchema, interviewLibrarySchema, resumeInputSchema, targetInputSchema } from './interview-validation'
 import type { SettingsStore } from './settings-store'
 import { SerialQueue } from './storage'
 import { parseInput } from './validation'
@@ -19,6 +20,18 @@ export class InterviewStore {
   saveResume(input: ResumeInput) { return this.save('resumes', parseInput(resumeInputSchema, input)) }
   saveTarget(input: TargetInput) { return this.save('targets', parseInput(targetInputSchema, input)) }
   saveEnvironment(input: EnvironmentInput) { return this.save('environments', parseInput(environmentInputSchema, input)) }
+  async extractEnvironmentHotwords(input: Pick<EnvironmentInput, 'resumeId' | 'targetId' | 'referenceIds'>): Promise<string[]> {
+    const sources = parseInput(environmentHotwordSourcesSchema, input)
+    try {
+      const response = await this.request('/hotwords/extract', sources, 60000)
+      return z.object({ hotwords: environmentHotwordsSchema }).parse(response).hotwords
+    } catch (error) {
+      if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+        throw new Error('专业术语提取超时，请稍后重试，或手动添加。')
+      }
+      throw error
+    }
+  }
   removeResume(id: string) { return this.remove('resumes', id) }
   removeTarget(id: string) { return this.remove('targets', id) }
   removeEnvironment(id: string) { return this.remove('environments', id) }
@@ -45,13 +58,13 @@ export class InterviewStore {
   private remove(kind: Kind, id: string): Promise<InterviewLibrary> {
     return this.queue.run(async () => { await this.request(`/${kind}/${encodeURIComponent(parseInput(interviewIdSchema, id))}/delete`, {}); return this.list() })
   }
-  private async request(path: string, body?: unknown): Promise<unknown> {
+  private async request(path: string, body?: unknown, timeoutMs = 15000): Promise<unknown> {
     const auth = await this.authentication()
     const token = auth.secrets.platformAccessToken
     if (!token || !auth.settings.platform?.authenticated) throw new Error('请先登录账户。')
     assertPlatformTransport(auth.settings.platform.baseUrl)
     const response = await fetch(`${auth.settings.platform.baseUrl}/api/v1/background${path}`, {
-      method: body === undefined ? 'GET' : 'POST', redirect: 'error', signal: AbortSignal.timeout(15_000),
+      method: body === undefined ? 'GET' : 'POST', redirect: 'error', signal: AbortSignal.timeout(timeoutMs),
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     })

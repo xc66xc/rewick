@@ -38,6 +38,10 @@ public final class UsageLease implements AutoCloseable {
         this.sessionId = sessionId;
     }
 
+    public String sessionId() {
+        return sessionId;
+    }
+
     public boolean isActive() {
         return !finished.get() && service.active(userId, sessionId);
     }

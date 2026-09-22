@@ -14,6 +14,7 @@ import com.interview.copilot.service.auth.SessionGuardService;
 import com.interview.copilot.service.background.BackgroundService;
 import com.interview.copilot.service.wallet.WalletService;
 import com.interview.copilot.validation.background.BackgroundPolicy;
+import com.interview.copilot.validation.background.HotwordPolicy;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.ZoneId;
 import java.util.UUID;
+import java.util.List;
 
 /**
  * @author Carl Wang
@@ -47,6 +49,17 @@ public class BackgroundServiceImpl implements BackgroundService {
         this.wallet = wallet;
         this.json = json;
         this.sessions = sessions;
+    }
+
+    public List<String> asrHotwords(long user, String sessionId) {
+        String saved = records.snapshot(user, sessionId);
+        if (saved == null) return List.of();
+        String id = parse(saved).path("interviewEnvironment").path("id").asText();
+        if (id.isBlank()) return List.of();
+        BackgroundPolicy.id(id);
+        BackgroundEntity environment = records.find(user, BackgroundKind.environments, id);
+        if (environment == null || environment.deleted()) return List.of();
+        return HotwordPolicy.words(parse(environment.content()).path("hotwords"));
     }
 
     public JsonNode library(long user) {
@@ -101,6 +114,10 @@ public class BackgroundServiceImpl implements BackgroundService {
         BackgroundPolicy.id(mutation);
         ObjectNode content = BackgroundPolicy.content(kind, input);
         var previous = records.find(user, kind, id);
+        if (kind == BackgroundKind.environments && !content.has("hotwords") && previous != null) {
+            JsonNode savedWords = parse(previous.content()).get("hotwords");
+            if (savedWords != null) content.set("hotwords", savedWords);
+        }
         if (previous != null && previous.deleted())
             throw new ApiException(HttpStatus.GONE, "BACKGROUND_DELETED", "资料已删除，不能重新保存。 ");
         if (previous != null && previous.mutationId().equals(mutation)) {

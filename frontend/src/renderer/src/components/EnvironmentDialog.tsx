@@ -1,4 +1,6 @@
 import type { EnvironmentInput, InterviewLibrary, ReferenceDocument, Settings } from '../../../shared/types'
+import EnvironmentHotwords from './EnvironmentHotwords'
+import { environmentHotwordsError } from '../../../shared/environment-hotwords'
 import EnvironmentReferencePicker from './EnvironmentReferencePicker'
 import { Button } from './ui/button'
 import { Modal } from './ui/dialog'
@@ -24,10 +26,11 @@ interface EnvironmentDialogProps {
   editingBlocked: boolean
   error: string
   onChange: (draft: EnvironmentInput) => void
+  onExtractHotwords: (input: EnvironmentInput) => Promise<string[]>
   onSave: () => void
 }
 /* v30 环境弹窗(spec §8.2):名称/简历/岗位/资料四段,底部状态/取消/保存;删除在卡片上 */
-export default function EnvironmentDialog({ open, onOpenChange, draft, dirty, library, references, referencesReady, settings, busy, editingBlocked, error, onChange, onSave }: EnvironmentDialogProps) {
+export default function EnvironmentDialog({ open, onOpenChange, draft, dirty, library, references, referencesReady, settings, busy, editingBlocked, error, onChange, onSave, onExtractHotwords }: EnvironmentDialogProps) {
   if (!library) return null
   const missingResume = Boolean(draft.resumeId && !library.resumes.some(record => record.id === draft.resumeId))
   const missingTarget = Boolean(draft.targetId && !library.targets.some(record => record.id === draft.targetId))
@@ -50,7 +53,7 @@ export default function EnvironmentDialog({ open, onOpenChange, draft, dirty, li
           {dirty ? '尚未保存' : draft.id ? '已同步' : '新环境草稿'}
         </span>
         <Button variant="default" disabled={busy} onClick={() => onOpenChange(false)}>取消</Button>
-        <Button variant="primary" disabled={fieldsDisabled || !dirty || !draft.name.trim() || missingResume || missingTarget} onClick={onSave}>{busy ? '保存中…' : '保存环境'}</Button>
+        <Button variant="primary" disabled={fieldsDisabled || !dirty || !draft.name.trim() || missingResume || missingTarget || Boolean(environmentHotwordsError(draft.hotwords ?? []))} onClick={onSave}>{busy ? '保存中…' : '保存环境'}</Button>
       </>}>
       <form onSubmit={event => { event.preventDefault(); onSave() }} noValidate>
         {editingBlocked && <p className="mb-4 rounded-chip border border-accent-line bg-accent-subtle px-4 py-3 text-xs leading-[1.8] text-text-secondary">面试进行中，当前面试准备已锁定。结束面试后可修改。</p>}
@@ -76,6 +79,7 @@ export default function EnvironmentDialog({ open, onOpenChange, draft, dirty, li
           </div>
           {(missingResume || missingTarget) && <p className={cn(inlineErrorClass, 'mt-0 mb-4')} role="alert">存在失效的简历或岗位，请重新选择或改为不选择后保存。</p>}
           <EnvironmentReferencePicker documents={references} selected={draft.referenceIds} disabled={fieldsDisabled} onChange={referenceIds => onChange({ ...draft, referenceIds })} />
+          {open && <EnvironmentHotwords key={draft.id ?? 'new'} draft={draft} disabled={fieldsDisabled} onChange={onChange} onExtract={onExtractHotwords} />}
         </fieldset>
       </form>
     </Modal>

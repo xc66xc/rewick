@@ -49,6 +49,23 @@ class BackgroundIntegrationTest extends PaymentHttpFixture {
     }
 
     @Test
+    void hotwords_saveReloadLegacyEditAndClear_preserveIsolation() {
+        String env = library(aliceToken).path("activeEnvironmentId").asText();
+        var content = environment(null);
+        content.put("hotwords", List.of(" Agent ", "Agent", "虚拟量测"));
+        var saved = save("environments", env, saveBody(1, content));
+        assertThat(saved.path("hotwords").toString()).isEqualTo("[\"Agent\",\"虚拟量测\"]");
+        assertThat(library(aliceToken).path("environments").get(0).path("hotwords")).isEqualTo(saved.path("hotwords"));
+        content.remove("hotwords");
+        saved = save("environments", env, saveBody(saved.path("version").asLong(), content));
+        assertThat(saved.path("hotwords").size()).isEqualTo(2);
+        content.put("hotwords", List.of());
+        saved = save("environments", env, saveBody(saved.path("version").asLong(), content));
+        assertThat(saved.path("hotwords").isEmpty()).isTrue();
+        assertThat(library(bobToken).path("environments").get(0).path("hotwords").isMissingNode()).isTrue();
+    }
+
+    @Test
     void interviewType_requiresKnownValue_andSurvivesLibraryReload() {
         var initial = library(aliceToken);
         assertThat(initial.path("environments").get(0).path("interviewType").asText())

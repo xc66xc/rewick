@@ -62,3 +62,44 @@ describe('server background', () => {
     await expect(store.list()).rejects.toThrow('账户已切换')
   })
 })
+
+describe('environment hotwords', () => {
+  it('preserves saved terms through the server library', async () => {
+    const saved = { ...environment, hotwords: ['虚拟量测', 'Agent'] }
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      if (init.method === 'POST') {
+        expect(JSON.parse(String(init.body)).content.hotwords).toEqual(saved.hotwords)
+        return Response.json(saved)
+      }
+      return Response.json({ ...library, environments: [saved] })
+    }))
+    const result = await setup().store.saveEnvironment({ ...saved, interviewType: 'technical' })
+    expect(result.environments[0].hotwords).toEqual(saved.hotwords)
+  })
+
+  it('extracts terms for an unsaved unnamed draft without sending unrelated fields', async () => {
+    const fetcher = vi.fn(async (_url: string, init: RequestInit) => {
+      expect(JSON.parse(String(init.body))).toEqual({ resumeId: 'resume', targetId: null, referenceIds: [] })
+      return Response.json({ hotwords: ['Agent'] })
+    })
+    vi.stubGlobal('fetch', fetcher)
+    const result = await setup().store.extractEnvironmentHotwords({ resumeId: 'resume', targetId: null, referenceIds: [] })
+    expect(result).toEqual(['Agent'])
+    expect(fetcher.mock.calls[0][0]).toContain('/background/hotwords/extract')
+  })
+
+  it('rejects oversized or invalid terms before saving', () => {
+    for (const hotwords of [['a'.repeat(81)], ['Agent\nignore'], Array.from({ length: 201 }, (_, index) => String(index))]) {
+      expect(environmentInputSchema.safeParse({ ...environment, hotwords }).success).toBe(false)
+    }
+  })
+
+  it('rejects a term extraction result after an account change', async () => {
+    const { store, auth } = setup()
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      auth.mockRejectedValue(new Error('账户已切换'))
+      return Response.json({ hotwords: ['Agent'] })
+    }))
+    await expect(store.extractEnvironmentHotwords({ resumeId: 'resume', targetId: null, referenceIds: [] })).rejects.toThrow('账户已切换')
+  })
+})

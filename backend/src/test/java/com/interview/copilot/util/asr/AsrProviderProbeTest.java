@@ -76,6 +76,18 @@ public class AsrProviderProbeTest {
     }
 
     @Test
+    void test_qwenStreaming_usesInferenceLifecycle() {
+        server = server(false);
+        var endpoint = endpoint();
+        endpoint.setModel(AsrEndpoint.QWEN_STREAMING);
+        endpoint.setUrl("ws://localhost:" + server.port() + "/api-ws/v1/inference");
+        probe.test(endpoint);
+        assertThat(requests.getFirst().at("/payload/model").asText()).isEqualTo(AsrEndpoint.QWEN_STREAMING);
+        assertThat(requests.getLast().at("/header/action").asText()).isEqualTo("finish-task");
+        assertThat(audioBytes.get()).isEqualTo(16000);
+    }
+
+    @Test
     void test_handshakeSucceedsButTaskFails_returnsSafeFailure() {
         server = server(true);
 

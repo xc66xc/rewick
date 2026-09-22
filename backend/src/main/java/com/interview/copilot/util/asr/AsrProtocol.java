@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.interview.copilot.exception.ai.ProviderErrors;
 import com.interview.copilot.validation.ai.LlmRequestPolicy;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -37,7 +38,8 @@ public final class AsrProtocol {
                         "sample_rate",
                         "semantic_punctuation_enabled",
                         "max_sentence_silence",
-                        "heartbeat"));
+                        "heartbeat",
+                        "vocabulary"));
         if (!"pcm".equals(parameters.path("format").asText())
                 || !parameters.path("sample_rate").isIntegralNumber()
                 || parameters.path("sample_rate").asInt() != 16000) {
@@ -61,19 +63,43 @@ public final class AsrProtocol {
                         "model",
                         model,
                         "parameters",
-                        Map.of(
-                                "format",
-                                "pcm",
-                                "sample_rate",
-                                16000,
-                                "semantic_punctuation_enabled",
-                                false,
-                                "max_sentence_silence",
-                                silence,
-                                "heartbeat",
-                                true),
+                        parameters(parameters, model, silence),
                         "input",
                         Map.of()));
+    }
+
+    private static Map<String, Object> parameters(JsonNode input, String model, int silence) {
+        Map<String, Object> output = new HashMap<>(Map.of(
+                "format", "pcm", "sample_rate", 16000,
+                "semantic_punctuation_enabled", false,
+                "max_sentence_silence", silence, "heartbeat", true));
+        if (input.has("vocabulary")) {
+            Map<String, Integer> words = vocabulary(input.get("vocabulary"), model);
+            if (!words.isEmpty()) output.put("vocabulary", words);
+        }
+        return output;
+    }
+
+    private static Map<String, Integer> vocabulary(JsonNode input, String model) {
+        // Phase-one guardrails: small session vocabularies, no super-hotwords.
+        if (!AsrEndpoint.QWEN_STREAMING.equals(model)
+                || !input.isObject() || input.size() > 200
+                || input.toString().getBytes(StandardCharsets.UTF_8).length > 4096) {
+            throw ProviderErrors.invalid();
+        }
+        Map<String, Integer> words = new HashMap<>();
+        input.fields().forEachRemaining(entry -> {
+            String word = entry.getKey();
+            JsonNode weight = entry.getValue();
+            if (word.isBlank() || !word.equals(word.strip()) || word.length() > 80
+                    || word.codePoints().anyMatch(Character::isISOControl)
+                    || !weight.isIntegralNumber() || !weight.canConvertToInt()
+                    || weight.asInt() < 1 || weight.asInt() > 5) {
+                throw ProviderErrors.invalid();
+            }
+            words.put(word, weight.asInt());
+        });
+        return words;
     }
 
     public static Map<String, Object> finish(String upstreamId) {

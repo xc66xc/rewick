@@ -68,6 +68,7 @@ export interface InterviewTarget { companyName: string; roleName: string; jobDes
 export interface ResumeProfile { hasContent?: boolean; version?: number; bodyLoaded?: boolean; id: string; name: string; text: string; createdAt: string; updatedAt: string }
 export interface TargetProfile extends InterviewTarget { version?: number; bodyLoaded?: boolean; id: string; name: string; createdAt: string; updatedAt: string }
 export interface InterviewEnvironment {
+  hotwords?: string[]
   interviewType: InterviewType
   version?: number; bodyLoaded?: boolean
   id: string; name: string; resumeId: string | null; targetId: string | null; referenceIds: string[]; createdAt: string; updatedAt: string
@@ -82,7 +83,7 @@ export interface InterviewEnvironmentSnapshot {
 }
 export interface ResumeInput { version?: number; bodyLoaded?: boolean; id?: string; name: string; text: string }
 export interface TargetInput extends InterviewTarget { version?: number; bodyLoaded?: boolean; id?: string; name: string }
-export interface EnvironmentInput { interviewType: InterviewType; version?: number; bodyLoaded?: boolean; id?: string; name: string; resumeId: string | null; targetId: string | null; referenceIds: string[] }
+export interface EnvironmentInput { hotwords?: string[]; interviewType: InterviewType; version?: number; bodyLoaded?: boolean; id?: string; name: string; resumeId: string | null; targetId: string | null; referenceIds: string[] }
 export type ReferenceKind = 'technical' | 'personal'
 export interface ReferenceDocument {
   id: string
@@ -218,6 +219,7 @@ export interface DesktopBridge {
   removeResume(id: string): Promise<InterviewLibrary>
   saveTarget(input: TargetInput): Promise<InterviewLibrary>
   removeTarget(id: string): Promise<InterviewLibrary>
+  extractEnvironmentHotwords(input: EnvironmentInput): Promise<string[]>
   saveEnvironment(input: EnvironmentInput): Promise<InterviewLibrary>
   removeEnvironment(id: string): Promise<InterviewLibrary>
   activateEnvironment(id: string): Promise<Settings>

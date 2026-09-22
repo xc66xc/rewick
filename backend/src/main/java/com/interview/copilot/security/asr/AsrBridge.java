@@ -93,7 +93,7 @@ public final class AsrBridge {
             throw ProviderErrors.unavailable();
         }
         Map<String, Object> request = AsrProtocol.run(frame, upstreamId, config.getModel());
-        URI endpoint = LiveTranslateSession.endpoint(config.getUrl(), config.getModel());
+        URI endpoint = com.interview.copilot.util.asr.AsrEndpoint.resolve(config.getUrl(), config.getModel());
         if (LiveTranslateSession.MODEL.equals(config.getModel())) {
             realtime = new LiveTranslateSession();
             request = realtime.run();
@@ -115,6 +115,10 @@ public final class AsrBridge {
                 resources
                         .timers()
                         .schedule(() -> fail("session_duration_limit"), resources.maximumSeconds(config), TimeUnit.SECONDS);
+        if (realtime == null) {
+            JsonNode enriched = resources.withHotwords(user.id(), lease.sessionId(), config.getModel(), frame);
+            request = AsrProtocol.run(enriched, upstreamId, config.getModel());
+        }
         String payload = resources.json().encode(request);
         connecting =
                 resources

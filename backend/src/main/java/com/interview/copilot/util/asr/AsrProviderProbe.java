@@ -50,7 +50,7 @@ public final class AsrProviderProbe {
                 client.newWebSocketBuilder()
                         .connectTimeout(Duration.ofSeconds(3))
                         .header("Authorization", "Bearer " + endpoint.getApiKey())
-                        .buildAsync(LiveTranslateSession.endpoint(endpoint.getUrl(), endpoint.getModel()), listener);
+                        .buildAsync(com.interview.copilot.util.asr.AsrEndpoint.resolve(endpoint.getUrl(), endpoint.getModel()), listener);
         try {
             connecting.thenCompose(socket -> listener.finished).get(10, TimeUnit.SECONDS);
         } catch (InterruptedException error) {

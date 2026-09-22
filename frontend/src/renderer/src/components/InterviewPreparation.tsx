@@ -1,3 +1,4 @@
+import { environmentHotwordsError } from '../../../shared/environment-hotwords'
 import InviteFriendsButton from './invitation/InviteFriendsButton'
 import { useState } from 'react'
 import { CheckCircle, PlusCircle } from '@phosphor-icons/react'
@@ -21,7 +22,7 @@ interface Props {
   onStarted: () => void; onContext: () => void; onSettings: () => void; onPurchase?: () => void; onHistory?: () => void
 }
 const emptyEnvironment: EnvironmentInput = { interviewType: 'technical', name: '', resumeId: null, targetId: null, referenceIds: [] }
-function environmentInput({ id, name, interviewType, resumeId, targetId, referenceIds, version }: InterviewEnvironment): EnvironmentInput { return { id, name, interviewType, resumeId, targetId, referenceIds, version } }
+function environmentInput({ id, name, interviewType, resumeId, targetId, referenceIds, version, hotwords }: InterviewEnvironment): EnvironmentInput { return { id, name, interviewType, resumeId, targetId, referenceIds, version, hotwords } }
 /* v30 准备面试页:钱包页头 + 摘要卡 + 环境卡片网格,新建/编辑走弹窗(原「面试环境」页已并入) */
 export default function InterviewPreparation({ bridge, settings, timer, isSessionActive, onPrepare, onSave, onStarted, onContext, onSettings, onPurchase, onHistory }: Props) {
   const data = useInterviewLibrary(bridge)
@@ -42,6 +43,8 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
   }
   async function handleSave() {
     if (busy || editingBlocked || !editor.draft.name.trim()) return
+    const hotwordsError = environmentHotwordsError(editor.draft.hotwords ?? [])
+    if (hotwordsError) { setError(hotwordsError); return }
     setBusy(true); setError(''); setNotice('')
     const input = { ...editor.draft, name: editor.draft.name.trim() }
     const savedCurrent = input.id !== undefined && input.id === activeId
@@ -130,7 +133,7 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
         </Button>
       </li>
     </ul>}
-    <EnvironmentDialog open={dialogOpen} onOpenChange={setDialogOpen} draft={editor.draft} dirty={editor.dirty} library={data.library}
+    <EnvironmentDialog onExtractHotwords={input => bridge.extractEnvironmentHotwords(input)} open={dialogOpen} onOpenChange={setDialogOpen} draft={editor.draft} dirty={editor.dirty} library={data.library}
       references={data.references} referencesReady={data.referencesReady} settings={settings} busy={busy}
       editingBlocked={editingBlocked} error={error}
       onChange={editor.setDraft} onSave={() => void handleSave()} />

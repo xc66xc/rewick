@@ -33,7 +33,7 @@ public final class BackgroundPolicy {
                 switch (kind) {
                     case resumes -> Set.of("name", "text");
                     case targets -> Set.of("name", "companyName", "roleName", "jobDescription");
-                    case environments -> Set.of("name", "interviewType", "resumeId", "targetId", "referenceIds");
+                    case environments -> Set.of("name", "interviewType", "resumeId", "targetId", "referenceIds", "hotwords");
                 };
         object.fieldNames()
                 .forEachRemaining(
@@ -65,7 +65,12 @@ public final class BackgroundPolicy {
                         });
             }
         }
-        return object.deepCopy();
+        ObjectNode result = object.deepCopy();
+        if (kind == BackgroundKind.environments && object.has("hotwords")) {
+            var words = result.putArray("hotwords");
+            HotwordPolicy.words(object.path("hotwords")).forEach(words::add);
+        }
+        return result;
     }
 
     private static void text(ObjectNode node, String key, int max) {

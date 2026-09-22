@@ -26,7 +26,7 @@ import { needsPlatform, routeService } from './services/service-routing'
 import { applyDesktopDefaults, assertAllowedSettings, hasAdvancedSettings, preserveLocalAdvancedSettings, requireAdvancedSettings } from './services/advanced-settings'
 import type { PlatformCapability } from './services/service-routing'
 import { InterviewStore } from './services/interview-store'
-import { environmentInputSchema } from './services/interview-validation'
+import { environmentHotwordSourcesSchema, environmentInputSchema } from './services/interview-validation'
 import { SerialQueue, readJson, writeJsonAtomic } from './services/storage'
 import { sessionToMarkdown } from './services/history-store'
 import { AsrClient } from './services/asr-client'
@@ -510,6 +510,7 @@ function registerHandlers(): void {
   handle('resumes:remove', input => mutateInterviews(() => interviews.removeResume(parseInput(profileId, input))))
   handle('targets:save', input => mutateInterviews(() => interviews.saveTarget(input as Parameters<InterviewStore['saveTarget']>[0])))
   handle('targets:remove', input => mutateInterviews(() => interviews.removeTarget(parseInput(profileId, input))))
+  handle('environments:extract-hotwords', input => interviews.extractEnvironmentHotwords(parseInput(environmentHotwordSourcesSchema, input)))
   handle('environments:save', input => mutateInterviews(() => interviews.saveEnvironment(parseInput(environmentInputSchema, input))))
   handle('environments:remove', input => mutateInterviews(() => interviews.removeEnvironment(parseInput(profileId, input))))
   handle('environments:activate', input => mutateInterviews(async () => {

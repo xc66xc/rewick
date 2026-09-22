@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { environmentHotwordsError } from '../../shared/environment-hotwords'
 import { interviewTypeSchema } from '../../shared/interview-type'
 
 const id = z.string().min(1).max(128)
@@ -15,8 +16,13 @@ const targetFields = {
 
 export const resumeInputSchema = z.object({ ...revision, id: id.optional(), name: profileName, text: z.string().max(100_000) })
 export const targetInputSchema = z.object({ ...revision, id: id.optional(), name: profileName, ...targetFields })
+export const environmentHotwordsSchema = z.array(z.string()).superRefine((words, context) => {
+  const error = environmentHotwordsError(words)
+  if (error) context.addIssue({ code: 'custom', message: error })
+})
+export const environmentHotwordSourcesSchema = z.object({ resumeId: id.nullable(), targetId: id.nullable(), referenceIds })
 export const environmentInputSchema = z.object({
-  interviewType: interviewTypeSchema,
+  interviewType: interviewTypeSchema, hotwords: environmentHotwordsSchema.optional(),
   ...revision, id: id.optional(), name: environmentName, resumeId: id.nullable(), targetId: id.nullable(), referenceIds,
 })
 export const environmentSnapshotSchema = z.object({
