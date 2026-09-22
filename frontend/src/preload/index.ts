@@ -17,6 +17,7 @@ function createBridge(accountScope?: string): DesktopBridge {
     info: sessionId => invoke('recordings:info', sessionId),
     remove: sessionId => invoke('recordings:remove', sessionId),
     exportReview: sessionId => invoke('recordings:export', sessionId),
+    download: sessionId => invoke('recordings:download', sessionId),
     cancelExport: sessionId => invoke('recordings:cancel-export', sessionId)
   },
   getPackageCatalog: () => invoke('payments:catalog'),

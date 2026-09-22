@@ -31,6 +31,18 @@ describe('local interview recordings', () => {
     expect(await recovered.info('a', 's')).toMatchObject({ status: 'interrupted' })
     expect((await readFile(await recovered.audioPath('a', 's'))).readUInt32LE(40)).toBe(640)
   })
+  it('exports the original WAV without changing it and rejects other accounts or active recordings', async () => {
+    const destination = join(root, 'download.wav')
+    await store.start('a', 's')
+    await store.append('a', 's', new Uint8Array([1, 2, 3, 4]).buffer)
+    await expect(store.exportFile('a', 's', destination)).rejects.toThrow('请先结束并保存录音')
+    await store.stop('a', 's')
+    await expect(store.exportFile('b', 's', destination)).rejects.toThrow()
+    const original = await readFile(await store.audioPath('a', 's'))
+    await store.exportFile('a', 's', destination)
+    expect(await readFile(destination)).toEqual(original)
+    expect(await readFile(await store.audioPath('a', 's'))).toEqual(original)
+  })
   it('rejects traversal, overwriting recordings, invalid PCM and deleting active audio', async () => {
     await expect(store.start('a', '../s')).rejects.toThrow()
     await store.start('a', 's')

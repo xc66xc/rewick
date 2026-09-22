@@ -1,7 +1,8 @@
 import LocalRecording from './LocalRecording'
+import { Collapse } from './ui/collapsible'
 import { interviewTypeLabels } from '../../../shared/interview-type'
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ClockCounterClockwise, DownloadSimple, Eye, TextAlignLeft, Trash } from '@phosphor-icons/react'
+import { ArrowLeft, ClockCounterClockwise, DownloadSimple, CaretRight, Eye, TextAlignLeft, Trash } from '@phosphor-icons/react'
 import type { DesktopBridge, SessionRecord, SessionExportOptions } from '../../../shared/types'
 import AnswerCard from './AnswerCard'
 import { formatDuration } from '../hooks/useInterviewTime'
@@ -63,12 +64,12 @@ export default function HistoryPage({ bridge, records: initialRecords, activeSes
     {bridge && !selected && <div className="mb-4 flex items-center gap-3"><Button disabled={loading} onClick={() => void loadPage(cursor)}>刷新</Button><Button disabled={loading || cursors.length === 1} onClick={() => setCursors(values => values.slice(0, -1))}>上一页</Button><Button disabled={loading || nextCursor === null} onClick={() => { if (nextCursor !== null) setCursors(values => [...values, nextCursor]) }}>下一页</Button>{loading && <span role="status">加载中…</span>}</div>}
     {notice && <p className="mb-4 text-xs text-success [overflow-wrap:anywhere]" role="status">{notice}</p>}
     {selected ? <div className="rounded-card border border-border bg-card p-6"><div className="mb-6 flex items-center justify-between gap-4"><button className={textButtonClass} onClick={() => setSelected(null)}><ArrowLeft size={17} />返回记录</button>
-      <div className="flex flex-wrap items-center justify-end gap-3"><Button onClick={() => setExporting(true)}><DownloadSimple size={17} aria-hidden="true" />导出 Markdown</Button>
+      <div className="flex flex-wrap items-center justify-end gap-3"><Button className="min-h-11" onClick={() => setExporting(true)}><DownloadSimple size={17} aria-hidden="true" />导出会话记录</Button>
         <Button variant="default" size="sm" className={cn(buttonDangerClass, 'text-danger')} disabled={locked(selected.id)} title={locked(selected.id) ? lockedHint : undefined} onClick={() => handleDeleteRequest(selected)}><Trash aria-hidden="true" />删除会话</Button></div></div>
       <h2 className="mb-2 text-xl">{selected.title}</h2><p className="mb-5 text-xs text-text-muted">{formatDate(selected.createdAt)} · {selected.answers.length} 个回答 · 使用时长 {usage(selected)}</p>
       {bridge?.recordings && <LocalRecording key={selected.id} bridge={bridge} sessionId={selected.id} />}
       <SessionContextDetails record={selected} />
-      {selected.segments.length > 0 && <details className="my-5 rounded-chip border border-border p-4 text-xs"><summary className="cursor-pointer [&_svg]:mr-2 [&_svg]:align-middle"><TextAlignLeft size={17} />查看转写全文</summary><div>{selected.segments.map(segment => <p key={segment.id} className="mt-3 whitespace-pre-wrap">{segment.text}</p>)}</div></details>}
+      {selected.segments.length > 0 && <Collapse className="my-5 p-4" summary={<><CaretRight size={16} aria-hidden="true" /><TextAlignLeft size={17} aria-hidden="true" />查看转写全文</>}><div>{selected.segments.map(segment => <p key={segment.id} className="mt-3 whitespace-pre-wrap">{segment.text}</p>)}</div></Collapse>}
       {selected.answers.map((answer, index) => <AnswerCard key={answer.id} answer={answer.status === 'streaming' && selected.id !== activeSessionId ? { ...answer, status: 'cancelled' } : answer} index={index + 1} />)}</div>
       : records.length ? <div className="overflow-hidden rounded-card border border-border bg-card">
         {/* v30 表格卡:表头行(面试/会话|开始时间|使用时长|转写|回答|操作) + grid 列行;≤560px 收为「标题 + 删除」两列 */}

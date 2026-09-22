@@ -679,6 +679,20 @@ function registerHandlers(): void {
     return recordings.remove(accounts.current().id, sessionId)
   })
   handle('recordings:cancel-export', input => { reviewJobs.get(`${accounts.current().id}:${recordingId(input)}`)?.abort() })
+  handle('recordings:download', async input => {
+    if (!window) return null
+    const owner = accounts.current()
+    const sessionId = recordingId(input)
+    await recordings.audioPath(owner.id, sessionId)
+    const result = await dialog.showSaveDialog(window, {
+      title: '下载录音', defaultPath: `面试录音-${sessionId}.wav`,
+      filters: [{ name: 'WAV 音频', extensions: ['wav'] }]
+    })
+    if (result.canceled || !result.filePath) return null
+    if (accounts.active !== owner) throw new Error('账户已切换，下载已取消。')
+    await recordings.exportFile(owner.id, sessionId, result.filePath)
+    return { path: result.filePath }
+  })
   handle('recordings:export', async input => {
     if (!window) return null
     const owner = accounts.current()

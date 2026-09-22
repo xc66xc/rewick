@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, open, stat, unlink } from 'node:fs/promises'
+import { copyFile, mkdir, open, stat, unlink } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { RecordingInfo } from '../../shared/recording-types'
@@ -150,6 +150,15 @@ export class InterviewRecordingStore {
       for (const file of [path, `${path}.interrupted`]) {
         try { await unlink(file) } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
       }
+    })
+  }
+
+  async exportFile(owner: string, sessionId: string, destination: string): Promise<void> {
+    const path = this.path(owner, sessionId)
+    await this.serial(path, async () => {
+      const info = await this.readInfo(path, sessionId)
+      if (!info || info.status === 'recording' || !info.bytes) throw new Error('请先结束并保存录音。')
+      await copyFile(path, destination)
     })
   }
 
