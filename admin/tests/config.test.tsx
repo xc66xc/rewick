@@ -19,18 +19,39 @@ function setup() {
   return { bodies, view, actor: userEvent.setup() }
 }
 describe('unified model service forms', () => {
+  it('filters summaries and cancels editing without saving', async () => {
+    const { actor, bodies } = setup()
+    await screen.findByRole('article', { name: '服务 快速模型' })
+    expect(screen.queryByRole('form')).toBeNull()
+    await actor.click(screen.getByRole('button', { name: '语音转写' }))
+    expect(screen.queryByRole('article')).toBeNull()
+    expect(screen.getByText('此分类尚无模型或服务，请添加。')).toBeTruthy()
+    await actor.click(screen.getByRole('button', { name: '全部' }))
+    await actor.click(screen.getByRole('button', { name: '编辑配置' }))
+    await actor.clear(screen.getByLabelText('显示名称'))
+    await actor.type(screen.getByLabelText('显示名称'), '未保存名称')
+    await actor.click(screen.getByRole('button', { name: '取消编辑' }))
+    expect(screen.getByRole('article', { name: '服务 快速模型' })).toBeTruthy()
+    await actor.click(screen.getByRole('button', { name: '编辑配置' }))
+    expect(screen.getByLabelText('显示名称')).toHaveProperty('value', '快速模型')
+    expect(bodies).toHaveLength(0)
+  })
   it('adds all service kinds when HTTP does not provide randomUUID', async () => {
     vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) })
     const { actor } = setup()
+    await actor.click(await screen.findByRole('button', { name: '编辑配置' }))
     await screen.findByDisplayValue('快速模型')
     for (const name of ['添加回答模型', '添加语音转写', '添加远程知识库', '添加资料检索向量模型']) {
+      await actor.click(screen.getByRole('button', { name: '添加服务' }))
       await actor.click(screen.getByRole('button', { name }))
     }
     expect(screen.getAllByRole('form')).toHaveLength(5)
   })
   it('saves, disables and deletes an embedding model using a single form', async () => {
     const { actor, bodies } = setup()
+    await actor.click(await screen.findByRole('button', { name: '编辑配置' }))
     await screen.findByDisplayValue('快速模型')
+    await actor.click(screen.getByRole('button', { name: '添加服务' }))
     await actor.click(screen.getByRole('button', { name: '添加资料检索向量模型' }))
     const draft = within(screen.getByRole('form', { name: '模型服务 新服务' }))
     await actor.type(draft.getByLabelText('显示名称'), '中文资料向量')
@@ -57,7 +78,9 @@ describe('unified model service forms', () => {
   })
   it('allows keyless loopback embedding and requires a key when moving to a remote service', async () => {
     const { actor, bodies } = setup()
+    await actor.click(await screen.findByRole('button', { name: '编辑配置' }))
     await screen.findByDisplayValue('快速模型')
+    await actor.click(screen.getByRole('button', { name: '添加服务' }))
     await actor.click(screen.getByRole('button', { name: '添加资料检索向量模型' }))
     const draft = within(screen.getByRole('form', { name: '模型服务 新服务' }))
     await actor.type(draft.getByLabelText('显示名称'), '本机向量')
@@ -96,7 +119,9 @@ describe('unified model service forms', () => {
     }))
     const actor = userEvent.setup()
     render(<ConfigPage api={new ApiClient('token')} />)
+    await actor.click(await screen.findByRole('button', { name: '编辑配置' }))
     await screen.findByDisplayValue('快速模型')
+    await actor.click(screen.getByRole('button', { name: '添加服务' }))
     await actor.click(screen.getByRole('button', { name: '添加资料检索向量模型' }))
     const draft = within(screen.getByRole('form', { name: '模型服务 新服务' }))
     await actor.type(draft.getByLabelText('显示名称'), '测试向量')
@@ -112,10 +137,12 @@ describe('unified model service forms', () => {
   })
   it('shows existing connection and model in one form and saves no other incomplete draft', async () => {
     const { actor, bodies } = setup()
+    await actor.click(await screen.findByRole('button', { name: '编辑配置' }))
     await screen.findByDisplayValue('快速模型')
     expect(screen.getAllByRole('form')).toHaveLength(1)
     expect(screen.getByLabelText('模型名称')).toHaveProperty('value', 'fast-model')
     expect(screen.queryByText('所属服务')).toBeNull()
+    await actor.click(screen.getByRole('button', { name: '添加服务' }))
     await actor.click(screen.getByRole('button', { name: '添加回答模型' }))
     const first = screen.getByRole('form', { name: '模型服务 快速模型' })
     await actor.clear(within(first).getByLabelText('显示名称'))
@@ -129,6 +156,7 @@ describe('unified model service forms', () => {
   })
   it('turns off the model and clears the last default in one save', async () => {
     const { actor, bodies } = setup()
+    await actor.click(await screen.findByRole('button', { name: '编辑配置' }))
     await screen.findByDisplayValue('快速模型')
     await actor.click(screen.getByRole('button', { name: '停用' }))
     await waitFor(() => expect(bodies).toHaveLength(1))
@@ -139,6 +167,7 @@ describe('unified model service forms', () => {
   it('preserves draft and stored credentials after a version conflict', async () => {
     vi.stubGlobal('fetch', vi.fn(async (_url: string, options: RequestInit) => response(options.method === 'PUT' ? { message: '版本冲突' } : config, options.method === 'PUT' ? 409 : 200)))
     const actor = userEvent.setup(); render(<ConfigPage api={new ApiClient('token')} />)
+    await actor.click(await screen.findByRole('button', { name: '编辑配置' }))
     await screen.findByDisplayValue('快速模型')
     await actor.type(screen.getByLabelText('API Key'), 'draft-secret')
     await actor.click(screen.getByRole('button', { name: '保存' }))

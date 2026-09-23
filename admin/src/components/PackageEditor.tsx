@@ -3,8 +3,8 @@ import { type ApiClient, message } from '../api'
 import { money, packageSchema, type PackageDraft, type TimePackage } from '../payments'
 import DurationInput from './DurationInput'
 import styles from '../styles.module.css'
-interface PackageEditorProps { api: ApiClient; item?: TimePackage; onSaved: (item: TimePackage) => void; onDelete: () => void }
-export default function PackageEditor({ api, item: initialItem, onSaved, onDelete }: PackageEditorProps) {
+interface PackageEditorProps { api: ApiClient; item?: TimePackage; onSaved: (item: TimePackage) => void; onDelete: () => void; onBusyChange?: (busy: boolean) => void }
+export default function PackageEditor({ api, item: initialItem, onSaved, onDelete, onBusyChange }: PackageEditorProps) {
   const [item, setItem] = useState(initialItem)
   const [draft, setDraft] = useState<PackageDraft>(item ?? { name: '', description: '', durationSeconds: 3600, originalPriceCents: 1000, discountBps: 10000, sortOrder: 0, enabled: false })
   const [busy, setBusy] = useState(false)
@@ -12,13 +12,13 @@ export default function PackageEditor({ api, item: initialItem, onSaved, onDelet
   function change<K extends keyof PackageDraft>(key: K, value: PackageDraft[K]) { setDraft(current => ({ ...current, [key]: value })) }
   async function save() {
     if (draft.durationSeconds <= 0) { setError('套餐时长必须大于 0。'); return }
-    setBusy(true); setError('')
+    setBusy(true); onBusyChange?.(true); setError('')
     try { const saved = await api.request(item ? `/admin/packages/${item.id}` : '/admin/packages', packageSchema, { method: item ? 'PUT' : 'POST', body: {
       name: draft.name, description: draft.description, durationSeconds: draft.durationSeconds,
       originalPriceCents: draft.originalPriceCents, discountBps: draft.discountBps,
       sortOrder: draft.sortOrder, enabled: draft.enabled, ...(item ? { version: item.version } : {})
     } }); setItem(saved); onSaved(saved) }
-    catch (failure) { setError(message(failure)) } finally { setBusy(false) }
+    catch (failure) { setError(message(failure)) } finally { setBusy(false); onBusyChange?.(false) }
   }
   return <form onSubmit={event => { event.preventDefault(); void save() }}><fieldset className={styles.editorCard} disabled={busy}><legend>{item?.name ?? '新套餐'}</legend>
     <div className={styles.twoColumns}><label className={styles.field}>套餐名称<input required maxLength={100} value={draft.name} onChange={event => change('name', event.target.value)} /></label><label className={styles.field}>排序<input type="number" required min={0} step={1} value={draft.sortOrder} onChange={event => change('sortOrder', Number(event.target.value))} /></label></div>

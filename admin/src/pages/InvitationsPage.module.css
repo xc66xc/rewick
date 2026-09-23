@@ -1,0 +1,24 @@
+.summary { display: grid; grid-template-columns: 1.3fr 1fr 1.15fr auto; align-items: center; gap: var(--space-6); border: 1px solid var(--color-border); border-radius: 10px; background: white; padding: var(--space-6); }
+.intro { display: flex; align-items: center; gap: var(--space-5); min-width: 0; }
+.gift { display: grid; place-items: center; width: 72px; height: 72px; flex-shrink: 0; border-radius: 50%; color: var(--color-primary); background: var(--color-primary-bg); }
+.intro h3 { font-size: 17px; }
+.intro p, .condition p { font-size: 13px; line-height: 1.7; margin-top: var(--space-2); color: var(--color-muted); }
+.reward, .condition { border-left: 1px solid var(--color-border); padding-left: var(--space-6); }
+.reward span, .condition > span { color: var(--color-muted); font-size: 13px; }
+.reward strong { display: block; font-size: 32px; color: var(--color-primary); margin-top: var(--space-3); }
+.condition h4 { display: flex; align-items: center; gap: var(--space-2); font-size: 14px; margin-top: var(--space-3); }
+.records { padding: var(--space-5); border: 1px solid var(--color-border); border-radius: 10px; background: white; min-width: 0; }
+.heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-4); }
+.heading h3 { font-size: 22px; }
+.searchBar { display: flex; gap: var(--space-3); margin-bottom: var(--space-5); }
+.search { display: flex; align-items: center; gap: var(--space-2); border: 1px solid var(--color-border); border-radius: 6px; padding-left: var(--space-3); width: min(380px, 100%); color: var(--color-muted); }
+.search input { border: 0; min-width: 0; }
+.table { min-width: 1000px; }
+.table th, .table td { padding: 16px 12px; font-size: 13px; }
+.details { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-6); padding: var(--space-6); margin: 0; }
+.details dt { color: var(--color-muted); font-size: 13px; margin-bottom: var(--space-2); }
+.details dd { margin: 0; overflow-wrap: anywhere; }
+.details span { display: block; color: var(--color-muted); font-size: 13px; margin-top: var(--space-2); }
+@media (max-width: 1250px) { .summary { grid-template-columns: 1fr 1fr; } .condition { border: 0; padding: 0; } }
+@media (max-width: 760px) { .summary, .details { grid-template-columns: minmax(0, 1fr); } .reward, .condition { border: 0; padding: 0; } .summary { gap: var(--space-5); } .search { min-width: 0; } }
+.records > nav { margin-top: var(--space-4); }

@@ -72,3 +72,77 @@
 @media (max-width: 1100px) { .shell { grid-template-columns: 184px minmax(0, 1fr); } .sidebar { padding: var(--space-6) var(--space-3); } .topbar, .mainContent { padding: var(--space-6); } .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .shell, .login { grid-template-columns: minmax(0, 1fr); } .sidebar { gap: var(--space-4); border-right: 0; border-bottom: 1px solid var(--color-border); } .navigation { flex-direction: row; overflow: auto; } .navButton, .navActive { white-space: nowrap; padding: var(--space-2); } .sidebarFooter { display: none; } .topbar { align-items: flex-start; padding: var(--space-5); } .account { gap: var(--space-3); } .mainContent { padding: var(--space-5); } .twoColumns { grid-template-columns: minmax(0, 1fr); } .loginIntro { padding: var(--space-8); gap: var(--space-8); } .loginIntro h1 { font-size: var(--text-xl); } .loginFoot, .lead { display: none; } .loginPanel { padding: var(--space-8); } .publishBar { flex-wrap: wrap; } }
 @media (max-width: 430px) { .topbar { flex-direction: column; } .filters { grid-template-columns: minmax(0, 1fr); } .pagination { flex-direction: column; align-items: stretch; } .toolbar { flex-wrap: wrap; } }
+
+/* Blue administrative workspace. */
+.shell { grid-template-columns: 232px minmax(0, 1fr); }
+.sidebar { padding: 24px 16px; gap: 32px; }
+.brand { padding: 0 10px; font-size: 17px; }
+.brandMark { width: 40px; height: 40px; flex-basis: 40px; }
+.navigation { gap: 28px; }
+.navGroup { display: grid; gap: 5px; }
+.navGroup > p { margin: 0 12px 6px; color: var(--color-muted); font-size: 12px; }
+.navButton, .navActive { width: 100%; min-height: 44px; border-radius: 8px; }
+.navActive { background: var(--color-primary-bg); }
+.sidebarFooter { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--color-border); padding: 20px 10px 0; }
+.sidebarFooter small { display: block; }
+.topbar { height: 64px; padding: 12px 32px; }
+.breadcrumb { display: flex; gap: 14px; color: var(--color-muted); font-size: 13px; }
+.breadcrumb span { color: var(--neutral-300); }
+.account { gap: 20px; font-size: 13px; }
+.account small { display: none; }
+.account button { border: 0; min-height: 32px; font-size: 12px; }
+.mainContent { padding: 32px; }
+.sectionHeading h2 { font-size: 28px; letter-spacing: -.6px; }
+.sectionHeading p { margin-top: 6px; font-size: 14px; }
+.secondaryButton:hover { border-color: #b9c9f7; background: var(--color-primary-bg); }
+.linkButton { display: inline-flex; align-items: center; gap: 4px; }
+.dataPanel { overflow: hidden; border: 1px solid var(--color-border); border-radius: 10px; background: white; }
+.userToolbar { display: flex; align-items: center; gap: 12px; padding: 20px; }
+.userSearch { display: flex; align-items: center; gap: 10px; padding-left: 12px; width: min(100%, 340px); border: 1px solid var(--neutral-300); border-radius: 6px; color: var(--color-muted); }
+.userSearch input { border: 0; background: transparent; padding-left: 0; }
+.resultCount { margin-left: auto; color: var(--color-muted); font-size: 13px; white-space: nowrap; }
+.dataPanel .tableScroll { margin: 0 6px; border-radius: 8px; box-shadow: none; }
+.dataPanel table { min-width: 850px; }
+.dataPanel th, .dataPanel td { padding: 14px 20px; }
+.dataPanel thead th { font-weight: 500; font-size: 13px; }
+.dataPanel tbody tr:last-child > * { border-bottom: 0; }
+.dataPanel tbody tr:hover { background: #fafbff; }
+.dataPanel .pagination { padding: 20px 24px; }
+.userIdentity { display: flex; align-items: center; gap: 14px; min-width: 170px; }
+.userIdentity strong { font-weight: 600; overflow-wrap: anywhere; }
+.avatar { width: 38px; height: 38px; flex: 0 0 38px; display: grid; place-items: center; border-radius: 50%; color: var(--color-primary); background: #e8efff; font-size: 16px; font-weight: 600; }
+.dataPanel tbody tr:nth-child(4n + 2) .avatar { background: #fce8ef; color: #9a4267; }
+.dataPanel tbody tr:nth-child(4n + 3) .avatar { background: #e8f2f0; color: #34736b; }
+.dataPanel tbody tr:nth-child(4n + 4) .avatar { background: #eeebff; color: #6151b9; }
+.tableDetail { font-size: 12px; }
+.enabledBadge { display: inline-flex; white-space: nowrap; padding: 3px 10px; border-radius: 20px; color: var(--color-primary); background: var(--color-primary-bg); font-size: 12px; }
+.mutedBadge { border-radius: 20px; padding: 3px 10px; }
+.rowActions { flex-wrap: nowrap; gap: 12px; }
+.actionPopover { position: fixed; z-index: var(--z-dropdown); width: 160px; padding: 6px; border: 1px solid var(--color-border); border-radius: 8px; background: white; box-shadow: var(--shadow-md); }
+.actionPopover button { display: block; border: 0; width: 100%; padding: 9px 12px; text-align: left; border-radius: 4px; background: transparent; }
+.actionPopover button:hover, .actionPopover button:focus-visible { background: var(--color-primary-bg); color: var(--color-primary); }
+.loginIntro { background: var(--color-primary-bg); }
+@media (max-width: 1100px) { .shell { grid-template-columns: 200px minmax(0, 1fr); } .mainContent { padding: 24px; } .topbar { padding: 12px 24px; } }
+@media (max-width: 760px) { .shell { grid-template-columns: minmax(0, 1fr); } .sidebar { padding: 16px; gap: 16px; } .navigation { gap: 20px; } .navGroup { display: flex; gap: 6px; } .navGroup > p { display: none; } .navButton, .navActive { width: auto; } .sidebarFooter { display: none; } .topbar { padding: 12px 20px; } .mainContent { padding: 20px; } .userToolbar { flex-wrap: wrap; padding: 16px; } .userSearch { flex: 1; min-width: 150px; } .resultCount { width: 100%; margin: 0; } }
+@media (max-width: 430px) { .topbar { height: auto; gap: 12px; } .sectionHeading h2 { font-size: 24px; } }
+.pageNumberGroup { display: inline-flex; align-items: center; gap: 8px; }
+.pageNumberGroup button { min-width: 34px; min-height: 34px; padding: 4px 10px; }
+@media (max-width: 760px) { .pageNumberGroup { display: none; } }
+@media (min-width: 1101px) {
+  .shell { grid-template-columns: 272px minmax(0, 1fr); }
+  .sidebar { padding: 26px 18px; gap: 38px; }
+  .brand { font-size: 20px; }
+  .brandMark { width: 48px; height: 48px; flex-basis: 48px; }
+  .navigation { gap: 38px; }
+  .navButton, .navActive { min-height: 48px; font-size: 16px; }
+  .navGroup > p { font-size: 14px; }
+  .topbar { height: 70px; }
+  .breadcrumb { font-size: 15px; }
+  .sectionHeading h2 { font-size: 36px; }
+  .sectionHeading p { font-size: 16px; }
+  .dataPanel td, .dataPanel tbody th { font-size: 15px; }
+  .dataPanel thead th { font-size: 14px; }
+  .dataPanel th, .dataPanel td { padding: 15px 24px; }
+  .avatar { width: 44px; height: 44px; flex-basis: 44px; }
+  .tableDetail { font-size: 13px; }
+}

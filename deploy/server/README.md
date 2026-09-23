@@ -135,3 +135,11 @@ API 域名只开放 `/api/` 与健康检查，`/api/v1/admin/` 和页面根路�
 验证：浏览器健康检查 UP；服务器侧 HTTPS UP、管理 API 404、未登录平台接口和 WebSocket Upgrade 401。当前本机 Node.js fetch 和 ws 均 ECONNRESET，curl 直连亦失败；尚未确认根因，不降低 TLS 校验、不回退 HTTP。公网全链路验收仍未完成。
 
 支付宝配置当前仍指向旧 IP:8080 通知地址；本次保留旧入口，未修改支付配置/订单/用户令牌。S1 收尾必须解决直连失败、升级客户端、迁移支付通知，随后关闭旧公网明文业务接口并撤销旧令牌。仅新增 TLS 不能保证旧客户端安全。旧配置在 `backups/nginx-before-api-tls-20260914.conf`。
+
+## 2026-09-23 管理后台十页 UI 改版
+
+发布当前工作区 admin 构建（71 项测试通过），覆盖用户、套餐、订单、邀请、模型、支付、邮件、客户端下载、调用记录和操作日志。仅上传管理端静态产物，构建 `interview-copilot-admin:server` 供后续重建使用，并先更新运行容器的哈希资源、原子替换 index.html；未重启容器，未更新后端或数据库。
+
+回滚材料：`/home/ubuntu/interview-copilot/releases/admin-ui-20260923-0133/previous-live`（运行站点备份）、`previous-source`（构建目录备份），旧镜像标签 `interview-copilot-admin:before-ui-20260923-0133`。旧哈希资源保留供已打开页面使用。入口 JS `index-BmSunuPZ.js`、CSS `index-BVmnf07G.css`。
+
+验收：上传包 SHA-256 一致；Nginx 配置检查通过；服务器本机使用管理域名 SNI 校验 HTTPS 首页、JS、CSS 均 200；后端健康 UP，容器运行时间未变化。本机公网 curl 连接重置，浏览器访问超时，公网浏览器验收未完成。

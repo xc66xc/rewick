@@ -44,5 +44,5 @@ export function useEmailConfig(api: ApiClient, active: boolean) {
       if (!controller.signal.aborted) { setError(message(reason)); if (reason instanceof ApiError && reason.status === 409) setConflict(true) }
     } finally { operation.current = null; if (!controller.signal.aborted) setBusy(false) }
   }
-  return { draft, saved, setDraft, loading, busy, error, setError, notice, conflict, submit, reload: () => setRevision(value => value + 1) }
+  return { draft, saved, setDraft, loading, busy, error, setError, notice, conflict, submit, clearFeedback: () => { setNotice(''); setError('') }, reload: () => setRevision(value => value + 1) }
 }

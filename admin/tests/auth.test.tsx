@@ -23,7 +23,7 @@ describe('administrator authentication', () => {
       return response(page([user]))
     }))
     render(<App />); const actor = await login()
-    await screen.findByRole('heading', { name: '平台用户' })
+    await screen.findByRole('heading', { name: '用户管理', level: 2 })
     expect(localStorage.length).toBe(0); expect(sessionStorage.length).toBe(1)
     expired.value = true
     await actor.click(screen.getByRole('button', { name: '调用记录' }))
@@ -41,10 +41,10 @@ describe('administrator authentication', () => {
       return response(page([user]))
     }))
     const first = render(<App />); await login()
-    await screen.findByRole('heading', { name: '平台用户' })
+    await screen.findByRole('heading', { name: '用户管理', level: 2 })
     first.unmount(); calls.length = 0
     render(<App />)
-    await screen.findByRole('heading', { name: '平台用户' })
+    await screen.findByRole('heading', { name: '用户管理', level: 2 })
     expect(calls[0]).toBe('/api/v1/admin/me')
     expect(calls.some(path => path.endsWith('/auth/login'))).toBe(false)
     expect(sessionStorage.getItem('copilot.admin.session')).not.toContain('long-password')
