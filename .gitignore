@@ -86,3 +86,4 @@ frontend/build/python-runtime/
 # Bundled local speech recognition resources (pinned manifests live in scripts).
 frontend/build/asr-model/
 frontend/build/asr-wheel-cache/
+/admin/design-preview/
