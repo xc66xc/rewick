@@ -38,7 +38,7 @@ export default function EnvironmentCard({ environment, resume, target, current, 
         {environment.name.trim().charAt(0).toUpperCase() || '面'}
       </span>
       <div className="min-w-0 flex-1">
-        <h3 className="line-clamp-2 break-words text-[15px] font-[650] text-text-heading" title={environment.name}>{environment.name}</h3>
+        <h3 className="truncate text-[15px] font-[650] text-text-heading" title={environment.name}>{environment.name}</h3>
         <p className="mt-0.5 truncate text-xs text-text-secondary" title={targetLine}>{targetLine}</p>
       </div>
       {current
