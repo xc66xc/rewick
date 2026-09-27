@@ -45,6 +45,14 @@ export class InterviewRecordingStore {
     return this.serial(path, async () => {
       if (this.active.has(path)) throw new Error('录音已经开始。')
       await mkdir(join(path, '..'), { recursive: true, mode: 0o700 })
+      // Resume interrupted capture without replacing the interview's existing audio.
+      const previous = await this.readInfo(path, sessionId)
+      if (previous && previous.bytes > 0) {
+        if (previous.bytes >= MAX_BYTES) throw new Error('录音已达到 4 小时上限。')
+        const file = await open(path, 'r+')
+        this.active.set(path, { file, bytes: previous.bytes, sessionId })
+        return
+      }
       try {
         const existing = await stat(path)
         if (existing.size === 44) {

@@ -42,6 +42,9 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
     await session.prepareRecording(id)
   })
   const [page, setPage] = useState<Page>('preparation')
+  useEffect(() => {
+    if (recording.error) toast.show(recording.error, { type: 'error' })
+  }, [recording.error])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [compact, setCompact] = useState(false)
   const [pinned, setPinned] = useState(false)
@@ -128,13 +131,12 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
         {/* v30 session-bar:浅蓝底 + 蓝细边 + 蓝字,脉冲点,mono 时长(可用 ≤60s 转红),刷新钮移到右组 */}
         {timer.active && !compact && <div className="mx-8 mt-4 mb-4 flex shrink-0 flex-wrap items-center justify-between gap-3.5 rounded-chip border border-accent-line bg-accent-subtle px-3.5 py-[9px] text-xs font-medium text-accent-text max-[820px]:mx-5 max-[820px]:mt-3">
           <div className="flex min-w-0 flex-1 items-center gap-2.5"><span aria-hidden="true" className="size-1.5 shrink-0 animate-pulse-dot rounded-full bg-accent" /><span className="min-w-0 truncate">面试进行中 · 已用 <b className="font-mono font-semibold tabular-nums">{formatDuration(timer.used)}</b> · 可用 <b className={cn('font-mono font-semibold tabular-nums', timer.remaining <= 60 && 'text-danger')}>{formatDuration(timer.remaining)}</b></span></div>
-          <div className="flex shrink-0 items-center gap-2.5"><RefreshTimeButton className="size-[30px] text-accent-text hover:bg-accent/10" refreshing={timer.refreshing} onRefresh={timer.refresh} /><Button variant="primary" size="sm" disabled={timer.busy} onClick={() => void handleEnd()}>结束面试</Button></div>
+          <div className="flex flex-wrap items-center gap-2.5"><InterviewRecordingControl recording={recording} /><RefreshTimeButton className="size-[30px] text-accent-text hover:bg-accent/10" refreshing={timer.refreshing} onRefresh={timer.refresh} /><Button variant="primary" size="sm" disabled={timer.busy} onClick={() => void handleEnd()}>结束面试</Button></div>
         </div>}
-        {timer.active && compact && <CompactStatus session={session} remaining={timer.remaining} ending={timer.busy} onEnd={() => void handleEnd()} />}
+        {timer.active && compact && <CompactStatus recording={<InterviewRecordingControl recording={recording} />} session={session} remaining={timer.remaining} ending={timer.busy} onEnd={() => void handleEnd()} />}
         {timer.warning && timer.active && <p className={cn(formNoteClass, 'px-8 pt-1 max-[820px]:px-5')} role="status">{timer.warning}</p>}
         {page === 'preparation' && <InterviewPreparation bridge={bridge} settings={config.settings} timer={timer} isSessionActive={timer.active || session.busy || !['idle', 'error'].includes(session.status)} onPrepare={handlePrepare} onSave={session.saveEnvironment} onStarted={() => setPage('workspace')} onContext={handleContext} onSettings={handleSettings} onPurchase={() => setPage('purchase')} onHistory={() => setPage('history')} />}
         {page === 'workspace' && timer.active && <div className={cn('flex min-h-0 flex-1 flex-col', compact ? 'p-0' : 'px-8 pb-0')}>
-          <InterviewRecordingControl recording={recording} />
           {/* 工作台顶部仅展示面试名称与面试类型 */}
           {!compact && environment && <div className="mb-3 flex shrink-0 items-center justify-between gap-3 text-xs"><div className="flex min-w-0 flex-1 items-center gap-2">
             <span className="inline-flex h-[34px] min-w-0 max-w-[280px] shrink-0 items-center gap-[7px] rounded-chip border border-border bg-card px-[11px] hover:border-border-hover max-[1180px]:max-w-[220px]" title="面试环境 · 在「面试准备」中修改"><span aria-hidden="true" className="grid size-[22px] shrink-0 place-items-center rounded-[5px] brand-gradient text-text-on-fill"><Briefcase size={12} aria-hidden="true" /></span><span className="min-w-0 truncate font-semibold">{environment.name}</span></span>

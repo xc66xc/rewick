@@ -4,61 +4,90 @@ import { MixedRecordingCapture } from '../audio/mixed-recording-capture'
 import { RecordingWriter } from '../audio/recording-writer'
 import { errorMessage } from './useSettings'
 
+interface Operation {
+  id: string
+  capture: MixedRecordingCapture
+  writer: RecordingWriter | null
+  opening?: Promise<void>
+  cancelled: boolean
+}
 export function useInterviewRecording(bridge: DesktopBridge, sessionId: string, active: boolean, prepare: () => Promise<void>) {
   const [state, setState] = useState<'idle' | 'starting' | 'recording' | 'stopping' | 'saved'>('idle')
   const [error, setError] = useState('')
   const [seconds, setSeconds] = useState(0)
-  const operation = useRef<{ id: string; capture: MixedRecordingCapture; writer: RecordingWriter | null; opened: boolean } | null>(null)
+  const operation = useRef<Operation | null>(null)
   const stopping = useRef<Promise<void> | null>(null)
+  const clock = useRef({ seconds: 0, started: 0 })
+  const latest = useRef({ active, sessionId, prepare })
+  latest.current = { active, sessionId, prepare }
   async function stop() {
     if (stopping.current) return stopping.current
     const current = operation.current
     if (!current) return
+    current.cancelled = true
     setState('stopping')
     stopping.current = (async () => {
       try { await current.capture.stop() } catch (reason) { setError(errorMessage(reason)) }
       try { await current.writer?.finish() } catch (reason) { setError(errorMessage(reason)) }
-      const saved = current.opened ? await bridge.recordings?.stop(current.id) : null
+      if (current.opening) {
+        await current.opening
+        const saved = await bridge.recordings?.stop(current.id)
+        if (latest.current.sessionId === current.id) setState(saved && saved.bytes > 0 ? 'saved' : 'idle')
+      } else setState('idle')
+    })().catch(reason => { setError(errorMessage(reason)); setState('idle') }).finally(() => {
       if (operation.current === current) operation.current = null
-      setState(saved && saved.bytes > 0 ? 'saved' : 'idle')
-    })().catch(reason => { setError(errorMessage(reason)); operation.current = null; setState('idle') }).finally(() => { stopping.current = null })
+      stopping.current = null
+    })
     return stopping.current
   }
   async function start() {
     const api = bridge.recordings
-    if (!api || operation.current || !active) return
-    const current = { id: sessionId, capture: new MixedRecordingCapture(), writer: null as RecordingWriter | null, opened: false }
+    if (!api || operation.current || !latest.current.active) return
+    const current: Operation = { id: latest.current.sessionId, capture: new MixedRecordingCapture(), writer: null, cancelled: false }
     operation.current = current
     setError(''); setState('starting'); setSeconds(0)
     try {
-      await prepare()
-      if (operation.current !== current) return
-      await api.start(current.id)
-      current.opened = true
-      if (operation.current !== current) { await api.stop(current.id); return }
+      await latest.current.prepare()
+      if (current.cancelled) return
+      const info = await api.info(current.id)
+      if (current.cancelled) return
+      setSeconds(Math.floor(info?.durationSeconds ?? 0))
+      current.opening = api.start(current.id)
+      await current.opening
+      if (current.cancelled) return
       current.writer = new RecordingWriter(buffer => api.append(current.id, buffer), reason => { setError(errorMessage(reason)); void stop() })
-      await current.capture.start(buffer => current.writer?.append(buffer), () => { setError('音频采集已结束，录音已停止。'); void stop() })
-      if (operation.current === current && !stopping.current) setState('recording')
-    } catch (reason) { setError(errorMessage(reason)); await stop() }
+      await current.capture.start(buffer => current.writer?.append(buffer), () => { setError('录音已中断，已保存已录制的内容。'); void stop() })
+      if (!current.cancelled) {
+        clock.current = { seconds: Math.floor(info?.durationSeconds ?? 0), started: performance.now() }
+        setState('recording')
+      }
+    } catch (reason) {
+      if (!current.cancelled) {
+        setError(reason instanceof Error && reason.name === 'NotAllowedError'
+          ? '录音权限未开启，请允许系统声音与麦克风访问后重试录音。' : errorMessage(reason))
+        await stop()
+      }
+    }
   }
-  const stopRef = useRef(stop)
-  stopRef.current = stop
+  const actions = useRef({ start, stop })
+  actions.current = { start, stop }
   useEffect(() => {
-    setState('idle'); setSeconds(0); setError('')
-    let current = true
-    void bridge.recordings?.info(sessionId).then(info => { if (current && info && info.bytes > 0 && !operation.current) setState('saved') }).catch(reason => { if (current) setError(errorMessage(reason)) })
-    return () => { current = false; void stopRef.current() }
-  }, [bridge, sessionId])
-  useEffect(() => {
-    if (!active) void stopRef.current()
-  }, [active])
-  useEffect(() => {
-    const off = bridge.onEvent(event => { if (event.kind === 'session-stopping') void stopRef.current() })
-    return () => { off(); void stopRef.current() }
-  }, [bridge])
+    let live = true
+    // Serialize session changes with the previous file's final flush.
+    void (async () => {
+      await stopping.current
+      if (!live) return
+      setState('idle'); setSeconds(0); setError('')
+      if (active) await actions.current.start()
+    })()
+    return () => { live = false; void actions.current.stop() }
+  }, [bridge, sessionId, active])
+  useEffect(() => bridge.onEvent(event => {
+    if (event.kind === 'session-stopping') void actions.current.stop()
+  }), [bridge])
   useEffect(() => {
     if (state !== 'recording') return
-    const timer = setInterval(() => setSeconds(value => value + 1), 1000)
+    const timer = setInterval(() => setSeconds(clock.current.seconds + Math.floor((performance.now() - clock.current.started) / 1000)), 1000)
     return () => clearInterval(timer)
   }, [state])
   return { state, error, seconds, start, stop, supported: Boolean(bridge.recordings) }

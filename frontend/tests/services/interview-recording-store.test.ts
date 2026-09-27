@@ -43,7 +43,7 @@ describe('local interview recordings', () => {
     expect(await readFile(destination)).toEqual(original)
     expect(await readFile(await store.audioPath('a', 's'))).toEqual(original)
   })
-  it('rejects traversal, overwriting recordings, invalid PCM and deleting active audio', async () => {
+  it('rejects invalid PCM and traversal, and preserves audio when resuming', async () => {
     await expect(store.start('a', '../s')).rejects.toThrow()
     await store.start('a', 's')
     await expect(store.append('a', 's', new ArrayBuffer(3))).rejects.toThrow()
@@ -51,7 +51,9 @@ describe('local interview recordings', () => {
     await expect(store.remove('a', 's')).rejects.toThrow()
     await store.append('a', 's', new ArrayBuffer(640))
     await store.stop('a', 's')
-    await expect(store.start('a', 's')).rejects.toThrow()
+    await store.start('a', 's')
+    await store.append('a', 's', new ArrayBuffer(640))
+    expect(await store.stop('a', 's')).toMatchObject({ bytes: 1280 })
     await store.remove('a', 's')
     expect(await store.info('a', 's')).toBeNull()
   })
