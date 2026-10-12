@@ -35,6 +35,35 @@ afterEach(async () => {
 
 describe('LlmClient', () => {
   it.each([
+    ['concise', false], ['expanded', false], ['concise', true], ['expanded', true],
+  ] as const)('sends grounding rules with %s style (platform=%s) without rewriting the question or references', async (style, platform) => {
+    const fetcher = vi.fn(async (_url: string | URL | Request, _options?: RequestInit) => Response.json({ choices: [{ message: { content: '测试回答。' } }] }))
+    vi.stubGlobal('fetch', fetcher)
+    const settings = structuredClone(defaultSettings)
+    settings.answerStyle = style === 'concise' ? 'concise' : 'detailed'
+    settings.context.text = '统一封装训练、推理与评估接口。'
+    const input = { ...request, question: '说一下示例 Harness，你认为它解决了什么问题？' }
+    const excerpt = { source: 'bailian' as const, kind: 'technical' as const, documentId: 'test-doc', chunkId: 'test-chunk', revision: 1, name: '测试资料', text: '数据集版本快照保证训练可复现。' }
+    const events: AppEvent[] = []
+    client = new LlmClient(settings, 'test-key', event => events.push(event), platform)
+    await client.generate(input, { status: 'ready', excerpts: [excerpt] })
+    const payload = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))
+    const instruction = payload.messages[0].content
+    expect(instruction).toContain('不得仅凭名称、同类产品或通用概念猜测')
+    expect(instruction).toContain('检索没有命中不意味着必须拒答')
+    expect(instruction).toContain('知识不足不等于对方问题不清')
+    expect(instruction).toContain('不主动附加个人项目经历')
+    expect(instruction).toContain('不得补造此前的人工流程')
+    expect(instruction).toContain('移植为当前产品的功能')
+    expect(instruction).toContain(style === 'concise' ? '简短口语' : '展开口语')
+    expect(JSON.parse(payload.messages[1].content)).toEqual({
+      personalContext: settings.context.text, interviewTarget: settings.interviewTarget,
+      question: input.question, transcript: input.transcript, referenceContext: [excerpt.text],
+    })
+    expect(events.find(event => event.kind === 'answer-request')?.modelInput.messages).toEqual(payload.messages)
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+  it.each([
     ['technical', '本场为技术面试', false],
     ['general', '本场为综合面试', false],
     ['technical', '本场为技术面试', true],
