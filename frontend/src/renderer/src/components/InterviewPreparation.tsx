@@ -112,7 +112,7 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
     {editor.restored && <p className="mb-4 text-xs leading-[1.85] text-text-secondary" role="status">已恢复尚未保存的环境草稿，保留到本次关闭应用前。保存环境后才会生效。</p>}
     {notice && <p className={cn(successNoticeClass, 'mt-0 mb-3')} role="status"><CheckCircle size={18} />{notice}</p>}
     {data.library && <ul aria-label="已保存面试环境" className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-4 p-0">
-      {data.library.environments.map(environment => {
+      {data.library.environments.slice().sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).map(environment => {
         const resume = data.library?.resumes.find(item => item.id === environment.resumeId)
         const target = data.library?.targets.find(item => item.id === environment.targetId)
         const resumeReady = Boolean(resume?.hasContent ?? resume?.text.trim())
