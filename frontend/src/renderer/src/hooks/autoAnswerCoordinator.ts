@@ -1,4 +1,5 @@
 import type { TranscriptSegment } from '../../../shared/types'
+import { isPureAcknowledgement } from './autoAnswerAcknowledgement'
 
 export type AutoAnswerState = 'off' | 'listening' | 'finalizing' | 'waiting' | 'queued' | 'editing' | 'manual'
 export interface AutoAnswerSnapshot {
@@ -122,7 +123,10 @@ export class AutoAnswerCoordinator {
       this.timer = setTimeout(() => this.refresh(), remaining)
       return
     }
-    const question = candidates.map(segment => segment.text).join('\n').trim().slice(-12_000)
+    // Wait for final text and silence before filtering: a partial “嗯” may grow into a real question.
+    // Filter before the busy check so feedback cannot become a queued answer after the current one ends.
+    const question = candidates.filter(segment => !isPureAcknowledgement(segment.text))
+      .map(segment => segment.text).join('\n').trim().slice(-12_000)
     if (!question) { this.consume(); this.updateState('listening'); return }
     if (snapshot.busy) { this.updateState('queued'); return }
     const lastId = candidates[candidates.length - 1].id

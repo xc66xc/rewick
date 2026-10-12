@@ -24,6 +24,80 @@ function setup(initial: Partial<AutoAnswerSnapshot> = {}) {
 }
 
 describe('automatic answers after a finished interviewer question', () => {
+  it.each(['嗯', '嗯嗯。', '嗯，好的，对。', '明白了', '是的', '没错', '哦！', '行，懂了，好吧', 'OK', 'Okay, yeah.', 'uh-huh', 'ｍｍ－ｈｍｍ'])('ignores pure feedback without removing its transcript: %s', text => {
+    const { snapshot, receive, answer, onState, coordinator } = setup()
+    receive(segment('feedback', text))
+    vi.advanceTimersByTime(1500)
+    expect(answer).not.toHaveBeenCalled()
+    expect(onState).toHaveBeenLastCalledWith('listening')
+    expect(snapshot.segments[0].text).toBe(text)
+    coordinator.refresh()
+    receive(segment('feedback', text))
+    vi.advanceTimersByTime(5000)
+    expect(answer).not.toHaveBeenCalled()
+    receive(segment('next', '为什么？'))
+    vi.advanceTimersByTime(1500)
+    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: '为什么？', transcript: `${text}\n为什么？` })
+  })
+
+  it.each(['嗯，你具体怎么实现的？', '好，继续', '然后呢', '谁？', '为什么', '继续', '展开讲讲', '是吗？', '嗯？', '对比一下', '不对', '好的方案是什么'])('preserves short follow-ups and mixed utterances: %s', text => {
+    const { receive, answer } = setup()
+    receive(segment('question', text))
+    vi.advanceTimersByTime(1500)
+    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: text, transcript: text })
+  })
+
+  it('allows partial feedback to expand into a real question before finalization', () => {
+    const { receive, answer } = setup()
+    receive(segment('one', '嗯', false))
+    vi.advanceTimersByTime(5000)
+    expect(answer).not.toHaveBeenCalled()
+    receive(segment('one', '嗯，你具体怎么实现的？'))
+    vi.advanceTimersByTime(1500)
+    expect(answer.mock.calls[0][0].question).toBe('嗯，你具体怎么实现的？')
+  })
+
+  it('allows a final feedback packet to be revised into a question during the quiet period', () => {
+    const { receive, answer } = setup()
+    receive(segment('one', '嗯'))
+    vi.advanceTimersByTime(1000)
+    receive(segment('one', '嗯，展开讲讲'))
+    vi.advanceTimersByTime(1500)
+    expect(answer.mock.calls[0][0].question).toBe('嗯，展开讲讲')
+  })
+
+  it('removes feedback from an aggregated question while retaining the complete transcript', () => {
+    const { receive, answer } = setup()
+    receive(segment('before', '嗯'))
+    receive(segment('question', '如何保证一致性？'))
+    receive(segment('after', '对，好的'))
+    vi.advanceTimersByTime(1500)
+    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: '如何保证一致性？', transcript: '嗯\n如何保证一致性？\n对，好的' })
+  })
+
+  it('does not queue feedback during generation or delay a subsequent real question', () => {
+    const { snapshot, receive, coordinator, answer, onState } = setup({ busy: true })
+    receive(segment('feedback', '嗯，好'))
+    vi.advanceTimersByTime(1500)
+    expect(onState).toHaveBeenLastCalledWith('listening')
+    snapshot.busy = false
+    coordinator.refresh()
+    expect(answer).not.toHaveBeenCalled()
+    receive(segment('next', '然后呢？'))
+    vi.advanceTimersByTime(1500)
+    expect(answer.mock.calls[0][0].question).toBe('然后呢？')
+  })
+
+  it('keeps a real queued question when feedback arrives before generation completes', () => {
+    const { snapshot, receive, coordinator, answer } = setup({ busy: true })
+    receive(segment('question', '为什么？'))
+    vi.advanceTimersByTime(1500)
+    receive(segment('feedback', '好的'))
+    vi.advanceTimersByTime(1500)
+    snapshot.busy = false
+    coordinator.refresh()
+    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: '为什么？', transcript: '为什么？\n好的' })
+  })
   it('waits for final recognition and a full quiet period before answering', () => {
     const { receive, answer, onState } = setup()
     receive(segment('one', '如何设计缓存', false))
@@ -309,7 +383,7 @@ describe('automatic answers after a finished interviewer question', () => {
     expect(answer.mock.calls[0][0].transcript).not.toContain('不应进入本题上下文')
   })
 
-  it.each(['你好', '我们使用 Redis 缓存热点数据', '线程池这一块结合项目展开一下', 'Can you hear me?', 'Design patterns are useful'])('answers any non-empty finalized transcript without question classification: %s', text => {
+  it.each(['你好', '我们使用 Redis 缓存热点数据', '线程池这一块结合项目展开一下', 'Can you hear me?', 'Design patterns are useful'])('answers non-feedback finalized speech without general question classification: %s', text => {
     const { receive, answer } = setup()
     receive(segment('one', text))
     vi.advanceTimersByTime(1499)

@@ -129,6 +129,20 @@ function segment(text: string, overrides: Partial<TranscriptSegment> = {}): Tran
 }
 
 describe('submitting the current question', () => {
+  it('still submits pure feedback when explicitly entered by the user', async () => {
+    const { result, bridge, run } = setup()
+    await run(() => result.current.setQuestion('嗯'))
+    await run(() => result.current.generate())
+    expect(bridge.generateAnswer.mock.calls[0][0].question).toBe('嗯')
+  })
+
+  it('still answers a feedback transcript sentence when explicitly requested', async () => {
+    const { result, bridge, run, receive } = setup()
+    await run(() => result.current.start())
+    await receive(segment('好的', { isFinal: true }))
+    await run(() => result.current.answerSegment('sentence-one'))
+    expect(bridge.generateAnswer.mock.calls[0][0].question).toBe('好的')
+  })
   it.each(['complete', 'error'] as const)('clears the submitted draft before IPC settles and preserves the next draft on %s', async outcome => {
     const { result, bridge, run, emit } = setup()
     let resolveRequest: () => void = () => undefined
