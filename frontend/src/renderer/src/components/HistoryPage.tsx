@@ -25,6 +25,7 @@ export default function HistoryPage({ bridge, records: initialRecords, activeSes
   const [records, setRecords] = useState(initialRecords)
   const [selected, setSelected] = useState<SessionRecord | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [exportingExcel, setExportingExcel] = useState(false)
   const [loading, setLoading] = useState(false)
   const [cursors, setCursors] = useState<(number | undefined)[]>([undefined])
   const [nextCursor, setNextCursor] = useState<number | null>(null)
@@ -57,6 +58,15 @@ export default function HistoryPage({ bridge, records: initialRecords, activeSes
     setSelected(null); setRecords(items => items.filter(item => item.id !== pendingDelete.id)); setPendingDelete(null); setNotice(`已删除「${pendingDelete.title}」。`)
   }
   function handleDeleteRequest(record: SessionRecord) { setNotice(''); setPendingDelete(record) }
+  async function handleExportAnswersExcel() {
+    if (!selected || !bridge?.exportAnswersExcel || exportingExcel) return
+    setExportingExcel(true)
+    setNotice('')
+    try {
+      if (await bridge.exportAnswersExcel(selected.id)) setNotice('回答 Excel 已导出，reference 已留空，填写标准答案后可用于评估。')
+    } catch (error) { setNotice(error instanceof Error ? error.message : '导出回答 Excel 失败') }
+    finally { setExportingExcel(false) }
+  }
   function locked(id: string) { return activeSessionLocked && id === activeSessionId }
   const lockedHint = '请先停止当前会话的转写或回答，再删除记录。'
   return <section className="flex-1 p-8 max-[820px]:p-5" aria-labelledby="history-title">
@@ -64,7 +74,7 @@ export default function HistoryPage({ bridge, records: initialRecords, activeSes
     {bridge && !selected && <div className="mb-4 flex items-center gap-3"><Button disabled={loading} onClick={() => void loadPage(cursor)}>刷新</Button><Button disabled={loading || cursors.length === 1} onClick={() => setCursors(values => values.slice(0, -1))}>上一页</Button><Button disabled={loading || nextCursor === null} onClick={() => { if (nextCursor !== null) setCursors(values => [...values, nextCursor]) }}>下一页</Button>{loading && <span role="status">加载中…</span>}</div>}
     {notice && <p className="mb-4 text-xs text-success [overflow-wrap:anywhere]" role="status">{notice}</p>}
     {selected ? <div className="rounded-card border border-border bg-card p-6"><div className="mb-6 flex items-center justify-between gap-4"><button className={textButtonClass} onClick={() => setSelected(null)}><ArrowLeft size={17} />返回记录</button>
-      <div className="flex flex-wrap items-center justify-end gap-3"><Button className="min-h-11" onClick={() => setExporting(true)}><DownloadSimple size={17} aria-hidden="true" />导出会话记录</Button>
+      <div className="flex flex-wrap items-center justify-end gap-3">{import.meta.env.DEV && bridge?.exportAnswersExcel && <Button className="min-h-11" disabled={exportingExcel || !selected.answers.some(answer => answer.text.trim())} onClick={() => void handleExportAnswersExcel()}><DownloadSimple size={17} aria-hidden="true" />{exportingExcel ? '正在导出…' : '导出回答 Excel'}</Button>}<Button className="min-h-11" onClick={() => setExporting(true)}><DownloadSimple size={17} aria-hidden="true" />导出会话记录</Button>
         <Button variant="default" size="sm" className={cn(buttonDangerClass, 'text-danger')} disabled={locked(selected.id)} title={locked(selected.id) ? lockedHint : undefined} onClick={() => handleDeleteRequest(selected)}><Trash aria-hidden="true" />删除会话</Button></div></div>
       <h2 className="mb-2 text-xl">{selected.title}</h2><p className="mb-5 text-xs text-text-muted">{formatDate(selected.createdAt)} · {selected.answers.length} 个回答 · 使用时长 {usage(selected)}</p>
       {bridge?.recordings && <LocalRecording key={selected.id} bridge={bridge} sessionId={selected.id} />}

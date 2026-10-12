@@ -715,6 +715,19 @@ function registerHandlers(): void {
       })
     } finally { reviewJobs.delete(key) }
   })
+  if (import.meta.env.DEV && !app.isPackaged) handle('history:export-answers-excel', async input => {
+    if (!window) return false
+    const owner = accounts.current()
+    const record = await history.detail(parseInput(z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/), input))
+    const { createAnswerWorkbook } = await import('./services/answer-excel-export')
+    const workbook = await createAnswerWorkbook(record)
+    if (accounts.active !== owner) throw new Error('登录账户已切换，请重新导出。')
+    const result = await dialog.showSaveDialog(window, { title: '导出回答 Excel', defaultPath: `回答评测-${record.id}.xlsx`, filters: [{ name: 'Excel', extensions: ['xlsx'] }] })
+    if (result.canceled || !result.filePath) return false
+    if (accounts.active !== owner) throw new Error('登录账户已切换，请重新导出。')
+    await writeFile(result.filePath, workbook)
+    return true
+  })
   handle('history:export', async input => {
     if (!window) return false
     const { record, options } = parseInput(z.object({ record: z.unknown(), options: z.object({ includeAiAnswers: z.boolean(), includeTranscript: z.boolean(), includeInterviewInfo: z.boolean() }) }), input)

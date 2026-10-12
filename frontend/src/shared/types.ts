@@ -259,6 +259,7 @@ export interface DesktopBridge {
   saveSession(record: SessionRecord, accountScope?: string): Promise<void>
   removeSession(id: string): Promise<void>
   exportSession(record: SessionRecord, options: SessionExportOptions): Promise<boolean>
+  exportAnswersExcel?(id: string): Promise<boolean>
   onEvent(callback: (event: AppEvent) => void): () => void
 }
 declare global { interface Window { copilot?: DesktopBridge } }

@@ -85,6 +85,7 @@ function createBridge(accountScope?: string): DesktopBridge {
   saveSession: (record, owner) => invoke('history:save', { record, accountScope: owner ?? accountScope ?? latestScope }),
   removeSession: id => invoke('history:remove', id),
   exportSession: (record, options) => invoke('history:export', { record, options }),
+  ...(import.meta.env.DEV ? { exportAnswersExcel: (id: string) => invoke('history:export-answers-excel', id) } : {}),
   onEvent: callback => {
     const listener = (_event: Electron.IpcRendererEvent, data: AppEvent): void => callback(data)
     ipcRenderer.on('copilot:event', listener)
