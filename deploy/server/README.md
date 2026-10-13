@@ -1,5 +1,13 @@
 # 单机部署（复用现有 PostgreSQL）
 
+## 2026-10-13 岗位经验要求后端发布
+
+后端0.5.0-SNAPSHOT已部署，环境四档经验要求及清除、旧客户端省略保留、本场冻结/历史链路上线，无DDL。部署的是717项完整测试通过的同一产物，JAR及运行容器SHA256 `247d584ec93da066af7d4d1fdadb0a048621418c37748a3c8e3c2bee71746b8f`。服务器HTTPS临时账号9项验收通过，所有测试账号/令牌/资料/钱包/会话/记录已清理，无真实供应商调用；backend healthy、HTTPS健康UP、Prometheus抓取UP。平台配置版本22与运营版本5/开启payload指纹不变，管理及数据库/监控容器未重启。
+
+回滚目录 `releases/before-job-experience-20261013-2125/` 保存旧JAR、Compose/Dockerfile、业务库dump、私有环境与配置指纹；旧镜像 `interview-copilot-backend:before-job-experience-20261013-2125`。恢复旧JAR并将旧镜像标记为server，运行 `docker compose -f compose.yaml -f compose.operations.yaml up -d --no-deps --no-build --wait backend`；无需恢复业务库或配置。回滚前备份最新环境JSONB并停止新版桌面写入，旧后端不支持档位输入且普通编辑可能覆盖档位；不重写已有快照与历史。
+
+桌面0.9.1包含主动回答分析提示词，仍需运行最新源码或另行打包；本次后端部署没有更新桌面安装包。
+
 ## 2026-10-13 个性化印章后端发布
 
 后端0.4.0-SNAPSHOT已部署，印章独立保存接口上线，无DDL；管理端无变更，桌面0.6.0尚未打包。验证产物后端686项测试通过，服务器HTTPS临时账号6项保存/版本/幂等/冲突/重新读取/清除及未登录隔离验收通过，测试账号及令牌全清理，无真实供应商调用。后端healthy、HTTPS健康UP、Prometheus抓取UP；平台配置版本22与运营版本5/开启payload指纹前后一致。
