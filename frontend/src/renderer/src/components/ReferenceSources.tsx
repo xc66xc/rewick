@@ -10,8 +10,9 @@ import { webSourceUrlSchema } from '../../../shared/web-search'
 
 interface ReferenceSourcesProps { retrieval: RetrievalContext }
 function excerptLocation(excerpt: ReferenceExcerpt): string {
-  if (excerpt.pageStart === undefined) return '文字片段'
-  return excerpt.pageEnd !== undefined && excerpt.pageEnd !== excerpt.pageStart ? `第 ${excerpt.pageStart}–${excerpt.pageEnd} 页` : `第 ${excerpt.pageStart} 页`
+  if (excerpt.sectionPath) return excerpt.sectionPath
+  if (excerpt.paragraphStart === undefined || excerpt.paragraphStart === 0) return '文字片段'
+  return `第 ${excerpt.paragraphStart}${excerpt.paragraphEnd !== excerpt.paragraphStart ? `–${excerpt.paragraphEnd}` : ''} 段`
 }
 const degradedClass = 'rounded-chip bg-accent-subtle px-3 py-2 text-accent-text'
 const degradedBadgeClass = 'ml-2 rounded-chip bg-accent-subtle px-2 text-[10px] text-accent-text'
@@ -33,15 +34,17 @@ export default function ReferenceSources({ retrieval }: ReferenceSourcesProps) {
   }
   const remoteNote = remote && <p className={cn(formNoteClass, remote.status === 'degraded' && degradedClass)}>百炼远程知识库 · {remoteStatus}<br />Agent ID：{remote.agentId}{remote.message && <><br />{remote.message}</>}</p>
   if (!retrieval.excerpts.length) return <div>{webNotice}<p className={cn('mt-4 flex items-start gap-2 text-xs leading-[1.8] text-text-secondary [&_svg]:mt-[3px] [&_svg]:shrink-0', degraded && degradedClass)}><Books size={14} aria-hidden="true" />{retrieval.message || (degraded ? '资料检索暂不可用，本次未提供参考片段。' : '本次未找到相关资料。')}</p>{remoteNote}</div>
-  return <div className="mt-5">{webNotice}<Collapse summary={<><Books size={15} aria-hidden="true" /><span>本次检索资料</span><span className="ml-2 text-text-muted">{retrieval.excerpts.length} 个片段</span>{remote && <span className="ml-2 text-text-muted">百炼：{remoteStatus}</span>}{web && <span className="ml-2 text-text-muted">联网：{webStatus}</span>}{degraded && <span className={degradedBadgeClass}>{remote || web ? '部分检索降级' : '关键词匹配'}</span>}</>}>
+  return <div className="mt-5">{webNotice}<Collapse summary={<><Books size={15} aria-hidden="true" /><span>本次检索资料</span><span className="ml-2 text-text-muted">{retrieval.excerpts.length} 个片段</span>{remote && <span className="ml-2 text-text-muted">百炼：{remoteStatus}</span>}{web && <span className="ml-2 text-text-muted">联网：{webStatus}</span>}{degraded && <span className={degradedBadgeClass}>{'部分检索降级'}</span>}</>}>
     <p className="my-3 leading-[1.8] text-text-secondary">以下片段提供给了本次回答模型，不代表逐句引用或事实核验。复制回答时不会包含这些资料。</p>
     {remoteNote}
+    {retrieval.hybrid && <p className={formNoteClass}>本地混合检索：BM25 {retrieval.hybrid.bm25.candidateCount}/5 · 向量 {retrieval.hybrid.vector.candidateCount}/5 · RRF {retrieval.hybrid.fusion.resultCount}/3</p>}
     {retrieval.message && <p className="mt-4 flex items-start gap-2 leading-[1.8] [&_svg]:mt-[3px] [&_svg]:shrink-0">{retrieval.message}</p>}
-    {degraded && !retrieval.message && <p className="mt-4">{remote || web ? '部分资料检索暂不可用，本次回答使用已取得的内容。' : '语义检索暂不可用，本次使用平台关键词匹配。'}</p>}
+    {degraded && !retrieval.message && <p className="mt-4">{remote || web ? '部分资料检索暂不可用，本次回答使用已取得的内容。' : '部分检索暂不可用，本次使用已取得的资料。'}</p>}
     <ol className="m-0 flex list-none flex-col gap-3 p-0">{retrieval.excerpts.map(excerpt => <li key={`${excerpt.source ?? 'local'}:${excerpt.documentId}:${excerpt.revision}:${excerpt.chunkId}`} className="rounded-chip border border-border bg-subtle p-3">
       <header className="mb-2 flex flex-wrap items-center gap-2"><FileText size={15} aria-hidden="true" className="shrink-0" /><strong className="text-xs font-medium [overflow-wrap:anywhere]">{excerpt.title || excerpt.name}</strong><span className="text-[10px] text-text-muted">{excerpt.generatedSummary ? '生成摘要 · 非网页原文' : excerpt.source === 'web' ? '网页片段' : excerptLocation(excerpt)}{!['bailian', 'web'].includes(excerpt.source ?? '') && ` · 版本 ${excerpt.revision}`}</span></header>
       <span className="text-[10px] text-success">{excerpt.source === 'web' ? '联网搜索 · 技术参考' : excerpt.source === 'bailian' ? '百炼远程知识库 · 技术参考' : excerpt.kind === 'personal' ? '我的项目经历' : '技术参考'}</span>
       {excerpt.source === 'web' && !excerpt.generatedSummary && excerpt.url && webSourceUrlSchema.safeParse(excerpt.url).success && <LinkButton className="block max-w-full break-all text-left" onClick={() => void openSource(excerpt.url ?? '')} aria-label={`打开网页来源：${excerpt.title || excerpt.name}`}>{excerpt.url}</LinkButton>}
+      {excerpt.ranking && <p className={formNoteClass}>BM25 名次：{excerpt.ranking.bm25Rank ?? '未命中'} · 向量名次：{excerpt.ranking.vectorRank ?? '未命中'} · RRF：{excerpt.ranking.rrfScore.toFixed(5)}{excerpt.contextExpansion === 'child' && ' · 父上下文扩展降级'}</p>}
       <p className="mt-2 mb-0 leading-[1.85] whitespace-pre-wrap text-text-secondary [overflow-wrap:anywhere]">{excerpt.text}</p>
     </li>)}</ol>
   </Collapse></div>

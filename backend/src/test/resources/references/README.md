@@ -1,0 +1,1 @@
+simple.doc is the Apache POI Apache-2.0 public test fixture. Source: https://github.com/apache/poi/blob/trunk/test-data/document/simple.doc . Used only for binary Word parsing tests; contains no user data.

@@ -312,10 +312,10 @@ describe('LlmClient', () => {
     settings.context.text = '生成时的个人背景：熟悉缓存'
     settings.interviewTarget = { companyName: '生成时公司', roleName: '后端', jobDescription: '生成时 JD' }
     const currentRequest = { ...request }
-    const retrieval = { status: 'ready' as const, excerpts: [{ documentId: 'doc', revision: 1, name: '缓存.pdf', kind: 'technical' as const, chunkId: 'chunk', text: '生成时参考资料', pageStart: 1, pageEnd: 1 }] }
+    const retrieval = { status: 'ready' as const, excerpts: [{ documentId: 'doc', revision: 1, name: '缓存.pdf', kind: 'technical' as const, chunkId: 'chunk', text: '生成时参考资料', paragraphStart: 1, paragraphEnd: 1 }] }
     const expectedInput = {
       personalContext: settings.context.text, interviewTarget: structuredClone(settings.interviewTarget),
-      question: currentRequest.question, transcript: currentRequest.transcript, referenceContext: structuredClone(retrieval.excerpts),
+      question: currentRequest.question, transcript: currentRequest.transcript, referenceContext: retrieval.excerpts.map(excerpt => ({ name: excerpt.name, kind: excerpt.kind, text: excerpt.text })),
     }
     const events: AppEvent[] = []
     vi.stubGlobal('fetch', vi.fn(async (_url: string, options: RequestInit) => {
@@ -346,7 +346,7 @@ describe('LlmClient', () => {
     }))
     const remote: RetrievalContext = { status: 'ready', remote: { agentId: 'internal-agent-marker', status: 'ready' }, excerpts: [
       { source: 'bailian', documentId: 'internal-document-marker', chunkId: 'internal-chunk-marker', revision: 1,
-        name: 'private-document-name-marker', kind: 'technical', pageStart: 13, pageEnd: 15,
+        name: 'private-document-name-marker', kind: 'technical', paragraphStart: 13, paragraphEnd: 15,
         text: '第一段正文\n保留换行与技术内容。' },
       { source: 'bailian', documentId: 'second-document-marker', chunkId: 'second-chunk-marker', revision: 1,
         name: 'second-name-marker', kind: 'technical', text: '第二段正文。' },
@@ -364,7 +364,7 @@ describe('LlmClient', () => {
     expect(remote).toEqual(original)
     const local = { documentId: 'local-project', chunkId: 'local-chunk', revision: 1, name: '我的项目', kind: 'personal' as const, text: '本人明确提供的经历。' }
     await client.generate(request, { status: 'ready', excerpts: [local] })
-    expect(JSON.parse(payloads[1].messages[1].content).referenceContext).toEqual([local])
+    expect(JSON.parse(payloads[1].messages[1].content).referenceContext).toEqual([{ name: local.name, kind: local.kind, text: local.text }])
   })
 
   it('always sends the saved JD and separates technical references from personal facts', async () => {
@@ -384,7 +384,7 @@ describe('LlmClient', () => {
     expect(noReferences.interviewTarget).toEqual(settings.interviewTarget)
     expect(noReferences.referenceContext).toEqual([])
     const withReferences = JSON.parse(payloads[1].messages[1].content)
-    expect(withReferences.referenceContext).toEqual([excerpt])
+    expect(withReferences.referenceContext).toEqual([{ name: excerpt.name, kind: excerpt.kind, text: excerpt.text }])
     expect(withReferences.personalContext).toBe(settings.context.text)
     expect(payloads[1].messages[0].content).toContain('不能当作候选人亲历')
     expect(payloads[1].messages[0].content).toContain('不能将招聘要求')

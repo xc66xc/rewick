@@ -79,7 +79,7 @@ export default function ReferenceLibrary({ settings, bridge, onSave }: Reference
     {loading && <p className={formNoteClass} role="status">正在读取资料库…</p>}
     {importBusy && <p className={formNoteClass} role="status">正在导入资料，已出现的资料可以预览或移除。</p>}
     {documents.length ? <div className="mt-5 mb-4 overflow-hidden rounded-chip border border-border">{documents.map(document => <ReferenceDocumentRow key={document.id} document={document} busy={documentBusy.has(document.id)} removing={removing.has(document.id)} onPreview={setPreview} onUpdate={handleUpdate} onReindex={handleReindex} onRemove={id => void handleRemove(id)} />)}</div>
-      : !loading && <EmptyState icon={<Books weight="duotone" />} title="为回答准备一些参考" description={<span>支持含文字的 PDF、TXT、MD，可一次选择多份。<br />每份不超过 10 MB，数量和总容量以平台配额为准。</span>} className="my-5 rounded-chip border border-dashed border-border-strong" />}
+      : !loading && <EmptyState icon={<Books weight="duotone" />} title="为回答准备一些参考" description={<span>支持 Markdown 和 Word（MD、DOC、DOCX），可一次选择多份。<br />每份不超过 10 MB，数量和总容量以平台配额为准。</span>} className="my-5 rounded-chip border border-dashed border-border-strong" />}
     {preview && bridge && <ReferencePreviewDialog document={preview} bridge={bridge} onClose={() => setPreview(null)} />}
   </section>
 }

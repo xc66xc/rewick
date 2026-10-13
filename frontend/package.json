@@ -1,6 +1,6 @@
 {
   "name": "interview-copilot",
-  "version": "0.9.1",
+  "version": "1.0.0",
   "private": true,
   "description": "Mac 上的实时面试辅助工作台",
   "type": "module",
@@ -23,7 +23,8 @@
     "test:platform": "node scripts/smoke-platform.mjs",
     "test:accounts": "node scripts/smoke-account-isolation.mjs",
     "prepare:recording": "node scripts/prepare-recording-python.mjs",
-    "predev": "npm run prepare:recording"
+    "predev": "npm run prepare:recording",
+    "test:hybrid": "node scripts/smoke-reference-hybrid.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

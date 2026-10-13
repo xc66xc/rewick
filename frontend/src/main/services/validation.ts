@@ -46,14 +46,20 @@ export const referenceExcerptSchema = z.object({
     url: webSourceUrlSchema.optional(), title: z.string().max(255).optional(), score: z.number().finite().optional(),
     documentId: z.string().min(1).max(128), revision: z.number().int().positive(),
     name: z.string().max(255), kind: z.enum(['technical', 'personal']), chunkId: z.string().min(1).max(200),
-    text: z.string().max(2000), pageStart: z.number().int().positive().max(100_000).optional(), pageEnd: z.number().int().positive().max(100_000).optional(),
+    text: z.string().max(2000), paragraphStart: z.number().int().nonnegative().optional(), paragraphEnd: z.number().int().nonnegative().optional(),
+    sectionPath: z.string().max(512).optional(), matchedChunkIds: z.array(z.string().max(128)).max(10).optional(),
+    contextExpansion: z.enum(['parent', 'child', 'partial']).optional(),
+    ranking: z.object({ bm25Rank: z.number().int().min(1).max(5).nullable().optional(), vectorRank: z.number().int().min(1).max(5).nullable().optional(),
+      bm25Score: z.number().finite().nonnegative().nullable().optional(), vectorScore: z.number().finite().nullable().optional(), rrfScore: z.number().finite().nonnegative() }).optional(),
   }).superRefine((value, context) => {
     if (value.generatedSummary && (value.source !== 'web' || value.url !== undefined || value.kind !== 'technical')) context.addIssue({ code: 'custom', message: '生成摘要只能作为联网技术参考，不能伪造网页来源。' })
     if (value.source === 'web' && ((!value.generatedSummary && !value.url) || value.kind !== 'technical')) context.addIssue({ code: 'custom', message: '网页资料必须包含来源 URL，且只能作为技术参考。' })
   })
+const recallBranchSchema = z.object({ status: z.enum(['ready', 'empty', 'degraded']), candidateCount: z.number().int().min(0).max(5), durationMs: z.number().finite().nonnegative() })
 export const retrievalContextSchema = z.object({
   status: z.enum(['disabled', 'ready', 'degraded', 'empty']), message: z.string().max(2000).optional(),
   excerpts: z.array(referenceExcerptSchema).max(33),
+  hybrid: z.object({ bm25: recallBranchSchema, vector: recallBranchSchema, fusion: z.object({ method: z.literal('rrf'), rankConstant: z.number().int().positive(), resultCount: z.number().int().min(0).max(3) }) }).nullable().optional(),
   remote: z.object({ agentId: z.string().max(200), status: z.enum(['ready', 'degraded', 'empty']), message: z.string().max(2000).optional() }).optional(),
   web: z.object({ status: z.enum(['ready', 'degraded', 'empty']), message: z.string().max(2000).optional() }).optional(),
 })

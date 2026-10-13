@@ -102,7 +102,13 @@ export interface ReferenceDocument {
   kind: ReferenceKind
   enabled: boolean
   status: 'parsing' | 'pending' | 'indexing' | 'ready' | 'error'
-  pageCount: number
+  contextCount: number
+  sectionCount: number
+  format: string
+  headingMode: string
+  splitterVersion: number
+  indexStatus: string
+  indexError: string
   contentHash: string
   revision: number
   createdAt: string
@@ -122,13 +128,22 @@ export interface ReferenceExcerpt {
   kind: ReferenceKind
   chunkId: string
   text: string
-  pageStart?: number
-  pageEnd?: number
+  paragraphStart?: number
+  paragraphEnd?: number
+  sectionPath?: string
+  matchedChunkIds?: string[]
+  contextExpansion?: 'parent' | 'child' | 'partial'
+  ranking?: { bm25Rank?: number | null; vectorRank?: number | null; bm25Score?: number | null; vectorScore?: number | null; rrfScore: number }
 }
 export interface RetrievalContext {
   status: 'disabled' | 'ready' | 'degraded' | 'empty'
   message?: string
   excerpts: ReferenceExcerpt[]
+  hybrid?: {
+    bm25: { status: 'ready' | 'empty' | 'degraded'; candidateCount: number; durationMs: number }
+    vector: { status: 'ready' | 'empty' | 'degraded'; candidateCount: number; durationMs: number }
+    fusion: { method: 'rrf'; rankConstant: number; resultCount: number }
+  } | null
   remote?: { agentId: string; status: 'ready' | 'degraded' | 'empty'; message?: string }
   web?: { status: 'ready' | 'degraded' | 'empty'; message?: string }
 }

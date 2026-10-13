@@ -2,7 +2,6 @@ package com.interview.copilot.mapper.references;
 
 import com.interview.copilot.dto.references.ReferencePolicy;
 import com.interview.copilot.entity.references.ReferenceDocumentEntity;
-import com.interview.copilot.entity.references.ReferenceExcerptEntity;
 import com.interview.copilot.entity.references.ReferenceTotals;
 import com.interview.copilot.model.references.ReferenceModels;
 
@@ -20,27 +19,33 @@ public interface ReferenceMapper {
     @Select(
             value =
                     "SELECT id::text,name,kind,is_enabled AS"
-                        + " enabled,status,page_count,content_hash,revision,to_char(created_at,"
+                        + " enabled,status,content_hash,revision,to_char(created_at,"
                         + " 'YYYY-MM-DD\"T\"HH24:MI:SS.US') || '+08:00' AS"
                         + " created_at,to_char(updated_at, 'YYYY-MM-DD\"T\"HH24:MI:SS.US') ||"
-                        + " '+08:00' AS updated_at,error,chunk_count FROM reference_documents WHERE"
+                        + " '+08:00' AS updated_at,error,chunk_count,context_count,section_count,format,heading_mode,splitter_version,index_status,index_error FROM reference_documents WHERE"
                         + " app_users_id=#{user} ORDER BY created_at DESC")
     List<ReferenceDocumentEntity> list(@Param("user") long user);
 
     @Select(
             value =
                     "SELECT id::text,name,kind,is_enabled AS"
-                        + " enabled,status,page_count,content_hash,revision,to_char(created_at,"
+                        + " enabled,status,content_hash,revision,to_char(created_at,"
                         + " 'YYYY-MM-DD\"T\"HH24:MI:SS.US') || '+08:00' AS"
                         + " created_at,to_char(updated_at, 'YYYY-MM-DD\"T\"HH24:MI:SS.US') ||"
-                        + " '+08:00' AS updated_at,error,chunk_count FROM reference_documents WHERE"
+                        + " '+08:00' AS updated_at,error,chunk_count,context_count,section_count,format,heading_mode,splitter_version,index_status,index_error FROM reference_documents WHERE"
                         + " app_users_id=#{user} AND id=CAST(#{id} AS uuid)")
     ReferenceDocumentEntity find(@Param("user") long user, @Param("id") String id);
+
+    @Select("""
+        <script>SELECT count(*) FROM reference_documents WHERE app_users_id=#{user} AND id IN
+        <foreach collection="ids" item="id" open="(" close=")" separator=",">CAST(#{id} AS uuid)</foreach></script>
+        """)
+    long countOwned(@Param("user") long user, @Param("ids") List<String> ids);
 
     @Select(value = "SELECT id FROM app_users WHERE id=#{user} FOR UPDATE")
     Long lockUser(@Param("user") long user);
 
-    @Select(value = "SELECT max_files,max_total_bytes,max_chunks FROM reference_policy WHERE id=1")
+    @Select(value = "SELECT max_files,max_total_bytes,max_chunks,child_target,child_overlap,parent_target,bm25_k1,bm25_b,vector_min_score,rrf_constant,bm25_timeout_ms,max_term_rows,cache_enabled,cache_weight_bytes,version,hybrid_enabled FROM reference_policy WHERE id=1")
     ReferencePolicy policy();
 
     @Select(
@@ -62,14 +67,14 @@ public interface ReferenceMapper {
 
     @Insert(
             value =
-                    "INSERT INTO reference_index_jobs(document_id,app_users_id,revision)"
-                            + " VALUES(CAST(#{id} AS uuid),#{user},#{revision})")
+                    "INSERT INTO reference_index_jobs(document_id,app_users_id,revision,policy_json)"
+                            + " SELECT CAST(#{id} AS uuid),#{user},#{revision},to_jsonb(p)-'updated_at'-'id' FROM reference_policy p WHERE p.id=1")
     void enqueue(@Param("user") long user, @Param("id") String id, @Param("revision") int revision);
 
     @Select(
             value =
                     "UPDATE reference_documents SET"
-                        + " desired_revision=desired_revision+1,status='pending',error='',updated_at=LOCALTIMESTAMP(6)"
+                        + " desired_revision=desired_revision+1,status=CASE WHEN splitter_version=1 AND revision>0 THEN 'ready' ELSE 'pending' END,index_status='pending',index_error='',error='',updated_at=LOCALTIMESTAMP(6)"
                         + " WHERE id=CAST(#{id} AS uuid) AND app_users_id=#{user} RETURNING"
                         + " desired_revision",
             affectData = true)
@@ -100,7 +105,7 @@ public interface ReferenceMapper {
 
     @Select(
             value =
-                    "SELECT text FROM reference_chunks WHERE document_id=CAST(#{id} AS uuid) AND"
+                    "SELECT CASE WHEN heading_level>0 THEN repeat('#',heading_level)||' '||title||E'\\n\\n' ELSE '' END||introduction AS text FROM reference_sections WHERE document_id=CAST(#{id} AS uuid) AND"
                             + " app_users_id=#{user} AND revision=#{revision} ORDER BY ordinal")
     List<String> preview(
             @Param("user") long user, @Param("id") String id, @Param("revision") int revision);
@@ -113,7 +118,7 @@ public interface ReferenceMapper {
                         + " id=(SELECT id FROM reference_index_jobs WHERE status='pending' OR"
                         + " (status='running' AND lease_until<LOCALTIMESTAMP(6)) ORDER BY id FOR"
                         + " UPDATE SKIP LOCKED LIMIT 1) RETURNING id,document_id::text,app_users_id"
-                        + " AS user_id,revision,lease_token::text AS token",
+                        + " AS user_id,revision,lease_token::text AS token,policy_json::text AS policy_json",
             affectData = true)
     ReferenceModels.Job claim(@Param("token") String token);
 
@@ -126,7 +131,7 @@ public interface ReferenceMapper {
 
     @Update(
             value =
-                    "UPDATE reference_documents SET status='indexing',updated_at=LOCALTIMESTAMP(6)"
+                    "UPDATE reference_documents SET status=CASE WHEN splitter_version=1 AND revision>0 THEN 'ready' ELSE 'indexing' END,index_status='indexing',updated_at=LOCALTIMESTAMP(6)"
                             + " WHERE id=CAST(#{job.documentId} AS uuid) AND"
                             + " desired_revision=#{job.revision}")
     void indexing(@Param("job") ReferenceModels.Job job);
@@ -144,36 +149,12 @@ public interface ReferenceMapper {
                             + " app_users_id=#{job.userId} AND id<>CAST(#{job.documentId} AS uuid)")
     long otherChunks(@Param("job") ReferenceModels.Job job);
 
-    @Delete(value = "DELETE FROM reference_chunks WHERE document_id=CAST(#{id} AS uuid)")
-    void deleteChunks(@Param("id") String id);
-
-    @Update(
-            value =
-                    "UPDATE reference_documents SET"
-                        + " revision=#{job.revision},status='ready',page_count=#{parsed.pageCount},chunk_count=#{count},error='',updated_at=LOCALTIMESTAMP(6)"
-                        + " WHERE id=CAST(#{job.documentId} AS uuid)")
-    void ready(
-            @Param("job") ReferenceModels.Job job,
-            @Param("parsed") ReferenceModels.Parsed parsed,
-            @Param("count") int count);
-
     @Update(
             value =
                     "UPDATE reference_index_jobs SET"
                         + " status='complete',embedded_chunks=#{count},lease_until=NULL,updated_at=LOCALTIMESTAMP(6)"
                         + " WHERE id=#{job.id}")
     void complete(@Param("job") ReferenceModels.Job job, @Param("count") int count);
-
-    @Select(
-            value =
-                    "INSERT INTO"
-                        + " reference_chunks(document_id,app_users_id,revision,ordinal,text,page_start,page_end)"
-                        + " VALUES(CAST(#{job.documentId} AS"
-                        + " uuid),#{job.userId},#{job.revision},#{chunk.ordinal},#{chunk.text},#{chunk.pageStart},#{chunk.pageEnd})"
-                        + " RETURNING id",
-            affectData = true)
-    long insertChunk(
-            @Param("job") ReferenceModels.Job job, @Param("chunk") ReferenceModels.Chunk chunk);
 
     @Insert(
             value =
@@ -195,53 +176,12 @@ public interface ReferenceMapper {
     @Update(
             value =
                     "UPDATE reference_documents SET"
-                            + " status='error',error=#{error},updated_at=LOCALTIMESTAMP(6) WHERE"
+                            + " status=CASE WHEN splitter_version=1 AND revision>0 THEN 'ready' ELSE 'error' END,index_status='error',index_error=#{error},error=#{error},updated_at=LOCALTIMESTAMP(6) WHERE"
                             + " id=CAST(#{job.documentId} AS uuid) AND"
                             + " desired_revision=#{job.revision}")
     void failDocument(@Param("job") ReferenceModels.Job job, @Param("error") String error);
 
-    @Update(
-            value =
-                    "UPDATE reference_policy SET"
-                        + " max_files=#{policy.maxFiles},max_total_bytes=#{policy.maxTotalBytes},max_chunks=#{policy.maxChunks},updated_at=LOCALTIMESTAMP(6)"
-                        + " WHERE id=1")
-    void updatePolicy(@Param("policy") ReferencePolicy policy);
+    @Update("UPDATE reference_policy SET max_files=#{policy.maxFiles},max_total_bytes=#{policy.maxTotalBytes},max_chunks=#{policy.maxChunks},child_target=#{policy.childTarget},child_overlap=#{policy.childOverlap},parent_target=#{policy.parentTarget},bm25_k1=#{policy.bm25K1},bm25_b=#{policy.bm25B},vector_min_score=#{policy.vectorMinScore},rrf_constant=#{policy.rrfConstant},bm25_timeout_ms=#{policy.bm25TimeoutMs},max_term_rows=#{policy.maxTermRows},cache_enabled=#{policy.cacheEnabled},cache_weight_bytes=#{policy.cacheWeightBytes},hybrid_enabled=#{policy.hybridEnabled},version=version+1,updated_at=LOCALTIMESTAMP(6) WHERE id=1 AND version=#{policy.version}")
+    int updatePolicy(@Param("policy") ReferencePolicy policy);
 
-    @Select(
-            value =
-                    "<script>SELECT 'platform' AS source,d.id::text AS"
-                        + " document_id,d.revision,d.name,d.kind,c.id::text AS"
-                        + " chunk_id,c.text,c.page_start,c.page_end FROM reference_documents d JOIN"
-                        + " reference_chunks c ON c.document_id=d.id AND"
-                        + " c.app_users_id=d.app_users_id AND c.revision=d.revision JOIN"
-                        + " reference_embeddings e ON e.chunk_id=c.id AND"
-                        + " e.app_users_id=c.app_users_id  WHERE d.app_users_id=#{user} AND"
-                        + " e.fingerprint=#{fingerprint} AND d.is_enabled AND d.status='ready' AND"
-                        + " d.id IN <foreach collection=\"ids\" item=\"id\" open=\"(\""
-                        + " separator=\",\" close=\")\">CAST(#{id} AS uuid)</foreach> AND"
-                        + " 1-(e.embedding &lt;=&gt; CAST(#{vector} AS vector)) &gt;= 0.55 ORDER BY"
-                        + " e.embedding &lt;=&gt; CAST(#{vector} AS vector) LIMIT 20</script>")
-    List<ReferenceExcerptEntity> vectorSearch(
-            @Param("user") long user,
-            @Param("fingerprint") String fingerprint,
-            @Param("ids") List<String> ids,
-            @Param("vector") String vector);
-
-    @Select(
-            value =
-                    "<script>SELECT 'platform' AS source,d.id::text AS"
-                        + " document_id,d.revision,d.name,d.kind,c.id::text AS"
-                        + " chunk_id,c.text,c.page_start,c.page_end FROM reference_documents d JOIN"
-                        + " reference_chunks c ON c.document_id=d.id AND"
-                        + " c.app_users_id=d.app_users_id AND c.revision=d.revision JOIN"
-                        + " reference_embeddings e ON e.chunk_id=c.id AND"
-                        + " e.app_users_id=c.app_users_id  WHERE d.app_users_id=#{user} AND"
-                        + " e.fingerprint=#{fingerprint} AND d.is_enabled AND d.status='ready' AND"
-                        + " d.id IN <foreach collection=\"ids\" item=\"id\" open=\"(\""
-                        + " separator=\",\" close=\")\">CAST(#{id} AS uuid)</foreach> LIMIT"
-                        + " 50000</script>")
-    List<ReferenceExcerptEntity> keywordCandidates(
-            @Param("user") long user,
-            @Param("fingerprint") String fingerprint,
-            @Param("ids") List<String> ids);
 }

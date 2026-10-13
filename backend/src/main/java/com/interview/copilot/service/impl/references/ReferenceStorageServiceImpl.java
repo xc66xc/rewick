@@ -16,10 +16,12 @@ import java.util.List;
 public class ReferenceStorageServiceImpl implements ReferenceStorageService {
     private final ReferenceMapper mapper;
     private final SessionGuardService sessions;
+    private final com.interview.copilot.service.references.ReferenceContextService contexts;
 
-    public ReferenceStorageServiceImpl(ReferenceMapper mapper, SessionGuardService sessions) {
+    public ReferenceStorageServiceImpl(ReferenceMapper mapper, SessionGuardService sessions, com.interview.copilot.service.references.ReferenceContextService contexts) {
         this.mapper = mapper;
         this.sessions = sessions;
+        this.contexts = contexts;
     }
 
     public List<ReferenceDocumentResponse> list(long user) {
@@ -32,6 +34,10 @@ public class ReferenceStorageServiceImpl implements ReferenceStorageService {
             throw ReferenceErrors.missing();
         }
         return ReferenceDocumentConverter.toResponse(document);
+    }
+
+    public void requireAll(long user, List<String> ids) {
+        if (mapper.countOwned(user, ids) != ids.stream().distinct().count()) throw ReferenceErrors.missing();
     }
 
     public void lockUser(long user) {
@@ -66,6 +72,7 @@ public class ReferenceStorageServiceImpl implements ReferenceStorageService {
         require(user, id);
         lockUser(user);
         mapper.update(user, id, enabled, kind);
+        if (Boolean.FALSE.equals(enabled)) contexts.invalidate(user, id);
     }
 
     @Transactional
@@ -73,6 +80,7 @@ public class ReferenceStorageServiceImpl implements ReferenceStorageService {
         lockUser(user);
         require(user, id);
         mapper.delete(user, id);
+        contexts.invalidate(user, id);
     }
 
     public String preview(long user, String id) {

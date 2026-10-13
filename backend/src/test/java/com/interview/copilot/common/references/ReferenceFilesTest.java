@@ -17,7 +17,7 @@ public class ReferenceFilesTest {
     @TempDir Path directory;
 
     @ParameterizedTest
-    @ValueSource(strings = {"../escape.txt", "secret.exe", "folder/name.pdf"})
+    @ValueSource(strings = {"../escape.md", "secret.exe", "folder/name.docx"})
     void name_unsupportedOrTraversal_rejects(String name) {
         assertThatThrownBy(
                         () ->
@@ -39,7 +39,7 @@ public class ReferenceFilesTest {
                                         .name(
                                                 new MockMultipartFile(
                                                         "file",
-                                                        "large.txt",
+                                                        "large.md",
                                                         "text/plain",
                                                         new byte[10 * 1024 * 1024 + 1])))
                 .isInstanceOf(ApiException.class);
@@ -53,7 +53,7 @@ public class ReferenceFilesTest {
                 files.save(
                         id,
                         new MockMultipartFile(
-                                "file", "small.txt", "text/plain", "sample".getBytes()));
+                                "file", "small.md", "text/plain", "sample".getBytes()));
         assertThat(hash).hasSize(64);
         assertThat(files.path(id)).hasContent("sample");
         files.delete(id);

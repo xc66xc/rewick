@@ -43,6 +43,7 @@ public class ReferenceIndexer {
 
     @Scheduled(fixedDelay = 2000, initialDelay = 5000)
     public void poll() {
+        jobs.cleanup();
         ReferenceModels.Job job = jobs.claim();
         if (job != null) {
             process(job);
@@ -53,9 +54,9 @@ public class ReferenceIndexer {
         try {
             var document = repository.require(job.userId(), job.documentId());
             jobs.indexing(job);
-            var parsed = parser.parse(files.path(job.documentId()), document.name());
+            var parsed = parser.parse(files.path(job.documentId()), document.name(), com.interview.copilot.common.references.ReferenceIndexPolicy.read(job));
             var selection = embedding.selection();
-            List<List<Double>> vectors = new ArrayList<>();
+            if (!jobs.prepare(job, parsed)) return;
             for (int offset = 0; offset < parsed.chunks().size(); offset += 10) {
                 if (!jobs.renew(job)) {
                     return;
@@ -67,12 +68,13 @@ public class ReferenceIndexer {
                                 .stream()
                                 .map(ReferenceModels.Chunk::text)
                                 .toList();
-                vectors.addAll(embedding.embed(selection, texts));
+                var batch = parsed.chunks().subList(offset, Math.min(offset + 10, parsed.chunks().size()));
+                if (!jobs.stage(job, batch, embedding.embed(selection, texts), selection.fingerprint())) return;
             }
             if (!selection.fingerprint().equals(embedding.selection().fingerprint())) {
                 throw ReferenceErrors.invalid("平台向量模型已变更，请重建资料。");
             }
-            jobs.publish(job, parsed, vectors, selection.fingerprint());
+            jobs.publish(job, parsed, selection.fingerprint());
         } catch (IOException | RuntimeException error) {
             LOG.error(
                     "Reference index failed job={} document={} exceptionType={}",

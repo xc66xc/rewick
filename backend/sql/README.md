@@ -206,3 +206,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON client_downloads, client_download_upload
 
 ### 23_interview_type.sql
 在更新后端和桌面端前手动执行。类型存入现有 `interview_environments.content.interviewType` JSON 字段，不新增独立表或重复列。既有准备及仍活动的计时快照设为技术面试；已有会话记录和回答快照保持原样。新版本写入必须明确提供 `technical` 或 `general`，旧桌面端需同步更新。
+
+### 25_reference_hybrid.sql
+在新后端启动前手工执行：新增MD/Word标题父子分片、BM25倒排/统计、索引版本与管理策略。只扩展schema，不转换或删除历史片段，旧索引不参与新检索；MD/Word须明确重建，旧PDF/TXT须重新上传支持格式。后端与桌面需同步升级。SQL执行后本地混合检索默认关闭，在管理页开启后生效，缓存默认关闭。生产未执行此脚本。

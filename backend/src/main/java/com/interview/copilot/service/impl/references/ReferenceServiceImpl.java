@@ -72,6 +72,8 @@ public class ReferenceServiceImpl implements ReferenceService {
     }
 
     public void reindex(long user, String id) {
+        var document = repository.require(user, id);
+        if (!document.name().toLowerCase(java.util.Locale.ROOT).matches(".*\\.(md|doc|docx)$")) throw ReferenceErrors.invalid("参考资料只支持 Markdown 和 Word，请重新上传。");
         embedding.selection();
         repository.reindex(user, id);
     }

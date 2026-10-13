@@ -30,7 +30,7 @@ public class ReferencePolicyController {
 
     @PutMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void put(@Valid @RequestBody ReferencePolicyRequest policy) {
-        service.update(policy);
+    public void put(@org.springframework.security.core.annotation.AuthenticationPrincipal com.interview.copilot.security.auth.UserPrincipal user, @Valid @RequestBody ReferencePolicyRequest policy) {
+        service.update(user.id(), policy);
     }
 }

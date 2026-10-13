@@ -6,5 +6,5 @@ import com.interview.copilot.response.references.ReferencePolicyResponse;
 public interface ReferencePolicyService {
     ReferencePolicyResponse get();
 
-    void update(ReferencePolicyRequest policy);
+    void update(long actor, ReferencePolicyRequest policy);
 }

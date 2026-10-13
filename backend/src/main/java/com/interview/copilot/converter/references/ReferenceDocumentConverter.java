@@ -13,12 +13,11 @@ public final class ReferenceDocumentConverter {
                 value.kind(),
                 value.enabled(),
                 value.status(),
-                value.pageCount(),
                 value.contentHash(),
                 value.revision(),
                 value.createdAt(),
                 value.updatedAt(),
                 value.error(),
-                value.chunkCount());
+                value.chunkCount(), value.contextCount(), value.sectionCount(), value.format(), value.headingMode(), value.splitterVersion(), value.indexStatus(), value.indexError());
     }
 }

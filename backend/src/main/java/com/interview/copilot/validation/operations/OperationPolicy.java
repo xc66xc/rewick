@@ -11,7 +11,7 @@ import java.util.UUID;
 
 public final class OperationPolicy {
     public static final Set<String> STAGES = Set.of("answer.auto_wait", "answer.complete", "answer.prepare", "retrieval.rag",
-            "retrieval.web", "retrieval.join", "retrieval.embedding", "retrieval.database", "llm.first_content",
+            "retrieval.bm25", "retrieval.vector", "retrieval.fusion", "retrieval.parent_lookup", "retrieval.context_pack", "retrieval.web", "retrieval.join", "retrieval.embedding", "retrieval.database", "llm.first_content",
             "llm.complete", "answer.first_render", "session.save", "session.sync", "asr.connect",
             "asr.first_transcript", "asr.complete", "asr.backlog", "auto.feedback");
     public static final Set<String> OUTCOMES = Set.of("success", "error", "timeout", "cancelled",
@@ -19,7 +19,7 @@ public final class OperationPolicy {
     private static final Set<String> FIELDS = Set.of("eventId", "operationId", "spanId", "parentSpanId",
             "requestId", "sessionId", "stage", "source", "startedAt", "offsetMs", "durationMs",
             "outcome", "reason", "serviceSource", "providerType", "model", "appVersion", "metadata");
-    private static final Set<String> METADATA = Set.of("fragmentCount", "inputTokens", "outputTokens",
+    private static final Set<String> METADATA = Set.of("candidateCount", "cacheHits", "fragmentCount", "inputTokens", "outputTokens",
             "totalTokens", "bufferedBytes", "maxGapMs", "summaryEnabled", "audioBytes", "filteredCount", "triggerCount");
     private static final Set<String> REASONS = Set.of("provider_error", "network_error", "timeout", "cancelled",
             "unauthorized", "unavailable", "rate_limit", "session_inactive", "invalid_input", "storage_error",

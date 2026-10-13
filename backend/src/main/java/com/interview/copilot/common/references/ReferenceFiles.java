@@ -37,8 +37,8 @@ public class ReferenceFiles {
             throw ReferenceErrors.invalid("文件名无效。");
         }
         String lower = name.toLowerCase(Locale.ROOT);
-        if (!(lower.endsWith(".pdf") || lower.endsWith(".txt") || lower.endsWith(".md"))) {
-            throw ReferenceErrors.invalid("仅支持 PDF、TXT、MD 文件。");
+        if (!(lower.endsWith(".md") || lower.endsWith(".docx") || lower.endsWith(".doc"))) {
+            throw ReferenceErrors.invalid("仅支持 Markdown（MD）和 Word（DOC、DOCX）文件。");
         }
         if (file.isEmpty() || file.getSize() > 10L * 1024 * 1024) {
             throw ReferenceErrors.invalid("单个资料文件必须在 10 MB 以内。");

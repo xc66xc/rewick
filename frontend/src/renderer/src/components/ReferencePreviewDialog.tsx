@@ -25,7 +25,7 @@ export default function ReferencePreviewDialog({ document, bridge, onClose }: Re
   return <Modal open onOpenChange={nextOpen => { if (!nextOpen) onClose() }} width="lg"
     title={<><span className="block text-xs font-medium text-text-secondary">提取文字预览</span><span className="block [overflow-wrap:anywhere]">{document.name}</span></>}>
     {error ? <p className={inlineErrorClass} role="alert">{error}</p> : preview ? <>
-      <p className={formNoteClass}>{preview.document.kind === 'personal' ? '我的项目经历' : '技术参考'} · {preview.document.pageCount} 页 · 版本 {preview.document.revision}</p>
+      <p className={formNoteClass}>{preview.document.kind === 'personal' ? '我的项目经历' : '技术参考'} · {preview.document.sectionCount} 个章节 · 版本 {preview.document.revision}</p>
       <pre className="mt-3 max-h-[50dvh] overflow-auto font-sans text-xs leading-[1.9] whitespace-pre-wrap [overflow-wrap:anywhere]">{preview.text || '这份资料尚无可预览文字。'}</pre></> : <p className={formNoteClass} role="status">正在读取资料…</p>}
   </Modal>
 }

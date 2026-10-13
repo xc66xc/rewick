@@ -565,7 +565,7 @@ function registerHandlers(): void {
   handle('references:list', () => references.list())
   handle('references:import', async () => {
     if (!window) return []
-    const result = await dialog.showOpenDialog(window, { title: '导入参考资料', properties: ['openFile', 'multiSelections'], filters: [{ name: '参考资料', extensions: ['pdf', 'md', 'txt'] }] })
+    const result = await dialog.showOpenDialog(window, { title: '导入参考资料', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Markdown / Word 参考资料', extensions: ['md', 'docx', 'doc'] }] })
     return result.canceled ? [] : references.importFiles(result.filePaths)
   })
   const documentId = z.string().min(1).max(128)

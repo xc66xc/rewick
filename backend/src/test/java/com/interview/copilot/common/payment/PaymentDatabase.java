@@ -47,6 +47,7 @@ final class PaymentDatabase extends PostgreSQLContainer<PaymentDatabase> {
                         "07_email_code_purpose.sql",
                         "08_server_local_time.sql",
                         "09_pg_references.sql",
+                        "25_reference_hybrid.sql",
                         "10_time_wallet.sql",
                         "11_payment_packages.sql",
                         "12_alipay_payments.sql",

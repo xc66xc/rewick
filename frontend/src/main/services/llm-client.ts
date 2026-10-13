@@ -104,7 +104,7 @@ async function consumeResponse(response: Response, onContent: (content: string) 
 }
 
 function buildMessages(settings: Settings, request: AnswerRequest, retrieval?: RetrievalContext): ModelInputSnapshot['messages'] {
-  const referenceContext = (retrieval?.excerpts ?? []).map(excerpt => excerpt.source === 'bailian' ? excerpt.text : excerpt)
+  const referenceContext = (retrieval?.excerpts ?? []).map(excerpt => excerpt.source === 'bailian' ? excerpt.text : { source: excerpt.source, name: excerpt.name, kind: excerpt.kind, text: excerpt.text, sectionPath: excerpt.sectionPath, url: excerpt.url, title: excerpt.title, generatedSummary: excerpt.generatedSummary })
   const interviewType = settings.interviewEnvironment?.interviewType
   const jobExperienceLevel = settings.interviewEnvironment?.jobExperienceLevel
   const focus = interviewType === 'technical'

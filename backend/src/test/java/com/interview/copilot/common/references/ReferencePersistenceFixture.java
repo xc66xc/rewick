@@ -20,6 +20,7 @@ import javax.sql.DataSource;
 
 public final class ReferencePersistenceFixture {
     public final ReferenceMapper mapper;
+    public final com.interview.copilot.mapper.references.ReferenceHybridMapper hybrid;
     public final ReferenceStorageService storage;
     public final ReferenceJobService jobs;
 
@@ -28,24 +29,30 @@ public final class ReferencePersistenceFixture {
             var configuration = new MybatisConfiguration();
             configuration.setMapUnderscoreToCamelCase(true);
             configuration.addMapper(ReferenceMapper.class);
+            configuration.addMapper(com.interview.copilot.mapper.references.ReferenceIndexMapper.class);
+            configuration.addMapper(com.interview.copilot.mapper.references.ReferenceHybridMapper.class);
             configuration.addMapper(TokenMapper.class);
             var factory = new MybatisSqlSessionFactoryBean();
             factory.setDataSource(source);
             factory.setConfiguration(configuration);
             mapper = new SqlSessionTemplate(factory.getObject()).getMapper(ReferenceMapper.class);
+            hybrid = new SqlSessionTemplate(factory.getObject()).getMapper(com.interview.copilot.mapper.references.ReferenceHybridMapper.class);
             var manager = new DataSourceTransactionManager(source);
+            var contexts = new com.interview.copilot.service.impl.references.ReferenceContextServiceImpl(hybrid, manager, new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
             storage =
                     transactional(
                             new ReferenceStorageServiceImpl(
                                     mapper,
                                     new SessionGuardServiceImpl(
                                             new SqlSessionTemplate(factory.getObject())
-                                                    .getMapper(TokenMapper.class))),
+                                                    .getMapper(TokenMapper.class)), contexts),
                             ReferenceStorageService.class,
                             manager);
             jobs =
                     transactional(
-                            new ReferenceJobServiceImpl(storage, mapper),
+                            new ReferenceJobServiceImpl(storage, mapper,
+                                    new SqlSessionTemplate(factory.getObject()).getMapper(com.interview.copilot.mapper.references.ReferenceIndexMapper.class),
+                                    new ReferenceAnalyzer(), contexts),
                             ReferenceJobService.class,
                             manager);
         } catch (Exception error) {

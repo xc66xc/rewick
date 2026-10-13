@@ -1,6 +1,6 @@
 import { z } from 'zod'
 export const stageNames = {
-  'answer.auto_wait': '自动回答等待', 'answer.complete': '回答流程完成', 'answer.prepare': '回答准备', 'retrieval.rag': '知识库检索', 'retrieval.web': '联网检索', 'retrieval.join': '检索汇合', 'retrieval.embedding': '生成问题向量', 'retrieval.database': '向量数据库', 'llm.first_content': '首段正文', 'llm.complete': '模型回答完成', 'answer.first_render': '首段渲染', 'session.save': '本地保存', 'session.sync': '云端同步', 'asr.connect': '转写连接', 'asr.first_transcript': '首段字幕', 'asr.complete': '转写结束', 'asr.backlog': '转写积压', 'auto.feedback': '附和过滤'
+  'answer.auto_wait': '自动回答等待', 'answer.complete': '回答流程完成', 'answer.prepare': '回答准备', 'retrieval.rag': '知识库检索', 'retrieval.bm25': 'BM25 关键词召回', 'retrieval.vector': '向量召回', 'retrieval.fusion': 'RRF 排序融合', 'retrieval.parent_lookup': '父上下文回查', 'retrieval.context_pack': '资料预算装箱', 'retrieval.web': '联网检索', 'retrieval.join': '检索汇合', 'retrieval.embedding': '生成问题向量', 'retrieval.database': '向量数据库', 'llm.first_content': '首段正文', 'llm.complete': '模型回答完成', 'answer.first_render': '首段渲染', 'session.save': '本地保存', 'session.sync': '云端同步', 'asr.connect': '转写连接', 'asr.first_transcript': '首段字幕', 'asr.complete': '转写结束', 'asr.backlog': '转写积压', 'auto.feedback': '附和过滤'
 } as const
 const stages = Object.keys(stageNames) as [keyof typeof stageNames, ...(keyof typeof stageNames)[]]
 const count = z.number().int().nonnegative()

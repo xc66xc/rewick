@@ -454,6 +454,7 @@ public class AdminIntegrationTest {
                             "07_email_code_purpose.sql",
                             "08_server_local_time.sql",
                             "09_pg_references.sql",
+                        "25_reference_hybrid.sql",
                             "10_time_wallet.sql",
                             "16_desktop_sessions.sql",
                             "17_desktop_settings.sql")) {
@@ -495,6 +496,7 @@ public class AdminIntegrationTest {
                                 "/tmp/08_server_local_time.sql",
                                 "-f",
                                 "/tmp/09_pg_references.sql",
+                                "-f", "/tmp/25_reference_hybrid.sql",
                                 "-f",
                                 "/tmp/10_time_wallet.sql",
                                 "-f",

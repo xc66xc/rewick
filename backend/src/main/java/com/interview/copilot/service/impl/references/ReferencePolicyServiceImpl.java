@@ -11,19 +11,22 @@ import org.springframework.stereotype.Service;
 @Service
 public class ReferencePolicyServiceImpl implements ReferencePolicyService {
     private final ReferenceMapper mapper;
+    private final com.interview.copilot.service.audit.AuditService audit;
 
-    public ReferencePolicyServiceImpl(ReferenceMapper mapper) {
+    public ReferencePolicyServiceImpl(ReferenceMapper mapper, com.interview.copilot.service.audit.AuditService audit) {
         this.mapper = mapper;
+        this.audit = audit;
     }
 
     public ReferencePolicyResponse get() {
-        var policy = mapper.policy();
-        return new ReferencePolicyResponse(
-                policy.maxFiles(), policy.maxTotalBytes(), policy.maxChunks());
+        return com.interview.copilot.converter.references.ReferencePolicyConverter.toResponse(mapper.policy());
     }
 
-    public void update(ReferencePolicyRequest policy) {
-        mapper.updatePolicy(
-                new ReferencePolicy(policy.maxFiles(), policy.maxTotalBytes(), policy.maxChunks()));
+    @org.springframework.transaction.annotation.Transactional
+    public void update(long actor, ReferencePolicyRequest policy) {
+        if (mapper.updatePolicy(com.interview.copilot.converter.references.ReferencePolicyConverter.fromRequest(policy)) != 1) {
+            throw new com.interview.copilot.exception.ApiException(org.springframework.http.HttpStatus.CONFLICT, "reference_policy_conflict", "资料策略已被修改，请刷新后重试。");
+        }
+        audit.record(actor, "reference.policy.update", "version:" + (policy.version() + 1));
     }
 }

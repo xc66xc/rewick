@@ -416,6 +416,7 @@ SELECT id, ('[' || id || ',0,0]')::vector FROM generate_series(1, 32) AS id
             withCopyFileToContainer(
                     MountableFile.forHostPath(Path.of("sql", "09_pg_references.sql")),
                     "/tmp/09_pg_references.sql");
+            withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "25_reference_hybrid.sql")), "/tmp/25_reference_hybrid.sql");
             withCopyFileToContainer(
                     MountableFile.forHostPath(Path.of("sql", "10_time_wallet.sql")),
                     "/tmp/10_time_wallet.sql");
@@ -464,6 +465,7 @@ SELECT id, ('[' || id || ',0,0]')::vector FROM generate_series(1, 32) AS id
                                 "/tmp/08_server_local_time.sql",
                                 "-f",
                                 "/tmp/09_pg_references.sql",
+                                "-f", "/tmp/25_reference_hybrid.sql",
                                 "-f",
                                 "/tmp/10_time_wallet.sql",
                                 "-f",

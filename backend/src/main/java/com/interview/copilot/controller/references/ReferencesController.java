@@ -34,10 +34,12 @@ import java.util.UUID;
 public class ReferencesController {
     private final ReferenceService service;
     private final ReferenceSearchService search;
+    private final com.interview.copilot.service.references.ReferenceCancellationService cancellations;
     private final com.interview.copilot.service.operations.OperationsService operations;
 
-    public ReferencesController(ReferenceService service,ReferenceSearchService search,com.interview.copilot.service.operations.OperationsService operations) {
+    public ReferencesController(ReferenceService service,ReferenceSearchService search,com.interview.copilot.service.operations.OperationsService operations,com.interview.copilot.service.references.ReferenceCancellationService cancellations) {
         this.operations=operations;
+        this.cancellations=cancellations;
         this.service = service;
         this.search = search;
     }
@@ -79,6 +81,12 @@ public class ReferencesController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void reindex(@AuthenticationPrincipal UserPrincipal user, @PathVariable UUID id) {
         service.reindex(user.id(), id.toString());
+    }
+
+    @DeleteMapping("/search/{requestId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void cancelSearch(@AuthenticationPrincipal UserPrincipal user, @PathVariable UUID requestId) {
+        cancellations.cancel(user.id(),requestId.toString());
     }
 
     @PostMapping("/search")

@@ -9,6 +9,8 @@ public interface ReferenceStorageService {
 
     ReferenceDocumentResponse require(long user, String id);
 
+    void requireAll(long user, List<String> ids);
+
     void lockUser(long user);
 
     void insert(long user, String id, String name, String hash, long size);

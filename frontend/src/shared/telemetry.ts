@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const operationStages = ['answer.complete', 'answer.auto_wait', 'answer.prepare', 'retrieval.rag', 'retrieval.web', 'retrieval.join', 'retrieval.embedding', 'retrieval.database', 'llm.first_content', 'llm.complete', 'answer.first_render', 'session.save', 'session.sync', 'asr.connect', 'asr.first_transcript', 'asr.complete', 'asr.backlog', 'auto.feedback'] as const
+export const operationStages = ['answer.complete', 'answer.auto_wait', 'answer.prepare', 'retrieval.rag', 'retrieval.bm25', 'retrieval.vector', 'retrieval.fusion', 'retrieval.parent_lookup', 'retrieval.context_pack', 'retrieval.web', 'retrieval.join', 'retrieval.embedding', 'retrieval.database', 'llm.first_content', 'llm.complete', 'answer.first_render', 'session.save', 'session.sync', 'asr.connect', 'asr.first_transcript', 'asr.complete', 'asr.backlog', 'auto.feedback'] as const
 export const telemetryEventSchema = z.object({
   eventId: z.string().uuid(), operationId: z.string().uuid(), spanId: z.string().uuid(), parentSpanId: z.string().uuid().optional(),
   requestId: z.string().max(128).optional(), sessionId: z.string().max(128).optional(), stage: z.enum(operationStages), source: z.literal('desktop'),
