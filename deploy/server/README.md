@@ -1,5 +1,15 @@
 # 单机部署（复用现有 PostgreSQL）
 
+## 2026-10-13 Tavily 后端发布
+
+部署提交 `9fba09c` 的后端到 `101.33.245.166:/home/ubuntu/interview-copilot`，Java 21 生产构建 `package -P!macos-arm64` 的 368 项测试通过。当前 JAR SHA256 为 `4121104b00f7cdcca32a4dff05aa312dd78b52e808e4af80600d84182e8310ff`，已核对容器内文件；后端 healthy，服务器回环及 API HTTPS 健康检查均 UP。联网接口未登录 401，管理首页 200。管理端和数据库容器未重启，现有 SQL 22/23 已执行，无新增迁移。
+
+服务器 `config/web-search.yml` 保存 Tavily 配置，`compose.override.yaml` 自动合并只读挂载 `/app/config/web-search.yml` 并设置 Spring 外部配置路径。当前 `enabled: false`、Key 空白、topK 5、advanced、8 秒。要启用，在服务器文件中填写 Key 和 `enabled: true`，然后在发布目录执行 `docker compose restart backend`，确认 healthy；账号仍需管理员高级设置授权和桌面保存开启。不要把真实 Key 提交到仓库或打进镜像。
+
+回滚目录 `releases/tavily-20261013-1134/` 保存旧 JAR、Compose、受限权限的环境配置与数据库 dump，旧镜像标签 `interview-copilot-backend:before-tavily-20261013-1134`。回滚后端时恢复 `backend-before.jar`，重新标记旧镜像为 `interview-copilot-backend:server`，移开本次新增的 `compose.override.yaml`，再执行 `docker compose up -d --no-deps --no-build --wait backend`；本次没有 SQL 变更，不需要恢复数据库 dump。
+
+本机公网 curl 仍连接重置，与旧发布记录一致；本次只完成服务器侧 HTTPS 验收，没有真实 Tavily/模型调用或桌面安装包更新。
+
 ## 2026-09-22 16:31 录音上传 413 修复
 
 补齐 HttpBodyLimitFilter 的录音专用 3,840,000 字节上限；原来通用 1 MiB 限制会拦截超过约 32 秒的录音分段。355 项后端测试通过后发布，容器 healthy。经线上 Nginx 验证：1,824,000 和 3,840,000 字节的未认证请求返回 401（通过大小检查），3,840,001 字节返回 413。没有调用真实供应商。
