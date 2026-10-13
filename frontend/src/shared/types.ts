@@ -1,3 +1,4 @@
+import type { EnvironmentStamp, EnvironmentStampInput } from './environment-stamp'
 export interface SessionExportOptions { includeAiAnswers: boolean; includeTranscript: boolean; includeInterviewInfo: boolean }
 import type { InterviewType } from './interview-type'
 import type { PackageCatalog, PaymentOrder, CreatePaymentOrder } from './payment'
@@ -74,6 +75,7 @@ export interface InterviewTarget { companyName: string; roleName: string; jobDes
 export interface ResumeProfile { hasContent?: boolean; version?: number; bodyLoaded?: boolean; id: string; name: string; text: string; createdAt: string; updatedAt: string }
 export interface TargetProfile extends InterviewTarget { version?: number; bodyLoaded?: boolean; id: string; name: string; createdAt: string; updatedAt: string }
 export interface InterviewEnvironment {
+  stamp?: EnvironmentStamp | null
   hotwords?: string[]
   interviewType: InterviewType
   version?: number; bodyLoaded?: boolean
@@ -244,6 +246,7 @@ export interface DesktopBridge {
   removeTarget(id: string): Promise<InterviewLibrary>
   extractEnvironmentHotwords(input: EnvironmentInput): Promise<string[]>
   saveEnvironment(input: EnvironmentInput): Promise<InterviewLibrary>
+  saveEnvironmentStamp(input: EnvironmentStampInput): Promise<InterviewLibrary>
   removeEnvironment(id: string): Promise<InterviewLibrary>
   activateEnvironment(id: string): Promise<Settings>
   testRemoteKnowledge(): Promise<{ latencyMs: number; message: string }>

@@ -1,3 +1,4 @@
+import EnvironmentStamp from './EnvironmentStamp'
 import { ArrowRight, Briefcase, FileText, PencilSimple, Stack, Trash } from '@phosphor-icons/react'
 import type { InterviewEnvironment, ResumeProfile, TargetProfile } from '../../../shared/types'
 import { Button } from './ui/button'
@@ -17,6 +18,7 @@ interface EnvironmentCardProps {
   busy: boolean
   timerActive: boolean
   sessionActive: boolean
+  onStamp?: () => void
   onEdit: () => void
   onDelete: () => void
   onStart: () => void
@@ -26,7 +28,7 @@ interface EnvironmentCardProps {
 }
 function formatUpdatedAt(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '' : `更新于 ${date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}` }
 /* v30 环境卡(spec §5):字母标 + 当前使用/日期、名称与岗位行、资源三行、底部编辑/开始操作 */
-export default function EnvironmentCard({ environment, resume, target, current, resumeReady, startBlocked, busy, timerActive, sessionActive, onEdit, onDelete, onStart, onReturn, onContext }: EnvironmentCardProps) {
+export default function EnvironmentCard({ environment, resume, target, current, resumeReady, startBlocked, busy, timerActive, sessionActive, onStamp, onEdit, onDelete, onStart, onReturn, onContext }: EnvironmentCardProps) {
   const resumeLabel = resume?.name ?? (environment.resumeId ? '所选简历已失效' : '未选择')
   const targetLabel = target?.name ?? (environment.targetId ? '所选岗位已失效' : '未选择')
   const referenceLabel = environment.referenceIds.length ? `${environment.referenceIds.length} 份参考资料` : '未选择'
@@ -45,7 +47,10 @@ export default function EnvironmentCard({ environment, resume, target, current, 
         ? <Pill className="self-start border-accent-line bg-card text-accent-text"><span className="size-1.5 rounded-full bg-accent" aria-hidden="true" />当前使用</Pill>
         : formatUpdatedAt(environment.updatedAt) && <span className="shrink-0 self-start text-[11px] text-text-muted">{formatUpdatedAt(environment.updatedAt)}</span>}
     </div>
-    <Pill className="mt-2 self-start">{interviewTypeLabels[environment.interviewType]}</Pill>
+    <div className="environment-card__status">
+      <Pill className="shrink-0">{interviewTypeLabels[environment.interviewType]}</Pill>
+      <EnvironmentStamp stamp={environment.stamp} name={environment.name} disabled={busy} onEdit={onStamp} />
+    </div>
     <dl className="mt-3 border-t border-border text-xs text-text-regular">
       <div className="flex items-center gap-2 border-b border-border py-2.5"><FileText size={13} aria-hidden="true" className="shrink-0 text-text-muted" /><dd className="m-0 min-w-0 flex-1 truncate" title={resumeLabel}>{resumeLabel}</dd><dt className="shrink-0 text-[10px] text-text-muted">简历</dt></div>
       <div className="flex items-center gap-2 border-b border-border py-2.5"><Briefcase size={13} aria-hidden="true" className="shrink-0 text-text-muted" /><dd className="m-0 min-w-0 flex-1 truncate" title={targetLabel}>{targetLabel}</dd><dt className="shrink-0 text-[10px] text-text-muted">岗位</dt></div>

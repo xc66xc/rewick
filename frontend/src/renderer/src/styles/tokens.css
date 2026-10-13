@@ -6,6 +6,32 @@
  * 纪律:组件只用这里的语义类,禁止字面色。
  */
 @theme {
+  --color-stamp-blue: #1e56be;
+  --color-stamp-amber: #985813;
+  --color-stamp-green: #226e47;
+  --color-stamp-red: #963434;
+  --spacing-stamp-preview: 144px;
+  --spacing-stamp-status: 56px;
+  --spacing-stamp-status-gap: 12px;
+  --spacing-stamp-status-top: 8px;
+  --spacing-stamp-inset: 4px;
+  --spacing-stamp-pad: 12px;
+  --radius-stamp: 8px;
+  --text-stamp: 20px;
+  --text-stamp-card: 16px;
+  --stamp-card-tilt: -6deg;
+  --border-stamp-outer: 3px;
+  --border-stamp-inner: 1px;
+  --stamp-letter-spacing: .05em;
+  --stamp-font-weight: 750;
+  --stamp-line-height: 1.35;
+  --stamp-transition-duration: 150ms;
+  --stamp-focus-width: 2px;
+  --spacing-stamp-focus: 3px;
+  --stamp-tilt: -8deg;
+  --stamp-rest-opacity: 0.76;
+  --stamp-hover-opacity: 1;
+  --stamp-ink-texture: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='70' height='38'%3E%3Crect width='70' height='38' fill='white'/%3E%3Cg fill='black' opacity='.48'%3E%3Ccircle cx='4' cy='5' r='.6'/%3E%3Ccircle cx='22' cy='9' r='.8'/%3E%3Ccircle cx='40' cy='2' r='1'/%3E%3Ccircle cx='59' cy='26' r='.7'/%3E%3Ccircle cx='11' cy='30' r='1'/%3E%3Ccircle cx='37' cy='31' r='.6'/%3E%3Cpath d='M19 2h6v1h-6zM45 36h9v1h-9zM68 8h2v7h-2zM0 22h2v8H0z'/%3E%3C/g%3E%3C/svg%3E");
   /* ── 颜色:面 ── */
   --color-page: #ffffff;
   --color-canvas: #f2f5fa;
@@ -273,3 +299,17 @@ html.compact-transparent #root { background: transparent; }
 .compact-composer textarea { max-height: 110px; }
 
 .compact-transcript__text, .compact-composer textarea { font-size: var(--compact-font-size, 19px); line-height: 1.65; }
+
+/* Pair status and stamp in one compact row instead of reserving a blank bottom row. */
+.environment-card__status { --text-stamp: var(--text-stamp-card); --stamp-tilt: var(--stamp-card-tilt); display: flex; justify-content: space-between; align-items: center; gap: var(--spacing-stamp-status-gap); min-height: var(--spacing-stamp-status); margin-top: var(--spacing-stamp-status-top); }
+.environment-stamp { position: relative; display: inline-flex; align-items: center; justify-content: center; max-width: 100%; border: var(--border-stamp-outer) solid currentColor; border-radius: var(--radius-stamp); padding: var(--spacing-stamp-inset) var(--spacing-stamp-pad); font-size: var(--text-stamp); font-weight: var(--stamp-font-weight); line-height: var(--stamp-line-height); letter-spacing: var(--stamp-letter-spacing); background: transparent; white-space: pre; transform: rotate(var(--stamp-tilt)); opacity: var(--stamp-rest-opacity); transition: opacity var(--stamp-transition-duration) ease; mask-image: var(--stamp-ink-texture); mask-mode: luminance; }
+.environment-stamp::before { content: ''; position: absolute; inset: var(--spacing-stamp-inset); border: var(--border-stamp-inner) solid currentColor; border-radius: var(--spacing-stamp-inset); pointer-events: none; }
+.environment-stamp:hover, .environment-stamp:focus-visible { opacity: var(--stamp-hover-opacity); background: transparent; }
+.environment-stamp:focus-visible { outline: var(--stamp-focus-width) solid var(--color-accent); outline-offset: var(--spacing-stamp-focus); mask-image: none; }
+.environment-stamp--blue, .environment-stamp-color--blue { color: var(--color-stamp-blue); }
+.environment-stamp--amber, .environment-stamp-color--amber { color: var(--color-stamp-amber); }
+.environment-stamp--green, .environment-stamp-color--green { color: var(--color-stamp-green); }
+.environment-stamp--red, .environment-stamp-color--red { color: var(--color-stamp-red); }
+.environment-stamp-swatch { width: var(--spacing-stamp-pad); height: var(--spacing-stamp-pad); background: currentColor; border-radius: var(--radius-stamp); }
+.environment-stamp-preview { display: flex; min-height: var(--spacing-stamp-preview); justify-content: center; align-items: center; background: var(--color-canvas); border-radius: var(--radius-card); }
+@media (prefers-reduced-motion: reduce) { .environment-stamp { transition: none; } }

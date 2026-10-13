@@ -1,5 +1,11 @@
 # 单机部署（复用现有 PostgreSQL）
 
+## 2026-10-13 个性化印章后端发布
+
+后端0.4.0-SNAPSHOT已部署，印章独立保存接口上线，无DDL；管理端无变更，桌面0.6.0尚未打包。验证产物后端686项测试通过，服务器HTTPS临时账号6项保存/版本/幂等/冲突/重新读取/清除及未登录隔离验收通过，测试账号及令牌全清理，无真实供应商调用。后端healthy、HTTPS健康UP、Prometheus抓取UP；平台配置版本22与运营版本5/开启payload指纹前后一致。
+
+JAR及运行容器SHA256 `1b0199bcdc1c01987f95f5024f613c9dbc7be9d88fd23ff460a68ba03f9feb94`。回滚目录 `releases/before-environment-stamp-20261013-1938/` 保存旧JAR、Compose、Dockerfile、业务数据库dump及配置指纹；旧镜像 `interview-copilot-backend:before-environment-stamp-20261013-1938`。恢复旧JAR并将旧镜像标记为 `interview-copilot-backend:server`，执行 `docker compose -f compose.yaml -f compose.operations.yaml up -d --no-deps --no-build --wait backend`；不需要恢复数据库或配置。旧后端不支持新印章保存接口，普通编辑可能覆盖印章，回滚前另备份当前环境JSONB，回滚期间避免编辑带印章环境。
+
 ## 2026-10-13 Tavily 摘要选项发布
 
 管理端新增「包含摘要答案」none/basic/advanced，搜索深度与摘要分别配置，默认none。none映射上游false，其他映射同名字符串；配置仍数据库加密管理，无YML。摘要追加到网页后，标记generatedSummary=true、无URL且明确非网页原文；不占网页topK，与网页共享8000字符预算。新桌面源码已适配类型/校验/资料展示/Prompt及历史、Excel，使用摘要时需运行最新桌面代码，旧安装包需另行更新。

@@ -11,6 +11,7 @@ import net from 'node:net'
 import electronPath from 'electron'
 import { _electron } from 'playwright'
 import { expect } from '@playwright/test'
+import { checkEnvironmentStamps } from '../tests/e2e/environment-stamp.mjs'
 import { startMockServices } from './mock-services.mjs'
 
 const execute = promisify(execFile)
@@ -230,6 +231,11 @@ try {
   await page.evaluate(() => { window.__operationEvents = []; window.copilot.onEvent(event => window.__operationEvents.push(event)); return window.copilot.getSettings() })
   await until(() => page.evaluate(() => window.copilot.telemetryEnabled()).catch(() => false), 'Desktop did not enable graylisted collection')
   assert.equal(await page.evaluate(() => window.__operationsSyntheticMedia), true)
+  if (process.env.OPERATIONS_SMOKE_STAMP === '1') {
+    const stampChecks = await checkEnvironmentStamps(page, application, output)
+    checks.push(...stampChecks)
+    for (const value of stampChecks) process.stdout.write(`PASS ${value}\n`)
+  } else {
   await beginDesktop()
   async function uiAnswer(question) {
     const previous = await page.evaluate(() => window.__operationEvents.filter(event => event.kind === 'answer-done').at(-1)?.requestId)
@@ -519,6 +525,7 @@ try {
   })
   await page.screenshot({ path: join(output, 'operations-electron.png') })
   }
+  }
 } finally {
   clearInterval(heartbeatTimer)
   await page?.screenshot({ path: join(output, 'operations-electron.png') }).catch(() => undefined)
@@ -528,7 +535,7 @@ try {
   supplier.closeAllConnections(); await new Promise(resolve => supplier.close(resolve)); await mock.close()
   for (const secret of [password, 'synthetic-platform-key', 'synthetic-custom-key', 'synthetic-asr-key']) logs = logs.replaceAll(secret, '[redacted]')
   await writeFile(join(output, 'operations-electron-backend.log'), logs)
-  if (process.env.OPERATIONS_SMOKE_FIXTURE_ONLY !== '1') await writeFile(join(output, 'operations-electron-report.json'), JSON.stringify({ realElectron: true, realJava: true, businessDatabase: 'PostgreSQL 15.19/pgvector0.8.6', independentOperationsDatabase: true, realProviderTested: false, realAudioTested: false, syntheticAudio: true, checks }, null, 2))
+  if (process.env.OPERATIONS_SMOKE_FIXTURE_ONLY !== '1') await writeFile(join(output, process.env.OPERATIONS_SMOKE_STAMP === '1' ? 'environment-stamp-report.json' : 'operations-electron-report.json'), JSON.stringify({ realElectron: true, realJava: true, businessDatabase: 'PostgreSQL 15.19/pgvector0.8.6', independentOperationsDatabase: true, realProviderTested: false, realAudioTested: false, syntheticAudio: true, checks }, null, 2))
   await rm(temporary, { recursive: true, force: true })
   if (process.env.OPERATIONS_SMOKE_READY_FILE) {
     await rm(process.env.OPERATIONS_SMOKE_READY_FILE, { force: true })

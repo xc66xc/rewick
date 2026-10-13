@@ -1,3 +1,4 @@
+import { environmentStampSchema } from '../../shared/environment-stamp'
 import { z } from 'zod'
 import { environmentHotwordsError } from '../../shared/environment-hotwords'
 import { interviewTypeSchema } from '../../shared/interview-type'
@@ -34,12 +35,12 @@ export const environmentSnapshotSchema = z.object({
 const metadata = { hasContent: z.boolean().optional(), id, createdAt: timestamp, updatedAt: timestamp }
 const resumeSchema = resumeInputSchema.extend(metadata)
 const targetSchema = targetInputSchema.extend(metadata)
-const environmentSchema = environmentInputSchema.extend(metadata)
+export const environmentDetailSchema = environmentInputSchema.extend({ ...metadata, stamp: environmentStampSchema.nullable().optional() })
 
 export const interviewLibrarySchema = z.object({
   resumes: z.array(resumeSchema).max(50, '最多保存 50 份简历。'),
   targets: z.array(targetSchema).max(50, '最多保存 50 个目标岗位。'),
-  environments: z.array(environmentSchema).min(1).max(100, '最多保存 100 个面试环境。'),
+  environments: z.array(environmentDetailSchema).min(1).max(100, '最多保存 100 个面试环境。'),
   activeEnvironmentId: id,
 }).superRefine((library, context) => {
   for (const key of ['resumes', 'targets', 'environments'] as const) {

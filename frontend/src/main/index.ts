@@ -1,3 +1,4 @@
+import { environmentStampInputSchema } from '../shared/environment-stamp'
 import { randomUUID as telemetryUUID } from 'node:crypto'
 import { OperationsTelemetry } from './services/operations-telemetry'
 import { MenuBar } from './services/menu-bar'
@@ -536,6 +537,11 @@ function registerHandlers(): void {
   handle('targets:save', input => mutateInterviews(() => interviews.saveTarget(input as Parameters<InterviewStore['saveTarget']>[0])))
   handle('targets:remove', input => mutateInterviews(() => interviews.removeTarget(parseInput(profileId, input))))
   handle('environments:extract-hotwords', input => interviews.extractEnvironmentHotwords(parseInput(environmentHotwordSourcesSchema, input)))
+  handle('environments:stamp', async input => {
+    const library = await interviews.saveEnvironmentStamp(parseInput(environmentStampInputSchema, input))
+    emit({ kind: 'interviews-changed' })
+    return library
+  })
   handle('environments:save', input => mutateInterviews(() => interviews.saveEnvironment(parseInput(environmentInputSchema, input))))
   handle('environments:remove', input => mutateInterviews(() => interviews.removeEnvironment(parseInput(profileId, input))))
   handle('environments:activate', input => mutateInterviews(async () => {

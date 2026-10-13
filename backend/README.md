@@ -182,6 +182,16 @@ ASR 连接测试会等待 `task-started`，发送半秒合成静音 PCM（16 kHz
 
 `/api/v1/background` 管理登录用户的简历、岗位 JD、环境与默认选择。正文和关联存 PostgreSQL，保存使用 `version` 和 `mutationId`；跨用户引用、覆盖旧版本、删除被引用资料均被拒绝。列表只携带默认环境所需正文，其他正文按需查询。
 
+`POST /api/v1/background/environments/{id}/stamp` 独立保存个性化印章，请求为 `{version, mutationId, stamp}`，返回更新后的环境详情。`version` 必须为正整数，`mutationId` 为 UUID，`stamp` 必须存在；传 `null` 明确清除。印章对象仅接受 `text` 和 `color`：文字首尾去空白后为 1–8 个 Unicode 码点，禁止控制字符、换行和孤立代理项；颜色仅允许 `blue`、`amber`、`green`、`red`。冲突返回 409，跨用户或不存在环境返回 404，已删除环境返回 410。同当前保存标识和规范化印章的重试不重复增加版本，异内容重用标识被拒绝。
+
+| 业务语义 | 采用字段 | 接入影响 |
+| --- | --- | --- |
+| 环境印章 | 环境详情和列表中的 `stamp` | 旧记录缺失或 `null` 表示无印章，普通环境保存不接受该字段且保留既有值 |
+| 乐观锁与幂等 | 既有 `version`、`mutationId` | 沿用背景保存协议的当前 mutation 语义 |
+| 印章文字与颜色 | `stamp.text`、`stamp.color` | 纯文本与固定四色，不接受额外样式字段 |
+
+印章保存在既有环境 JSONB 中，无需数据库迁移。用户行锁保证同账号写入串行化；修改印章允许在面试中进行，不改变冻结背景快照、模型资料、检索、计时或计费。
+
 `POST /api/v1/interview-sessions/start` 现在需要 `requestId` 和 `environmentId`。开始前验证非空简历、资料归属与就绪状态，随后在同一事务创建计时会话并保存背景快照，返回 `background`。重复请求返回原会话及原快照。升级执行 `sql/14_server_background.sql` 并更新桌面端；不导入旧桌面背景、不存原始简历文件、不向量化简历。
 
 ### Qwen3.8 LiveTranslate 原文转写

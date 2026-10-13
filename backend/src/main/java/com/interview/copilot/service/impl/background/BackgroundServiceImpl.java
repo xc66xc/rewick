@@ -114,6 +114,10 @@ public class BackgroundServiceImpl implements BackgroundService {
         BackgroundPolicy.id(mutation);
         ObjectNode content = BackgroundPolicy.content(kind, input);
         var previous = records.find(user, kind, id);
+        if (kind == BackgroundKind.environments && previous != null) {
+            JsonNode savedStamp = parse(previous.content()).get("stamp");
+            if (savedStamp != null) content.set("stamp", savedStamp);
+        }
         if (kind == BackgroundKind.environments && !content.has("hotwords") && previous != null) {
             JsonNode savedWords = parse(previous.content()).get("hotwords");
             if (savedWords != null) content.set("hotwords", savedWords);

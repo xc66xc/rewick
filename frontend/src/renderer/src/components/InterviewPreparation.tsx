@@ -1,3 +1,5 @@
+import EnvironmentStampDialog from './EnvironmentStampDialog'
+import useEnvironmentStampEditor from '../hooks/useEnvironmentStampEditor'
 import { environmentHotwordsError } from '../../../shared/environment-hotwords'
 import InviteFriendsButton from './invitation/InviteFriendsButton'
 import { useState } from 'react'
@@ -26,6 +28,7 @@ function environmentInput({ id, name, interviewType, resumeId, targetId, referen
 /* v30 准备面试页:钱包页头 + 摘要卡 + 环境卡片网格,新建/编辑走弹窗(原「面试环境」页已并入) */
 export default function InterviewPreparation({ bridge, settings, timer, isSessionActive, onPrepare, onSave, onStarted, onContext, onSettings, onPurchase, onHistory }: Props) {
   const data = useInterviewLibrary(bridge)
+  const stampEditor = useEnvironmentStampEditor(bridge, settings.accountScope, data.acceptLibrary)
   const records = data.library?.environments.map(environmentInput) ?? []
   const editor = useLibraryDraft<EnvironmentInput>(records, emptyEnvironment, Boolean(data.library), settings.interviewEnvironment?.id, 'environment-library')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -120,6 +123,7 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
         return <li key={environment.id} className="min-w-0">
           <EnvironmentCard environment={environment} resume={resume} target={target} current={environment.id === activeId}
             resumeReady={resumeReady} startBlocked={startBlocked} busy={busy} timerActive={timer.active} sessionActive={isSessionActive || timer.active}
+            onStamp={() => stampEditor.open(environment)}
             onEdit={() => requestEdit(environment)}
             onDelete={() => setDeleteTarget(environment)}
             onStart={() => void start(environment)} onReturn={onStarted} onContext={onContext} />
@@ -133,6 +137,7 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
         </Button>
       </li>
     </ul>}
+    <EnvironmentStampDialog editor={stampEditor} />
     <EnvironmentDialog onExtractHotwords={input => bridge.extractEnvironmentHotwords(input)} open={dialogOpen} onOpenChange={setDialogOpen} draft={editor.draft} dirty={editor.dirty} library={data.library}
       references={data.references} referencesReady={data.referencesReady} settings={settings} busy={busy}
       editingBlocked={editingBlocked} error={error}

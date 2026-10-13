@@ -1,10 +1,11 @@
+import { environmentStampInputSchema, type EnvironmentStampInput } from '../../shared/environment-stamp'
 import { assertPlatformTransport } from '../../shared/platform-transport'
 import { sessionFault } from './session-fault'
 import { z } from 'zod'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type { EnvironmentInput, InterviewLibrary, ResumeInput, Settings, TargetInput } from '../../shared/types'
 import { resolveInterviewSettings } from '../../shared/interview-settings'
-import { environmentHotwordsSchema, environmentHotwordSourcesSchema, environmentInputSchema, interviewIdSchema, interviewLibrarySchema, resumeInputSchema, targetInputSchema } from './interview-validation'
+import { environmentHotwordsSchema, environmentHotwordSourcesSchema, environmentInputSchema, environmentDetailSchema, interviewIdSchema, interviewLibrarySchema, resumeInputSchema, targetInputSchema } from './interview-validation'
 import type { SettingsStore } from './settings-store'
 import { SerialQueue } from './storage'
 import { parseInput } from './validation'
@@ -12,6 +13,7 @@ import { parseInput } from './validation'
 type Kind = 'resumes' | 'targets' | 'environments'
 export class InterviewStore {
   private readonly queue = new SerialQueue()
+  private readonly stampPending = new Map<string, string>()
   private readonly pending = new Map<string, { id: string; mutationId: string }>()
   constructor(private readonly authentication: () => ReturnType<SettingsStore['getConnectionSnapshot']>) {}
   async list(): Promise<InterviewLibrary> { return interviewLibrarySchema.parse(await this.request('')) }
@@ -20,6 +22,26 @@ export class InterviewStore {
   saveResume(input: ResumeInput) { return this.save('resumes', parseInput(resumeInputSchema, input)) }
   saveTarget(input: TargetInput) { return this.save('targets', parseInput(targetInputSchema, input)) }
   saveEnvironment(input: EnvironmentInput) { return this.save('environments', parseInput(environmentInputSchema, input)) }
+  async saveEnvironmentStamp(input: EnvironmentStampInput): Promise<InterviewLibrary> {
+    const value = parseInput(environmentStampInputSchema, input)
+    const actor = await this.authentication()
+    const token = actor.secrets.platformAccessToken
+    if (!token || !actor.settings.platform?.authenticated) throw new Error('请先登录账户。')
+    return this.queue.run(async () => {
+      const key = `${createHash('sha256').update(token).digest('hex')}:${JSON.stringify(value)}`
+      const mutationId = this.stampPending.get(key) ?? randomUUID()
+      if (!this.stampPending.has(key) && this.stampPending.size >= 64) { const oldest = this.stampPending.keys().next().value; if (oldest) this.stampPending.delete(oldest) }
+      this.stampPending.set(key, mutationId)
+      const saved = environmentDetailSchema.parse(await this.request(`/environments/${encodeURIComponent(value.id)}/stamp`, { version: value.version, mutationId, stamp: value.stamp }, 15000, token))
+      const library = await this.request('', undefined, 15000, token)
+      const parsed = interviewLibrarySchema.parse(library)
+      const index = parsed.environments.findIndex(environment => environment.id === value.id)
+      if (index < 0) throw new Error('该环境已删除，请刷新环境列表。')
+      if ((parsed.environments[index].version ?? 0) < (saved.version ?? 0)) parsed.environments[index] = saved
+      this.stampPending.delete(key)
+      return parsed
+    })
+  }
   async extractEnvironmentHotwords(input: Pick<EnvironmentInput, 'resumeId' | 'targetId' | 'referenceIds'>): Promise<string[]> {
     const sources = parseInput(environmentHotwordSourcesSchema, input)
     try {
@@ -58,9 +80,10 @@ export class InterviewStore {
   private remove(kind: Kind, id: string): Promise<InterviewLibrary> {
     return this.queue.run(async () => { await this.request(`/${kind}/${encodeURIComponent(parseInput(interviewIdSchema, id))}/delete`, {}); return this.list() })
   }
-  private async request(path: string, body?: unknown, timeoutMs = 15000): Promise<unknown> {
+  private async request(path: string, body?: unknown, timeoutMs = 15000, expectedToken?: string): Promise<unknown> {
     const auth = await this.authentication()
     const token = auth.secrets.platformAccessToken
+    if (expectedToken && token !== expectedToken) throw new Error('账户登录状态已变化，请刷新后重试。')
     if (!token || !auth.settings.platform?.authenticated) throw new Error('请先登录账户。')
     assertPlatformTransport(auth.settings.platform.baseUrl)
     const response = await fetch(`${auth.settings.platform.baseUrl}/api/v1/background${path}`, {
@@ -87,6 +110,7 @@ export class InterviewStore {
     if (!response.ok) {
       const error = raw as { message?: unknown; error?: { message?: unknown } } | undefined
       const message = error?.message ?? error?.error?.message
+      if (response.status === 409) throw new Error(`${typeof message === 'string' ? message : '环境已被其他设备修改'}，请刷新环境后重试。`)
       throw new Error(typeof message === 'string' && message.length <= 2000 ? message : `背景资料请求失败（HTTP ${response.status}），请刷新后重试。`)
     }
     return raw

@@ -59,6 +59,7 @@ function createBridge(accountScope?: string): DesktopBridge {
   removeTarget: id => invoke('targets:remove', id),
   extractEnvironmentHotwords: input => invoke('environments:extract-hotwords', input),
   saveEnvironment: input => invoke('environments:save', input),
+  saveEnvironmentStamp: input => invoke('environments:stamp', input),
   removeEnvironment: id => invoke('environments:remove', id),
   activateEnvironment: id => invoke('environments:activate', id),
   testRemoteKnowledge: () => invoke('remote-knowledge:test'),

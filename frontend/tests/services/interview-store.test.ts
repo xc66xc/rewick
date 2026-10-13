@@ -103,3 +103,63 @@ describe('environment hotwords', () => {
     await expect(store.extractEnvironmentHotwords({ resumeId: 'resume', targetId: null, referenceIds: [] })).rejects.toThrow('账户已切换')
   })
 })
+
+describe('independent environment stamp mutation', () => {
+  const stamp = { text: '一面中', color: 'blue' as const }
+  const input = { id: environment.id, version: 1, stamp }
+  it('preserves missing/null stamps and never sends stamps through ordinary save', async () => {
+    const { store } = setup()
+    const fetcher = vi.fn(async (_url: string, init: RequestInit) => {
+      if (init.method === 'POST') { expect(JSON.parse(String(init.body)).content).not.toHaveProperty('stamp'); return Response.json({ ...environment, stamp }) }
+      return Response.json({ ...library, environments: [{ ...environment, stamp }] })
+    })
+    vi.stubGlobal('fetch', fetcher)
+    const result = await store.saveEnvironment({ ...environment, stamp } as unknown as Parameters<typeof store.saveEnvironment>[0])
+    expect(result.environments[0].stamp).toEqual(stamp)
+    expect((await store.resolve(defaultSettings)).interviewEnvironment).not.toHaveProperty('stamp')
+  })
+  it('retries normalized stamp mutations with the same mutation ID after commit/network failure', async () => {
+    const { store } = setup(), bodies: unknown[] = []
+    let failed = false
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      if (init.method === 'GET') return Response.json({ ...library, environments: [{ ...environment, stamp, version: 2 }] })
+      expect(url).toMatch(/\/environments\/.+\/stamp$/)
+      bodies.push(JSON.parse(String(init.body)))
+      if (!failed) { failed = true; throw new Error('network failed after commit') }
+      return Response.json({ ...environment, stamp, version: 2 })
+    }))
+    await expect(store.saveEnvironmentStamp({ ...input, stamp: { ...stamp, text: ' 一面中 ' } })).rejects.toThrow('network failed')
+    expect((await store.saveEnvironmentStamp(input)).environments[0].stamp).toEqual(stamp)
+    expect(bodies[0]).toEqual(bodies[1])
+    expect(bodies[0]).toEqual({ version: 1, mutationId: expect.any(String), stamp })
+  })
+  it('keeps a fresher library version instead of overwriting with an earlier POST response', async () => {
+    const { store } = setup()
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => Response.json(init.method === 'GET'
+      ? { ...library, environments: [{ ...environment, stamp: { text: '已挂', color: 'red' }, version: 3 }] }
+      : { ...environment, stamp, version: 2 })))
+    expect((await store.saveEnvironmentStamp(input)).environments[0]).toMatchObject({ version: 3, stamp: { text: '已挂', color: 'red' } })
+  })
+  it('reports version conflicts and rejects invalid stamp inputs before HTTP', async () => {
+    const { store } = setup()
+    const fetcher = vi.fn(async () => Response.json({ message: '环境版本冲突' }, { status: 409 }))
+    vi.stubGlobal('fetch', fetcher)
+    await expect(store.saveEnvironmentStamp({ ...input, version: 0 })).rejects.toThrow()
+    expect(fetcher).not.toHaveBeenCalled()
+    await expect(store.saveEnvironmentStamp(input)).rejects.toThrow('刷新环境')
+  })
+  it('does not reuse another account mutation or accept switched-account responses', async () => {
+    const { store, auth } = setup(), bodies: { mutationId: string }[] = []
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      if (init.method === 'POST') { bodies.push(JSON.parse(String(init.body))); throw new Error('offline') }
+      return Response.json(library)
+    }))
+    await expect(store.saveEnvironmentStamp(input)).rejects.toThrow('offline')
+    const old = await auth()
+    auth.mockResolvedValue({ ...old, secrets: { ...old.secrets, platformAccessToken: 'other-token' } })
+    await expect(store.saveEnvironmentStamp(input)).rejects.toThrow('offline')
+    expect(bodies[0].mutationId).not.toBe(bodies[1].mutationId)
+    vi.stubGlobal('fetch', vi.fn(async () => { auth.mockResolvedValue(old); return Response.json({ ...environment, stamp, version: 2 }) }))
+    await expect(store.saveEnvironmentStamp(input)).rejects.toThrow('登录状态已变化')
+  })
+})

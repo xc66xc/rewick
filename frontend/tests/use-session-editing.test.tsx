@@ -67,6 +67,7 @@ function setup(fakeTimers = false) {
     saveTarget: vi.fn(async () => structuredClone(library)),
     removeTarget: vi.fn(async () => structuredClone(library)),
     extractEnvironmentHotwords: vi.fn(async () => []),
+    saveEnvironmentStamp: vi.fn(),
     saveEnvironment: vi.fn(async (input: EnvironmentInput) => {
       library.environments = library.environments.map(value => value.id === input.id ? { ...value, ...input } : value)
       return structuredClone(library)
