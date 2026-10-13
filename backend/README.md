@@ -198,3 +198,23 @@ ASR 连接测试会等待 `task-started`，发送半秒合成静音 PCM（16 kHz
 
 协议参考：https://help.aliyun.com/zh/model-studio/live-translator-client-events
 与 https://help.aliyun.com/zh/model-studio/live-translator-server-events 。
+
+## 运营观测
+
+采集开关、账号灰度和阈值在管理后台保存到独立监控 PostgreSQL 的 `operations_settings`，默认关闭。`allowedUserIds` 为空且开关开启时为全量；非空时只采集名单账号。业务数据库、钱包、模型与原有鉴权继续使用主数据源，监控库不可用会关闭采集、显示 unknown/stale，并计监控故障，业务启动和回答不依赖它。
+
+独立库基础连接使用 `COPILOT_OPERATIONS_DATABASE_URL`、`COPILOT_OPERATIONS_DATABASE_USERNAME`、`COPILOT_OPERATIONS_DATABASE_PASSWORD`，对应 `copilot.operations.storage.*`；不要与业务数据库 URL 相同。连接池最多 2，查询默认超时 1 秒。先在独立库手工执行 [监控库 bootstrap](sql/operations/01_operations.sql)，业务库可单独执行 [统计索引](sql/24_operations_statistics.sql)，其中 `CREATE INDEX CONCURRENTLY` 必须在事务外执行。应用不自动创建基础 schema。Bootstrap 定义的固定分区维护函数只维护固定监控表的未来日分区和保留清理，不接收外部表名或 SQL。
+
+明细与全局 UUID 去重保留 7 天；90 天趋势使用去身份的小时固定直方图，回答计数通过 7 天操作去重状态修正迟到的桌面终态，然后保留无身份的小时总量。时间/容量维护通过删除旧日分区实际释放文件，压力下每次最多删除一个非当天且非空的旧分区。2GB 是监控库软预算，含 WAL/临时空间可能短暂超过；达到缓存容量门限后显式丢弃新采集和队列，不继续无限写入。页面返回明细和趋势实际可用起始时间。全局事件 ID 去重表按服务端时间有界清理，不依赖客户端时间作为唯一键。
+
+业务汇总每 60 秒在后台刷新，单查询 1 秒预算，不在管理请求中查询业务库。今日活跃用户固定为北京时间当天开始面试的普通账号；扣除时长只统计选定窗口 `consume` 钱包流水，不推估正在进行的时长；支付按支付时间、退款按成功人工退款流水、订单按创建窗口当前状态。未知值不补零，失败保留最后快照并标 stale。
+
+详情事件仅收固定阶段、状态、标识、模型版本及白名单数值/布尔元数据，不收正文、Key、URL 或任意属性；客户端不能提交用户 ID 或 backend source。接收 `POST /api/v1/telemetry/operations` 每批最多 64 条/256KB，解析前及流读取均有边界。后台队列和在途批次共同限制 2000 条/8MB；去重缓存有界淘汰不丢事件，数据库全局 UUID 表负责最终去重；业务线程使用无锁 MPSC 队列和原子 count/bytes 共同预留，竞争不会丢弃；仅真实容量/存储失败或关闭时显式丢弃，JSON 编码和 64 条事务批量入库在后台，最多 2 次重试，2 分钟后丢弃。`dropReasons` 和固定原因指标区分容量、存储不可用、存储预算、无效输入、关闭、客户端报告，不把锁竞争当丢弃。可选 `X-Operation-Id`、`X-Parent-Span-Id` 必须为 UUID，身份来自当前登录；Reactor/ASR 生命周期显式携带上下文，不使用线程局部变量。
+
+`errors` 表示系统错误；超时、拒绝和主动取消分别返回 `timeouts`、`rejections`、`cancellations`。失败率分母为去重回答操作，排除取消、跳过、拒绝；分子是系统错误加超时。检索降级率按 RAG/web 分别优先桌面来源、缺失时使用后端来源；Token 覆盖率只用同一 LLM 来源实际返回 usage 的终态样本，无 usage 不补零。响应提供来源、分母和样本数，客户端报告并不代表完整覆盖或事实准确率。
+
+7 天内分位数直接查询明细；P99 少于 100 样本时为 null。长窗口首选固定 Prometheus range 查询（桌面计时优先，缺失时明确后端来源），不可用时退回 SQL 小时直方图并标 stale/`histogram_upper_bound`，不平均分位数。模型/版本比较只查最近 7 天明细，不进入指标标签。指标标签只有固定 stage/source/providerType/outcome；辅助阶段 providerType 使用固定阶段分类，详情保留实际供应商类型。
+
+管理页四个接口为 `/api/v1/admin/operations/{overview,performance,traces,health}`，另有版本化 `settings` 和 `traces/{operationId}?userId=`。报警只在页面呈现：5 分钟窗口且比例规则至少 20 样本，阈值持续 300 秒后 firing；恢复会保留 recovered 状态。连接池使用/等待、持续丢弃、存储触限与观测不可用单独评价，不要求回答样本量。ASR 连接数来自实际 WebSocket 会话，首字幕和错误为后端 24 小时样本；`audioBytes` 为实际接收的有效 PCM 字节，`bufferedBytes` 为实际发送队列高水位，不等同已发送字节。
+
+`COPILOT_OPERATIONS_MANAGEMENT_PORT` 默认 9091；`/actuator/prometheus` 只允许该端口和 `Authorization: Bearer <COPILOT_OPERATIONS_METRICS_TOKEN>`，使用恒定时间比较并绕过业务认证数据库。主端口请求即使携带相同 Key 也拒绝，原 `/actuator/health` 保留业务健康检查。Prometheus 地址 `COPILOT_OPERATIONS_PROMETHEUS_URL` 默认内部 `http://operations-prometheus:9090`；端口和凭据仅内部网络使用，不对公网发布。

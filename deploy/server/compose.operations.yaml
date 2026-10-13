@@ -1,0 +1,78 @@
+# Install beside compose.yaml as compose.override.yaml after preparing private env files.
+services:
+  backend:
+    env_file:
+      - .env
+      - .operations-backend.env
+  operations-database:
+    image: postgres:15.19
+    restart: unless-stopped
+    env_file: .operations-database.env
+    command:
+      - postgres
+      - -c
+      - shared_buffers=32MB
+      - -c
+      - work_mem=2MB
+      - -c
+      - max_connections=15
+      - -c
+      - max_wal_size=128MB
+      - -c
+      - min_wal_size=32MB
+      - -c
+      - timezone=Asia/Shanghai
+      - -c
+      - statement_timeout=2000
+      - -c
+      - log_statement=none
+    volumes:
+      - operations-data:/var/lib/postgresql/data
+    networks: [copilot]
+    mem_limit: 256m
+    cpus: 0.25
+    healthcheck:
+      test: [CMD, pg_isready, -U, operations, -d, copilot_operations]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: '2'
+  operations-prometheus:
+    image: prom/prometheus:v3.15.0
+    restart: unless-stopped
+    environment:
+      GOMEMLIMIT: 192MiB
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=90d
+      - --storage.tsdb.retention.size=1GB
+      - --query.max-concurrency=2
+      - --query.timeout=2s
+      - --web.listen-address=0.0.0.0:9090
+    volumes:
+      - ./prometheus.operations.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/operations-metrics-token:/etc/prometheus/metrics-token:ro
+      - operations-metrics:/prometheus
+    networks: [copilot]
+    mem_limit: 256m
+    cpus: 0.25
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:9090/-/ready]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: '2'
+volumes:
+  operations-data:
+  operations-metrics:

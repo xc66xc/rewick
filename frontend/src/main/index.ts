@@ -1,3 +1,5 @@
+import { randomUUID as telemetryUUID } from 'node:crypto'
+import { OperationsTelemetry } from './services/operations-telemetry'
 import { MenuBar } from './services/menu-bar'
 import { InterviewRecordingStore } from './services/interview-recording-store'
 import { recordingReviewRuntime, runRecordingReview } from './services/interview-recording-review'
@@ -114,6 +116,11 @@ const secretStorage = {
 }
 const authSettings = new SettingsStore(join(app.getPath('userData'), 'authentication-v3'), secretStorage)
 const platform = new PlatformService(authSettings)
+const telemetry = new OperationsTelemetry(async () => {
+  const snapshot = await authSettings.getConnectionSnapshot()
+  const value = snapshot.settings.platform
+  return value?.authenticated && value.user?.id && snapshot.secrets.platformAccessToken ? { accountId: value.user?.id, baseUrl: value.baseUrl, token: snapshot.secrets.platformAccessToken } : undefined
+}, app.getVersion())
 const accounts = new AccountWorkspaces(app.getPath('userData'), secretStorage, () => emit({ kind: 'documents-changed' }), () => authSettings.getConnectionSnapshot(), async token => {
   await accounts.context.exit(() => finishInvalidSession(token, '登录已失效，请重新登录。', true))
 })
@@ -124,8 +131,9 @@ async function walletConnection() {
   return { baseUrl: snapshot.settings.platform.baseUrl, token: snapshot.secrets.platformAccessToken }
 }
 async function syncAccount() {
+  void telemetry.refresh()
   const authenticated = await authSettings.getSettings()
-  if (accounts.identity(authenticated) !== accounts.active?.id) { interviewTimer.dispose(); disposeWork() }
+  if (accounts.identity(authenticated) !== accounts.active?.id) { telemetry.reset(true); interviewTimer.dispose(); disposeWork() }
   return accounts.activate(authenticated)
 }
 const settings = new Proxy(authSettings, {
@@ -206,7 +214,7 @@ async function retrieveRemote(snapshot: { settings: Settings; secrets: ServiceSe
       release = platformWork.track(platformRevision, () => controller.abort(new Error('平台连接已更改，本次跳过远程知识库。')))
     }
     const connection = await serviceConnection(snapshot, 'knowledge', controller.signal)
-    return await new RemoteKnowledgeClient(connection.settings.remoteKnowledge, connection.apiKey).retrieve(query, controller.signal)
+    return await new RemoteKnowledgeClient(connection.settings.remoteKnowledge, connection.apiKey, 5000, connection.platform).retrieve(query, controller.signal)
   } catch (error) {
     signal.throwIfAborted()
     if (error instanceof SessionFault) throw error
@@ -322,6 +330,7 @@ async function finishInvalidSession(token: string, message: string, revoke: bool
   if (snapshot.secrets.platformAccessToken !== token) return
   if (signOut) { await signOut; return finishInvalidSession(token, message, revoke) }
   const operation = async () => {
+    telemetry.reset(true)
     const owner = accounts.active
     owner?.history.dispose()
     platformWork.invalidate()
@@ -433,16 +442,16 @@ function registerHandlers(): void {
   handle('settings:get', async () => { await accounts.active?.preferences.load(true); return effectiveSettings() })
   handle('platform:remembered-login', () => authSettings.getRememberedLogin())
   handle('platform:login', input => {
-    return mutatePlatform(async () => { disposeWork(); await platform.login(input); sessionNotice = ''; await sessionMonitor.ensureVerified(); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings() })
+    return mutatePlatform(async () => { telemetry.reset(true); disposeWork(); await platform.login(input); sessionNotice = ''; await sessionMonitor.ensureVerified(); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings() })
   })
   handle('platform:email-code', input => platform.emailCode(input))
   handle('platform:password-reset-code', input => platform.passwordResetCode(input))
   handle('platform:password-reset', input => platform.resetPassword(input))
   handle('platform:register', input => mutatePlatform(async () => {
-    disposeWork(); await platform.register(input); sessionNotice = ''; await sessionMonitor.ensureVerified(); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings()
+    telemetry.reset(true); disposeWork(); await platform.register(input); sessionNotice = ''; await sessionMonitor.ensureVerified(); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings()
   }))
   handle('platform:logout', () => {
-    return mutatePlatform(async () => { await interviewTimer.end().catch(() => undefined); disposeWork(); await platform.logout(); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings() })
+    return mutatePlatform(async () => { telemetry.reset(true); await interviewTimer.end().catch(() => undefined); disposeWork(); await platform.logout(); await syncAccount(); emit({ kind: 'settings-changed' }); return effectiveSettings() })
   })
   handle('platform:refresh', () => {
     const controller = new AbortController()
@@ -576,13 +585,18 @@ function registerHandlers(): void {
       const connection = await serviceConnection(snapshot, 'asr', controller.signal)
       if (epoch !== asrEpoch) throw new Error('转写连接已取消。')
       interviewTimer.assertActive()
-      ownedAsr = asr = new AsrClient(connection.settings.asr, connection.apiKey, emit)
+      ownedAsr = asr = new AsrClient(connection.settings.asr, connection.apiKey, emit, telemetry, telemetry.operation({ operationId: telemetryUUID(), sessionId: interviewTimer.sessionId, model: connection.settings.asr.model, providerType: 'asr', serviceSource: connection.platform ? 'platform' : 'custom' }))
       return await ownedAsr.start()
     } catch (error) {
       release?.()
       if (releasePlatformAsr === release) releasePlatformAsr = undefined
       throw error
     } finally { if (epoch === asrEpoch) startingAsr = false }
+  })
+  handle('telemetry:enabled', () => telemetry.isEnabled())
+  ipcMain.on('telemetry:event', (event, input: unknown, scope: unknown) => {
+    if (!accounts.active || accounts.active.id !== scope || !window?.webContents || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) return
+    telemetry.enqueue(input)
   })
   ipcMain.on('asr:audio', (event, sessionId: unknown, audio: unknown, accountScope: unknown) => {
     if (!accounts.active || accountScope !== accounts.active.id) return
@@ -595,12 +609,18 @@ function registerHandlers(): void {
     interviewTimer.assertActive()
     if (changingEnvironment) throw new Error('正在保存面试环境，请稍后生成回答。')
     const request = parseInput(answerRequestSchema, input)
+    const observation = telemetry.operation({ operationId: request.operationId ?? telemetryUUID(), requestId: request.requestId, sessionId: interviewTimer.sessionId })
+    const preparing = performance.now()
+    if (observation && request.autoWaitMs !== undefined) telemetry.record(observation, 'answer.auto_wait', observation.started - request.autoWaitMs, 'success', { triggerCount: 1 })
     cancelAnswerWork()
     const epoch = answerEpoch
     const platformRevision = platformWork.revision
     pendingAnswerId = request.requestId
     const controller = new AbortController()
     retrievalController = controller
+    let preparationFinished = false
+    const observedCancel = () => { if (!preparationFinished) telemetry.record(observation, 'answer.complete', observation?.started ?? preparing, 'cancelled', undefined, observation?.spanId) }
+    controller.signal.addEventListener('abort', observedCancel, { once: true })
     try {
       const snapshot = await settings.getConnectionSnapshot()
       const config = interviewTimer.background ? { ...snapshot.settings, ...interviewTimer.background } : await interviews.resolve(snapshot.settings)
@@ -613,26 +633,30 @@ function registerHandlers(): void {
       const connection = await serviceConnection({ settings: config, secrets }, 'llm', controller.signal)
       if (epoch !== answerEpoch || controller.signal.aborted) return
       const resolved = connection.settings
-      const retrieval = await retrieveAnswerContext(
-        signal => resolved.remoteKnowledge.enabled
+      if (observation) { observation.model = resolved.llm.model; observation.serviceSource = connection.platform ? 'platform' : 'custom'; observation.providerType = 'llm' }
+      telemetry.record(observation, 'answer.prepare', preparing, 'success')
+      const retrieval = await telemetry.measure(observation, 'retrieval.join', () => retrieveAnswerContext(
+        signal => telemetry.measure(observation, 'retrieval.rag', () => resolved.remoteKnowledge.enabled
           ? retrieveRemote({ settings: resolved, secrets }, request.question, signal, platformRevision)
-          : references.retrieve(request.question, request.transcript, resolved, signal),
-        resolved.webSearch?.enabled ? signal => new WebSearchClient(resolved, secrets.platformAccessToken).retrieve(request.question, signal) : undefined,
-        controller.signal)
+          : references.retrieve(request.question, request.transcript, resolved, signal), resolved.remoteKnowledge.enabled ? 'bailian' : 'pg', resolved.remoteKnowledge.enabled && !needsPlatform(resolved, secrets, 'knowledge') ? 'custom' : 'platform'),
+        resolved.webSearch?.enabled ? signal => telemetry.measure(observation, 'retrieval.web', () => new WebSearchClient(resolved, secrets.platformAccessToken).retrieve(request.question, signal), 'tavily', 'platform') : undefined,
+        controller.signal), 'system')
       if (epoch !== answerEpoch || controller.signal.aborted) return
       emit({ kind: 'answer-context', requestId: request.requestId, interviewTarget: config.interviewTarget, retrieval, interviewEnvironment: config.interviewEnvironment })
       interviewTimer.assertActive()
       pendingAnswerId = null
       activeAnswerId = request.requestId
-      llm = new LlmClient(connection.settings, connection.apiKey, emit, connection.platform)
+      preparationFinished = true
+      llm = new LlmClient(connection.settings, connection.apiKey, emit, connection.platform, telemetry, observation && { ...observation, parentSpanId: observation.spanId, spanId: telemetryUUID() })
       // The service emits its own request-scoped error; do not send a duplicate event here.
       void llm.generate(request, retrieval).catch(() => undefined)
     } catch (error) {
       if (epoch !== answerEpoch || controller.signal.aborted) return
+      telemetry.record(observation, 'answer.complete', observation?.started ?? preparing, 'error', undefined, observation?.spanId)
       pendingAnswerId = null
       releasePlatformAnswer?.(); releasePlatformAnswer = undefined
       throw error
-    } finally { if (retrievalController === controller) retrievalController = null }
+    } finally { controller.signal.removeEventListener('abort', observedCancel); if (retrievalController === controller) retrievalController = null }
   })
   handle('answer:cancel', () => cancelAnswerWork())
   handle('window:pin', input => desktopWindows?.setPinned(z.boolean().parse(input)) ?? false)
@@ -657,7 +681,9 @@ function registerHandlers(): void {
   handle('history:save', input => {
     const value = input as { record: SessionRecord; accountScope?: string }
     if (!value.accountScope || value.accountScope !== accounts.current().id) throw new Error('会话不属于当前登录账户。')
-    return history.save({ ...value.record, interviewSessionId: value.record.interviewSessionId ?? interviewTimer.sessionId })
+    const sessionId = value.record.interviewSessionId ?? interviewTimer.sessionId
+    const observation = telemetry.forRequest(value.record.answers.at(-1)?.id, sessionId) ?? telemetry.operation({ operationId: telemetryUUID(), sessionId })
+    return telemetry.measure(observation, 'session.save', () => history.save({ ...value.record, interviewSessionId: value.record.interviewSessionId ?? interviewTimer.sessionId }))
   })
   handle('history:remove', async id => {
     const sessionId = parseInput(z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/), id)
@@ -773,6 +799,7 @@ app.on('second-instance', () => {
 })
 
 if (hasInstanceLock) app.whenReady().then(async () => {
+  telemetry.start()
   // Keep the runtime encryption identity stable; expose the brand through UI and About metadata.
   app.setAboutPanelOptions({ applicationName: '掌灯 Rewick' })
   if (process.platform === 'darwin') app.dock?.hide()
@@ -834,6 +861,7 @@ app.on('before-quit', event => {
   }).finally(async () => {
     await recordingCleanup
     desktopWindows?.prepareQuit()
+    telemetry.dispose()
     accounts.dispose()
     globalShortcut.unregisterAll()
     menuBar?.hide()

@@ -47,6 +47,11 @@ public final class AsrBridge {
     private volatile CompletableFuture<WebSocket> connecting;
     private volatile ScheduledFuture<?> deadline;
     private volatile ScheduledFuture<?> phaseDeadline;
+    private com.interview.copilot.model.operations.OperationContext observation;
+    private com.interview.copilot.model.operations.OperationContext connectObservation;
+    private final AtomicBoolean firstTranscript=new AtomicBoolean();
+    private long audioBytes;
+    private int maximumBufferedBytes;
     private long lastAudioNanos = System.nanoTime();
     private double audioAllowance = 128000;
 
@@ -102,6 +107,8 @@ public final class AsrBridge {
         String requestId = requestId();
         diagnostics.started(requestId, upstreamId, resources.maximumSeconds(config));
         lease = resources.usage().startForSession(user.id(), requestId, "asr", user.tokenId());
+        observation=resources.observation(downstream,user.id(),requestId,lease.sessionId(),config.getModel());
+        connectObservation=observation==null?null:observation.child("asr");
         lease.watch(() -> terminate("cancel", null, "interview_lease_inactive"));
         resources.usage().describeModel(user.id(), requestId, "asr", config.getModel());
         if (ended.get()) {
@@ -167,6 +174,7 @@ public final class AsrBridge {
             return;
         }
         diagnostics.audio(size);
+        audioBytes+=size;
         ByteBuffer copy = ByteBuffer.allocate(size);
         copy.put(value).flip();
         enqueue(copy, null);
@@ -187,6 +195,7 @@ public final class AsrBridge {
     private void enqueue(ByteBuffer audio, String text) {
         int size = text == null ? audio.remaining() : text.length() * 2;
         sendQueue.enqueue(size, () -> send(audio, text));
+        maximumBufferedBytes=Math.max(maximumBufferedBytes,sendQueue.pendingBytes());
     }
 
     private void sendFailure(String reason, Throwable error) {
@@ -242,6 +251,7 @@ public final class AsrBridge {
             }
             if ("task-started".equals(event) && "connecting".equals(phase)) {
                 phase = "running";
+                if(connectObservation!=null) connectObservation.finish("asr.connect","success",Map.of());
                 phaseDeadline.cancel(false);
             }
             if ("task-finished".equals(event) && !"stopping".equals(phase)) {
@@ -253,6 +263,8 @@ public final class AsrBridge {
                 terminate("complete", message, "task_finished");
                 return;
             }
+            if(observation!=null && !frame.path("payload").path("output").path("sentence").path("text").asText("").isBlank()
+                    && firstTranscript.compareAndSet(false,true)) observation.point("asr.first_transcript",Map.of());
             downstream.sendMessage(new TextMessage(message));
         } catch (IOException | RuntimeException exception) {
             failure("upstream_event_or_downstream_send_error", exception);
@@ -285,6 +297,12 @@ public final class AsrBridge {
             return;
         }
         diagnostics.ended(phase, outcome, reason);
+        String observed="complete".equals(outcome)?"success":"cancel".equals(outcome)?"cancelled":reason.contains("timeout")?"timeout":"error";
+        if(connectObservation!=null) connectObservation.finish("asr.connect",observed,Map.of());
+        if(observation!=null) {
+            var backlog=observation.child("asr");backlog.finish("asr.backlog",observed,Map.of("bufferedBytes",maximumBufferedBytes));
+            observation.finish("asr.complete",observed,Map.of("audioBytes",audioBytes,"bufferedBytes",maximumBufferedBytes));
+        }
         stopUpstream();
         String terminalMessage = finalizeUsage(outcome, message);
         release.run();

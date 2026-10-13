@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { operationHeaders } from './operations-telemetry'
 import { invitationErrors } from '../../shared/invitation'
 import { assertPlatformTransport } from '../../shared/platform-transport'
 import { sessionFault, SessionFault } from './session-fault'
@@ -51,6 +52,10 @@ export class PlatformClient {
   async webSearch(token: string, query: string, requestId: string, signal: AbortSignal): Promise<unknown> {
     return this.request('/api/v1/web-search', token, { query, requestId }, signal)
   }
+  async telemetrySettings(token: string): Promise<{ enabled: boolean }> {
+    return z.object({ enabled: z.boolean() }).parse(await this.request('/api/v1/telemetry/settings', token))
+  }
+  async telemetryBatch(token: string, body: unknown, signal: AbortSignal): Promise<unknown> { return this.request('/api/v1/telemetry/operations', token, body, signal) }
   private async request(path: string, token?: string, body?: unknown, signal?: AbortSignal): Promise<unknown> {
     const controller = new AbortController()
     const abort = () => controller.abort(signal?.reason)
@@ -60,8 +65,8 @@ export class PlatformClient {
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
         method: body === undefined ? 'GET' : 'POST', redirect: 'error', signal: controller.signal,
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        headers: { 'Content-Type': 'application/json', ...operationHeaders(), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        ...(body === undefined ? {} : { body: path === '/api/v1/telemetry/operations' && typeof body === 'string' ? body : JSON.stringify(body) }),
       })
       if (!response.ok) {
         if (path === '/api/v1/auth/register' && [400, 409].includes(response.status)) {
@@ -77,7 +82,7 @@ export class PlatformClient {
             }
           }
         }
-        if (response.status === 401 && token) throw await sessionFault(response, token)
+        if (response.status === 401 && token && !path.startsWith('/api/v1/telemetry/')) throw await sessionFault(response, token)
         if (response.status === 400 && path.endsWith('/interview-sessions/start')) {
           await response.body?.cancel().catch(() => undefined)
           throw new PlatformRequestError('面试背景校验失败，请刷新简历、岗位和资料选择后重试。', response.status)

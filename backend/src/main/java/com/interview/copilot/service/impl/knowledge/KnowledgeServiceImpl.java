@@ -39,7 +39,16 @@ public class KnowledgeServiceImpl implements KnowledgeService {
         this.usage = usage;
     }
 
-    public Map<String, Object> search(long userId, String requestId, JsonNode input) {
+    public Map<String,Object> search(long userId,String requestId,JsonNode input) {return search(userId,requestId,input,null);}
+    public Map<String,Object> search(long userId,String requestId,JsonNode input,
+            com.interview.copilot.model.operations.OperationContext context) {
+        try {
+            var result=observedSearch(userId,requestId,input);
+            if(context!=null) context.finish("retrieval.rag",Boolean.TRUE.equals(result.get("success"))?"success":"degraded",Map.of());
+            return result;
+        } catch(RuntimeException error) {if(context!=null) context.finish("retrieval.rag","error",Map.of());throw error;}
+    }
+    private Map<String,Object> observedSearch(long userId,String requestId,JsonNode input) {
         validate(input);
         String serviceId = input.has("serviceId") ? input.get("serviceId").asText() : null;
         ProviderProperties.Knowledge config =

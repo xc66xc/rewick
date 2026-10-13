@@ -17,7 +17,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 public class SecurityConfiguration {
     @Bean
-    SecurityFilterChain security(HttpSecurity http, AuthService auth, ApiErrorWriter errors)
+    SecurityFilterChain security(HttpSecurity http,AuthService auth,ApiErrorWriter errors,OperationsProperties operations,org.springframework.core.env.Environment environment)
             throws Exception {
         http.csrf(csrf -> csrf.disable())
                 .sessionManagement(
@@ -56,6 +56,7 @@ public class SecurityConfiguration {
                                                 "/api/v1/payments/alipay/notify",
                                                 "/api/v1/payments/alipay/checkout")
                                         .permitAll()
+                                        .requestMatchers("/actuator/prometheus").hasAuthority("ROLE_METRICS")
                                         .requestMatchers("/api/v1/admin/**")
                                         .hasRole("ADMIN")
                                         .requestMatchers("/api/v1/**")
@@ -79,7 +80,7 @@ public class SecurityConfiguration {
                                                                 "forbidden",
                                                                 "无权访问此资源。")))
                 .addFilterBefore(
-                        new BearerTokenFilter(auth, errors),
+                        new BearerTokenFilter(auth,errors,operations.metricsToken(),Integer.parseInt(environment.getProperty("management.server.port","9091"))),
                         UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

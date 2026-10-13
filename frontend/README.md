@@ -258,3 +258,21 @@ node scripts/smoke-compact-ui.mjs
 品牌图标源文件与再生成说明见 `../assets/branding/README.md`；运行 `node scripts/create-brand-icons.mjs` 可从确认原图生成 ICNS/ICO 与各端图片（需要 macOS）。
 
 共享保护同步验收（先构建）：`node frontend/scripts/smoke-content-protection.mjs`。测试检查原生窗口保护标志、两个入口与重启持久化；会议软件实际捕获效果仍需在对应系统验证。
+
+### 运营性能采集
+
+桌面按账号读取平台 `/api/v1/telemetry/settings`，默认不采集，读取失败即关闭。管理端开关及灰度名单开启后，主进程只采集固定阶段耗时、结果分类、模型/版本和供应商实际 token usage 等白名单元数据。不会采集问题、回答、字幕、简历、接口 URL、密钥或认证头。
+
+每次回答使用独立 `operationId`，不改额度使用的 `requestId`。只有平台请求携带关联头，自定义模型/ASR/知识库供应商不会收到监控头。桌面主进程、渲染进程各用自己的单调时钟；首次正文渲染表示 React 提交，不表示屏幕实际显示。隐藏窗口仍可记录提交，不依赖 animation frame。
+
+遥测通过有界内存队列低流量每 10 秒批量上报，积累到 64 条时通过 deferred 调度提前上传，避免持续回答时积压；失败批次仅按 10 秒周期重试，避免立即重试循环。队列与正在上传批次合计最多 200 条/2 MiB，单批最多 64 条/256 KiB。网络失败最多重试两次，超过两分钟放弃；注销、切账号和退出直接清理，不等待上传。遥测故障不会使正常面试请求失败或注销业务登录。未返回供应商 token usage 时保持未知，不通过字符数估算。
+
+运营完整链路本地验收：先构建最新 Java JAR 与桌面，再运行 `npm run test:operations`。脚本使用独立临时业务 PostgreSQL 和运营 PostgreSQL，顺序应用业务 SQL 01–24，调用真实 Electron IPC、Java 接口和本地 mock 供应商。验证平台/自定义模型、有效首字与实际 usage、隐藏窗口提交、取消、自动触发/附和过滤、隐私白名单和运营库故障隔离；不调用生产，不使用真实音频或外部供应商。JAR 复制到临时目录后运行，避免其他构建覆盖延迟加载的文件。
+
+可选真实 Electron 性能对照：`OPERATIONS_SMOKE_ELECTRON_BENCH=1 npm run test:operations`，默认每种模式 600 次（3 轮，每轮 200 次、顺序交替）。每个模式使用独立临时用户目录、清理本地测试账号历史，确认旧 Electron 进程退出后通过正常登录刷新配置；执行五次相同预热，排除初始化及预热时间，使用同一用户、问题与供应商延迟；记录实际点击提交到有效正文、最新 React 回答 DOM 提交（MutationObserver）及回答完成的 P95，并对比吞吐。测试包含实际 Electron/IPC/Java 流程，非空检索与 ASR 单独验收，不把 DOM 提交当作屏幕显示。结果保存在 `test-results/operations-electron-benchmark.json`，各阶段原始耗时与数据完整性单独保留；要求开启采集时所有回答和首次提交被收集，客户端/服务端丢弃及监控故障均为零。保存与同步记录实际调用，现有草稿合并可能减少同步次数。
+
+会话保存和云端同步通过最多 128 条、有效期十分钟的近期回答上下文关联到同一个 operationId；账号切换清理关联缓存，历史编辑无对应近期回答时独立记录。
+
+当前性能验收限制：真实 Electron 六阶段正式对照每模式 600 次，开启采集的三个阶段均完整收到 205 个回答与首次提交（包含每阶段五次预热），客户端/服务端丢弃及监控故障为零；池化 P95 首字增加 13.5 ms、渲染提交增加 12.4 ms、完成增加 10 ms，吞吐下降 7.54%，未通过 ≤5 ms/≤2% 预算。完整原始数据保留在 `test-results/operations-electron-final-600-per-mode/`，不能以短诊断或服务级测量替代。最新 SDK 服务级复测 P95 增加 0.849 ms、吞吐下降 2.319%，也未通过全部预算。采集应保持默认关闭，待定位并验证开销后开放。
+
+可选 `OPERATIONS_SMOKE_ELECTRON_PROFILE=1 npm run test:operations` 使用合成系统声音与麦克风，执行短诊断（100 次/模式）、Node/renderer CPU sampling、Chrome timeline、主进程发出事件与供应商发包的独立时间线；只用于定位热点，不能作为性能验收。profile 不包含问题、答案、Key 或认证头。当前诊断采样没有找到能解释正式验收失败的大型遥测热点，主线程采样仍以现有会话加解密与 renderer Markdown 解析为主。

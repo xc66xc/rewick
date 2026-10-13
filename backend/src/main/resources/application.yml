@@ -29,10 +29,12 @@ spring:
       max-file-size: 500MB
       max-request-size: 501MB
 management:
+  server:
+    port: ${COPILOT_OPERATIONS_MANAGEMENT_PORT:9091}
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,prometheus
   endpoint:
     health:
       show-details: never
@@ -42,6 +44,14 @@ mybatis-plus:
   global-config:
     banner: false
 copilot:
+  operations:
+    metrics-token: ${COPILOT_OPERATIONS_METRICS_TOKEN:}
+    prometheus-url: ${COPILOT_OPERATIONS_PROMETHEUS_URL:http://operations-prometheus:9090}
+    storage:
+      url: ${COPILOT_OPERATIONS_DATABASE_URL:}
+      username: ${COPILOT_OPERATIONS_DATABASE_USERNAME:}
+      password: ${COPILOT_OPERATIONS_DATABASE_PASSWORD:}
+      budget-bytes: 2147483648
   platform:
     master-key: ${COPILOT_PLATFORM_MASTER_KEY:}
   auth:

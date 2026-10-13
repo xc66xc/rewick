@@ -1,3 +1,5 @@
+import { operationHeaders, type OperationsTelemetry, type OperationContext } from './operations-telemetry'
+import type { TelemetryMetadata } from '../../shared/telemetry'
 import { sessionFault } from './session-fault'
 import { randomUUID } from 'node:crypto'
 import type { AnswerRequest, AppEvent, ModelInputSnapshot, RetrievalContext, Settings } from '../../shared/types'
@@ -15,6 +17,15 @@ function object(value: unknown): JsonObject | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as JsonObject : undefined
 }
 
+function tokenUsage(usage: JsonObject): TelemetryMetadata {
+  const result: TelemetryMetadata = {}
+  for (const [key, target] of [['prompt_tokens', 'inputTokens'], ['completion_tokens', 'outputTokens'], ['total_tokens', 'totalTokens']] as const) {
+    const value = usage[key]
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1e12) result[target] = value
+  }
+  return result
+}
+
 function contentOf(value: unknown, streaming: boolean): string {
   const root = object(value)
   if (root?.error) throw new Error('模型服务返回错误，请检查模型名称、额度及接口兼容性。')
@@ -23,7 +34,7 @@ function contentOf(value: unknown, streaming: boolean): string {
   return typeof message?.content === 'string' ? message.content : ''
 }
 
-async function consumeResponse(response: Response, onContent: (content: string) => void, onActivity: () => void): Promise<void> {
+async function consumeResponse(response: Response, onContent: (content: string) => void, onActivity: () => void, onUsage?: (usage: TelemetryMetadata) => void): Promise<void> {
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined)
     const detail = response.status === 401 || response.status === 403 ? '请检查 API Key 及模型权限。'
@@ -46,6 +57,8 @@ async function consumeResponse(response: Response, onContent: (content: string) 
     let parsed: unknown
     try { parsed = JSON.parse(data) as unknown }
     catch { throw new Error('模型流式响应格式无效，请检查该接口是否兼容 Chat Completions SSE。') }
+    const usage = object(object(parsed)?.usage)
+    if (usage) onUsage?.(tokenUsage(usage))
     const content = contentOf(parsed, true)
     if (content) onContent(content)
   }
@@ -78,6 +91,8 @@ async function consumeResponse(response: Response, onContent: (content: string) 
       let parsed: unknown
       try { parsed = JSON.parse(buffer) as unknown }
       catch { throw new Error('模型响应不是有效的 JSON 或 SSE，请检查接口地址。') }
+      const usage = object(object(parsed)?.usage)
+      if (usage) onUsage?.(tokenUsage(usage))
       const content = contentOf(parsed, false)
       if (content) onContent(content)
     }
@@ -118,7 +133,7 @@ interviewTarget 是当前面试公司、岗位及 JD，只用于选择与当前�
 
 export class LlmClient {
   private active?: Generation
-  constructor(private readonly settings: Settings, private readonly apiKey: string, private readonly emit: (event: AppEvent) => void, private readonly platform = false) {}
+  constructor(private readonly settings: Settings, private readonly apiKey: string, private readonly emit: (event: AppEvent) => void, private readonly platform = false, private readonly telemetry?: OperationsTelemetry, private readonly observation?: OperationContext) {}
 
   async generate(request: AnswerRequest, retrieval?: RetrievalContext): Promise<void> {
     this.cancel()
@@ -132,6 +147,11 @@ export class LlmClient {
     const activity = () => { clearTimeout(idleTimer); idleTimer = setTimeout(timeout, 30_000) }
     const totalTimer = setTimeout(timeout, 180_000)
     let received = false
+    let lastContent: number | undefined
+    let maxGapMs = 0
+    let usage: TelemetryMetadata = {}
+    let outcome: 'success' | 'error' | 'timeout' | 'cancelled' | 'rejected' = 'success'
+    const started = performance.now()
     try {
       const parsed = parseInput(answerRequestSchema, request)
       const endpoint = this.endpoint()
@@ -140,19 +160,24 @@ export class LlmClient {
       activity()
       this.emit({ kind: 'answer-request', requestId: state.requestId, modelInput })
       const response = await fetch(endpoint, {
-        method: 'POST', headers: this.headers(parsed.requestId), signal: state.controller.signal, redirect: 'error',
+        method: 'POST', headers: { ...this.headers(parsed.requestId), ...(this.platform && this.observation ? { 'X-Operation-Id': this.observation.operationId, 'X-Parent-Span-Id': this.observation.spanId } : {}) }, signal: state.controller.signal, redirect: 'error',
         body,
       })
+      if ([402, 403, 409, 429].includes(response.status)) outcome = 'rejected'
+      if ([408, 504].includes(response.status)) outcome = 'timeout'
       if (this.platform && response.status === 401) throw await sessionFault(response, this.apiKey)
       await consumeResponse(response, (delta) => {
         if (this.active !== state || state.cancelled || state.finished) return
-        received = true
+        const now = performance.now()
+        if (delta.trim() && !received) this.telemetry?.record(this.observation, 'llm.first_content', this.observation?.started ?? started, 'success')
+        if (delta.trim()) { received = true; if (lastContent !== undefined) maxGapMs = Math.max(maxGapMs, now - lastContent); lastContent = now }
         this.emit({ kind: 'answer-delta', requestId: state.requestId, delta })
-      }, activity)
+      }, activity, value => { usage = { ...usage, ...value } })
       if (state.cancelled) return
       if (!received) throw new Error('模型未返回可展示的回答内容，请检查模型及接口兼容性。')
       this.finish(state, false)
     } catch (error) {
+      outcome = state.cancelled ? 'cancelled' : state.timedOut ? 'timeout' : outcome === 'rejected' || outcome === 'timeout' ? outcome : 'error'
       if (state.cancelled) return
       const message = state.timedOut ? '模型响应超时，请检查网络或尝试速度更快的模型。'
         : error instanceof TypeError ? '无法连接模型接口，请检查网络和接口地址。'
@@ -163,6 +188,8 @@ export class LlmClient {
       }
       throw new Error(message)
     } finally {
+      this.telemetry?.record(this.observation, 'llm.complete', started, state.cancelled ? 'cancelled' : outcome, { ...usage, maxGapMs }, this.observation?.spanId)
+      this.telemetry?.record(this.observation && { ...this.observation, spanId: this.observation.parentSpanId ?? this.observation.spanId, parentSpanId: undefined }, 'answer.complete', this.observation?.started ?? started, state.cancelled ? 'cancelled' : outcome, undefined, this.observation?.parentSpanId ?? this.observation?.spanId)
       clearTimeout(idleTimer)
       clearTimeout(totalTimer)
       if (this.active === state) this.active = undefined
@@ -214,7 +241,7 @@ export class LlmClient {
 
   private headers(requestId: string): Record<string, string> {
     if (this.platform && !/^[a-zA-Z0-9._:-]{1,128}$/.test(requestId)) throw new Error('平台请求标识格式无效，请重新生成回答。')
-    return { 'Content-Type': 'application/json', ...(this.platform ? { 'X-Request-Id': requestId } : {}), ...(this.apiKey.trim() ? { Authorization: `Bearer ${this.apiKey.trim()}` } : {}) }
+    return { 'Content-Type': 'application/json', ...(this.platform ? { 'X-Request-Id': requestId, ...operationHeaders() } : {}), ...(this.apiKey.trim() ? { Authorization: `Bearer ${this.apiKey.trim()}` } : {}) }
   }
 
   private providerOptions(): Record<string, unknown> {

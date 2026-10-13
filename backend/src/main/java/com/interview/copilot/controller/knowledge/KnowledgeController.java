@@ -15,8 +15,10 @@ import java.util.Map;
 @RestController
 public class KnowledgeController {
     private final KnowledgeService proxy;
+    private final com.interview.copilot.service.operations.OperationsService operations;
 
-    public KnowledgeController(KnowledgeService proxy) {
+    public KnowledgeController(KnowledgeService proxy,com.interview.copilot.service.operations.OperationsService operations) {
+        this.operations=operations;
         this.proxy = proxy;
     }
 
@@ -24,7 +26,9 @@ public class KnowledgeController {
     public Map<String, Object> search(
             @AuthenticationPrincipal UserPrincipal user,
             @RequestBody JsonNode body,
-            @RequestHeader(value = "X-Request-Id", required = false) String requestId) {
-        return proxy.search(user.id(), requestId, body);
+            @RequestHeader(value = "X-Request-Id", required = false) String requestId,
+            @RequestHeader(value="X-Operation-Id",required=false) String operation,
+            @RequestHeader(value="X-Parent-Span-Id",required=false) String parent) {
+        return proxy.search(user.id(),requestId,body,operations.start(user.id(),operation,parent,requestId,null,"bailian",null));
     }
 }

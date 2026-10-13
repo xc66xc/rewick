@@ -34,8 +34,10 @@ import java.util.UUID;
 public class ReferencesController {
     private final ReferenceService service;
     private final ReferenceSearchService search;
+    private final com.interview.copilot.service.operations.OperationsService operations;
 
-    public ReferencesController(ReferenceService service, ReferenceSearchService search) {
+    public ReferencesController(ReferenceService service,ReferenceSearchService search,com.interview.copilot.service.operations.OperationsService operations) {
+        this.operations=operations;
         this.service = service;
         this.search = search;
     }
@@ -83,7 +85,9 @@ public class ReferencesController {
     public ReferenceRetrievalResponse search(
             @AuthenticationPrincipal UserPrincipal user,
             @Valid @RequestBody SearchReferenceRequest body,
-            @RequestHeader(value = "X-Request-Id", required = false) String requestId) {
-        return search.search(user.id(), requestId, body.query(), body.referenceIds());
+            @RequestHeader(value = "X-Request-Id", required = false) String requestId,
+            @RequestHeader(value="X-Operation-Id",required=false) String operation,
+            @RequestHeader(value="X-Parent-Span-Id",required=false) String parent) {
+        return search.search(user.id(),requestId,body.query(),body.referenceIds(),operations.start(user.id(),operation,parent,requestId,null,"pg",null));
     }
 }

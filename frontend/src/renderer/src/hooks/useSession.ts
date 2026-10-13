@@ -1,3 +1,4 @@
+import { useOperationsTelemetry } from './useOperationsTelemetry'
 import type { SessionExportOptions } from '../../../shared/types'
 import { useEffect, useRef, useState } from 'react'
 import type { AppEvent, AsrStatus, DesktopBridge, EnvironmentInput, SessionRecord, Settings, SettingsInput } from '../../../shared/types'
@@ -13,6 +14,7 @@ const questionLimitMessage = '当前问题最多 12,000 个字符，请先删减
 export function useSession(bridge: DesktopBridge | undefined, settings: Settings, saveSettings?: (input: SettingsInput) => Promise<Settings>, applySettings?: (settings: Settings) => void) {
   const [record, setRecord] = useState<SessionRecord>(newRecord)
   const recordRef = useRef(record)
+  const observation = useOperationsTelemetry(bridge, record, settings.platform?.user?.id)
   const [status, setStatus] = useState<AsrStatus>('idle')
   const statusRef = useRef<AsrStatus>('idle')
   const [source, updateSource] = useState<'system' | 'microphone'>('system')
@@ -76,6 +78,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
   const automatic = useAutoAnswer({ settingsRef, saveSettings,
     read: () => ({ source: sourceRef.current, status: statusRef.current, busy: requestId.current !== null,
       editing: isEditing(), assembling: questionAssemblingRef.current, segments: recordRef.current.segments }),
+    onFiltered: observation.feedback,
     onAnswer: selection => { void generate(selection, true) },
   })
   useEffect(() => { automatic.coordinator.current?.refresh() }, [settings.autoAnswer, settings.llm, settings.platform, settings.serviceSelections, settings.customServices, source, status, busy])
@@ -164,7 +167,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
       if (currentOperation === operation.current) { asrId.current = null; updateStatus('error'); setError(errorMessage(reason)) }
     }
   }
-  async function generate(selected?: { question: string; transcript: string }, isAutomatic = false) {
+  async function generate(selected?: { question: string; transcript: string; autoWaitMs?: number }, isAutomatic = false) {
     if (changingTarget.current) return
     if (!isAutomatic) automatic.coordinator.current?.acknowledge()
     if (!bridge) { setError('请在 掌灯 Rewick 桌面应用中连接模型。'); return }
@@ -174,6 +177,8 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
     const prompt = selected ? selected.question.trim() : questionRef.current.trim() || recentQuestion(recordRef.current.segments)
     if (!prompt) { setError('输入一个面试问题，或先开始转写。'); return }
     const id = crypto.randomUUID()
+    const operationId = crypto.randomUUID()
+    observation.begin(operationId, id)
     attachEnvironment()
     requestId.current = id
     automatic.coordinator.current?.refresh()
@@ -183,7 +188,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
         { id, question: prompt, text: '', createdAt: new Date().toISOString(), status: 'streaming' }] }))
     if (!selected && !isAutomatic) setQuestion('')
     const transcript = selected?.transcript ?? recordRef.current.segments.map(segment => segment.text).join('\n')
-    try { await bridge.generateAnswer({ requestId: id, question: prompt, transcript: transcript.slice(-18000),
+    try { await bridge.generateAnswer({ requestId: id, operationId, ...(isAutomatic && selected?.autoWaitMs !== undefined ? { autoWaitMs: selected.autoWaitMs } : {}), question: prompt, transcript: transcript.slice(-18000),
       ...(settingsRef.current.interviewEnvironment ? { environmentId: settingsRef.current.interviewEnvironment.id } : {}) }) }
     catch (reason) { handleEvent({ kind: 'answer-error', requestId: id, message: errorMessage(reason) }) }
   }

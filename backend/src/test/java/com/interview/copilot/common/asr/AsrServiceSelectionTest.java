@@ -87,7 +87,8 @@ public class AsrServiceSelectionTest {
                         json,
                         usage,
                         new com.interview.copilot.service.impl.asr.AsrSessionServiceImpl(mock(com.interview.copilot.service.background.BackgroundService.class), new PlatformLimitsProperties(3600)),
-                        com.interview.copilot.common.platform.DesktopSettingsFixture.advanced());
+                        com.interview.copilot.common.platform.DesktopSettingsFixture.advanced(),
+                        mock(com.interview.copilot.service.operations.OperationsService.class));
     }
 
     @AfterEach

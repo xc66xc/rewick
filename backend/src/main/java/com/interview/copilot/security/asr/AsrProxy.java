@@ -36,6 +36,7 @@ import java.util.concurrent.ScheduledExecutorService;
 @Component
 public class AsrProxy extends AbstractWebSocketHandler {
     private final DesktopSettingsService desktop;
+    private final com.interview.copilot.service.operations.OperationsService operations;
     private final PlatformRuntimeService providers;
     private final ProviderJson json;
     private final UsageService usage;
@@ -56,7 +57,8 @@ public class AsrProxy extends AbstractWebSocketHandler {
             ProviderJson json,
             UsageService usage,
             AsrSessionService sessionService,
-            DesktopSettingsService desktop) {
+            DesktopSettingsService desktop,com.interview.copilot.service.operations.OperationsService operations) {
+        this.operations=operations;
         this.desktop = desktop;
         this.providers = providers;
         this.json = json;
@@ -151,9 +153,17 @@ public class AsrProxy extends AbstractWebSocketHandler {
         }
     }
 
+    public com.interview.copilot.model.operations.OperationContext observation(WebSocketSession session,long user,
+            String request,String interview,String model) {
+        return operations.start(user,session.getHandshakeHeaders().getFirst("X-Operation-Id"),
+                session.getHandshakeHeaders().getFirst("X-Parent-Span-Id"),request,interview,"asr",model);
+    }
+
     public JsonNode withHotwords(long user, String sessionId, String model, JsonNode frame) {
         return sessionService.withHotwords(user, sessionId, model, frame);
     }
+
+    public int activeConnections() {return sessions.size();}
 
     public ProviderJson json() {
         return json;

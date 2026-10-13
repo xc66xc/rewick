@@ -47,7 +47,16 @@ public class LlmServiceImpl implements LlmService {
         this.usage = usage;
     }
 
-    public Object execute(long userId, String requestId, JsonNode input) {
+    public Object execute(long userId,String requestId,JsonNode input) {return execute(userId,requestId,input,null);}
+
+    public Object execute(long userId,String requestId,JsonNode input,
+            com.interview.copilot.model.operations.OperationContext context) {
+        try {return observedExecute(userId,requestId,input,context);}
+        catch(RuntimeException error) {if(context!=null) context.finish("llm.complete",com.interview.copilot.common.operations.OperationOutcomes.from(error),Map.of());throw error;}
+    }
+
+    private Object observedExecute(long userId,String requestId,JsonNode input,
+            com.interview.copilot.model.operations.OperationContext context) {
         if (!input.isObject() || (input.has("model") && !input.get("model").isTextual())) {
             throw ProviderErrors.invalid();
         }
@@ -66,11 +75,15 @@ public class LlmServiceImpl implements LlmService {
             permit.close();
             throw exception;
         }
+        var observation=new com.interview.copilot.common.operations.LlmObservation(
+                context==null?null:context.model(config.getModel()),json);
         if (Boolean.TRUE.equals(body.get("stream"))) {
-            return new LlmStreamSession(lease, permit, config.getTotalTimeoutSeconds() * 1000L)
-                    .start(stream(config, body));
+            return new LlmStreamSession(lease,permit,config.getTotalTimeoutSeconds()*1000L,()->observation.finish("timeout"))
+                    .start(observation.lifecycle(stream(config,body,observation)));
         }
-        return single(config, body, lease, permit);
+        try {
+            var result=single(config,body,lease,permit,observation);observation.single(result);return result;
+        } catch(RuntimeException error) {observation.finish("error");throw error;}
     }
 
     private UsageLease reserve(long userId, String requestId, String model) {
@@ -88,7 +101,7 @@ public class LlmServiceImpl implements LlmService {
             ProviderProperties.Llm config,
             Map<String, Object> body,
             UsageLease lease,
-            LlmConcurrency.Permit permit) {
+            LlmConcurrency.Permit permit,com.interview.copilot.common.operations.LlmObservation observation) {
         try (permit;
                 lease) {
             try {
@@ -100,12 +113,15 @@ public class LlmServiceImpl implements LlmService {
                 return result;
             } catch (RuntimeException exception) {
                 lease.fail();
+                observation.finish(com.interview.copilot.common.operations.OperationOutcomes.from(exception));
                 throw ProviderErrors.failed();
             }
         }
     }
 
-    Flux<String> stream(ProviderProperties.Llm config, Map<String, Object> body) {
+    Flux<String> stream(ProviderProperties.Llm config,Map<String,Object> body) {return stream(config,body,null);}
+    Flux<String> stream(ProviderProperties.Llm config,Map<String,Object> body,
+            com.interview.copilot.common.operations.LlmObservation observation) {
         AtomicInteger received = new AtomicInteger();
         AtomicInteger output = new AtomicInteger();
         AtomicBoolean done = new AtomicBoolean();
@@ -113,9 +129,9 @@ public class LlmServiceImpl implements LlmService {
                 .timeout(Duration.ofSeconds(config.getIdleTimeoutSeconds()))
                 .takeUntilOther(
                         Mono.delay(Duration.ofSeconds(config.getTotalTimeoutSeconds()))
-                                .flatMap(value -> Mono.error(ProviderErrors.failed())))
+                                .flatMap(value -> {if(observation!=null) observation.finish("timeout");return Mono.error(ProviderErrors.failed());}))
                 .filter(event -> event.data() != null && !event.data().isBlank())
-                .map(event -> sanitize(event.data(), received, output, done))
+                .map(event -> sanitize(event.data(),received,output,done,observation))
                 .takeUntil("[DONE]"::equals)
                 .concatWith(
                         Flux.defer(
@@ -123,11 +139,12 @@ public class LlmServiceImpl implements LlmService {
                                         done.get()
                                                 ? Flux.empty()
                                                 : Flux.error(ProviderErrors.failed())))
+                .doOnError(error -> {if(observation!=null) observation.finish(com.interview.copilot.common.operations.OperationOutcomes.from(error));})
                 .onErrorMap(error -> ProviderErrors.failed());
     }
 
     private String sanitize(
-            String data, AtomicInteger received, AtomicInteger output, AtomicBoolean done) {
+            String data,AtomicInteger received,AtomicInteger output,AtomicBoolean done,com.interview.copilot.common.operations.LlmObservation observation) {
         if (received.addAndGet(data.length()) > 2 * 1024 * 1024) {
             throw ProviderErrors.failed();
         }
@@ -139,6 +156,7 @@ public class LlmServiceImpl implements LlmService {
             return "[DONE]";
         }
         JsonNode input = json.parse(data);
+        if(observation!=null) observation.inspect(input);
         int length =
                 input.path("choices").path(0).path("delta").path("content").asText("").length();
         if (output.addAndGet(length) > 32768) {

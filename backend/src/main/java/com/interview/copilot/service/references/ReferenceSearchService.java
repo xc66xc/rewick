@@ -7,4 +7,5 @@ import java.util.UUID;
 
 public interface ReferenceSearchService {
     ReferenceRetrievalResponse search(long user, String requestId, String query, List<UUID> ids);
+    default ReferenceRetrievalResponse search(long user,String requestId,String query,List<UUID> ids,com.interview.copilot.model.operations.OperationContext context) {return search(user,requestId,query,ids);}
 }

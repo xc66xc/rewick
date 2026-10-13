@@ -47,6 +47,19 @@ public class ReferenceSearchServiceImpl implements ReferenceSearchService {
 
     public ReferenceRetrievalResponse search(
             long user, String requestId, String query, List<UUID> ids) {
+        return search(user,requestId,query,ids,null);
+    }
+    public ReferenceRetrievalResponse search(long user,String requestId,String query,List<UUID> ids,
+            com.interview.copilot.model.operations.OperationContext context) {
+        try {
+            var result=observedSearch(user,requestId,query,ids,context);
+            if(context!=null) context.finish("retrieval.rag",switch(result.status()) {case "ready" -> "success";case "disabled" -> "skipped";case "empty" -> "empty";default -> "degraded";},
+                    java.util.Map.of("fragmentCount",result.excerpts().size()));
+            return result;
+        } catch(RuntimeException error) {if(context!=null) context.finish("retrieval.rag","error",java.util.Map.of());throw error;}
+    }
+    private ReferenceRetrievalResponse observedSearch(long user,String requestId,String query,List<UUID> ids,
+            com.interview.copilot.model.operations.OperationContext context) {
         desktop.requireLocal(user);
         if (ids.isEmpty()) {
             return result("disabled", "当前环境未选择参考资料。", List.of());
@@ -59,7 +72,7 @@ public class ReferenceSearchServiceImpl implements ReferenceSearchService {
             try {
                 var selection = embedding.selection();
                 usage.describeModel(user, identifier, "knowledge", selection.config().getModel());
-                ReferenceRetrievalResponse result = retrieve(user, query, ids, selection);
+                ReferenceRetrievalResponse result = retrieve(user, query, ids, selection,context);
                 lease.complete();
                 return result;
             } catch (RuntimeException error) {
@@ -74,10 +87,10 @@ public class ReferenceSearchServiceImpl implements ReferenceSearchService {
     }
 
     private ReferenceRetrievalResponse retrieve(
-            long user, String query, List<UUID> ids, PlatformEmbeddingClient.Selection selection) {
+            long user, String query, List<UUID> ids,PlatformEmbeddingClient.Selection selection,com.interview.copilot.model.operations.OperationContext context) {
         List<Double> vector;
         try {
-            vector = embedding.embed(selection, List.of(query)).getFirst();
+            vector = embedding.embed(selection,List.of(query),context==null?null:context.child("llm")).getFirst();
         } catch (RuntimeException error) {
             LOG.warn(
                     "Reference vector lookup failed user={} exceptionType={}; using keyword"
@@ -89,6 +102,8 @@ public class ReferenceSearchServiceImpl implements ReferenceSearchService {
                     "向量服务暂不可用，已使用资料关键词检索。",
                     keyword(user, query, ids, selection.fingerprint()));
         }
+        var database=context==null?null:context.child("pg");
+        try {
         var excerpts =
                 mapper
                         .vectorSearch(
@@ -103,6 +118,8 @@ public class ReferenceSearchServiceImpl implements ReferenceSearchService {
                 excerpts.isEmpty() ? "empty" : "ready",
                 excerpts.isEmpty() ? "未找到相关资料；模型变更后请重建资料。" : "",
                 excerpts);
+        } catch(RuntimeException error) {if(database!=null) database.finish("retrieval.database","error",java.util.Map.of());throw error;}
+        finally {if(database!=null) database.finish("retrieval.database","success",java.util.Map.of());}
     }
 
     private List<ReferenceExcerptResponse> keyword(

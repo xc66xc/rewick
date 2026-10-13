@@ -71,6 +71,8 @@ function createBridge(accountScope?: string): DesktopBridge {
   startAsr: () => invoke('asr:start'),
   sendAudio: (sessionId, audio) => ipcRenderer.send('asr:audio', sessionId, audio, accountScope ?? latestScope),
   stopAsr: () => invoke('asr:stop'),
+  telemetryEnabled: () => invoke('telemetry:enabled'),
+  reportTelemetry: event => ipcRenderer.send('telemetry:event', event, accountScope ?? latestScope),
   generateAnswer: request => invoke('answer:generate', request),
   cancelAnswer: () => invoke('answer:cancel'),
   setAlwaysOnTop: value => invoke('window:pin', value),

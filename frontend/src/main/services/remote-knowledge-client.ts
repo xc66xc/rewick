@@ -1,3 +1,4 @@
+import { operationHeaders } from './operations-telemetry'
 import { createHash } from 'node:crypto'
 import type { ReferenceExcerpt, RetrievalContext, Settings } from '../../shared/types'
 import { remoteKnowledgeSettingsSchema } from './validation'
@@ -53,7 +54,7 @@ function extractExcerpts(raw: unknown, namespace: string): ReferenceExcerpt[] {
 
 export class RemoteKnowledgeClient {
   private readonly config: Settings['remoteKnowledge']
-  constructor(config: Settings['remoteKnowledge'], private readonly apiKey: string, private readonly timeoutMs = 5000) {
+  constructor(config: Settings['remoteKnowledge'], private readonly apiKey: string, private readonly timeoutMs = 5000, private readonly platform = false) {
     this.config = { ...config, agentId: config.agentId.trim() }
   }
 
@@ -101,7 +102,7 @@ export class RemoteKnowledgeClient {
       budget.throwIfAborted()
       const pendingResponse = fetch(parsed.data.url, {
         method: 'POST', redirect: 'error', signal: budget,
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        headers: { 'Content-Type': 'application/json', ...(this.platform ? operationHeaders() : {}), Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({ agent_id: parsed.data.agentId, query, images: [], ...(this.config.serviceId ? { serviceId: this.config.serviceId } : {}) }),
       })
       // Clean up even when a transport returns a response after cancellation.

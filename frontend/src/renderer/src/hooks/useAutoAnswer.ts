@@ -8,7 +8,8 @@ import { explicitServiceReady } from './serviceChoices'
 interface AutoAnswerOptions {
   settingsRef: RefObject<Settings>
   read: () => Omit<AutoAnswerSnapshot, 'active' | 'pauseMs'> & { source: 'system' | 'microphone'; status: AsrStatus; assembling: boolean }
-  onAnswer: (selection: { question: string; transcript: string }) => void
+  onAnswer: (selection: { question: string; transcript: string; autoWaitMs?: number }) => void
+  onFiltered?: (count: number) => void
   saveSettings?: (input: SettingsInput) => Promise<Settings>
 }
 
@@ -50,7 +51,8 @@ export function useAutoAnswer(options: AutoAnswerOptions) {
           active: !changing.current && !snapshot.assembling && settings.autoAnswer.enabled && snapshot.source === 'system'
             && snapshot.status === 'listening' && isAnswerModelReady(settings) }
       },
-      answer: selection => latest.current.onAnswer(selection), onState: setState,
+      includeTiming: true,
+      answer: selection => latest.current.onAnswer(selection), onFiltered: count => latest.current.onFiltered?.(count), onState: setState,
     })
     coordinator.current = current
     return () => { current.dispose(); if (coordinator.current === current) coordinator.current = null }

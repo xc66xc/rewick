@@ -1,6 +1,6 @@
 {
   "name": "interview-copilot-admin",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,22 +10,24 @@
     "test": "vitest run",
     "test:smoke": "node scripts/smoke.mjs",
     "test:static": "node scripts/smoke-static.mjs",
-    "test:web-search": "node scripts/smoke-web-search.mjs"
+    "test:web-search": "node scripts/smoke-web-search.mjs",
+    "test:operations": "node scripts/smoke-operations.mjs"
   },
   "dependencies": {
+    "@phosphor-icons/react": "2.1.10",
+    "echarts": "6.1.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "zod": "4.5.4",
-    "@phosphor-icons/react": "2.1.10"
+    "zod": "4.5.4"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.7",
     "@types/node": "24.13.3",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
     "@vitejs/plugin-react": "5.2.0",
-    "@testing-library/react": "16.3.3",
-    "@testing-library/user-event": "14.6.7",
-    "@playwright/test": "1.63.0",
     "jsdom": "28.1.0",
     "typescript": "5.9.3",
     "vite": "7.3.6",

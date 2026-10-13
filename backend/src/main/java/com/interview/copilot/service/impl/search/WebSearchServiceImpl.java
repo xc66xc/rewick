@@ -34,14 +34,21 @@ public class WebSearchServiceImpl implements WebSearchService {
         this.configs = configs;
     }
 
-    public Mono<WebSearchResponse> search(long user, long token, String query, String requestId) {
+    public Mono<WebSearchResponse> search(long user,long token,String query,String requestId) {return search(user,token,query,requestId,null);}
+
+    public Mono<WebSearchResponse> search(long user,long token,String query,String requestId,
+            com.interview.copilot.model.operations.OperationContext context) {
         return Mono.defer(() -> {
             authorize(user);
             if (!capacity.tryAcquire()) return Mono.just(WebSearchResponse.degraded());
             return Mono.using(() -> reserve(user, token, requestId),
                     lease -> execute(user, query, requestId, lease), UsageLease::close)
                     .doFinally(signal -> capacity.release());
-        }).subscribeOn(Schedulers.boundedElastic());
+        }).subscribeOn(Schedulers.boundedElastic()).doOnNext(result -> {
+            if(context!=null) context.finish("retrieval.web",switch(result.status()) {case "ready" -> "success";case "empty" -> "empty";default -> "degraded";},
+                    java.util.Map.of("fragmentCount",result.excerpts().size(),"summaryEnabled",result.excerpts().stream().anyMatch(e -> Boolean.TRUE.equals(e.generatedSummary()))));
+        }).doOnError(error -> {if(context!=null) context.finish("retrieval.web","error",java.util.Map.of());})
+          .doFinally(signal -> {if(context!=null && signal==reactor.core.publisher.SignalType.CANCEL) context.finish("retrieval.web","cancelled",java.util.Map.of());});
     }
 
     private UsageLease reserve(long user, long token, String requestId) {

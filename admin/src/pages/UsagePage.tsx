@@ -1,3 +1,4 @@
+import type { TraceSelection } from '../components/operations/OperationsTraces'
 import { ArrowClockwise, BookOpen, ChatCircleDots, Database, Microphone } from '@phosphor-icons/react'
 import layout from './UsagePage.module.css'
 import { useState } from 'react'
@@ -7,7 +8,7 @@ import { useResource } from '../hooks/useResource'
 import LoadState from '../components/LoadState'
 import Pagination from '../components/Pagination'
 import styles from '../styles.module.css'
-interface UsagePageProps { api: ApiClient }
+interface UsagePageProps { api: ApiClient; onOpenTrace?: (selection: TraceSelection) => void }
 export function usageDuration(start: string, finish: string | null): string {
   if (!finish) return '—'
   const elapsed = Date.parse(finish) - Date.parse(start)
@@ -15,7 +16,7 @@ export function usageDuration(start: string, finish: string | null): string {
 }
 const icons = { llm: ChatCircleDots, asr: Microphone, knowledge: BookOpen, embedding: Database, 'web-search': BookOpen }
 const blankFilters = { userId: '', query: '', capability: '', status: '', model: '' }
-export default function UsagePage({ api }: UsagePageProps) {
+export default function UsagePage({ api, onOpenTrace }: UsagePageProps) {
   const [more, setMore] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [draft, setDraft] = useState(blankFilters)
@@ -37,7 +38,7 @@ export default function UsagePage({ api }: UsagePageProps) {
         const Icon = icons[item.capability as Capability] || ChatCircleDots
         return <tr key={item.id} className={selectedId === item.id ? layout.selected : item.status === 'failed' ? layout.failed : undefined}><th scope="row"><div className={layout.user}><span className={styles.avatar} aria-hidden="true">{(item.displayName || '用户').slice(0, 1)}</span><div><strong>{item.displayName || '未命名用户'}</strong><span className={styles.tableDetail}>用户 ID {item.userId}</span></div></div></th><td><span className={layout.capability}><Icon size={20} />{capabilityNames[item.capability as Capability] ?? item.capability}</span></td><td className={styles.code}>{item.model || '—'}</td><td><span className={item.status === 'failed' ? layout.failure : item.status === 'started' ? layout.pending : item.status === 'complete' ? styles.enabledBadge : styles.mutedBadge}>{statusNames[item.status] ?? item.status}</span></td><td>{dateTime(item.createdAt)}</td><td>{usageDuration(item.createdAt, item.finishedAt)}</td><td><button type="button" className={styles.linkButton} aria-expanded={selectedId === item.id} onClick={() => setSelectedId(current => current === item.id ? null : item.id)}>查看详情</button></td></tr>
       })}</tbody></table></div> : <LoadState>没有匹配的调用记录。</LoadState>}
-      {selected && <section className={layout.detail} data-failed={selected.status === 'failed'} aria-label="请求详情"><header className={layout.detailHeader}><h3>请求详情</h3><button type="button" className={styles.linkButton} onClick={() => setSelectedId(null)}>收起详情</button></header><dl className={layout.facts}>{[['请求 ID', selected.requestId], ['用户 ID', selected.userId], ['服务能力', capabilityNames[selected.capability as Capability] ?? selected.capability], ['模型', selected.model || '—'], ['状态', statusNames[selected.status] ?? selected.status], ['开始时间', dateTime(selected.createdAt)], ['结束时间', dateTime(selected.finishedAt)], ['耗时', usageDuration(selected.createdAt, selected.finishedAt)]].map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}</dl><p>不包含问题与回答正文。调用记录不等于费用账单。</p></section>}
+      {selected && <section className={layout.detail} data-failed={selected.status === 'failed'} aria-label="请求详情"><header className={layout.detailHeader}><h3>请求详情</h3><button type="button" className={styles.linkButton} onClick={() => setSelectedId(null)}>收起详情</button></header><dl className={layout.facts}>{[['请求 ID', selected.requestId], ['用户 ID', selected.userId], ['服务能力', capabilityNames[selected.capability as Capability] ?? selected.capability], ['模型', selected.model || '—'], ['状态', statusNames[selected.status] ?? selected.status], ['开始时间', dateTime(selected.createdAt)], ['结束时间', dateTime(selected.finishedAt)], ['耗时', usageDuration(selected.createdAt, selected.finishedAt)]].map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}</dd></div>)}</dl>{onOpenTrace && <button className={styles.secondaryButton} onClick={() => onOpenTrace({ operationId: selected.operationId, userId: selected.userId })}>{selected.operationId ? '查看操作链路' : '查看该用户操作'}</button>}{!selected.operationId && <p className={styles.hint}>旧调用记录未关联操作链路，入口仅按用户筛选，不推断请求与操作的关系。</p>}<p>不包含问题与回答正文。调用记录不等于费用账单。</p></section>}
       <Pagination page={state.data.page} size={state.data.size} total={state.data.total} onChange={value => { setPage(value); setSelectedId(null) }} />
     </>}
   </div></section>

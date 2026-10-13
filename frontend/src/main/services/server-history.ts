@@ -1,3 +1,4 @@
+import { operationsTelemetry } from './operations-telemetry'
 import { assertPlatformTransport } from '../../shared/platform-transport'
 import { sessionFault } from './session-fault'
 import { join } from 'node:path'
@@ -117,9 +118,13 @@ export class ServerHistory {
       const draft = await this.queue.run(async () => (await this.read()).drafts[id])
       if (!draft) return
       this.state = '保存中'
-      const result = responseSchema.parse(await this.request(`/${encodeURIComponent(id)}`, {
+      await this.auth() // Verify this workspace still owns the authenticated account before recording a sync.
+      const telemetry = operationsTelemetry()
+      const observation = telemetry?.forRequest(draft.record.answers.at(-1)?.id, draft.record.interviewSessionId) ?? telemetry?.operation({ operationId: randomUUID(), sessionId: draft.record.interviewSessionId })
+      const sync = () => this.request(`/${encodeURIComponent(id)}`, {
         record: draft.record, version: draft.version, mutationId: draft.mutationId
-      }))
+      })
+      const result = responseSchema.parse(telemetry ? await telemetry.measure(observation, 'session.sync', sync) : await sync())
       await this.queue.run(async () => {
         const journal = await this.read()
         const current = journal.drafts[id]

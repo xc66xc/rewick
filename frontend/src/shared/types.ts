@@ -163,7 +163,7 @@ export interface SessionRecord {
   answers: Answer[]
   interviewEnvironment?: InterviewEnvironmentSnapshot
 }
-export interface AnswerRequest { requestId: string; question: string; transcript: string; environmentId?: string }
+export interface AnswerRequest { requestId: string; question: string; transcript: string; environmentId?: string; operationId?: string; autoWaitMs?: number }
 export type AsrStatus = 'connecting' | 'listening' | 'stopping' | 'idle' | 'error'
 export interface WalletState {
   background?: Pick<Settings, 'context' | 'interviewTarget' | 'interviewEnvironment'> | null
@@ -256,6 +256,8 @@ export interface DesktopBridge {
   startAsr(): Promise<{ sessionId: string }>
   sendAudio(sessionId: string, audio: ArrayBuffer): void
   stopAsr(): Promise<void>
+  telemetryEnabled?(): Promise<boolean>
+  reportTelemetry?(event: import('./telemetry').TelemetryEvent): void
   generateAnswer(request: AnswerRequest): Promise<void>
   cancelAnswer(): Promise<void>
   setAlwaysOnTop(value: boolean): Promise<boolean>

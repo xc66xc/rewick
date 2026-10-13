@@ -124,7 +124,7 @@ public class LlmServiceTest {
                         new UserPrincipal(1, "test"), null, List.of());
         SecurityContextHolder.getContext().setAuthentication(authentication);
         MockMvc mvc =
-                MockMvcBuilders.standaloneSetup(new LlmController(proxy))
+                MockMvcBuilders.standaloneSetup(new LlmController(proxy,org.mockito.Mockito.mock(com.interview.copilot.service.operations.OperationsService.class)))
                         .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                         .build();
 

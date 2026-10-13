@@ -1,3 +1,4 @@
+import type { OperationsTelemetry, OperationContext } from './operations-telemetry'
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
 import { websocketHttpsAgent } from './network-transport'
@@ -7,6 +8,10 @@ import { asrSettingsSchema, isLoopback, parseInput } from './validation'
 
 interface Session {
   id: string
+  started: number
+  firstTranscript?: boolean
+  audioBytes: number
+  maxBacklog: number
   socket: WebSocket
   phase: 'connecting' | 'listening' | 'stopping'
   resolveStart?: (value: { sessionId: string }) => void
@@ -35,7 +40,7 @@ const resultSchema = z.object({
 
 export class AsrClient {
   private active?: Session
-  constructor(private readonly settings: Settings['asr'], private readonly apiKey: string, private readonly emit: (event: AppEvent) => void) {}
+  constructor(private readonly settings: Settings['asr'], private readonly apiKey: string, private readonly emit: (event: AppEvent) => void, private readonly telemetry?: OperationsTelemetry, private readonly observation?: OperationContext) {}
 
   async start(): Promise<{ sessionId: string }> {
     const config = parseInput(asrSettingsSchema, this.settings)
@@ -43,10 +48,10 @@ export class AsrClient {
     this.dispose()
     const socket = new WebSocket(config.url, {
       agent: new URL(config.url).protocol === 'wss:' ? websocketHttpsAgent : undefined,
-      headers: this.apiKey.trim() ? { Authorization: `Bearer ${this.apiKey.trim()}` } : {},
+      headers: { ...(this.apiKey.trim() ? { Authorization: `Bearer ${this.apiKey.trim()}` } : {}), ...(this.observation?.serviceSource === 'platform' ? { 'X-Operation-Id': this.observation.operationId, 'X-Parent-Span-Id': this.observation.spanId } : {}) },
       handshakeTimeout: 15_000, maxPayload: 1_048_576, followRedirects: false,
     })
-    const state: Session = { id: randomUUID(), socket, phase: 'connecting', alive: true, finalized: new Map() }
+    const state: Session = { started: performance.now(), audioBytes: 0, maxBacklog: 0, id: randomUUID(), socket, phase: 'connecting', alive: true, finalized: new Map() }
     this.active = state
     const promise = new Promise<{ sessionId: string }>((resolve, reject) => {
       state.resolveStart = resolve
@@ -93,10 +98,12 @@ export class AsrClient {
       this.fail(state, '音频数据格式无效，预期 16kHz 单声道 PCM16。')
       return
     }
+    state.maxBacklog = Math.max(state.maxBacklog, state.socket.bufferedAmount + audio.byteLength)
     if (state.socket.bufferedAmount + audio.byteLength > 128_000) {
       this.fail(state, '音频发送积压，网络速度不足。请检查网络后重新开始。')
       return
     }
+    state.audioBytes += audio.byteLength
     state.socket.send(Buffer.from(audio), { binary: true }, (error) => {
       if (error) this.fail(state, '音频发送失败，请重新开始转写。')
     })
@@ -123,6 +130,7 @@ export class AsrClient {
     if (!state) return
     state.rejectStart?.(new Error('语音连接已取消。'))
     state.resolveStop?.()
+    this.reportComplete(state, 'cancelled')
     this.release(state)
     this.emit({ kind: 'asr-status', sessionId: state.id, status: 'idle' })
   }
@@ -135,6 +143,7 @@ export class AsrClient {
     if (header.event === 'task-started' && state.phase === 'connecting') {
       clearTimeout(state.startupTimer)
       state.phase = 'listening'
+      this.telemetry?.record(this.observation, 'asr.connect', state.started, 'success')
       state.resolveStart?.({ sessionId: state.id })
       state.resolveStart = undefined
       state.rejectStart = undefined
@@ -144,6 +153,7 @@ export class AsrClient {
       if (!result.success) { this.fail(state, '转写字幕格式不兼容，请检查模型名称。'); return }
       const sentence = result.data.output.sentence
       if (sentence.heartbeat || sentence.begin_time === undefined || !sentence.text?.trim()) return
+      if (!state.firstTranscript) { state.firstTranscript = true; this.telemetry?.record(this.observation, 'asr.first_transcript', state.started, 'success') }
       const endMs = sentence.end_time !== null && sentence.end_time !== undefined && sentence.end_time >= sentence.begin_time
         ? sentence.end_time : undefined
       // Fun-ASR SDKs also mark completed sentences with end_time when sentence_end is absent.
@@ -171,6 +181,7 @@ export class AsrClient {
     } else if (header.event === 'task-finished') {
       if (state.phase === 'connecting') { this.fail(state, '转写任务未启动就结束，请检查模型及服务配置。'); return }
       state.resolveStop?.()
+      this.reportComplete(state, 'success')
       this.release(state)
       this.emit({ kind: 'asr-status', sessionId: state.id, status: 'idle' })
     } else if (header.event === 'task-failed') {
@@ -187,10 +198,17 @@ export class AsrClient {
 
   private fail(state: Session, message: string): void {
     if (this.active !== state) return
+    this.reportComplete(state, 'error')
     state.rejectStart?.(new Error(message))
     state.rejectStop?.(new Error(message))
     this.release(state)
     this.emit({ kind: 'asr-status', sessionId: state.id, status: 'error', message })
+  }
+
+  private reportComplete(state: Session, outcome: 'success' | 'cancelled' | 'error'): void {
+    if (state.phase === 'connecting') this.telemetry?.record(this.observation, 'asr.connect', state.started, outcome)
+    this.telemetry?.record(this.observation, 'asr.complete', state.started, outcome, { audioBytes: state.audioBytes }, this.observation?.spanId)
+    this.telemetry?.record(this.observation, 'asr.backlog', performance.now(), state.maxBacklog > 128000 ? 'rejected' : 'success', { bufferedBytes: state.maxBacklog })
   }
 
   private release(state: Session): void {

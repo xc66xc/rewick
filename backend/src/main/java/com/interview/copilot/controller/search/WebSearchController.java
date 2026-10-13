@@ -14,15 +14,19 @@ import reactor.core.publisher.Mono;
 @RestController
 public class WebSearchController {
     private final WebSearchService search;
+    private final com.interview.copilot.service.operations.OperationsService operations;
 
-    public WebSearchController(WebSearchService search) {
+    public WebSearchController(WebSearchService search,com.interview.copilot.service.operations.OperationsService operations) {
+        this.operations=operations;
         this.search = search;
     }
 
     @PostMapping("/api/v1/web-search")
     public Mono<WebSearchResponse> search(
             @AuthenticationPrincipal UserPrincipal user,
-            @Valid @RequestBody WebSearchRequest body) {
-        return search.search(user.id(), user.tokenId(), body.query(), body.requestId());
+            @Valid @RequestBody WebSearchRequest body,
+            @org.springframework.web.bind.annotation.RequestHeader(value="X-Operation-Id",required=false) String operation,
+            @org.springframework.web.bind.annotation.RequestHeader(value="X-Parent-Span-Id",required=false) String parent) {
+        return search.search(user.id(), user.tokenId(), body.query(), body.requestId(),operations.start(user.id(),operation,parent,body.requestId(),null,"tavily","tavily-search"));
     }
 }

@@ -25,8 +25,14 @@ public class BearerTokenFilter extends OncePerRequestFilter {
     private static final Logger LOGGER = LoggerFactory.getLogger(BearerTokenFilter.class);
     private final AuthService auth;
     private final ApiErrorWriter errors;
+    private final String metricsToken;
+    private final int metricsPort;
 
     public BearerTokenFilter(AuthService auth, ApiErrorWriter errors) {
+        this(auth,errors,"",0);
+    }
+    public BearerTokenFilter(AuthService auth,ApiErrorWriter errors,String metricsToken,int metricsPort) {
+        this.metricsToken=metricsToken;this.metricsPort=metricsPort;
         this.auth = auth;
         this.errors = errors;
     }
@@ -46,6 +52,14 @@ public class BearerTokenFilter extends OncePerRequestFilter {
             HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+        if("/actuator/prometheus".equals(request.getRequestURI())) {
+            boolean valid=request.getLocalPort()==metricsPort && !metricsToken.isBlank() && header!=null
+                    && java.security.MessageDigest.isEqual(("Bearer "+metricsToken).getBytes(java.nio.charset.StandardCharsets.UTF_8),header.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            if(!valid) {errors.write(response,403,"forbidden","无权访问此资源。");return;}
+            SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("internal_metrics",null,
+                    List.of(new SimpleGrantedAuthority("ROLE_METRICS"))));
+            chain.doFilter(request,response);return;
+        }
         if (isPublicAuthentication(request.getRequestURI())) {
             chain.doFilter(request, response);
             return;

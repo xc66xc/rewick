@@ -87,6 +87,7 @@ export const settingsInputSchema = z.object({
   }
 })
 export const answerRequestSchema = z.object({
+  operationId: z.string().uuid().optional(), autoWaitMs: z.number().finite().nonnegative().max(86400000).optional(),
   requestId: z.string().min(1).max(128),
   question: z.string().trim().min(1, '请先输入问题或等待字幕。').max(20_000),
   transcript: z.string().max(100_000),

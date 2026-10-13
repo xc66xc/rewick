@@ -24,12 +24,15 @@ public final class LlmStreamSession {
     private final AtomicBoolean done = new AtomicBoolean();
     private final AtomicReference<Disposable> subscription = new AtomicReference<>();
 
-    public LlmStreamSession(UsageLease lease, LlmConcurrency.Permit permit, long timeoutMillis) {
+    public LlmStreamSession(UsageLease lease,LlmConcurrency.Permit permit,long timeoutMillis) {
+        this(lease,permit,timeoutMillis,()->{});
+    }
+    public LlmStreamSession(UsageLease lease,LlmConcurrency.Permit permit,long timeoutMillis,Runnable timeoutObservation) {
         this.lease = lease;
         this.permit = permit;
         emitter = new SseEmitter(timeoutMillis + 1000);
         emitter.onCompletion(() -> terminate("cancel"));
-        emitter.onTimeout(() -> terminate("fail"));
+        emitter.onTimeout(() -> {timeoutObservation.run();terminate("fail");});
         emitter.onError(error -> terminate("cancel"));
     }
 

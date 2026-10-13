@@ -36,8 +36,16 @@ public class PlatformEmbeddingClient {
                 config, snapshot.availableEmbeddingServices().getFirst().fingerprint());
     }
 
+    public List<List<Double>> embed(Selection selection,List<String> texts,
+            com.interview.copilot.model.operations.OperationContext context) {
+        try {
+            var result=embed(selection,texts);
+            if(context!=null) context.model(selection.config().getModel()).finish("retrieval.embedding","success",Map.of());
+            return result;
+        } catch(RuntimeException error) {if(context!=null) context.finish("retrieval.embedding","error",Map.of());throw error;}
+    }
     @SuppressWarnings("unchecked")
-    public List<List<Double>> embed(Selection selection, List<String> texts) {
+    public List<List<Double>> embed(Selection selection,List<String> texts) {
         if (texts.isEmpty() || texts.size() > 10) {
             throw ReferenceErrors.invalid("向量批次无效。");
         }
