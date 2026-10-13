@@ -12,6 +12,8 @@ export interface PlatformServices { asr: { id: string; name: string }[]; knowled
 export interface DesktopDefaults { version: number; llmModelId: string; temperature: number; asrServiceId: string; retrievalMode: 'local' | 'remote'; knowledgeServiceId: string }
 export interface PlatformInfo {
   advancedSettingsEnabled?: boolean
+  webSearchAvailable?: boolean
+  webSearchTimeoutMs?: number
   desktopDefaults?: DesktopDefaults
   user: { id: string; displayName: string; email?: string | null }
   capabilities: { llm: boolean; asr: boolean; knowledge: boolean }
@@ -21,6 +23,8 @@ export interface PlatformInfo {
 }
 export interface PlatformSettings {
   advancedSettingsEnabled?: boolean
+  webSearchAvailable?: boolean
+  webSearchTimeoutMs?: number
   desktopDefaults?: DesktopDefaults
   enabled: boolean
   baseUrl: string
@@ -47,6 +51,7 @@ export interface Settings {
   interviewTarget: InterviewTarget
   interviewEnvironment?: InterviewEnvironmentSnapshot
   retrieval: { enabled: boolean }
+  webSearch?: { enabled: boolean }
   remoteKnowledge: { enabled: boolean; url: string; agentId: string; hasApiKey: boolean; serviceId?: string }
   answerStyle: 'concise' | 'detailed'
   autoAnswer: { enabled: boolean; pauseMs: number }
@@ -60,6 +65,7 @@ export interface SettingsInput {
   context: Settings['context']
   interviewTarget: InterviewTarget
   retrieval: Settings['retrieval']
+  webSearch?: Settings['webSearch']
   remoteKnowledge: Omit<Settings['remoteKnowledge'], 'hasApiKey'> & { apiKey?: string }
   answerStyle: Settings['answerStyle']
   autoAnswer: Settings['autoAnswer']
@@ -100,7 +106,10 @@ export interface ReferenceDocument {
   chunkCount: number
 }
 export interface ReferenceExcerpt {
-  source?: 'platform' | 'bailian'
+  source?: 'platform' | 'bailian' | 'web'
+  url?: string
+  title?: string
+  score?: number
   documentId: string
   revision: number
   name: string
@@ -115,6 +124,7 @@ export interface RetrievalContext {
   message?: string
   excerpts: ReferenceExcerpt[]
   remote?: { agentId: string; status: 'ready' | 'degraded' | 'empty'; message?: string }
+  web?: { status: 'ready' | 'degraded' | 'empty'; message?: string }
 }
 export interface TranscriptSegment {
   id: string
@@ -182,6 +192,7 @@ export type AppEvent =
   | { kind: 'answer-error'; requestId: string; message: string }
   | { kind: 'shortcut'; action: 'answer' }
 export interface DesktopBridge {
+  openWebSource?(url: string): Promise<void>
   recordings?: {
     start(sessionId: string): Promise<void>
     append(sessionId: string, audio: ArrayBuffer): Promise<void>

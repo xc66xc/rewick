@@ -9,6 +9,7 @@ export const userPreferencesSchema = z.object({
   version: z.number().int().nonnegative(),
   preferences: z.object({ answerStyle: z.enum(['concise', 'detailed']), temperature: z.number().min(0).max(2), silenceMs: z.number().int().min(200).max(6000),
     autoAnswer: z.object({ enabled: z.boolean(), pauseMs: z.number().int().min(1000).max(5000) }), retrievalEnabled: z.boolean(), remoteKnowledgeEnabled: z.boolean(),
+    webSearchEnabled: z.boolean().default(false),
     platformSelections: z.object({ llm: choice, asr: choice, knowledge: choice }) }),
   unavailableSelections: z.array(z.enum(['llm', 'asr', 'knowledge'])),
 })
@@ -45,6 +46,7 @@ export class UserPreferencesClient {
     return { ...local, preferencesVersion: state.version, serviceSelections,
       unavailablePlatformSelections: Object.fromEntries(state.unavailableSelections.map(kind => [kind, value.platformSelections[kind]])),
       answerStyle: value.answerStyle, autoAnswer: { ...value.autoAnswer }, retrieval: { enabled: value.retrievalEnabled },
+      webSearch: { enabled: value.webSearchEnabled },
       llm: { ...local.llm, temperature: value.temperature }, asr: { ...local.asr, silenceMs: value.silenceMs },
       remoteKnowledge: { ...local.remoteKnowledge, enabled: value.remoteKnowledgeEnabled } }
   }
@@ -59,7 +61,7 @@ export class UserPreferencesClient {
       else if (!selection) platformSelections[kind] = null
     }
     const preferences: State['preferences'] = { answerStyle: input.answerStyle, temperature: input.llm.temperature, silenceMs: input.asr.silenceMs,
-      autoAnswer: input.autoAnswer, retrievalEnabled: input.retrieval.enabled, remoteKnowledgeEnabled: input.remoteKnowledge.enabled, platformSelections }
+      autoAnswer: input.autoAnswer, retrievalEnabled: input.retrieval.enabled, remoteKnowledgeEnabled: input.remoteKnowledge.enabled, webSearchEnabled: input.webSearch?.enabled ?? previous.preferences.webSearchEnabled, platformSelections }
     const key = JSON.stringify({ version: input.preferencesVersion, preferences })
     if (this.pending?.key !== key) this.pending = { key, mutationId: randomUUID() }
     const generation = this.generation

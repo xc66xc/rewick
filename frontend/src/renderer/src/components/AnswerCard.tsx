@@ -36,6 +36,7 @@ export default function AnswerCard({ answer, index, compact = false }: AnswerCar
     {answer.error && <p className={inlineErrorClass} role="alert">{answer.error}</p>}
     {copyError && <p className={inlineErrorClass}>无法访问剪贴板，请选择文字复制。</p>}
     </div>
-    {import.meta.env.DEV && (compact ? <Collapse summary="本次发送内容与检索资料" className="compact-answer__details mt-2 border-0 px-0 py-1"><ModelInputDetails modelInput={answer.modelInput} pending={answer.status === 'streaming'} />{answer.retrieval && <ReferenceSources retrieval={answer.retrieval} />}</Collapse> : answer.retrieval && <ReferenceSources retrieval={answer.retrieval} />)}
+    {import.meta.env.DEV && compact && <Collapse summary="本次发送内容" className="compact-answer__details mt-2 border-0 px-0 py-1"><ModelInputDetails modelInput={answer.modelInput} pending={answer.status === 'streaming'} /></Collapse>}
+    {(import.meta.env.DEV || answer.retrieval?.web) && answer.retrieval && <ReferenceSources retrieval={answer.retrieval} />}
   </article>
 }

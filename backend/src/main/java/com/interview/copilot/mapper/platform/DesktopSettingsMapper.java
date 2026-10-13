@@ -36,6 +36,11 @@ public interface DesktopSettingsMapper {
                     + " updated_at=LOCALTIMESTAMP(6) WHERE id=#{id}")
     int permission(@Param("id") long id, @Param("enabled") boolean enabled);
 
+    @Update("UPDATE user_preferences SET payload=jsonb_set(payload, '{webSearchEnabled}', 'false'::jsonb),"
+            + " version=version+1,mutation_id=NULL,updated_at=LOCALTIMESTAMP(6) WHERE app_users_id=#{user}"
+            + " AND payload->>'webSearchEnabled'='true'")
+    void clearWebSearch(long user);
+
     @Update(
             "UPDATE desktop_settings SET"
                 + " version=version+1,llm_model_id=#{llmModelId},temperature=#{temperature},asr_service_id=#{asrServiceId},retrieval_mode=#{retrievalMode},knowledge_service_id=#{knowledgeServiceId},updated_at=LOCALTIMESTAMP(6)"

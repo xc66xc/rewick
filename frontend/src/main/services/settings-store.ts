@@ -202,6 +202,7 @@ export class SettingsStore {
     const settings = local?.settings as Record<string, unknown> | undefined
     const restored = settings ? { ...local, settings: { ...settings, preferencesVersion: undefined,
       answerStyle: defaultSettings.answerStyle, autoAnswer: defaultSettings.autoAnswer, retrieval: defaultSettings.retrieval,
+      webSearch: { enabled: false },
       asr: { ...settings.asr as object, silenceMs: defaultSettings.asr.silenceMs },
       llm: { ...settings.llm as object, temperature: defaultSettings.llm.temperature },
       remoteKnowledge: { ...settings.remoteKnowledge as object, enabled: false } } } : saved
@@ -218,7 +219,7 @@ export class SettingsStore {
     if (!this.cloudManaged) { await writeJsonAtomic(this.path, value); return }
     const saved = structuredClone(value) as { settings: Record<string, unknown> }
     const config = saved.settings
-    for (const key of ['preferencesVersion', 'answerStyle', 'autoAnswer', 'retrieval']) delete config[key]
+    for (const key of ['preferencesVersion', 'answerStyle', 'autoAnswer', 'retrieval', 'webSearch']) delete config[key]
     delete (config.asr as Record<string, unknown>).silenceMs
     delete (config.llm as Record<string, unknown>).temperature
     delete (config.remoteKnowledge as Record<string, unknown>).enabled
@@ -233,11 +234,11 @@ export class SettingsStore {
     const info = authenticated ? value.platformSession?.info : undefined
     let result: Settings = {
       customServices: value.customServices.map(profileView), serviceSelections: value.settings.serviceSelections,
-      platform: { ...value.settings.platform, authenticated, advancedSettingsEnabled: info?.advancedSettingsEnabled ?? false, desktopDefaults: info?.desktopDefaults, user: info?.user, expiresAt: value.platformSession?.expiresAt, capabilities: info?.capabilities ?? { llm: false, asr: false, knowledge: false }, models: info?.models ?? { llm: '', asr: '' }, services: info?.services, limits: info?.limits },
+      platform: { ...value.settings.platform, authenticated, advancedSettingsEnabled: info?.advancedSettingsEnabled ?? false, webSearchAvailable: info?.webSearchAvailable ?? false, webSearchTimeoutMs: info?.webSearchTimeoutMs ?? 8000, desktopDefaults: info?.desktopDefaults, user: info?.user, expiresAt: value.platformSession?.expiresAt, capabilities: info?.capabilities ?? { llm: false, asr: false, knowledge: false }, models: info?.models ?? { llm: '', asr: '' }, services: info?.services, limits: info?.limits },
       asr: { url: asr.url, model: asr.model, silenceMs: asr.silenceMs, hasApiKey: Boolean(value.secrets.asr) },
       llm: { baseUrl: llm.baseUrl, model: llm.model, temperature: llm.temperature, hasApiKey: Boolean(value.secrets.llm) },
       remoteKnowledge: { ...remoteKnowledge, hasApiKey: Boolean(value.secrets.remoteKnowledge) },
-      context: { name: '', text: '' }, interviewTarget: { companyName: '', roleName: '', jobDescription: '' }, retrieval, answerStyle, autoAnswer,
+      context: { name: '', text: '' }, interviewTarget: { companyName: '', roleName: '', jobDescription: '' }, retrieval, webSearch: value.settings.webSearch, answerStyle, autoAnswer,
     }
     for (const kind of serviceKinds) {
       const choice = value.settings.serviceSelections?.[kind]

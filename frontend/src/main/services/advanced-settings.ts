@@ -16,6 +16,7 @@ export function applyDesktopDefaults(settings: Settings): Settings {
     },
     llm: { ...settings.llm, temperature: defaults?.temperature ?? 0 },
     remoteKnowledge: { ...settings.remoteKnowledge, enabled: defaults?.retrievalMode === 'remote' },
+    webSearch: { enabled: false },
   }
 }
 
@@ -29,6 +30,7 @@ export function assertAllowedSettings(input: SettingsInput, current: Settings): 
     llm: { baseUrl: value.llm.baseUrl, model: value.llm.model, temperature: value.llm.temperature },
     asr: { url: value.asr.url, model: value.asr.model }, remote: { enabled: value.remoteKnowledge.enabled, url: value.remoteKnowledge.url, agentId: value.remoteKnowledge.agentId },
     selectedModelId: value.platform?.selectedModelId,
+    webSearchEnabled: value.webSearch?.enabled ?? false,
   })
   if (keys(input) !== keys(current) || input.llm.apiKey || input.asr.apiKey || input.remoteKnowledge.apiKey) {
     throw new Error('当前账号不能修改高级模型设置，请重新读取设置。')
@@ -37,5 +39,5 @@ export function assertAllowedSettings(input: SettingsInput, current: Settings): 
 
 export function preserveLocalAdvancedSettings(input: SettingsInput, saved: Settings): SettingsInput {
   return { ...input, serviceSelections: saved.serviceSelections, llm: { ...saved.llm },
-    asr: { ...saved.asr, silenceMs: input.asr.silenceMs }, remoteKnowledge: { ...saved.remoteKnowledge } }
+    asr: { ...saved.asr, silenceMs: input.asr.silenceMs }, remoteKnowledge: { ...saved.remoteKnowledge }, webSearch: { enabled: false } }
 }

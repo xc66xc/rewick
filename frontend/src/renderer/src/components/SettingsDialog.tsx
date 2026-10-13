@@ -6,6 +6,7 @@ import { selectionFor, serviceLabels } from '../hooks/serviceChoices'
 import CustomServiceDialog from './CustomServiceDialog'
 import RemoveServiceDialog from './RemoveServiceDialog'
 import ServicePreferences from './ServicePreferences'
+import WebSearchPreferences from './WebSearchPreferences'
 import ServiceSelector from './ServiceSelector'
 import { Button } from './ui/button'
 import { Modal, ConfirmModal } from './ui/dialog'
@@ -52,7 +53,8 @@ export default function SettingsDialog({ settings, bridge, onSave, onApply, onLo
         const value = await onSave({ ...settingsInput(settings), preferencesVersion: draft.preferencesVersion, serviceSelections: advanced ? draft.serviceSelections : catalog.serviceSelections,
           answerStyle: draft.answerStyle, llm: { ...settingsInput(settings).llm, temperature: advanced ? draft.llm.temperature : catalog.llm.temperature },
           asr: { ...settingsInput(settings).asr, silenceMs: draft.asr.silenceMs }, autoAnswer: draft.autoAnswer,
-          retrieval: draft.retrieval, remoteKnowledge: { ...settingsInput(settings).remoteKnowledge, enabled: advanced ? draft.remoteKnowledge.enabled : catalog.remoteKnowledge.enabled } })
+          retrieval: draft.retrieval, webSearch: { enabled: advanced && (draft.webSearch?.enabled ?? false) },
+          remoteKnowledge: { ...settingsInput(settings).remoteKnowledge, enabled: advanced ? draft.remoteKnowledge.enabled : catalog.remoteKnowledge.enabled } })
         setCatalog(value); setDraft(initialDraft(value)); toast.show('设置已保存', { type: 'success' }); onClose()
       }
     } catch (reason) { setError(errorMessage(reason)) }
@@ -82,6 +84,7 @@ export default function SettingsDialog({ settings, bridge, onSave, onApply, onLo
               onCustom={profile => setEditor({ kind, profile })} onRemove={setRemoving} />}
             <ServicePreferences advanced={advanced} kind={kind} draft={draft} onChange={setDraft} />
           </fieldset>)}
+          {advanced && <section aria-label="联网搜索" className={groupClass}><h3 className="mb-4 text-sm font-semibold">联网搜索</h3><WebSearchPreferences catalog={catalog} draft={draft} onChange={setDraft} /></section>}
         </fieldset>
         {notice && <p className={successNoticeClass} role="status"><CheckCircle size={18} aria-hidden="true" />{notice}</p>}{error && <p className={inlineErrorClass} role="alert">{error}</p>}
       </form>

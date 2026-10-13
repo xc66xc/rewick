@@ -14,6 +14,7 @@ import com.interview.copilot.service.platform.PlatformRuntimeService;
 
 @org.springframework.stereotype.Service
 public class PlatformCatalogServiceImpl implements PlatformCatalogService {
+    private final com.interview.copilot.config.WebSearchProperties webSearch;
     private final DesktopSettingsService desktop;
     private final PlatformRuntimeService providers;
     private final PlatformLimitsProperties limits;
@@ -21,7 +22,8 @@ public class PlatformCatalogServiceImpl implements PlatformCatalogService {
     public PlatformCatalogServiceImpl(
             PlatformRuntimeService providers,
             PlatformLimitsProperties limits,
-            DesktopSettingsService desktop) {
+            DesktopSettingsService desktop, com.interview.copilot.config.WebSearchProperties webSearch) {
+        this.webSearch = webSearch;
         this.desktop = desktop;
         this.providers = providers;
         this.limits = limits;
@@ -44,6 +46,6 @@ public class PlatformCatalogServiceImpl implements PlatformCatalogService {
                 new PlatformServicesResponse(
                         snapshot.availableAsrServices(), snapshot.availableKnowledgeServices()),
                 desktop.advanced(user.id()),
-                desktop.get());
+                desktop.get(), webSearch.enabled(), webSearch.timeoutMs());
     }
 }

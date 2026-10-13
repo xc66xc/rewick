@@ -10,6 +10,7 @@ function createBridge(accountScope?: string): DesktopBridge {
   }
   return {
   withAccountScope: scope => createBridge(scope),
+  openWebSource: url => invoke('web-search:open-source', url),
   recordings: {
     start: sessionId => invoke('recordings:start', sessionId),
     append: (sessionId, audio) => invoke('recordings:append', { sessionId, audio }),

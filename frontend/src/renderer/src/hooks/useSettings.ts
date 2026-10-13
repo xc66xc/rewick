@@ -12,6 +12,7 @@ export function settingsInput(settings: Settings): SettingsInput {
     context: settings.context,
     interviewTarget: settings.interviewTarget,
     retrieval: settings.retrieval,
+    webSearch: settings.webSearch ?? { enabled: false },
     remoteKnowledge: { enabled: settings.remoteKnowledge.enabled, url: settings.remoteKnowledge.url, agentId: settings.remoteKnowledge.agentId },
     answerStyle: settings.answerStyle,
     autoAnswer: settings.autoAnswer

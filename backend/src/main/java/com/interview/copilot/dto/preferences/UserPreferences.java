@@ -16,7 +16,18 @@ public record UserPreferences(
         @NotNull @Valid AutoAnswer autoAnswer,
         @NotNull Boolean retrievalEnabled,
         @NotNull Boolean remoteKnowledgeEnabled,
-        @NotNull @Valid PlatformSelections platformSelections) {
+        @NotNull @Valid PlatformSelections platformSelections,
+        Boolean webSearchEnabled) {
+    public UserPreferences(String answerStyle, Double temperature, Integer silenceMs,
+            AutoAnswer autoAnswer, Boolean retrievalEnabled, Boolean remoteKnowledgeEnabled,
+            PlatformSelections platformSelections) {
+        this(answerStyle, temperature, silenceMs, autoAnswer, retrievalEnabled, remoteKnowledgeEnabled, platformSelections, false);
+    }
+
+    public UserPreferences withWebSearch(boolean enabled) {
+        return new UserPreferences(answerStyle, temperature, silenceMs, autoAnswer, retrievalEnabled,
+                remoteKnowledgeEnabled, platformSelections, enabled);
+    }
     public record AutoAnswer(
             @NotNull Boolean enabled, @NotNull @Min(1000) @Max(5000) Integer pauseMs) {}
 

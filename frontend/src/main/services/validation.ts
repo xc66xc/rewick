@@ -1,5 +1,6 @@
 import { productionPlatformUrl } from '../../shared/platform-transport'
 import { z } from 'zod'
+import { webSourceUrlSchema } from '../../shared/web-search'
 import { environmentSnapshotSchema } from './interview-validation'
 
 export function isLoopback(hostname: string): boolean {
@@ -39,15 +40,20 @@ export const remoteKnowledgeSettingsSchema = remoteKnowledgeBaseSchema.superRefi
   if (!value.agentId) context.addIssue({ code: 'custom', path: ['agentId'], message: '启用远程知识库前请填写 Agent ID。' })
 })
 export const referencePatchSchema = z.object({ enabled: z.boolean().optional(), kind: z.enum(['technical', 'personal']).optional() }).strict()
-export const retrievalContextSchema = z.object({
-  status: z.enum(['disabled', 'ready', 'degraded', 'empty']), message: z.string().max(2000).optional(),
-  excerpts: z.array(z.object({
-    source: z.enum(['platform', 'bailian']).optional(),
+export const referenceExcerptSchema = z.object({
+    source: z.enum(['platform', 'bailian', 'web']).optional(),
+    url: webSourceUrlSchema.optional(), title: z.string().max(255).optional(), score: z.number().finite().optional(),
     documentId: z.string().min(1).max(128), revision: z.number().int().positive(),
     name: z.string().max(255), kind: z.enum(['technical', 'personal']), chunkId: z.string().min(1).max(200),
     text: z.string().max(2000), pageStart: z.number().int().positive().max(100_000).optional(), pageEnd: z.number().int().positive().max(100_000).optional(),
-  })).max(12),
+  }).superRefine((value, context) => {
+    if (value.source === 'web' && (!value.url || value.kind !== 'technical')) context.addIssue({ code: 'custom', message: '网页资料必须包含来源 URL，且只能作为技术参考。' })
+  })
+export const retrievalContextSchema = z.object({
+  status: z.enum(['disabled', 'ready', 'degraded', 'empty']), message: z.string().max(2000).optional(),
+  excerpts: z.array(referenceExcerptSchema).max(32),
   remote: z.object({ agentId: z.string().max(200), status: z.enum(['ready', 'degraded', 'empty']), message: z.string().max(2000).optional() }).optional(),
+  web: z.object({ status: z.enum(['ready', 'degraded', 'empty']), message: z.string().max(2000).optional() }).optional(),
 })
 export const platformSettingsSchema = z.object({
   enabled: z.boolean(),
@@ -67,6 +73,7 @@ export const settingsInputSchema = z.object({
   context: z.object({ name: z.string().max(255), text: z.string().max(100_000) }),
   interviewTarget: interviewTargetSchema.default({ companyName: '', roleName: '', jobDescription: '' }),
   retrieval: z.object({ enabled: z.boolean() }).default({ enabled: false }),
+  webSearch: z.object({ enabled: z.boolean() }).default({ enabled: false }),
   remoteKnowledge: remoteKnowledgeBaseSchema.extend({ apiKey }).default({ enabled: false, url: '', agentId: '' }),
   answerStyle: z.enum(['concise', 'detailed']),
   autoAnswer: z.object({ enabled: z.boolean(), pauseMs: z.number().int().min(1000).max(5000) })

@@ -12,6 +12,35 @@ function setup() {
 }
 afterEach(() => vi.unstubAllGlobals())
 describe('cloud user preferences', () => {
+  it('defaults old account preferences off and saves the web switch without provider configuration', async () => {
+    const fetcher = vi.fn(async (_url: string, options?: RequestInit) => {
+      if (options?.body) {
+        const saved = JSON.parse(String(options.body))
+        return Response.json({ ...state, version: 1, preferences: saved.preferences })
+      }
+      return Response.json(state)
+    })
+    vi.stubGlobal('fetch', fetcher)
+    const { client } = setup()
+    const config = await client.merge(defaultSettings)
+    expect(config.webSearch?.enabled).toBe(false)
+    await client.save({ ...config, webSearch: { enabled: true } } as SettingsInput)
+    expect((await client.merge(defaultSettings)).webSearch?.enabled).toBe(true)
+    const payload = String(fetcher.mock.calls[1][1]?.body)
+    expect(JSON.parse(payload).preferences.webSearchEnabled).toBe(true)
+    expect(payload).not.toMatch(/tavily|apiKey|topK|timeoutMs/)
+  })
+
+  it('preserves a saved web switch when an older settings caller omits the field', async () => {
+    const fetcher = vi.fn(async () => Response.json({ ...state, preferences: { ...state.preferences, webSearchEnabled: true } }))
+    vi.stubGlobal('fetch', fetcher)
+    const { client } = setup()
+    const config = await client.merge(defaultSettings) as SettingsInput
+    delete config.webSearch
+    await client.save(config)
+    const calls = fetcher.mock.calls as unknown as [string, RequestInit][]
+    expect(JSON.parse(String(calls[1][1].body)).preferences.webSearchEnabled).toBe(true)
+  })
   it('shares platform selections across devices while preserving a local custom override', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => Response.json(state)))
     const local: Settings = { ...defaultSettings, serviceSelections: { llm: { source: 'custom', id: 'my-private-profile' } } }

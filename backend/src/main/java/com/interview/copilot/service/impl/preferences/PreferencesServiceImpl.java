@@ -54,6 +54,8 @@ public class PreferencesServiceImpl implements PreferencesService {
         initialize(user);
         var before = mapper.get(user);
         var original = decode(before.payload());
+        preferences = preferences.withWebSearch(preferences.webSearchEnabled() == null
+                ? Boolean.TRUE.equals(original.webSearchEnabled()) : preferences.webSearchEnabled());
         if (!desktop.advanced(user)) {
             preferences =
                     new UserPreferences(
@@ -63,7 +65,7 @@ public class PreferencesServiceImpl implements PreferencesService {
                             preferences.autoAnswer(),
                             preferences.retrievalEnabled(),
                             original.remoteKnowledgeEnabled(),
-                            original.platformSelections());
+                            original.platformSelections(), false);
         }
         if (mutation.toString().equals(before.mutationId())) {
             if (!preferences.equals(original)) throw conflict();
@@ -122,7 +124,8 @@ public class PreferencesServiceImpl implements PreferencesService {
 
     private UserPreferences decode(String payload) {
         try {
-            return json.readValue(payload, UserPreferences.class);
+            UserPreferences value = json.readValue(payload, UserPreferences.class);
+            return value.withWebSearch(Boolean.TRUE.equals(value.webSearchEnabled()));
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("用户设置格式无效", e);
         }

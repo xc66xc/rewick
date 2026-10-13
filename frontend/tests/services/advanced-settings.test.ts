@@ -52,6 +52,8 @@ describe('advanced settings authorization', () => {
   it('blocks custom service actions and forged advanced settings while allowing ordinary preferences', () => {
     const effective = applyDesktopDefaults(configured())
     expect(() => requireAdvancedSettings(effective)).toThrow('没有高级模型设置权限')
+    expect(() => assertAllowedSettings({ ...effective, webSearch: { enabled: true } } as SettingsInput, effective)).toThrow('不能修改')
+    expect(applyDesktopDefaults({ ...effective, webSearch: { enabled: true } }).webSearch?.enabled).toBe(false)
     expect(() => assertAllowedSettings({ ...effective, llm: { ...effective.llm, temperature: 2 } } as SettingsInput, effective)).toThrow('不能修改')
     expect(() => assertAllowedSettings({ ...effective, asr: { ...effective.asr, apiKey: 'injected' } } as SettingsInput, effective)).toThrow('不能修改')
     expect(() => assertAllowedSettings({ ...effective, serviceSelections: { llm: { source: 'custom', id: 'own' } } } as SettingsInput, effective)).toThrow('不能修改')

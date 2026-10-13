@@ -7,7 +7,7 @@ import { emailCodeResponseSchema, emailInputSchema, platformInfoSchema, platform
 import { parseInput, platformSettingsSchema } from './validation'
 import type { ServiceSecrets, SettingsStore } from './settings-store'
 
-class PlatformRequestError extends Error { constructor(message: string, readonly status?: number) { super(message) } }
+export class PlatformRequestError extends Error { constructor(message: string, readonly status?: number) { super(message) } }
 const MAX_BYTES = 65_536
 export class PlatformClient {
   readonly baseUrl: string
@@ -48,6 +48,9 @@ export class PlatformClient {
   async logout(token: string): Promise<void> { await this.request('/api/v1/auth/logout', token, {}) }
   async walletRequest(path: string, token: string, body?: unknown): Promise<unknown> { return this.request(path, token, body) }
   async paymentRequest(path: string, token: string, body?: unknown, signal?: AbortSignal): Promise<unknown> { return this.request(path, token, body, signal) }
+  async webSearch(token: string, query: string, requestId: string, signal: AbortSignal): Promise<unknown> {
+    return this.request('/api/v1/web-search', token, { query, requestId }, signal)
+  }
   private async request(path: string, token?: string, body?: unknown, signal?: AbortSignal): Promise<unknown> {
     const controller = new AbortController()
     const abort = () => controller.abort(signal?.reason)
@@ -110,7 +113,7 @@ export class PlatformClient {
           const chunk = await reader.read()
           if (chunk.done) break
           size += chunk.value.byteLength
-          if (size > (path.includes('/interview-sessions/') ? 1_048_576 : MAX_BYTES)) throw new PlatformRequestError('平台响应超过容量限制。')
+          if (size > (path.includes('/interview-sessions/') ? 1_048_576 : path === '/api/v1/web-search' ? 262_144 : MAX_BYTES)) throw new PlatformRequestError('平台响应超过容量限制。')
           chunks.push(chunk.value)
         }
       } finally { await reader.cancel().catch(() => undefined); reader.releaseLock() }

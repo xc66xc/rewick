@@ -98,6 +98,42 @@ class PreferencesIntegrationTest extends PaymentHttpFixture {
         assertThat(save(preferences)).isEqualTo(200);
     }
 
+    @Test
+    void webSearch_oldClientPreservesSwitchAndRevocationClearsIt() {
+        var initial = call(HttpMethod.GET, "/user-preferences", aliceToken, null).getBody();
+        assertThat(initial.path("preferences").path("webSearchEnabled").asBoolean()).isFalse();
+        ObjectNode value = initial.path("preferences").deepCopy();
+        value.put("webSearchEnabled", true);
+        assertThat(save(value)).isEqualTo(200);
+        var saved = call(HttpMethod.GET, "/user-preferences", aliceToken, null).getBody();
+        ObjectNode legacy = saved.path("preferences").deepCopy();
+        legacy.remove("webSearchEnabled");
+        legacy.put("answerStyle", "detailed");
+        var oldClient = call(HttpMethod.POST, "/user-preferences", aliceToken,
+                Map.of("version", saved.path("version").asLong(), "mutationId", UUID.randomUUID().toString(), "preferences", legacy));
+        assertThat(oldClient.getBody().path("preferences").path("webSearchEnabled").asBoolean()).isTrue();
+        long user = jdbc.queryForObject("SELECT id FROM app_users WHERE display_name='alice'", Long.class);
+        assertThat(call(HttpMethod.PUT, "/admin/desktop-settings/users/" + user, adminToken,
+                Map.of("enabled", false)).getStatusCode().value()).isEqualTo(204);
+        var revoked = call(HttpMethod.GET, "/user-preferences", aliceToken, null).getBody();
+        assertThat(revoked.path("preferences").path("webSearchEnabled").asBoolean()).isFalse();
+        assertThat(revoked.path("version").asLong()).isEqualTo(3);
+        call(HttpMethod.PUT, "/admin/desktop-settings/users/" + user, adminToken, Map.of("enabled", true));
+        assertThat(call(HttpMethod.GET, "/user-preferences", aliceToken, null).getBody()
+                .path("preferences").path("webSearchEnabled").asBoolean()).isFalse();
+    }
+
+    @Test
+    void webSearch_ordinaryAccountCannotEnableAndEndpointRejects() {
+        ObjectNode value = call(HttpMethod.GET, "/user-preferences", bobToken, null).getBody().path("preferences").deepCopy();
+        value.put("webSearchEnabled", true);
+        var saved = call(HttpMethod.POST, "/user-preferences", bobToken,
+                Map.of("version", 0, "mutationId", UUID.randomUUID().toString(), "preferences", value));
+        assertThat(saved.getBody().path("preferences").path("webSearchEnabled").asBoolean()).isFalse();
+        assertThat(call(HttpMethod.POST, "/web-search", bobToken,
+                Map.of("query", "question", "requestId", UUID.randomUUID().toString())).getStatusCode().value()).isEqualTo(403);
+    }
+
     private int save(ObjectNode preferences) {
         return call(
                         HttpMethod.POST,

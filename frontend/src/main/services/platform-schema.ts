@@ -3,6 +3,8 @@ const publicUser = z.object({ id: z.string().min(1).max(128), displayName: z.str
 const serviceList = z.array(z.object({ id: z.string().min(1).max(200), name: z.string().min(1).max(200) })).max(100)
 export const platformInfoSchema = z.object({
   advancedSettingsEnabled: z.boolean().default(false),
+  webSearchAvailable: z.boolean().default(false),
+  webSearchTimeoutMs: z.number().int().min(1000).max(30000).default(8000),
   desktopDefaults: z.object({ version: z.number().int().nonnegative(), llmModelId: z.string().max(200), temperature: z.number().min(0).max(2), asrServiceId: z.string().max(200), retrievalMode: z.enum(['local', 'remote']), knowledgeServiceId: z.string().max(200) }).optional(),
   user: publicUser,
   services: z.object({ asr: serviceList, knowledge: serviceList }).optional(),

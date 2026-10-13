@@ -2,6 +2,16 @@
 
 独立 Java 模块化单体，供 macOS / Windows 客户端调用平台能力。采用 JDK 21、Spring Boot 3.5.16、MyBatis-Plus 3.5.17、PostgreSQL 15.19 和 pgvector 0.8.6。MyBatis-Plus 模块由其 3.5.17 BOM 统一管理，其余 Spring/数据库组件使用 Boot BOM。平台供应商与 SMTP 连接只从后台管理的数据库配置读取，Key/密码加密保存，不回退环境配置；客户端持有可撤销的业务登录凭证。
 
+## Tavily 联网搜索
+
+`src/main/resources/application.yml` 的 `copilot.web-search` 默认关闭。部署时在外部 YML 中设置 `enabled: true` 和 `api-key`；地址默认为 `https://api.tavily.com/search`，`top-k` 默认 5（1–20），`search-depth` 默认 `advanced`（可选 `basic`），`timeout-ms` 默认 8000（1000–30000）。配置启动时加载，修改后重启后端。真实 Key 只放本机被忽略的 `application-local.yml` 或服务器外部配置，不能提交或打进 jar。
+
+本机运行可使用 `./mvnw spring-boot:run -Dspring-boot.run.profiles=local` 加载本地配置；服务器通过 Spring 的 `--spring.config.additional-location=file:/实际路径/web-search.yml` 加载外部配置。Docker 部署需把文件只读挂载进容器，并将 `SPRING_CONFIG_ADDITIONAL_LOCATION` 指向容器中的文件路径。此专属 YML 配置不改变模型、ASR、知识库与 SMTP 的数据库配置来源。
+
+管理员沿用「高级设置授权用户」名单授予权限；用户还需在桌面设置保存「开启联网搜索」，并处于已开始的面试会话中。`POST /api/v1/web-search` 接收 `{query,requestId}`，身份来自登录 Token，服务端验证权限、保存的开关、面试与检索额度。撤销高级设置权限会清除开关，重新授权仍默认关闭。`GET /api/v1/platform` 只公开可用状态和超时，不返回 Tavily Key。
+
+搜索仅使用当前问题，保留有效网页片段及标题、URL、score；不采用 Tavily 摘要答案，不抓取网页全文。每片最多 2000 字符、合计最多 8000 字符。上游搜索失败/超时返回降级状态，桌面继续用其他资料回答并提示失败；认证失效或面试结束则停止本次生成。联网检索计入现有知识检索额度。
+
 ## 代码分层
 
 根包保持 `com.interview.copilot`，先按职责分包，再按业务模块细分。例如用户模块使用 `controller/user`、`service/user`、`service/impl/user`、`mapper/user`、`entity/user`、`request/user` 和 `vo/user`。

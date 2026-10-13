@@ -63,6 +63,7 @@ public class DesktopSettingsServiceImpl implements DesktopSettingsService {
         if (mapper.permission(user, enabled) != 1) {
             throw new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "用户不存在。");
         }
+        if (!enabled) mapper.clearWebSearch(user);
         audit.record(actor, "desktop.permission.update", "user:" + user + ",enabled:" + enabled);
     }
 

@@ -37,6 +37,10 @@ import { DisplayCaptureService } from './services/display-capture'
 import { ReferenceService } from './services/reference-service'
 import { extractDocument } from './services/document-extractor'
 import { RemoteKnowledgeClient } from './services/remote-knowledge-client'
+import { WebSearchClient } from './services/web-search-client'
+import { retrieveAnswerContext } from './services/answer-retrieval'
+import { webSourceUrlSchema } from '../shared/web-search'
+import { SessionFault } from './services/session-fault'
 import { answerRequestSchema, parseInput, referencePatchSchema, settingsInputSchema, sessionRecordSchema } from './services/validation'
 import type { AppEvent, Settings, SettingsInput, SessionRecord, RetrievalContext } from '../shared/types'
 import { resolveInterviewSettings } from '../shared/interview-settings'
@@ -205,6 +209,7 @@ async function retrieveRemote(snapshot: { settings: Settings; secrets: ServiceSe
     return await new RemoteKnowledgeClient(connection.settings.remoteKnowledge, connection.apiKey).retrieve(query, controller.signal)
   } catch (error) {
     signal.throwIfAborted()
+    if (error instanceof SessionFault) throw error
     const message = error instanceof Error ? error.message : '远程知识库连接失败，本次继续回答。'
     return { status: 'degraded', excerpts: [], message, remote: { agentId: needsPlatform(snapshot.settings, snapshot.secrets, 'knowledge') ? 'platform' : snapshot.settings.remoteKnowledge.agentId, status: 'degraded', message } }
   } finally { release?.(); signal.removeEventListener('abort', onAbort) }
@@ -413,6 +418,10 @@ function registerHandlers(): void {
     const url = await paymentRequest(client => client.checkout(id))
     await shell.openExternal(url)
   })
+  handle('web-search:open-source', async value => {
+    const url = webSourceUrlSchema.parse(value)
+    await shell.openExternal(url)
+  })
   handle('wallet:get', async () => interviewTimer.read(await walletConnection()))
   handle('interview:start', input => interviewMutations.run(async () => {
     const { requestId, environmentId } = parseInput(z.object({ requestId: z.string().uuid(), environmentId: z.string().uuid() }), input)
@@ -598,15 +607,18 @@ function registerHandlers(): void {
       if (request.environmentId && request.environmentId !== config.interviewEnvironment?.id) throw new Error('面试环境已切换，请重新生成回答。')
       const secrets = snapshot.secrets
       if (epoch !== answerEpoch) return
-      if (needsPlatform(config, secrets, 'llm')) {
+      if (needsPlatform(config, secrets, 'llm') || config.webSearch?.enabled) {
         releasePlatformAnswer = platformWork.track(platformRevision, () => { if (epoch === answerEpoch) cancelAnswerWork() })
       }
       const connection = await serviceConnection({ settings: config, secrets }, 'llm', controller.signal)
       if (epoch !== answerEpoch || controller.signal.aborted) return
       const resolved = connection.settings
-      const retrieval = resolved.remoteKnowledge.enabled
-        ? await retrieveRemote({ settings: resolved, secrets }, request.question, controller.signal, platformRevision)
-        : await references.retrieve(request.question, request.transcript, resolved, controller.signal)
+      const retrieval = await retrieveAnswerContext(
+        signal => resolved.remoteKnowledge.enabled
+          ? retrieveRemote({ settings: resolved, secrets }, request.question, signal, platformRevision)
+          : references.retrieve(request.question, request.transcript, resolved, signal),
+        resolved.webSearch?.enabled ? signal => new WebSearchClient(resolved, secrets.platformAccessToken).retrieve(request.question, signal) : undefined,
+        controller.signal)
       if (epoch !== answerEpoch || controller.signal.aborted) return
       emit({ kind: 'answer-context', requestId: request.requestId, interviewTarget: config.interviewTarget, retrieval, interviewEnvironment: config.interviewEnvironment })
       interviewTimer.assertActive()

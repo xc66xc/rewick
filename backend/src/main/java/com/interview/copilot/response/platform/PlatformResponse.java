@@ -9,4 +9,5 @@ public record PlatformResponse(
         PlatformLimitsResponse limits,
         PlatformServicesResponse services,
         boolean advancedSettingsEnabled,
-        DesktopSettingsResponse desktopDefaults) {}
+        DesktopSettingsResponse desktopDefaults,
+        boolean webSearchAvailable, int webSearchTimeoutMs) {}
