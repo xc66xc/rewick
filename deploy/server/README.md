@@ -1,5 +1,9 @@
 # 单机部署（复用现有 PostgreSQL）
 
+## 2026-10-14 父子分片与混合召回发布
+
+后端1.0.0-SNAPSHOT/管理端1.0.0已发布，SQL25手工执行并授予新表/序列权限；混合检索和缓存仍关闭，满容量BM25未达到30ms目标。11项服务器HTTPS/DB验证通过，健康与Prom抓取UP，临时账号/资料清理。平台配置23和运营配置5/开启指纹保持。后端SHA256 `16cd4a1ed2633dc49946f72e63ed9a2a2b94da4ad58cd9e6e60465ed5d910cce`；回滚备份 `releases/before-reference-hybrid-20261014-0119/`，同时保留旧backend/admin镜像。桌面1.0.0未打包，旧桌面协议未做兼容；需协调更新桌面，符合新格式的资料重新构建。详见 `workspace/interview-copilot/notes/impl-heading-parent-child-retrieval.md`。
+
 ## 2026-10-13 岗位经验要求后端发布
 
 后端0.5.0-SNAPSHOT已部署，环境四档经验要求及清除、旧客户端省略保留、本场冻结/历史链路上线，无DDL。部署的是717项完整测试通过的同一产物，JAR及运行容器SHA256 `247d584ec93da066af7d4d1fdadb0a048621418c37748a3c8e3c2bee71746b8f`。服务器HTTPS临时账号9项验收通过，所有测试账号/令牌/资料/钱包/会话/记录已清理，无真实供应商调用；backend healthy、HTTPS健康UP、Prometheus抓取UP。平台配置版本22与运营版本5/开启payload指纹不变，管理及数据库/监控容器未重启。
