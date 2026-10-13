@@ -313,3 +313,5 @@ html.compact-transparent #root { background: transparent; }
 .environment-stamp-swatch { width: var(--spacing-stamp-pad); height: var(--spacing-stamp-pad); background: currentColor; border-radius: var(--radius-stamp); }
 .environment-stamp-preview { display: flex; min-height: var(--spacing-stamp-preview); justify-content: center; align-items: center; background: var(--color-canvas); border-radius: var(--radius-card); }
 @media (prefers-reduced-motion: reduce) { .environment-stamp { transition: none; } }
+
+.environment-card__tags { display: flex; flex: 1; min-width: 0; flex-wrap: wrap; gap: var(--spacing-stamp-status-gap); align-items: center; }

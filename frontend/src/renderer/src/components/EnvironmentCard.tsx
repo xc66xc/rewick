@@ -1,3 +1,4 @@
+import JobExperienceTag from './JobExperienceTag'
 import EnvironmentStamp from './EnvironmentStamp'
 import { ArrowRight, Briefcase, FileText, PencilSimple, Stack, Trash } from '@phosphor-icons/react'
 import type { InterviewEnvironment, ResumeProfile, TargetProfile } from '../../../shared/types'
@@ -48,7 +49,7 @@ export default function EnvironmentCard({ environment, resume, target, current, 
         : formatUpdatedAt(environment.updatedAt) && <span className="shrink-0 self-start text-[11px] text-text-muted">{formatUpdatedAt(environment.updatedAt)}</span>}
     </div>
     <div className="environment-card__status">
-      <Pill className="shrink-0">{interviewTypeLabels[environment.interviewType]}</Pill>
+      <div className="environment-card__tags"><Pill className="shrink-0">{interviewTypeLabels[environment.interviewType]}</Pill><JobExperienceTag level={environment.jobExperienceLevel} /></div>
       <EnvironmentStamp stamp={environment.stamp} name={environment.name} disabled={busy} onEdit={onStamp} />
     </div>
     <dl className="mt-3 border-t border-border text-xs text-text-regular">

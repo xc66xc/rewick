@@ -182,6 +182,10 @@ ASR 连接测试会等待 `task-started`，发送半秒合成静音 PCM（16 kHz
 
 `/api/v1/background` 管理登录用户的简历、岗位 JD、环境与默认选择。正文和关联存 PostgreSQL，保存使用 `version` 和 `mutationId`；跨用户引用、覆盖旧版本、删除被引用资料均被拒绝。列表只携带默认环境所需正文，其他正文按需查询。
 
+环境 `content.jobExperienceLevel` 表示目标岗位要求，不是候选人的实际工作年限。接受 `no_experience`、`one_to_three_years`、`three_to_five_years`、`five_plus_years` 或 `null`；空字符串、未知值和非字符串值返回 400。复用普通环境保存接口和 JSONB，无 DDL。旧客户端编辑省略字段时保留已保存档位，显式 `null` 清除；新建省略和旧环境读取返回 `null`。锁内归一化后比较当前 `mutationId`，相同内容重试不增加版本。
+
+开始面试时冻结档位到 `background.interviewEnvironment.jobExperienceLevel`，重复开始返回原始快照。活动面试所属环境不允许改档位（409），其他环境可以编辑；旧快照缺失字段按未设置比较，但不会补写历史。会话及逐回答历史快照接受可选/可空合法档位，非法档位按历史格式错误返回 400。印章与 ASR 热词继续采用原有规则。
+
 `POST /api/v1/background/environments/{id}/stamp` 独立保存个性化印章，请求为 `{version, mutationId, stamp}`，返回更新后的环境详情。`version` 必须为正整数，`mutationId` 为 UUID，`stamp` 必须存在；传 `null` 明确清除。印章对象仅接受 `text` 和 `color`：文字首尾去空白后为 1–8 个 Unicode 码点，禁止控制字符、换行和孤立代理项；颜色仅允许 `blue`、`amber`、`green`、`red`。冲突返回 409，跨用户或不存在环境返回 404，已删除环境返回 410。同当前保存标识和规范化印章的重试不重复增加版本，异内容重用标识被拒绝。
 
 | 业务语义 | 采用字段 | 接入影响 |

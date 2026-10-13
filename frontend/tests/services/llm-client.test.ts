@@ -1,3 +1,4 @@
+import { jobExperienceLevels, jobExperienceStrategy } from '../../src/shared/job-experience-level'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -34,6 +35,23 @@ afterEach(async () => {
 })
 
 describe('LlmClient', () => {
+  it.each(jobExperienceLevels.flatMap(level => (['technical', 'general'] as const).flatMap(interviewType => (['concise', 'detailed'] as const).flatMap(style => [false, true].map(platform => [level, interviewType, style, platform] as const)))))('uses %s with %s/%s in actual and recorded messages (platform=%s)', async (level, interviewType, style, platform) => {
+    const fetcher = vi.fn(async (_url: string | URL | Request, _options?: RequestInit) => Response.json({ choices: [{ message: { content: '方案说明。' } }] }))
+    vi.stubGlobal('fetch', fetcher)
+    const settings: Settings = { ...structuredClone(defaultSettings), answerStyle: style, interviewEnvironment: { id: 'env', name: '准备', interviewType, jobExperienceLevel: level, resumeId: null, resumeName: '', targetId: null, targetName: '', referenceIds: [] } }
+    const events: AppEvent[] = []
+    client = new LlmClient(settings, 'fixture-key', event => events.push(event), platform)
+    await client.generate(request)
+    const payload = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))
+    expect(JSON.parse(payload.messages[1].content)).toMatchObject({ jobExperienceLevel: level, question: request.question, referenceContext: [] })
+    expect(payload.messages[0].content).toContain(jobExperienceStrategy(level))
+    expect(payload.messages[0].content).toContain('个人经历只能引用 personalContext 中明确提供的事实')
+    expect(payload.messages[0].content).toContain('当前问题、追问和具体 JD 的明确职责优先')
+    expect(payload.messages[0].content).toContain(style === 'concise' ? '简短口语' : '展开口语')
+    expect(events.find(event => event.kind === 'answer-request')?.modelInput.messages).toEqual(payload.messages)
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
   it.each([
     ['concise', false], ['expanded', false], ['concise', true], ['expanded', true],
   ] as const)('sends grounding rules with %s style (platform=%s) without rewriting the question or references', async (style, platform) => {

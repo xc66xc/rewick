@@ -1,3 +1,4 @@
+import JobExperiencePicker from './JobExperiencePicker'
 import type { EnvironmentInput, InterviewLibrary, ReferenceDocument, Settings } from '../../../shared/types'
 import EnvironmentHotwords from './EnvironmentHotwords'
 import { environmentHotwordsError } from '../../../shared/environment-hotwords'
@@ -69,6 +70,7 @@ export default function EnvironmentDialog({ open, onOpenChange, draft, dirty, li
               checked={draft.interviewType === type} disabled={fieldsDisabled}
               onChange={checked => { if (checked) onChange({ ...draft, interviewType: type }) }} />)}
           </fieldset>
+          <JobExperiencePicker value={draft.jobExperienceLevel} disabled={fieldsDisabled} onChange={jobExperienceLevel => onChange({ ...draft, jobExperienceLevel })} />
           <div className="mb-4 flex flex-col gap-2">
             <label htmlFor="environment-resume" className="text-[12.5px] font-medium text-text-regular">环境简历</label>
             <AppSelect id="environment-resume" size="lg" value={draft.resumeId ?? ''} options={resumeOptions} aria-invalid={missingResume} disabled={fieldsDisabled} onValueChange={value => onChange({ ...draft, resumeId: value || null })} />

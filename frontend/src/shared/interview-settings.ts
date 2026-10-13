@@ -11,7 +11,7 @@ export function resolveInterviewSettings(settings: Settings, library: InterviewL
     ...structuredClone(settings),
     context: { name: resume?.name ?? '', text: resume?.text ?? '' },
     interviewTarget: { companyName: target?.companyName ?? '', roleName: target?.roleName ?? '', jobDescription: target?.jobDescription ?? '' },
-    interviewEnvironment: { id: environment.id, name: environment.name, interviewType: environment.interviewType, resumeId: environment.resumeId, resumeName: resume?.name ?? '',
+    interviewEnvironment: { ...(environment.jobExperienceLevel !== undefined ? { jobExperienceLevel: environment.jobExperienceLevel } : {}), id: environment.id, name: environment.name, interviewType: environment.interviewType, resumeId: environment.resumeId, resumeName: resume?.name ?? '',
       targetId: environment.targetId, targetName: target?.name ?? '', referenceIds: [...environment.referenceIds] },
   }
 }

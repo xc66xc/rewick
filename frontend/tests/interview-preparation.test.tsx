@@ -29,6 +29,32 @@ async function pickOption(actor: ReturnType<typeof userEvent.setup>, selectName:
   await actor.click(screen.getByRole('option', { name: optionName}))
 }
 describe('interview preparation', () => {
+  it('saves, reopens and clears a job requirement without changing interview type', async () => {
+    const { actor, onSave } = setup()
+    await actor.click(await screen.findByRole('button', { name: '编辑环境 默认环境' }))
+    expect((screen.getByRole('radio', { name: /^无经验/ }) as HTMLInputElement).checked).toBe(false)
+    await actor.click(screen.getByRole('radio', { name: /^3–5年经验/ }))
+    await actor.click(screen.getByRole('button', { name: '保存环境' }))
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ jobExperienceLevel: 'three_to_five_years', interviewType: 'technical' })))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.getByText('岗位要求：3–5年')).toBeTruthy()
+    await actor.click(screen.getByRole('button', { name: '编辑环境 默认环境' }))
+    expect((screen.getByRole('radio', { name: /^3–5年经验/ }) as HTMLInputElement).checked).toBe(true)
+    await actor.click(screen.getByRole('button', { name: '不设置' }))
+    await actor.click(screen.getByRole('button', { name: '保存环境' }))
+    await waitFor(() => expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ jobExperienceLevel: null })))
+  })
+  it('does not persist a cancelled experience draft', async () => {
+    const { actor, onSave } = setup()
+    await actor.click(await screen.findByRole('button', { name: '编辑环境 默认环境' }))
+    await actor.click(screen.getByRole('radio', { name: /^5年经验以上/ }))
+    await actor.click(screen.getByRole('button', { name: '取消' }))
+    await actor.click(screen.getByRole('button', { name: '编辑环境 默认环境' }))
+    expect((screen.getByRole('radio', { name: /^5年经验以上/ }) as HTMLInputElement).checked).toBe(true)
+    expect(screen.queryByText('岗位要求：5年以上')).toBeNull()
+    expect(onSave).not.toHaveBeenCalled()
+  })
+
   it('saves edited hotwords and restores them when reopening the preparation', async () => {
     const { actor, onSave } = setup()
     await actor.click(await screen.findByRole('button', { name: '编辑环境 默认环境' }))

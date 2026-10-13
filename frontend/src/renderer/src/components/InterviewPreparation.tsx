@@ -23,8 +23,8 @@ interface Props {
   onPrepare: (input: EnvironmentInput) => Promise<void>; onSave: (input: EnvironmentInput) => Promise<void>
   onStarted: () => void; onContext: () => void; onSettings: () => void; onPurchase?: () => void; onHistory?: () => void
 }
-const emptyEnvironment: EnvironmentInput = { interviewType: 'technical', name: '', resumeId: null, targetId: null, referenceIds: [] }
-function environmentInput({ id, name, interviewType, resumeId, targetId, referenceIds, version, hotwords }: InterviewEnvironment): EnvironmentInput { return { id, name, interviewType, resumeId, targetId, referenceIds, version, hotwords } }
+const emptyEnvironment: EnvironmentInput = { interviewType: 'technical', jobExperienceLevel: null, name: '', resumeId: null, targetId: null, referenceIds: [] }
+function environmentInput({ id, name, interviewType, resumeId, targetId, referenceIds, version, hotwords, jobExperienceLevel }: InterviewEnvironment): EnvironmentInput { return { id, name, interviewType, resumeId, targetId, referenceIds, version, hotwords, ...(jobExperienceLevel !== undefined ? { jobExperienceLevel } : {}) } }
 /* v30 准备面试页:钱包页头 + 摘要卡 + 环境卡片网格,新建/编辑走弹窗(原「面试环境」页已并入) */
 export default function InterviewPreparation({ bridge, settings, timer, isSessionActive, onPrepare, onSave, onStarted, onContext, onSettings, onPurchase, onHistory }: Props) {
   const data = useInterviewLibrary(bridge)

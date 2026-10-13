@@ -12,6 +12,23 @@ function setup() {
 }
 afterEach(() => vi.unstubAllGlobals())
 describe('server background', () => {
+  it.each([undefined, null, 'three_to_five_years'] as const)('preserves omission/clear/value %s in the server payload', async level => {
+    const saved = { ...environment, jobExperienceLevel: level, version: 2 }
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      if (init.method === 'POST') {
+        const content = JSON.parse(String(init.body)).content
+        if (level === undefined) expect(content).not.toHaveProperty('jobExperienceLevel')
+        else expect(content.jobExperienceLevel).toBe(level)
+        return Response.json(saved)
+      }
+      return Response.json({ ...library, environments: [saved] })
+    }))
+    const { store } = setup()
+    const result = await store.saveEnvironment({ ...environment, interviewType: 'technical', ...(level !== undefined ? { jobExperienceLevel: level } : {}) })
+    expect(result.environments[0].jobExperienceLevel).toBe(level)
+    expect((await store.resolve(defaultSettings)).interviewEnvironment?.jobExperienceLevel).toBe(level)
+  })
+
   it.each([undefined, '', 'hr', null])('rejects invalid interview type %s before save', interviewType => {
     expect(environmentInputSchema.safeParse({ ...environment, interviewType }).success).toBe(false)
   })

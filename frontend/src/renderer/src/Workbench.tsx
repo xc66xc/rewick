@@ -1,3 +1,4 @@
+import JobExperienceTag from './components/JobExperienceTag'
 import InterviewRecordingControl from './components/InterviewRecordingControl'
 import { useInterviewRecording } from './hooks/useInterviewRecording'
 import ContentProtectionControl from './components/ContentProtectionControl'
@@ -138,9 +139,10 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
         {page === 'preparation' && <InterviewPreparation bridge={bridge} settings={config.settings} timer={timer} isSessionActive={timer.active || session.busy || !['idle', 'error'].includes(session.status)} onPrepare={handlePrepare} onSave={session.saveEnvironment} onStarted={() => setPage('workspace')} onContext={handleContext} onSettings={handleSettings} onPurchase={() => setPage('purchase')} onHistory={() => setPage('history')} />}
         {page === 'workspace' && timer.active && <div className={cn('flex min-h-0 flex-1 flex-col', compact ? 'p-0' : 'px-8 pb-0')}>
           {/* 工作台顶部仅展示面试名称与面试类型 */}
-          {!compact && environment && <div className="mb-3 flex shrink-0 items-center justify-between gap-3 text-xs"><div className="flex min-w-0 flex-1 items-center gap-2">
+          {!compact && environment && <div className="mb-3 flex shrink-0 items-center justify-between gap-3 text-xs"><div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <span className="inline-flex h-[34px] min-w-0 max-w-[280px] shrink-0 items-center gap-[7px] rounded-chip border border-border bg-card px-[11px] hover:border-border-hover max-[1180px]:max-w-[220px]" title="面试环境 · 在「面试准备」中修改"><span aria-hidden="true" className="grid size-[22px] shrink-0 place-items-center rounded-[5px] brand-gradient text-text-on-fill"><Briefcase size={12} aria-hidden="true" /></span><span className="min-w-0 truncate font-semibold">{environment.name}</span></span>
             {environment.interviewType && <Pill>{interviewTypeLabels[environment.interviewType]}</Pill>}
+            <JobExperienceTag level={environment.jobExperienceLevel} />
           </div></div>}
           {!compact && !config.loading && !isAsrReady(config.settings) && <div className="mb-5 flex items-center justify-between gap-4 rounded-chip border border-accent-line bg-accent-subtle px-4 py-3 text-xs text-text-primary max-[560px]:px-2 max-[560px]:py-2 max-[560px]:text-[10px]"><div className="flex items-center gap-2"><span className="size-1.5 shrink-0 rounded-full bg-accent" aria-hidden="true" /><span>准备开始？先连接转写服务和回答模型。</span></div><Button variant="quiet" size="sm" onClick={handleSettings}>完成配置<ArrowRight size={16} aria-hidden="true" /></Button></div>}
           <div className={cn('grid min-h-0 flex-1 grid-cols-[minmax(280px,.72fr)_minmax(400px,1.28fr)] gap-5 wide:grid-cols-[minmax(300px,.75fr)_minmax(430px,1.55fr)] wide:gap-6 max-[1060px]:grid-cols-[minmax(260px,.68fr)_minmax(340px,1.32fr)] max-[1060px]:gap-4 max-[820px]:grid-cols-[minmax(0,1fr)] max-[820px]:overflow-y-auto',

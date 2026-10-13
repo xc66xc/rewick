@@ -33,7 +33,7 @@ public final class BackgroundPolicy {
                 switch (kind) {
                     case resumes -> Set.of("name", "text");
                     case targets -> Set.of("name", "companyName", "roleName", "jobDescription");
-                    case environments -> Set.of("name", "interviewType", "resumeId", "targetId", "referenceIds", "hotwords");
+                    case environments -> Set.of("name", "interviewType", "resumeId", "targetId", "referenceIds", "hotwords", JobExperiencePolicy.FIELD);
                 };
         object.fieldNames()
                 .forEachRemaining(
@@ -51,6 +51,7 @@ public final class BackgroundPolicy {
             }
             case environments -> {
                 interviewType(object.path("interviewType"));
+                JobExperiencePolicy.validate(object.get(JobExperiencePolicy.FIELD));
                 for (String key : Set.of("resumeId", "targetId")) {
                     if (!object.has(key)) throw invalid("请选择简历和岗位。");
                     if (!object.get(key).isNull()) id(object.get(key).asText());

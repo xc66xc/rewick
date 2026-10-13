@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.interview.copilot.converter.background.BackgroundSnapshotConverter;
 import com.interview.copilot.entity.background.BackgroundEntity;
 import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.mapper.background.BackgroundMapper;
@@ -15,12 +16,12 @@ import com.interview.copilot.service.background.BackgroundService;
 import com.interview.copilot.service.wallet.WalletService;
 import com.interview.copilot.validation.background.BackgroundPolicy;
 import com.interview.copilot.validation.background.HotwordPolicy;
+import com.interview.copilot.validation.background.JobExperiencePolicy;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.ZoneId;
 import java.util.UUID;
 import java.util.List;
 
@@ -122,10 +123,19 @@ public class BackgroundServiceImpl implements BackgroundService {
             JsonNode savedWords = parse(previous.content()).get("hotwords");
             if (savedWords != null) content.set("hotwords", savedWords);
         }
+        if (kind == BackgroundKind.environments && !content.has(JobExperiencePolicy.FIELD) && previous != null) {
+            JsonNode savedLevel = parse(previous.content()).get(JobExperiencePolicy.FIELD);
+            if (savedLevel != null) content.set(JobExperiencePolicy.FIELD, savedLevel);
+        }
+        if (kind == BackgroundKind.environments && !content.has(JobExperiencePolicy.FIELD))
+            content.putNull(JobExperiencePolicy.FIELD);
         if (previous != null && previous.deleted())
             throw new ApiException(HttpStatus.GONE, "BACKGROUND_DELETED", "资料已删除，不能重新保存。 ");
         if (previous != null && previous.mutationId().equals(mutation)) {
-            if (!parse(previous.content()).equals(content)) throw conflict("保存标识已用于其他内容，请重新提交。");
+            ObjectNode previousContent = (ObjectNode) parse(previous.content());
+            if (kind == BackgroundKind.environments && !previousContent.has(JobExperiencePolicy.FIELD))
+                previousContent.putNull(JobExperiencePolicy.FIELD);
+            if (!previousContent.equals(content)) throw conflict("保存标识已用于其他内容，请重新提交。");
             return view(previous);
         }
         if ((previous == null ? 0 : previous.version()) != version)
@@ -181,7 +191,7 @@ public class BackgroundServiceImpl implements BackgroundService {
             var result = wallet.start(user, requestId);
             String saved = records.snapshot(user, previous.id());
             if (saved == null) throw conflict("该面试缺少背景快照，请结束后重新开始。");
-            return withBackground(result, parse(saved));
+            return BackgroundSnapshotConverter.withBackground(result, parse(saved));
         }
         BackgroundPolicy.id(environmentId);
         ObjectNode environment = view(require(user, BackgroundKind.environments, environmentId));
@@ -193,36 +203,15 @@ public class BackgroundServiceImpl implements BackgroundService {
             throw BackgroundPolicy.invalid("开始面试前必须填写简历正文。");
         String targetId = environment.path("targetId").asText(null);
         JsonNode target = targetId == null ? null : detail(user, BackgroundKind.targets, targetId);
-        ObjectNode snapshot = json.createObjectNode();
-        snapshot.set(
-                "context",
-                json.createObjectNode()
-                        .put("name", resume.path("name").asText())
-                        .put("text", resume.path("text").asText()));
-        ObjectNode jd = snapshot.putObject("interviewTarget");
-        for (String field : new String[] {"companyName", "roleName", "jobDescription"})
-            jd.put(field, target == null ? "" : target.path(field).asText());
-        ObjectNode env = snapshot.putObject("interviewEnvironment");
-        for (String field : new String[] {"id", "name", "interviewType", "resumeId", "targetId", "referenceIds"})
-            env.set(field, environment.get(field));
-        env.put("resumeName", resume.path("name").asText())
-                .put("targetName", target == null ? "" : target.path("name").asText());
+        ObjectNode snapshot = BackgroundSnapshotConverter.snapshot(json, environment, resume, target);
         var result = wallet.start(user, requestId);
         records.freeze(user, result.session().id(), snapshot.toString());
-        return withBackground(result, snapshot);
-    }
-
-    private WalletResponse withBackground(WalletResponse value, JsonNode snapshot) {
-        return new WalletResponse(
-                value.availableSeconds(),
-                value.version(),
-                value.serverTime(),
-                value.session(),
-                snapshot);
+        return BackgroundSnapshotConverter.withBackground(result, snapshot);
     }
 
     private void validateEnvironment(long user, JsonNode content, boolean ready) {
         BackgroundPolicy.interviewType(content.path("interviewType"));
+        JobExperiencePolicy.validate(content.get(JobExperiencePolicy.FIELD));
         for (BackgroundKind kind :
                 new BackgroundKind[] {BackgroundKind.resumes, BackgroundKind.targets}) {
             String id =
@@ -269,6 +258,10 @@ public class BackgroundServiceImpl implements BackgroundService {
                 && !content.path("interviewType").equals(environment.path("interviewType"))) {
             throw conflict("面试进行中，不能修改本场面试类型，请先结束面试。");
         }
+        if (environmentId.equals(environment.path("id").asText())
+                && !JobExperiencePolicy.value(content).equals(JobExperiencePolicy.value(environment))) {
+            throw conflict("面试进行中，不能修改本场岗位经验要求，请先结束面试。");
+        }
     }
 
     private BackgroundEntity require(long user, BackgroundKind kind, String id) {
@@ -279,22 +272,7 @@ public class BackgroundServiceImpl implements BackgroundService {
     }
 
     private ObjectNode view(BackgroundEntity row) {
-        ObjectNode node = (ObjectNode) parse(row.content());
-        return node.put("id", row.id())
-                .put("version", row.version())
-                .put("bodyLoaded", true)
-                .put(
-                        "createdAt",
-                        row.createdAt()
-                                .atZone(ZoneId.of("Asia/Shanghai"))
-                                .toOffsetDateTime()
-                                .toString())
-                .put(
-                        "updatedAt",
-                        row.updatedAt()
-                                .atZone(ZoneId.of("Asia/Shanghai"))
-                                .toOffsetDateTime()
-                                .toString());
+        return BackgroundSnapshotConverter.detail(row, (ObjectNode) parse(row.content()));
     }
 
     private JsonNode parse(String text) {

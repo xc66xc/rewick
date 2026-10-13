@@ -6,7 +6,7 @@ const connection = { baseUrl: 'http://127.0.0.1:8080', token: 'test-token' }
 const requestId = '12345678-1234-4123-8123-123456789012'
 function state(status: 'active' | 'ended' = 'active'): WalletState {
   const now = new Date().toISOString()
-  return { background: { context: { name: '简历', text: '经历' }, interviewTarget: { companyName: '', roleName: '', jobDescription: '' }, interviewEnvironment: { id: 'env', name: '环境', interviewType: 'general', resumeId: 'resume', resumeName: '简历', targetId: null, targetName: '', referenceIds: [] } }, availableSeconds: 120, version: 0, serverTime: now, session: { id: 'session', status, startedAt: now, expiresAt: new Date(Date.now() + 30000).toISOString(), endedAt: status === 'ended' ? now : null, usedSeconds: 0, endReason: status === 'ended' ? 'ended' : null } }
+  return { background: { context: { name: '简历', text: '经历' }, interviewTarget: { companyName: '', roleName: '', jobDescription: '' }, interviewEnvironment: { id: 'env', name: '环境', interviewType: 'general', jobExperienceLevel: 'three_to_five_years', resumeId: 'resume', resumeName: '简历', targetId: null, targetName: '', referenceIds: [] } }, availableSeconds: 120, version: 0, serverTime: now, session: { id: 'session', status, startedAt: now, expiresAt: new Date(Date.now() + 30000).toISOString(), endedAt: status === 'ended' ? now : null, usedSeconds: 0, endReason: status === 'ended' ? 'ended' : null } }
 }
 beforeEach(() => vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'Date', 'performance'] }))
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
@@ -89,7 +89,7 @@ describe('interview metering lease', () => {
     expect(stopped).toHaveBeenCalledOnce()
   })
   it('uses the server snapshot through heartbeats and clears it on end', async () => {
-    const background = { context: { name: '简历', text: '固定经历' }, interviewTarget: { companyName: '', roleName: '', jobDescription: '' }, interviewEnvironment: { id: 'environment', name: '环境', interviewType: 'general', resumeId: 'resume', resumeName: '简历', targetId: null, targetName: '', referenceIds: [] } }
+    const background = { context: { name: '简历', text: '固定经历' }, interviewTarget: { companyName: '', roleName: '', jobDescription: '' }, interviewEnvironment: { id: 'environment', name: '环境', interviewType: 'general', jobExperienceLevel: 'three_to_five_years', resumeId: 'resume', resumeName: '简历', targetId: null, targetName: '', referenceIds: [] } }
     const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ ...state(), background })).mockResolvedValueOnce(Response.json(state())).mockResolvedValueOnce(Response.json(state('ended')))
     vi.stubGlobal('fetch', fetcher)
     const timer = new InterviewTimer(vi.fn(), vi.fn())

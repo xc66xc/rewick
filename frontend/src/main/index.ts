@@ -1,3 +1,4 @@
+import { canSaveOtherEnvironment } from './services/environment-edit-policy'
 import { environmentStampInputSchema } from '../shared/environment-stamp'
 import { randomUUID as telemetryUUID } from 'node:crypto'
 import { OperationsTelemetry } from './services/operations-telemetry'
@@ -542,7 +543,17 @@ function registerHandlers(): void {
     emit({ kind: 'interviews-changed' })
     return library
   })
-  handle('environments:save', input => mutateInterviews(() => interviews.saveEnvironment(parseInput(environmentInputSchema, input))))
+  handle('environments:save', input => interviewMutations.run(async () => {
+    const value = parseInput(environmentInputSchema, input)
+    const other = canSaveOtherEnvironment(value, interviewTimer.active, interviewTimer.background?.interviewEnvironment)
+    if (!other) assertInterviewIdle()
+    if (!other) changingEnvironment = true
+    try {
+      const library = await interviews.saveEnvironment(value)
+      emit({ kind: 'interviews-changed' })
+      return library
+    } finally { if (!other) changingEnvironment = false }
+  }))
   handle('environments:remove', input => mutateInterviews(() => interviews.removeEnvironment(parseInput(profileId, input))))
   handle('environments:activate', input => mutateInterviews(async () => {
     assertInterviewIdle()

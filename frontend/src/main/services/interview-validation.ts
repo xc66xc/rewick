@@ -1,3 +1,4 @@
+import { jobExperienceLevelSchema } from '../../shared/job-experience-level'
 import { environmentStampSchema } from '../../shared/environment-stamp'
 import { z } from 'zod'
 import { environmentHotwordsError } from '../../shared/environment-hotwords'
@@ -23,10 +24,12 @@ export const environmentHotwordsSchema = z.array(z.string()).superRefine((words,
 })
 export const environmentHotwordSourcesSchema = z.object({ resumeId: id.nullable(), targetId: id.nullable(), referenceIds })
 export const environmentInputSchema = z.object({
+  jobExperienceLevel: jobExperienceLevelSchema.nullable().optional(),
   interviewType: interviewTypeSchema, hotwords: environmentHotwordsSchema.optional(),
   ...revision, id: id.optional(), name: environmentName, resumeId: id.nullable(), targetId: id.nullable(), referenceIds,
 })
 export const environmentSnapshotSchema = z.object({
+  jobExperienceLevel: jobExperienceLevelSchema.nullable().optional(),
   interviewType: interviewTypeSchema.optional(),
   id, name: environmentName, resumeId: id.nullable(), resumeName: z.string().max(255),
   targetId: id.nullable(), targetName: z.string().max(255), referenceIds,

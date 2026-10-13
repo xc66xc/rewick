@@ -111,6 +111,7 @@ describe('server history', () => {
     expect(screen.queryByRole('heading', { name: '综合面记录' })).toBeNull()
     expect(screen.getByText('综合面试')).toBeTruthy()
     await userEvent.setup().click(screen.getByRole('button', { name: '查看详情：原始环境' }))
+    await userEvent.setup().click(screen.getByRole('button', { name: /面试信息/ }))
     expect(within(screen.getByLabelText('面试环境与目标详情')).getByText('综合面试')).toBeTruthy()
   })
   it('loads summaries by page and fetches body only when opened', async () => {

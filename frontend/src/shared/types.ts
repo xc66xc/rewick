@@ -1,3 +1,4 @@
+import type { JobExperienceLevel } from './job-experience-level'
 import type { EnvironmentStamp, EnvironmentStampInput } from './environment-stamp'
 export interface SessionExportOptions { includeAiAnswers: boolean; includeTranscript: boolean; includeInterviewInfo: boolean }
 import type { InterviewType } from './interview-type'
@@ -75,6 +76,7 @@ export interface InterviewTarget { companyName: string; roleName: string; jobDes
 export interface ResumeProfile { hasContent?: boolean; version?: number; bodyLoaded?: boolean; id: string; name: string; text: string; createdAt: string; updatedAt: string }
 export interface TargetProfile extends InterviewTarget { version?: number; bodyLoaded?: boolean; id: string; name: string; createdAt: string; updatedAt: string }
 export interface InterviewEnvironment {
+  jobExperienceLevel?: JobExperienceLevel | null
   stamp?: EnvironmentStamp | null
   hotwords?: string[]
   interviewType: InterviewType
@@ -85,13 +87,14 @@ export interface InterviewLibrary {
   resumes: ResumeProfile[]; targets: TargetProfile[]; environments: InterviewEnvironment[]; activeEnvironmentId: string
 }
 export interface InterviewEnvironmentSnapshot {
+  jobExperienceLevel?: JobExperienceLevel | null
   /** Historical records created before interview types have no type. */
   interviewType?: InterviewType
   id: string; name: string; resumeId: string | null; resumeName: string; targetId: string | null; targetName: string; referenceIds: string[]
 }
 export interface ResumeInput { version?: number; bodyLoaded?: boolean; id?: string; name: string; text: string }
 export interface TargetInput extends InterviewTarget { version?: number; bodyLoaded?: boolean; id?: string; name: string }
-export interface EnvironmentInput { hotwords?: string[]; interviewType: InterviewType; version?: number; bodyLoaded?: boolean; id?: string; name: string; resumeId: string | null; targetId: string | null; referenceIds: string[] }
+export interface EnvironmentInput { jobExperienceLevel?: JobExperienceLevel | null; hotwords?: string[]; interviewType: InterviewType; version?: number; bodyLoaded?: boolean; id?: string; name: string; resumeId: string | null; targetId: string | null; referenceIds: string[] }
 export type ReferenceKind = 'technical' | 'personal'
 export interface ReferenceDocument {
   id: string

@@ -1,3 +1,5 @@
+import { Collapse } from './ui/collapsible'
+import { jobExperienceLabels } from '../../../shared/job-experience-level'
 import { interviewTypeLabels } from '../../../shared/interview-type'
 import { CaretDown } from '@phosphor-icons/react'
 import type { InterviewEnvironmentSnapshot, InterviewTarget, SessionRecord, Settings } from '../../../shared/types'
@@ -22,7 +24,7 @@ function collectContexts(record: SessionContextDetailsProps['record'], current: 
   record.answers.forEach((answer, index) => {
     const environment = answer.interviewEnvironment
     const target = answer.interviewTarget
-    const key = JSON.stringify([environment?.id, environment?.name, environment?.interviewType, environment?.resumeId, environment?.resumeName,
+    const key = JSON.stringify([environment?.id, environment?.name, environment?.interviewType, environment?.jobExperienceLevel, environment?.resumeId, environment?.resumeName,
       environment?.targetId, environment?.targetName, environment ? [...environment.referenceIds].sort() : undefined,
       target?.companyName, target?.roleName, target?.jobDescription])
     let group = groups.get(key)
@@ -42,13 +44,12 @@ export default function SessionContextDetails({ record, current }: SessionContex
   const groups = collectContexts(record, current)
   const hasAnswers = record.answers.length > 0
   const description = hasAnswers ? '以下为回答使用的面试信息。' : current ? '当前配置，将用于接下来的回答。' : '这场会话保存的面试环境。'
-  return <details className="group min-w-0 shrink-0 border-b border-border bg-subtle text-xs text-text-secondary" aria-label="面试信息">
-    <summary className="flex cursor-pointer list-none items-center gap-1.5 px-5 py-3 font-medium text-text-secondary transition-colors hover:text-text-primary [&::-webkit-details-marker]:hidden">
+  return <Collapse className="group min-w-0 shrink-0 rounded-none border-x-0 border-t-0 border-b border-border bg-subtle px-5 py-3 text-xs text-text-secondary" summary={<span className="inline-flex max-w-full items-center gap-1.5 font-medium">
       <CaretDown size={13} weight="bold" aria-hidden="true" className="shrink-0 text-text-muted transition-transform duration-200 group-open:rotate-180" />
       面试信息
       <span className="ml-2 min-w-0 truncate text-accent-text">{groups.length > 1 ? `${groups.length} 组回答记录` : contextLabel(groups[0])}</span>
-    </summary>
-    <div className="flex max-h-[min(280px,28vh)] flex-col gap-4 overflow-y-auto px-5 pb-4" role="region" aria-label="面试环境与目标详情" tabIndex={0}>
+    </span>}>
+    <div className="flex max-h-[min(280px,28vh)] flex-col gap-4 overflow-y-auto pb-1" role="region" aria-label="面试环境与目标详情" tabIndex={0}>
       <p className="text-text-muted">{description}</p>
       {groups.map(group => <section key={group.key} className="min-w-0">
         {groups.length > 1 && <p className="mb-2 font-mono text-success [overflow-wrap:anywhere]">用于 {group.questions.join('、')}</p>}
@@ -57,6 +58,7 @@ export default function SessionContextDetails({ record, current }: SessionContex
             {group.environment && <>
               <dt className="text-text-muted">面试环境</dt><dd className="m-0 text-text-primary [overflow-wrap:anywhere]">{group.environment.name}</dd>
               <dt className="text-text-muted">面试类型</dt><dd className="m-0 text-text-primary">{group.environment.interviewType ? interviewTypeLabels[group.environment.interviewType] : '未记录'}</dd>
+              {group.environment.jobExperienceLevel && <><dt className="text-text-muted">岗位经验要求</dt><dd className="m-0 text-text-primary">{jobExperienceLabels[group.environment.jobExperienceLevel]}</dd></>}
               <dt className="text-text-muted">使用简历</dt><dd className="m-0 text-text-primary [overflow-wrap:anywhere]">{group.environment.resumeName || '未选择'}</dd>
               <dt className="text-text-muted">目标岗位</dt><dd className="m-0 text-text-primary [overflow-wrap:anywhere]">{group.environment.targetName || '未选择'}</dd>
               <dt className="text-text-muted">参考资料</dt><dd className="m-0 text-text-primary [overflow-wrap:anywhere]">已选择 {group.environment.referenceIds.length} 份</dd>
@@ -67,5 +69,5 @@ export default function SessionContextDetails({ record, current }: SessionContex
         </> : <p className="text-text-muted">{hasAnswers ? '这组回答未记录面试信息，可查看各回答的本次发送内容。' : '尚未设置面试环境或目标。'}</p>}
       </section>)}
     </div>
-  </details>
+  </Collapse>
 }

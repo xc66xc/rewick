@@ -1,3 +1,4 @@
+import { jobExperienceLabels } from '../../shared/job-experience-level'
 import { interviewTypeLabels } from '../../shared/interview-type'
 import type { SessionRecord, SessionExportOptions } from '../../shared/types'
 import { parseInput, sessionRecordSchema } from './validation'
@@ -20,6 +21,7 @@ export function sessionToMarkdown(record: SessionRecord, options: SessionExportO
     for (const environment of environments.values()) {
       lines.push(`面试环境：${environment.name}`, `简历：${environment.resumeName || '未选择'}`)
       if (environment.interviewType) lines.push(`面试类型：${interviewTypeLabels[environment.interviewType]}`)
+      if (environment.jobExperienceLevel) lines.push(`岗位经验要求：${jobExperienceLabels[environment.jobExperienceLevel]}`)
       lines.push('')
     }
     const targets = new Map(session.answers.flatMap(answer => answer.interviewTarget
