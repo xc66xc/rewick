@@ -1,5 +1,21 @@
 # 单机部署（复用现有 PostgreSQL）
 
+## 2026-10-13 Tavily 管理后台配置发布（当前方式）
+
+Tavily 已改用管理后台「模型与服务 → 联网搜索」，可编辑地址、Key、topK、搜索深度与超时，保存后新请求立即生效。现有 Key 和5/advanced/8000ms 已迁入平台数据库加密配置，版本21，保持启用；此前服务器 `config/web-search.yml`、`compose.override.yaml` 与挂载/`SPRING_CONFIG_ADDITIONAL_LOCATION` 已删除，源码 YML 也删除对应字段，不再提供回退。下面旧章节的 YML 方式仅为历史记录。
+
+本次后端单元/架构378项、数据库集成全套561项、管理端78项测试通过；管理端真实 Chromium 模拟 API 验证通过，桌面检索回归29项通过。后端 JAR SHA256 `e4a7c118ac36d91e14688b29b6a6e45f521fcd91c65989339e916e302770ebe4`，管理端新 JS `index-Dw2DqIj2.js`，上传和运行容器哈希均一致。只更新后端容器、热更新管理静态和构建下一次启动所用镜像；未重启管理容器或数据库，也未更新桌面包。
+
+服务器通过既有管理员配置接口迁移并验证其他提供商/模型/ASR/知识库/向量配置一致、Key脱敏和数据库密文；临时10分钟管理员范围维护凭证均在操作后撤销。移除 YML并重新创建后端后，真实后台 Tavily 测试成功（约1706ms）；后端healthy，服务器API HTTPS健康UP，管理新JS200。无DDL，本机访问公网域名仍连接重置，未验证本机桌面完整回答流程。
+
+回滚材料位于 `releases/tavily-admin-20261013/`（目录700）：旧 JAR、旧Compose/搜索YML、管理构建目录和运行站点、数据库dump及单独 `platform-config-before.sql`，配置/数据库文件600。旧镜像标签为 `interview-copilot-backend:before-tavily-admin-20261013`、`interview-copilot-admin:before-tavily-admin-20261013`。回滚旧后端前应停止后端，在事务中仅恢复原 `platform_config` 行（删除该单行后执行受限备份SQL），恢复旧JAR/Compose override/搜索YML与旧镜像，再启动；旧程序无法读取新增搜索字段，不能只回滚JAR。管理端恢复 `admin-live-before` 的静态文件和 `admin-source-before.tar.gz` 的构建目录。不需要恢复整个业务数据库；回滚配置会回到发布前版本，注意核对随后新增的管理员配置变更。
+
+## 2026-10-13 11:49 Tavily 启用与重新发布
+
+用户提供真实 Key 后发布 `77ad3a0` 后端，生产构建 368 项测试通过。真实 Key 仅保存在服务器 `config/web-search.yml`，`enabled: true`，topK5/advanced/8000ms；不写入源码或镜像。新 JAR SHA256 `bb1610202bdfe1a768a2acb95edb5b62caf9447b7694cdec574bfec5873922a3`，上传及容器内校验一致。服务器调用真实 Tavily Search 返回 HTTP200 和5条结果；backend healthy，服务器 API HTTPS 健康 UP、未登录搜索401、管理首页200。此后联网功能已启用，用户仍需高级设置授权并保存账号开关。
+
+回滚材料 `releases/tavily-enable-20261013-1148/` 保存旧 JAR和旧搜索YML，旧镜像 `interview-copilot-backend:before-tavily-enable-20261013-1148`；回滚时恢复这两份文件、将旧镜像标为 `interview-copilot-backend:server`，然后执行 `docker compose up -d --no-deps --no-build --wait backend`。本次无 SQL 变更，不重启管理端或数据库。未测试已登录桌面的完整回答流程，本机公网 API 连接重置仍存在。
+
 ## 2026-10-13 Tavily 后端发布
 
 部署提交 `9fba09c` 的后端到 `101.33.245.166:/home/ubuntu/interview-copilot`，Java 21 生产构建 `package -P!macos-arm64` 的 368 项测试通过。当前 JAR SHA256 为 `4121104b00f7cdcca32a4dff05aa312dd78b52e808e4af80600d84182e8310ff`，已核对容器内文件；后端 healthy，服务器回环及 API HTTPS 健康检查均 UP。联网接口未登录 401，管理首页 200。管理端和数据库容器未重启，现有 SQL 22/23 已执行，无新增迁移。

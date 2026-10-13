@@ -13,7 +13,7 @@ export function usageDuration(start: string, finish: string | null): string {
   const elapsed = Date.parse(finish) - Date.parse(start)
   return Number.isFinite(elapsed) && elapsed >= 0 ? `${(elapsed / 1000).toFixed(2)} 秒` : '—'
 }
-const icons = { llm: ChatCircleDots, asr: Microphone, knowledge: BookOpen, embedding: Database }
+const icons = { llm: ChatCircleDots, asr: Microphone, knowledge: BookOpen, embedding: Database, 'web-search': BookOpen }
 const blankFilters = { userId: '', query: '', capability: '', status: '', model: '' }
 export default function UsagePage({ api }: UsagePageProps) {
   const [more, setMore] = useState(false)

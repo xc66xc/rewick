@@ -29,6 +29,7 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
     private final ProviderJson json;
     private final AsrProviderProbe asr;
     private final AuditService audit;
+    private final com.interview.copilot.util.search.TavilySearchClient search;
     private final Semaphore capacity = new Semaphore(4);
 
     public PlatformProbeServiceImpl(
@@ -36,18 +37,19 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
             ProviderHttpClient http,
             ProviderJson json,
             AsrProviderProbe asr,
-            AuditService audit) {
+            AuditService audit, com.interview.copilot.util.search.TavilySearchClient search) {
         this.configs = configs;
         this.http = http;
         this.json = json;
         this.asr = asr;
         this.audit = audit;
+        this.search = search;
     }
 
     public PlatformProbeResponse test(long actorId, PlatformProbeRequest input) {
         if (input == null
                 || input.capability() == null
-                || !Set.of("llm", "asr", "knowledge", "embedding").contains(input.capability())) {
+                || !Set.of("llm", "asr", "knowledge", "embedding", "web-search").contains(input.capability())) {
             throw PlatformConfigErrors.invalid("请选择需要测试的服务能力。");
         }
         PlatformSnapshot snapshot = configs.draft(input.config());
@@ -61,7 +63,7 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
             success = true;
             return new PlatformProbeResponse(true, "服务测试通过。", elapsed(started));
         } catch (RuntimeException error) {
-            return new PlatformProbeResponse(false, "服务测试失败，请检查地址、密钥和模型配置。", elapsed(started));
+            return new PlatformProbeResponse(false, "服务测试失败，请检查地址、密钥及服务参数。", elapsed(started));
         } finally {
             capacity.release();
             audit.record(
@@ -77,8 +79,15 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
             case "asr" -> asr.test(snapshot.asr());
             case "knowledge" -> knowledge(snapshot);
             case "embedding" -> embedding(snapshot);
+            case "web-search" -> webSearch(snapshot);
             default -> throw PlatformConfigErrors.invalid("服务能力无效。");
         }
+    }
+
+    private void webSearch(PlatformSnapshot snapshot) {
+        var endpoint = snapshot.webSearch();
+        if (!endpoint.enabled()) throw ProviderErrors.unavailable();
+        search.search("Tavily search connection test", endpoint).block();
     }
 
     private void llm(PlatformSnapshot snapshot, String modelId) {

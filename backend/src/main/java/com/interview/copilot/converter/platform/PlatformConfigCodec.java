@@ -52,7 +52,7 @@ public final class PlatformConfigCodec {
                             config.defaultModelId(),
                             config.asr(),
                             config.knowledge(),
-                            config.embedding()));
+                            config.embedding(), config.webSearch()));
         } catch (JsonProcessingException error) {
             throw PlatformConfigErrors.storageUnavailable();
         }
@@ -80,7 +80,7 @@ public final class PlatformConfigCodec {
                 config.defaultModelId(),
                 config.asr(),
                 config.knowledge(),
-                config.embedding());
+                config.embedding(), config.webSearch() == null ? PlatformConfig.WebSearch.disabled() : config.webSearch());
     }
 
     public PlatformSnapshot snapshot(PlatformConfigRow row, PlatformPolicy policy) {

@@ -1,7 +1,7 @@
 package com.interview.copilot.util.search;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.interview.copilot.config.WebSearchProperties;
+import com.interview.copilot.model.search.WebSearchEndpoint;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,9 +29,9 @@ class TavilySearchHttpTest {
         server.stop(0);
     }
 
-    private TavilySearchClient client(int timeout) {
-        return new TavilySearchClient(new WebSearchProperties(false,
-                "http://127.0.0.1:" + server.getAddress().getPort() + "/search", "fixture-key", 5, "advanced", timeout));
+    private WebSearchEndpoint endpoint(int timeout) {
+        return new WebSearchEndpoint(true,
+                "http://127.0.0.1:" + server.getAddress().getPort() + "/search", "fixture-key", 5, "advanced", timeout);
     }
 
     @Test
@@ -48,7 +48,7 @@ class TavilySearchHttpTest {
             exchange.close();
         });
 
-        assertThat(client(8000).search("question").block(Duration.ofSeconds(10)).status()).isEqualTo("ready");
+        assertThat(new TavilySearchClient().search("question", endpoint(8000)).block(Duration.ofSeconds(10)).status()).isEqualTo("ready");
         assertThat(auth.get()).isEqualTo("Bearer fixture-key");
         assertThat(body.get().path("query").asText()).isEqualTo("question");
         assertThat(body.get().path("max_results").asInt()).isEqualTo(5);
@@ -65,7 +65,7 @@ class TavilySearchHttpTest {
             exchange.getResponseBody().write(response);
             exchange.close();
         });
-        assertThatThrownBy(() -> client(8000).search("question").block())
+        assertThatThrownBy(() -> new TavilySearchClient().search("question", endpoint(8000)).block())
                 .isInstanceOf(com.interview.copilot.exception.ApiException.class)
                 .hasMessageNotContaining("fixture-secret");
     }
@@ -76,7 +76,7 @@ class TavilySearchHttpTest {
             try { Thread.sleep(2000); } catch (InterruptedException error) { Thread.currentThread().interrupt(); }
             exchange.close();
         });
-        assertThatThrownBy(() -> client(1000).search("question").block(Duration.ofSeconds(4)))
+        assertThatThrownBy(() -> new TavilySearchClient().search("question", endpoint(1000)).block(Duration.ofSeconds(4)))
                 .hasCauseInstanceOf(java.util.concurrent.TimeoutException.class);
     }
 }

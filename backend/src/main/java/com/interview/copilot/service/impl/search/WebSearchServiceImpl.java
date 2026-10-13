@@ -1,7 +1,7 @@
 package com.interview.copilot.service.impl.search;
 
 import com.interview.copilot.common.usage.UsageLease;
-import com.interview.copilot.config.WebSearchProperties;
+import com.interview.copilot.service.platform.PlatformConfigService;
 import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.response.search.WebSearchResponse;
 import com.interview.copilot.service.platform.DesktopSettingsService;
@@ -22,16 +22,16 @@ public class WebSearchServiceImpl implements WebSearchService {
     private final PreferencesService preferences;
     private final UsageService usage;
     private final TavilySearchClient client;
-    private final WebSearchProperties config;
+    private final PlatformConfigService configs;
     private final Semaphore capacity = new Semaphore(16);
 
     public WebSearchServiceImpl(DesktopSettingsService desktop, PreferencesService preferences,
-            UsageService usage, TavilySearchClient client, WebSearchProperties config) {
+            UsageService usage, TavilySearchClient client, PlatformConfigService configs) {
         this.desktop = desktop;
         this.preferences = preferences;
         this.usage = usage;
         this.client = client;
-        this.config = config;
+        this.configs = configs;
     }
 
     public Mono<WebSearchResponse> search(long user, long token, String query, String requestId) {
@@ -56,13 +56,14 @@ public class WebSearchServiceImpl implements WebSearchService {
     }
 
     private Mono<WebSearchResponse> execute(long user, String query, String requestId, UsageLease lease) {
+        var config = configs.snapshot().webSearch();
         if (!config.enabled()) {
             lease.fail();
             return Mono.just(WebSearchResponse.degraded());
         }
         Sinks.One<WebSearchResponse> expired = Sinks.one();
         lease.watch(() -> expired.tryEmitError(inactive()));
-        return client.search(query).onErrorResume(error -> {
+        return client.search(query, config).onErrorResume(error -> {
             lease.fail();
             org.slf4j.LoggerFactory.getLogger(WebSearchServiceImpl.class).warn(
                     "Web search failed user={} request={} exception={}", user, requestId,

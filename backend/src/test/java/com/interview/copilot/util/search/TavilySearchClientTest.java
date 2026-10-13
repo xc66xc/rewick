@@ -1,7 +1,7 @@
 package com.interview.copilot.util.search;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.interview.copilot.config.WebSearchProperties;
+import com.interview.copilot.model.search.WebSearchEndpoint;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -10,8 +10,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class TavilySearchClientTest {
     private final ObjectMapper json = new ObjectMapper();
-    private final WebSearchProperties config = new WebSearchProperties(false, "https://api.tavily.com/search", "", 5, "advanced", 8000);
-    private final TavilySearchClient client = new TavilySearchClient(config);
+    private final TavilySearchClient client = new TavilySearchClient();
 
     @Test
     void extract_validResults_preservesOrderAndEnforcesTextBudget() {
@@ -22,7 +21,7 @@ class TavilySearchClientTest {
         for (int i = 0; i < 7; i++) results.addObject().put("url", "https://example.com/" + i)
                 .put("title", "title " + i).put("content", "x".repeat(3000)).put("score", 0.9);
 
-        var actual = client.extract(response);
+        var actual = client.extract(response, 5);
 
         assertThat(actual.status()).isEqualTo("ready");
         assertThat(actual.excerpts()).hasSize(5);
@@ -38,45 +37,30 @@ class TavilySearchClientTest {
         var response = json.createObjectNode();
         var results = response.putArray("results");
         for (int i = 0; i < 8; i++) results.addObject().put("url", "https://example.com/" + i).put("content", "fact");
-        assertThat(client.extract(response).excerpts()).hasSize(5);
+        assertThat(client.extract(response, 5).excerpts()).hasSize(5);
     }
 
     @Test
     void extract_emptyResults_returnsEmptyRatherThanFailure() {
         var response = json.createObjectNode();
         response.putArray("results");
-        assertThat(client.extract(response).status()).isEqualTo("empty");
-        assertThatThrownBy(() -> client.extract(json.createObjectNode())).isInstanceOf(com.interview.copilot.exception.ApiException.class);
+        assertThat(client.extract(response, 5).status()).isEqualTo("empty");
+        assertThatThrownBy(() -> client.extract(json.createObjectNode(), 5)).isInstanceOf(com.interview.copilot.exception.ApiException.class);
     }
 
     @Test
     void response_absentOptionalFields_omitsNullsForDesktopSchema() throws Exception {
         var response = json.createObjectNode();
         response.putArray("results").addObject().put("url", "https://example.com").put("content", "fact");
-        var output = json.readTree(json.writeValueAsString(client.extract(response)));
+        var output = json.readTree(json.writeValueAsString(client.extract(response, 5)));
         assertThat(output.has("message")).isFalse();
         assertThat(output.path("excerpts").get(0).has("score")).isFalse();
         assertThat(output.path("excerpts").get(0).path("documentId").asText()).hasSize(68);
     }
 
-    @ParameterizedTest
-    @ValueSource(ints = {0, 21, -1})
-    void validate_invalidTopK_rejectsConfiguration(int topK) {
-        assertThatThrownBy(() -> new WebSearchProperties(false, "https://api.tavily.com/search", "", topK, "advanced", 8000).validate())
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"http://api.tavily.com/search", "https://api.tavily.com", "https://key@api.tavily.com/search"})
-    void validate_invalidEnabledEndpoint_rejectsConfiguration(String url) {
-        assertThatThrownBy(() -> new WebSearchProperties(true, url, "fixture", 5, "advanced", 8000).validate())
-                .isInstanceOf(IllegalArgumentException.class);
-    }
-
     @Test
-    void validate_missingEnabledKey_rejectsWithoutExposingKey() {
-        assertThatThrownBy(() -> new WebSearchProperties(true, config.url(), "", 5, "advanced", 8000).validate())
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThat(new WebSearchProperties(true, config.url(), "secret", 5, "advanced", 8000).toString()).doesNotContain("secret");
+    void endpoint_toString_neverExposesKey() {
+        assertThat(new WebSearchEndpoint(true, "https://api.tavily.com/search", "secret", 5, "advanced", 8000).toString())
+                .doesNotContain("secret");
     }
 }

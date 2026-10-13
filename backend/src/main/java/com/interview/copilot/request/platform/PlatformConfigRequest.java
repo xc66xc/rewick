@@ -1,6 +1,7 @@
 package com.interview.copilot.request.platform;
 
 import com.interview.copilot.model.platform.PlatformConfig.Asr;
+import com.interview.copilot.model.platform.PlatformConfig.WebSearch;
 import com.interview.copilot.model.platform.PlatformConfig.Embedding;
 import com.interview.copilot.model.platform.PlatformConfig.Knowledge;
 import com.interview.copilot.model.platform.PlatformConfig.Model;
@@ -20,7 +21,8 @@ public record PlatformConfigRequest(
         @NotNull @Size(max = 64) String defaultModelId,
         @NotNull @Valid Asr asr,
         @NotNull @Valid Knowledge knowledge,
-        @Valid Embedding embedding) {
+        @Valid Embedding embedding,
+        @Valid WebSearch webSearch) {
     @Override
     public String toString() {
         return "PlatformConfigRequest[redacted]";

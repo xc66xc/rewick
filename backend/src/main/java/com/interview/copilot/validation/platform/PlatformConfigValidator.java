@@ -44,6 +44,7 @@ public final class PlatformConfigValidator {
                 throw PlatformConfigErrors.invalid("提供商 ID 不能重复。");
             }
             validateUrl(provider);
+            if ("web-search".equals(provider.kind())) validateSearchUrl(provider.url());
             if (provider.apiKey() != null && provider.apiKey().matches("(?s).*[\\r\\n].*")) {
                 throw PlatformConfigErrors.invalid("API Key 格式无效。");
             }
@@ -71,6 +72,13 @@ public final class PlatformConfigValidator {
         }
     }
 
+    private void validateSearchUrl(String url) {
+        URI uri = URI.create(url);
+        if (!"/search".equals(uri.getRawPath()) || uri.getRawQuery() != null) {
+            throw PlatformConfigErrors.invalid("Tavily 服务地址必须包含 /search 路径，且不能包含查询参数。");
+        }
+    }
+
     private void validateModels(
             PlatformConfig config, Map<String, PlatformConfig.Provider> providers) {
         Set<String> identifiers = new HashSet<>();
@@ -94,6 +102,13 @@ public final class PlatformConfigValidator {
 
     private void validateServices(
             PlatformConfig config, Map<String, PlatformConfig.Provider> providers) {
+        var search = config.webSearch();
+        if (search.enabled() || !search.providerId().isEmpty()) {
+            var provider = reference(providers, search.providerId(), "web-search");
+            if (search.enabled() && !provider.enabled()) {
+                throw PlatformConfigErrors.invalid("开启联网搜索前请启用对应提供商。");
+            }
+        }
         validateService(
                 config.embedding().enabled(),
                 config.embedding().providerId(),

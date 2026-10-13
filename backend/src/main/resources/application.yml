@@ -42,13 +42,6 @@ mybatis-plus:
   global-config:
     banner: false
 copilot:
-  web-search:
-    enabled: true
-    url: https://api.tavily.com/search
-    api-key: ${TAVILY_SEARCH_KEY:}
-    top-k: 5
-    search-depth: none
-    timeout-ms: 8000
   platform:
     master-key: ${COPILOT_PLATFORM_MASTER_KEY:}
   auth:

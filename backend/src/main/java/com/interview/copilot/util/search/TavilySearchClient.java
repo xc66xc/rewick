@@ -1,7 +1,7 @@
 package com.interview.copilot.util.search;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.interview.copilot.config.WebSearchProperties;
+import com.interview.copilot.model.search.WebSearchEndpoint;
 import com.interview.copilot.exception.ai.ProviderErrors;
 import com.interview.copilot.response.search.WebExcerptResponse;
 import com.interview.copilot.response.search.WebSearchResponse;
@@ -18,17 +18,15 @@ import java.util.Map;
 
 @Component
 public class TavilySearchClient {
-    private final WebSearchProperties config;
     private final WebClient client;
 
-    public TavilySearchClient(WebSearchProperties config) {
-        this.config = config;
+    public TavilySearchClient() {
         this.client = WebClient.builder()
                 .clientConnector(new ReactorClientHttpConnector(HttpClient.create().followRedirect(false)))
                 .codecs(value -> value.defaultCodecs().maxInMemorySize(2 * 1024 * 1024)).build();
     }
 
-    public Mono<WebSearchResponse> search(String query) {
+    public Mono<WebSearchResponse> search(String query, WebSearchEndpoint config) {
         Map<String, Object> body = Map.of(
                 "query", query, "max_results", config.topK(), "search_depth", config.searchDepth(),
                 "include_answer", false, "include_raw_content", false, "include_images", false,
@@ -40,14 +38,14 @@ public class TavilySearchClient {
                         return response.releaseBody().then(Mono.error(ProviderErrors.failed()));
                     return response.bodyToMono(JsonNode.class)
                             .switchIfEmpty(Mono.error(ProviderErrors.failed()));
-                }).timeout(Duration.ofMillis(config.timeoutMs())).map(this::extract);
+                }).timeout(Duration.ofMillis(config.timeoutMs())).map(response -> extract(response, config.topK()));
     }
 
-    public WebSearchResponse extract(JsonNode response) {
+    public WebSearchResponse extract(JsonNode response, int topK) {
         if (!response.path("results").isArray()) throw ProviderErrors.failed();
         var selected = new ArrayList<JsonNode>();
         for (JsonNode result : response.path("results")) {
-            if (selected.size() >= config.topK()) break;
+            if (selected.size() >= topK) break;
             if (validResult(result)) selected.add(result);
         }
         if (selected.isEmpty()) return new WebSearchResponse("empty", null, java.util.List.of());

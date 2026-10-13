@@ -4,9 +4,9 @@
 
 ## Tavily 联网搜索
 
-`src/main/resources/application.yml` 的 `copilot.web-search` 默认关闭。部署时在外部 YML 中设置 `enabled: true` 和 `api-key`；地址默认为 `https://api.tavily.com/search`，`top-k` 默认 5（1–20），`search-depth` 默认 `advanced`（可选 `basic`），`timeout-ms` 默认 8000（1000–30000）。配置启动时加载，修改后重启后端。真实 Key 只放本机被忽略的 `application-local.yml` 或服务器外部配置，不能提交或打进 jar。
+Tavily 的地址、API Key、Top K（1–20）、搜索深度（`basic` / `advanced`）和超时（1000–30000 毫秒）由管理后台「模型与服务」配置，通过既有 `platform_config` JSONB 版本化发布。服务类型为 `web-search`，地址必须明确填写完整的 `https://api.tavily.com/search`；不会自动补齐路径。选择并启用一个服务后立即生效，搜索请求各自使用不可变配置快照。
 
-本机运行可使用 `./mvnw spring-boot:run -Dspring-boot.run.profiles=local` 加载本地配置；服务器通过 Spring 的 `--spring.config.additional-location=file:/实际路径/web-search.yml` 加载外部配置。Docker 部署需把文件只读挂载进容器，并将 `SPRING_CONFIG_ADDITIONAL_LOCATION` 指向容器中的文件路径。此专属 YML 配置不改变模型、ASR、知识库与 SMTP 的数据库配置来源。
+API Key 沿用平台密钥加密机制保存在数据库；管理 API 只返回 `hasApiKey`，留空保留原有 Key，修改地址或服务类型时必须重填。默认关闭、Top K 为 5、深度为 `advanced`、超时为 8000 毫秒。旧配置缺少搜索字段时默认关闭；旧管理客户端省略此字段保存时保留已发布的搜索设置。无需新增 SQL 或 DDL。`application.yml` 和服务器外部 YML 不再配置 Tavily，也没有环境回退。
 
 管理员沿用「高级设置授权用户」名单授予权限；用户还需在桌面设置保存「开启联网搜索」，并处于已开始的面试会话中。`POST /api/v1/web-search` 接收 `{query,requestId}`，身份来自登录 Token，服务端验证权限、保存的开关、面试与检索额度。撤销高级设置权限会清除开关，重新授权仍默认关闭。`GET /api/v1/platform` 只公开可用状态和超时，不返回 Tavily Key。
 

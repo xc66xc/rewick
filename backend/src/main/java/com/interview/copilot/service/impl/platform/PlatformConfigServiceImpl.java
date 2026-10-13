@@ -86,7 +86,7 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
                 view.defaultModelId(),
                 view.asr(),
                 view.knowledge(),
-                view.embedding());
+                view.embedding(), view.webSearch());
     }
 
     private DesktopSettingsEntity replacedAsrDefault(
@@ -116,6 +116,7 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
                 row.published()
                         ? codec.snapshot(row, PlatformPolicy.from(properties))
                         : empty(row.version());
+        input = preserveWebSearch(input, previous.view());
         validator.validate(input, previous.view());
         Map<String, String> keys = new HashMap<>();
         for (PlatformConfig.Provider provider : input.providers()) {
@@ -126,6 +127,12 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
             keys.put(provider.id(), key);
         }
         return new PlatformSnapshot(input, keys, PlatformPolicy.from(properties));
+    }
+
+    private PlatformConfig preserveWebSearch(PlatformConfig input, PlatformConfig previous) {
+        if (input.webSearch() != null) return input;
+        return new PlatformConfig(input.version(), input.providers(), input.models(), input.defaultModelId(),
+                input.asr(), input.knowledge(), input.embedding(), previous.webSearch());
     }
 
     private boolean localEmbedding(PlatformConfig.Provider provider) {

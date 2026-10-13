@@ -169,6 +169,27 @@ public class PlatformConfigIntegrationTest {
         assertThat(mapper.desktopDefaults().version()).isZero();
     }
 
+    @Test
+    void publish_searchConfig_databaseEncryptsKeyAndLegacyAdminSavePreservesSettings() {
+        var base = PlatformConfigFixture.config(0, "fixture-model-key");
+        var providers = new ArrayList<>(base.providers());
+        providers.add(new PlatformConfig.Provider("tavily", "Search", "web-search",
+                "https://api.tavily.com/search", true, false, "fixture-search-key"));
+        service.publish(1, new PlatformConfig(0, providers, base.models(), base.defaultModelId(),
+                base.asr(), base.knowledge(), base.embedding(), new PlatformConfig.WebSearch(true, "tavily", 7, "basic", 2000)));
+        var saved = service.get();
+        new com.interview.copilot.service.impl.platform.AdminPlatformConfigServiceImpl(service).publish(1,
+                new com.interview.copilot.request.platform.PlatformConfigRequest(saved.version(), saved.providers(),
+                        saved.models(), saved.defaultModelId(), saved.asr(), saved.knowledge(), saved.embedding(), null));
+        String payload = jdbc.queryForObject("SELECT payload::text FROM platform_config WHERE id=1", String.class);
+        assertThat(payload).contains("v1:").doesNotContain("fixture-search-key");
+        assertThat(service.get().webSearch().topK()).isEqualTo(7);
+        assertThat(service.snapshot().webSearch().apiKey()).isEqualTo("fixture-search-key");
+        assertThat(service.snapshot().llm("fast").config().getApiKey()).isEqualTo("fixture-model-key");
+        assertThat(service.get().version()).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_events WHERE action='platform.config.publish'", Integer.class)).isEqualTo(2);
+    }
+
     private void prepareDefaultAsr() {
         service.publish(1, asrConfig(0, "old-asr", true));
         jdbc.update("UPDATE desktop_settings SET asr_service_id='old-asr' WHERE id=1");

@@ -50,8 +50,7 @@ public class PlatformServicesTest {
                                                 .PlatformCatalogServiceImpl(
                                                 () -> snapshot,
                                                 limits,
-                                                DesktopSettingsFixture.advanced(),
-                                                new com.interview.copilot.config.WebSearchProperties(false, "https://api.tavily.com/search", "", 5, "advanced", 8000))))
+                                                DesktopSettingsFixture.advanced())))
                         .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                         .build();
 

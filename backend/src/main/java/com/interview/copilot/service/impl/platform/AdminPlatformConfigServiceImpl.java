@@ -31,7 +31,7 @@ public class AdminPlatformConfigServiceImpl implements AdminPlatformConfigServic
                                 input.defaultModelId(),
                                 input.asr(),
                                 input.knowledge(),
-                                input.embedding())));
+                                input.embedding(), input.webSearch())));
     }
 
     private PlatformConfigResponse response(PlatformConfig value) {
@@ -42,6 +42,6 @@ public class AdminPlatformConfigServiceImpl implements AdminPlatformConfigServic
                 value.defaultModelId(),
                 value.asr(),
                 value.knowledge(),
-                value.embedding());
+                value.embedding(), value.webSearch());
     }
 }

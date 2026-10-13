@@ -21,7 +21,12 @@ public record PlatformConfig(
         @NotNull @Size(max = 64) String defaultModelId,
         @NotNull @Valid Asr asr,
         @NotNull @Valid Knowledge knowledge,
-        @Valid Embedding embedding) {
+        @Valid Embedding embedding,
+        @Valid WebSearch webSearch) {
+    public PlatformConfig(long version, List<Provider> providers, List<Model> models, String defaultModelId,
+            Asr asr, Knowledge knowledge, Embedding embedding) {
+        this(version, providers, models, defaultModelId, asr, knowledge, embedding, WebSearch.disabled());
+    }
     public PlatformConfig(
             long version,
             List<Provider> providers,
@@ -47,7 +52,7 @@ public record PlatformConfig(
     public record Provider(
             @NotBlank @Pattern(regexp = "[A-Za-z0-9_.-]{1,64}") String id,
             @NotBlank @Size(max = 120) String name,
-            @NotBlank @Pattern(regexp = "llm|asr|knowledge|embedding") String kind,
+            @NotBlank @Pattern(regexp = "llm|asr|knowledge|embedding|web-search") String kind,
             @NotBlank @Size(max = 2048) String url,
             boolean enabled,
             @JsonProperty(access = JsonProperty.Access.READ_ONLY) boolean hasApiKey,
@@ -72,6 +77,17 @@ public record PlatformConfig(
             @NotNull @Size(max = 64) String providerId,
             @NotNull @Size(max = 200) String model,
             @Min(1024) @Max(1024) int dimensions) {}
+
+    public record WebSearch(
+            boolean enabled,
+            @NotNull @Size(max = 64) String providerId,
+            @Min(1) @Max(20) int topK,
+            @NotNull @Pattern(regexp = "basic|advanced") String searchDepth,
+            @Min(1000) @Max(30000) int timeoutMs) {
+        public static WebSearch disabled() {
+            return new WebSearch(false, "", 5, "advanced", 8000);
+        }
+    }
 
     public record Asr(
             boolean enabled,

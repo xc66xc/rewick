@@ -28,7 +28,7 @@ public class PlatformProbeServiceTest {
     private final AsrProviderProbe asr = new AsrProviderProbe(json);
     private final PlatformProbeService probes =
             new PlatformProbeServiceImpl(
-                    fixture.service, new ProviderHttpClient(), json, asr, fixture.audit);
+                    fixture.service, new ProviderHttpClient(), json, asr, fixture.audit, new com.interview.copilot.util.search.TavilySearchClient());
     private final AtomicReference<String> authorization = new AtomicReference<>();
     private final AtomicReference<String> body = new AtomicReference<>();
     private DisposableServer server;
@@ -93,6 +93,24 @@ public class PlatformProbeServiceTest {
         assertThat(fixture.service.snapshot().llm("fast").config().getApiKey())
                 .isEqualTo("original-secret");
         assertThat(fixture.service.get().version()).isEqualTo(1);
+    }
+
+    @Test
+    void test_searchDraft_usesWebSnippetSearchWithoutPublishingOrExposingKey() {
+        respond("{\"results\":[{\"url\":\"https://example.com\",\"content\":\"Evidence\"}]}");
+        var provider = new PlatformConfig.Provider("search", "Search", "web-search",
+                "http://127.0.0.1:" + server.port() + "/search", true, false, "fixture-search-key");
+        var draft = new PlatformConfig(0, List.of(provider), List.of(), "",
+                new PlatformConfig.Asr(false, "", ""), new PlatformConfig.Knowledge(false, "", ""),
+                null, new PlatformConfig.WebSearch(true, "search", 2, "basic", 1000));
+        var result = probes.test(1, new PlatformProbeRequest(draft, "web-search", null));
+        assertThat(result.success()).isTrue();
+        assertThat(authorization).hasValue("Bearer fixture-search-key");
+        assertThat(json.parse(body.get()).path("max_results").asInt()).isEqualTo(2);
+        assertThat(json.parse(body.get()).path("include_answer").asBoolean()).isFalse();
+        assertThat(fixture.row.get().published()).isFalse();
+        assertThat(result.message()).doesNotContain("fixture-search-key", "Evidence");
+        verify(fixture.audit).record(1, "platform.config.test.success", "web-search");
     }
 
     private PlatformConfig config(String kind) {
