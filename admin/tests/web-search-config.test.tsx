@@ -30,9 +30,34 @@ describe('Tavily management configuration', () => {
     const { includeAnswer: _missingMode, ...legacySearch } = searchConfig.webSearch
     expect(configSchema.parse({ ...searchConfig, webSearch: legacySearch }).webSearch.includeAnswer).toBe('none')
     expect(configSchema.parse(searchConfig).webSearch.includeAnswer).toBe('advanced')
-    for (const patch of [{ topK: 0 }, { topK: 21 }, { topK: 1.5 }, { timeoutMs: 999 }, { timeoutMs: 30001 }, { searchDepth: 'fast' }, { includeAnswer: 'fast' }]) {
+    for (const patch of [{ topK: 0 }, { topK: 21 }, { topK: 1.5 }, { timeoutMs: 999 }, { timeoutMs: 30001 }, { searchDepth: 'quick' }, { includeAnswer: 'fast' }]) {
       expect(configSchema.safeParse({ ...config, webSearch: { ...defaultWebSearch, ...patch } }).success).toBe(false)
     }
+  })
+  it.each([
+    ['advanced', '高级搜索', 'basic'],
+    ['basic', '基础搜索', 'fast'],
+    ['fast', '快速搜索', 'ultra-fast'],
+    ['ultra-fast', '极速搜索', 'advanced'],
+  ] as const)('displays %s and preserves the next depth through testing and saving', async (depth, label, nextDepth) => {
+    const { actor, publications, tests } = setup({ ...searchConfig, webSearch: { ...searchConfig.webSearch, searchDepth: depth } })
+    const overview = within(await screen.findByRole('article', { name: '服务 Tavily' }))
+    expect(overview.getByText(label)).toBeTruthy()
+    await actor.click(overview.getByRole('button', { name: '编辑配置' }))
+    const draft = within(screen.getByRole('form', { name: '模型服务 Tavily' }))
+    const selector = draft.getByLabelText('搜索深度')
+    expect(selector).toHaveProperty('value', depth)
+    expect(within(selector).getAllByRole('option').map(option => (option as HTMLOptionElement).value)).toEqual(['advanced', 'basic', 'fast', 'ultra-fast'])
+    await actor.selectOptions(selector, nextDepth)
+    await actor.click(draft.getByRole('button', { name: '测试连接' }))
+    await waitFor(() => expect(tests).toHaveLength(1))
+    expect(tests[0].config.webSearch.searchDepth).toBe(nextDepth)
+    expect(publications).toHaveLength(0)
+    await actor.click(draft.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(publications).toHaveLength(1))
+    expect(publications[0].webSearch.searchDepth).toBe(nextDepth)
+    expect(publications[0].webSearch.includeAnswer).toBe(searchConfig.webSearch.includeAnswer)
+    expect(draft.getByLabelText('搜索深度')).toHaveProperty('value', nextDepth)
   })
   it('adds Tavily with its full search URL and publishes parameters without changing model services', async () => {
     const { actor, publications } = setup()

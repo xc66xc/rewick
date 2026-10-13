@@ -1,7 +1,7 @@
 import { defaultWebSearch, type Capability, type Config } from '../types'
 export interface ServiceForm {
   id: string; providerId: string; kind: Capability; name: string; url: string; model: string
-  topK: number; searchDepth: 'basic' | 'advanced'; timeoutMs: number; includeAnswer: 'none' | 'basic' | 'advanced'
+  topK: number; searchDepth: Config['webSearch']['searchDepth']; timeoutMs: number; includeAnswer: 'none' | 'basic' | 'advanced'
   enabled: boolean; hasApiKey?: boolean; apiKey?: string; maxOutputTokens: number; dimensions: number
 }
 export function allowsBlankServiceKey(form: Pick<ServiceForm, 'kind' | 'url'>): boolean {

@@ -18,8 +18,10 @@ const providerSchema = z.object({ id: z.string(), name: z.string(), kind: z.enum
 export interface Provider extends z.infer<typeof providerSchema> { apiKey?: string }
 const modelSchema = z.object({ id: z.string(), name: z.string(), providerId: z.string(), model: z.string(), enabled: z.boolean(), maxOutputTokens: z.number() })
 export type Model = z.infer<typeof modelSchema>
+export const searchDepthSchema = z.enum(['advanced', 'basic', 'fast', 'ultra-fast'])
+export const searchDepthNames: Record<z.infer<typeof searchDepthSchema>, string> = { advanced: '高级搜索', basic: '基础搜索', fast: '快速搜索', 'ultra-fast': '极速搜索' }
 export const defaultWebSearch = { enabled: false, providerId: '', topK: 5, searchDepth: 'advanced' as const, timeoutMs: 8000, includeAnswer: 'none' as const }
-export const webSearchSchema = z.object({ enabled: z.boolean(), providerId: z.string(), topK: z.number().int().min(1).max(20), searchDepth: z.enum(['basic', 'advanced']), timeoutMs: z.number().int().min(1000).max(30000), includeAnswer: z.enum(['none', 'basic', 'advanced']).default('none') })
+export const webSearchSchema = z.object({ enabled: z.boolean(), providerId: z.string(), topK: z.number().int().min(1).max(20), searchDepth: searchDepthSchema, timeoutMs: z.number().int().min(1000).max(30000), includeAnswer: z.enum(['none', 'basic', 'advanced']).default('none') })
 export const configSchema = z.object({ version: z.number(), providers: z.array(providerSchema), models: z.array(modelSchema), defaultModelId: z.string(), asr: z.object({ enabled: z.boolean(), providerId: z.string(), model: z.string() }), knowledge: z.object({ enabled: z.boolean(), providerId: z.string(), agentId: z.string() }), embedding: z.object({ enabled: z.boolean(), providerId: z.string(), model: z.string(), dimensions: z.literal(1024) }), webSearch: webSearchSchema.default(defaultWebSearch) })
 export interface Config extends Omit<z.infer<typeof configSchema>, 'providers'> { providers: Provider[] }
 export const testSchema = z.object({ success: z.boolean(), message: z.string(), latencyMs: z.number() })

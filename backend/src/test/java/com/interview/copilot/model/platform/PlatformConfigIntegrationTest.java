@@ -169,14 +169,15 @@ public class PlatformConfigIntegrationTest {
         assertThat(mapper.desktopDefaults().version()).isZero();
     }
 
-    @Test
-    void publish_searchConfig_databaseEncryptsKeyAndLegacyAdminSavePreservesSettings() {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"advanced", "basic", "fast", "ultra-fast"})
+    void publish_searchConfig_databaseEncryptsKeyAndLegacyAdminSavePreservesSettings(String depth) {
         var base = PlatformConfigFixture.config(0, "fixture-model-key");
         var providers = new ArrayList<>(base.providers());
         providers.add(new PlatformConfig.Provider("tavily", "Search", "web-search",
                 "https://api.tavily.com/search", true, false, "fixture-search-key"));
         service.publish(1, new PlatformConfig(0, providers, base.models(), base.defaultModelId(),
-                base.asr(), base.knowledge(), base.embedding(), new PlatformConfig.WebSearch(true, "tavily", 7, "basic", 2000, "advanced")));
+                base.asr(), base.knowledge(), base.embedding(), new PlatformConfig.WebSearch(true, "tavily", 7, depth, 2000, "advanced")));
         var saved = service.get();
         new com.interview.copilot.service.impl.platform.AdminPlatformConfigServiceImpl(service).publish(1,
                 new com.interview.copilot.request.platform.PlatformConfigRequest(saved.version(), saved.providers(),
@@ -184,6 +185,7 @@ public class PlatformConfigIntegrationTest {
         String payload = jdbc.queryForObject("SELECT payload::text FROM platform_config WHERE id=1", String.class);
         assertThat(payload).contains("v1:").doesNotContain("fixture-search-key");
         assertThat(service.get().webSearch().topK()).isEqualTo(7);
+        assertThat(service.snapshot().webSearch().searchDepth()).isEqualTo(depth);
         assertThat(service.snapshot().webSearch().includeAnswer()).isEqualTo("advanced");
         assertThat(service.snapshot().webSearch().apiKey()).isEqualTo("fixture-search-key");
         assertThat(service.snapshot().llm("fast").config().getApiKey()).isEqualTo("fixture-model-key");

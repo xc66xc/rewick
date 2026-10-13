@@ -82,7 +82,7 @@ public record PlatformConfig(
             boolean enabled,
             @NotNull @Size(max = 64) String providerId,
             @Min(1) @Max(20) int topK,
-            @NotNull @Pattern(regexp = "basic|advanced") String searchDepth,
+            @NotNull @Pattern(regexp = "advanced|basic|fast|ultra-fast") String searchDepth,
             @Min(1000) @Max(30000) int timeoutMs,
             @Pattern(regexp = "none|basic|advanced") String includeAnswer) {
         public WebSearch(boolean enabled, String providerId, int topK, String searchDepth, int timeoutMs) {

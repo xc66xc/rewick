@@ -34,9 +34,15 @@ class TavilySearchHttpTest {
                 "http://127.0.0.1:" + server.getAddress().getPort() + "/search", "fixture-key", 5, "advanced", timeout);
     }
 
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> searchParameters() {
+        return java.util.stream.Stream.of("advanced", "basic", "fast", "ultra-fast")
+                .flatMap(depth -> java.util.stream.Stream.of("none", "basic", "advanced")
+                        .map(mode -> org.junit.jupiter.params.provider.Arguments.of(depth, mode)));
+    }
+
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {"none", "basic", "advanced"})
-    void search_httpRequest_onlySendsQueryAndFixedSearchParameters(String mode) {
+    @org.junit.jupiter.params.provider.MethodSource("searchParameters")
+    void search_httpRequest_onlySendsQueryAndFixedSearchParameters(String depth, String mode) {
         AtomicReference<com.fasterxml.jackson.databind.JsonNode> body = new AtomicReference<>();
         AtomicReference<String> auth = new AtomicReference<>();
         server.createContext("/search", exchange -> {
@@ -49,11 +55,11 @@ class TavilySearchHttpTest {
             exchange.close();
         });
 
-        assertThat(new TavilySearchClient().search("question", new WebSearchEndpoint(true, endpoint(8000).url(), "fixture-key", 5, "advanced", 8000, mode)).block(Duration.ofSeconds(10)).status()).isEqualTo("ready");
+        assertThat(new TavilySearchClient().search("question", new WebSearchEndpoint(true, endpoint(8000).url(), "fixture-key", 5, depth, 8000, mode)).block(Duration.ofSeconds(10)).status()).isEqualTo("ready");
         assertThat(auth.get()).isEqualTo("Bearer fixture-key");
         assertThat(body.get().path("query").asText()).isEqualTo("question");
         assertThat(body.get().path("max_results").asInt()).isEqualTo(5);
-        assertThat(body.get().path("search_depth").asText()).isEqualTo("advanced");
+        assertThat(body.get().path("search_depth").asText()).isEqualTo(depth);
         if ("none".equals(mode)) assertThat(body.get().path("include_answer").isBoolean()).isTrue();
         else assertThat(body.get().path("include_answer").asText()).isEqualTo(mode);
         assertThat(body.get().has("api_key")).isFalse();

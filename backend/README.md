@@ -4,7 +4,7 @@
 
 ## Tavily 联网搜索
 
-Tavily 的地址、API Key、Top K（1–20）、搜索深度（`basic` / `advanced`）、包含摘要答案（`none` / `basic` / `advanced`）和超时（1000–30000 毫秒）由管理后台「模型与服务」配置，通过既有 `platform_config` JSONB 版本化发布。服务类型为 `web-search`，地址必须明确填写完整的 `https://api.tavily.com/search`；不会自动补齐路径。选择并启用一个服务后立即生效，搜索请求各自使用不可变配置快照。
+Tavily 的地址、API Key、Top K（1–20）、搜索深度（`advanced` / `basic` / `fast` / `ultra-fast`）、包含摘要答案（`none` / `basic` / `advanced`）和超时（1000–30000 毫秒）由管理后台「模型与服务」配置，通过既有 `platform_config` JSONB 版本化发布。服务类型为 `web-search`，地址必须明确填写完整的 `https://api.tavily.com/search`；不会自动补齐路径。选择并启用一个服务后立即生效，搜索请求各自使用不可变配置快照。
 
 API Key 沿用平台密钥加密机制保存在数据库；管理 API 只返回 `hasApiKey`，留空保留原有 Key，修改地址或服务类型时必须重填。默认关闭、Top K 为 5、深度为 `advanced`、超时为 8000 毫秒。旧配置缺少搜索字段时默认关闭；旧管理客户端省略此字段保存时保留已发布的搜索设置。无需新增 SQL 或 DDL。`application.yml` 和服务器外部 YML 不再配置 Tavily，也没有环境回退。
 
