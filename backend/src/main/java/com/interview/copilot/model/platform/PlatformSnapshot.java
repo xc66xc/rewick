@@ -53,7 +53,7 @@ public final class PlatformSnapshot {
                         input.defaultModelId(),
                         input.asr(),
                         input.knowledge(),
-                        input.embedding(), input.webSearch() == null ? PlatformConfig.WebSearch.disabled() : input.webSearch());
+                        input.embedding(), input.webSearch() == null ? PlatformConfig.WebSearch.disabled() : input.webSearch().withDefaultAnswer("none"));
         Map<String, PlatformConfig.Provider> indexed = new LinkedHashMap<>();
         redacted.forEach(provider -> indexed.put(provider.id(), provider));
         providers = Map.copyOf(indexed);
@@ -74,7 +74,7 @@ public final class PlatformSnapshot {
                 && "web-search".equals(provider.kind()) && !key(provider.id()).isBlank();
         return new com.interview.copilot.model.search.WebSearchEndpoint(enabled,
                 provider == null ? "" : provider.url(), key(search.providerId()), search.topK(),
-                search.searchDepth(), search.timeoutMs());
+                search.searchDepth(), search.timeoutMs(), search.includeAnswer());
     }
 
     public String defaultModelId() {

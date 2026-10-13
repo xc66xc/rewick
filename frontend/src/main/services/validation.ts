@@ -42,16 +42,18 @@ export const remoteKnowledgeSettingsSchema = remoteKnowledgeBaseSchema.superRefi
 export const referencePatchSchema = z.object({ enabled: z.boolean().optional(), kind: z.enum(['technical', 'personal']).optional() }).strict()
 export const referenceExcerptSchema = z.object({
     source: z.enum(['platform', 'bailian', 'web']).optional(),
+    generatedSummary: z.boolean().optional(),
     url: webSourceUrlSchema.optional(), title: z.string().max(255).optional(), score: z.number().finite().optional(),
     documentId: z.string().min(1).max(128), revision: z.number().int().positive(),
     name: z.string().max(255), kind: z.enum(['technical', 'personal']), chunkId: z.string().min(1).max(200),
     text: z.string().max(2000), pageStart: z.number().int().positive().max(100_000).optional(), pageEnd: z.number().int().positive().max(100_000).optional(),
   }).superRefine((value, context) => {
-    if (value.source === 'web' && (!value.url || value.kind !== 'technical')) context.addIssue({ code: 'custom', message: '网页资料必须包含来源 URL，且只能作为技术参考。' })
+    if (value.generatedSummary && (value.source !== 'web' || value.url !== undefined || value.kind !== 'technical')) context.addIssue({ code: 'custom', message: '生成摘要只能作为联网技术参考，不能伪造网页来源。' })
+    if (value.source === 'web' && ((!value.generatedSummary && !value.url) || value.kind !== 'technical')) context.addIssue({ code: 'custom', message: '网页资料必须包含来源 URL，且只能作为技术参考。' })
   })
 export const retrievalContextSchema = z.object({
   status: z.enum(['disabled', 'ready', 'degraded', 'empty']), message: z.string().max(2000).optional(),
-  excerpts: z.array(referenceExcerptSchema).max(32),
+  excerpts: z.array(referenceExcerptSchema).max(33),
   remote: z.object({ agentId: z.string().max(200), status: z.enum(['ready', 'degraded', 'empty']), message: z.string().max(2000).optional() }).optional(),
   web: z.object({ status: z.enum(['ready', 'degraded', 'empty']), message: z.string().max(2000).optional() }).optional(),
 })

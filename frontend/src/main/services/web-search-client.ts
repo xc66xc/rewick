@@ -7,9 +7,11 @@ import { referenceExcerptSchema } from './validation'
 
 const responseSchema = z.object({
   status: z.enum(['ready', 'empty', 'degraded']), message: z.string().max(2000).optional(),
-  excerpts: z.array(referenceExcerptSchema).max(20),
+  excerpts: z.array(referenceExcerptSchema).max(21),
 }).superRefine((value, context) => {
   if (value.excerpts.some(excerpt => excerpt.source !== 'web')
+    || value.excerpts.filter(excerpt => excerpt.generatedSummary).length > 1
+    || value.excerpts.filter(excerpt => !excerpt.generatedSummary).length > 20
     || value.excerpts.reduce((sum, excerpt) => sum + excerpt.text.length, 0) > 8000
     || (value.status === 'ready') !== (value.excerpts.length > 0)) {
     context.addIssue({ code: 'custom', message: '联网检索响应格式无效。' })

@@ -29,7 +29,8 @@ public class TavilySearchClient {
     public Mono<WebSearchResponse> search(String query, WebSearchEndpoint config) {
         Map<String, Object> body = Map.of(
                 "query", query, "max_results", config.topK(), "search_depth", config.searchDepth(),
-                "include_answer", false, "include_raw_content", false, "include_images", false,
+                "include_answer", "none".equals(config.includeAnswer()) ? false : config.includeAnswer(),
+                "include_raw_content", false, "include_images", false,
                 "auto_parameters", false, "topic", "general");
         return client.post().uri(config.url()).contentType(MediaType.APPLICATION_JSON)
                 .headers(headers -> headers.setBearerAuth(config.apiKey())).bodyValue(body)
@@ -38,20 +39,44 @@ public class TavilySearchClient {
                         return response.releaseBody().then(Mono.error(ProviderErrors.failed()));
                     return response.bodyToMono(JsonNode.class)
                             .switchIfEmpty(Mono.error(ProviderErrors.failed()));
-                }).timeout(Duration.ofMillis(config.timeoutMs())).map(response -> extract(response, config.topK()));
+                }).timeout(Duration.ofMillis(config.timeoutMs()))
+                .map(response -> extract(response, config.topK(), config.includeAnswer()));
     }
 
     public WebSearchResponse extract(JsonNode response, int topK) {
-        if (!response.path("results").isArray()) throw ProviderErrors.failed();
+        return extract(response, topK, "none");
+    }
+
+    public WebSearchResponse extract(JsonNode response, int topK, String includeAnswer) {
+        String answer = summary(response, includeAnswer);
+        if (!response.path("results").isArray() && answer.isEmpty()) throw ProviderErrors.failed();
         var selected = new ArrayList<JsonNode>();
-        for (JsonNode result : response.path("results")) {
+        Iterable<JsonNode> results = response.path("results").isArray()
+                ? response.path("results") : java.util.List.of();
+        for (JsonNode result : results) {
             if (selected.size() >= topK) break;
             if (validResult(result)) selected.add(result);
         }
-        if (selected.isEmpty()) return new WebSearchResponse("empty", null, java.util.List.of());
-        int budget = Math.min(2000, 8000 / selected.size());
-        var excerpts = selected.stream().map(result -> excerpt(result, budget)).toList();
-        return new WebSearchResponse("ready", null, excerpts);
+        int count = selected.size() + (answer.isEmpty() ? 0 : 1);
+        if (count == 0) return new WebSearchResponse("empty", null, java.util.List.of());
+        int budget = Math.min(2000, 8000 / count);
+        var excerpts = new ArrayList<WebExcerptResponse>();
+        selected.forEach(result -> excerpts.add(excerpt(result, budget)));
+        if (!answer.isEmpty()) excerpts.add(summaryExcerpt(answer, budget));
+        return new WebSearchResponse("ready", null, java.util.List.copyOf(excerpts));
+    }
+
+    private String summary(JsonNode response, String includeAnswer) {
+        if ("none".equals(includeAnswer) || !response.path("answer").isTextual()) return "";
+        return response.path("answer").asText().trim();
+    }
+
+    private WebExcerptResponse summaryExcerpt(String answer, int budget) {
+        String text = answer.substring(0, Math.min(answer.length(), budget));
+        String title = "Tavily 生成摘要（非网页原文）";
+        String identity = fingerprint("tavily-generated-summary\n" + text);
+        return new WebExcerptResponse("web", "technical", identity, identity, 1,
+                title, title, null, text, null, true);
     }
 
     private boolean validResult(JsonNode result) {

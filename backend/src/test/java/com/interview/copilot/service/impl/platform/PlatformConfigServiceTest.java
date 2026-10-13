@@ -238,6 +238,41 @@ public class PlatformConfigServiceTest {
         assertThat(fixture.service.snapshot().webSearch().topK()).isEqualTo(20);
     }
 
+    @Test
+    void publish_oldNestedSearchRequest_preservesPreviouslySavedSummaryMode() throws Exception {
+        fixture.service.publish(1, searchConfig(0, "search-key", "https://api.tavily.com/search",
+                new PlatformConfig.WebSearch(true, "tavily", 5, "advanced", 8000, "basic")));
+        var saved = fixture.service.get();
+        var legacy = (com.fasterxml.jackson.databind.node.ObjectNode) fixture.json.valueToTree(saved);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) legacy.path("webSearch")).remove("includeAnswer");
+        var request = fixture.json.treeToValue(legacy, com.interview.copilot.request.platform.PlatformConfigRequest.class);
+        new AdminPlatformConfigServiceImpl(fixture.service).publish(1, request);
+        assertThat(fixture.service.get().webSearch().includeAnswer()).isEqualTo("basic");
+        assertThat(fixture.service.snapshot().webSearch().includeAnswer()).isEqualTo("basic");
+        assertThat(fixture.row.get().payload()).doesNotContain("search-key");
+        assertThat(fixture.service.snapshot().webSearch().apiKey()).isEqualTo("search-key");
+    }
+
+    @Test
+    void snapshot_oldStoredNestedSearch_defaultsModeToNone() throws Exception {
+        fixture.service.publish(1, searchConfig(0, "fixture", "https://api.tavily.com/search",
+                new PlatformConfig.WebSearch(true, "tavily", 5, "advanced", 8000, "advanced")));
+        var row = fixture.row.get();
+        var legacy = (com.fasterxml.jackson.databind.node.ObjectNode) fixture.json.readTree(row.payload());
+        ((com.fasterxml.jackson.databind.node.ObjectNode) legacy.path("webSearch")).remove("includeAnswer");
+        fixture.row.set(new com.interview.copilot.entity.platform.PlatformConfigRow(row.version(), row.published(), fixture.json.writeValueAsString(legacy)));
+        assertThat(fixture.service.get().webSearch().includeAnswer()).isEqualTo("none");
+        assertThat(fixture.service.snapshot().webSearch().includeAnswer()).isEqualTo("none");
+    }
+
+    @Test
+    void draft_invalidSummaryMode_rejectsWithoutPublishing() {
+        assertThatThrownBy(() -> fixture.service.draft(searchConfig(0, "fixture", "https://api.tavily.com/search",
+                new PlatformConfig.WebSearch(true, "tavily", 5, "advanced", 8000, "invalid"))))
+                .isInstanceOf(ApiException.class);
+        assertThat(fixture.row.get().published()).isFalse();
+    }
+
     private PlatformConfig searchConfig(long version, String key, String url, PlatformConfig.WebSearch search) {
         var base = PlatformConfigFixture.empty(version);
         return new PlatformConfig(version, List.of(new PlatformConfig.Provider("tavily", "Search", "web-search", url, true, false, key)), List.of(), "", base.asr(), base.knowledge(), base.embedding(), search);

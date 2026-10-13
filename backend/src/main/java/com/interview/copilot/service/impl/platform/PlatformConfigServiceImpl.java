@@ -130,9 +130,10 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
     }
 
     private PlatformConfig preserveWebSearch(PlatformConfig input, PlatformConfig previous) {
-        if (input.webSearch() != null) return input;
+        var search = input.webSearch() == null ? previous.webSearch()
+                : input.webSearch().withDefaultAnswer(previous.webSearch().includeAnswer());
         return new PlatformConfig(input.version(), input.providers(), input.models(), input.defaultModelId(),
-                input.asr(), input.knowledge(), input.embedding(), previous.webSearch());
+                input.asr(), input.knowledge(), input.embedding(), search);
     }
 
     private boolean localEmbedding(PlatformConfig.Provider provider) {

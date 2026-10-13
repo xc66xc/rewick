@@ -107,6 +107,7 @@ export interface ReferenceDocument {
 }
 export interface ReferenceExcerpt {
   source?: 'platform' | 'bailian' | 'web'
+  generatedSummary?: boolean
   url?: string
   title?: string
   score?: number

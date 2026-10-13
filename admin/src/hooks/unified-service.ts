@@ -1,7 +1,7 @@
 import { defaultWebSearch, type Capability, type Config } from '../types'
 export interface ServiceForm {
   id: string; providerId: string; kind: Capability; name: string; url: string; model: string
-  topK: number; searchDepth: 'basic' | 'advanced'; timeoutMs: number
+  topK: number; searchDepth: 'basic' | 'advanced'; timeoutMs: number; includeAnswer: 'none' | 'basic' | 'advanced'
   enabled: boolean; hasApiKey?: boolean; apiKey?: string; maxOutputTokens: number; dimensions: number
 }
 export function allowsBlankServiceKey(form: Pick<ServiceForm, 'kind' | 'url'>): boolean {
@@ -15,14 +15,14 @@ export function allowsBlankServiceKey(form: Pick<ServiceForm, 'kind' | 'url'>): 
 }
 export function serviceForms(config: Config): ServiceForm[] {
   return config.providers.flatMap(provider => {
-    const base = { id: provider.id, providerId: provider.id, kind: provider.kind, name: provider.name, url: provider.url, enabled: provider.enabled, hasApiKey: provider.hasApiKey, maxOutputTokens: 2048, dimensions: 1024, model: '', topK: 5, searchDepth: 'advanced' as const, timeoutMs: 8000 }
+    const base = { id: provider.id, providerId: provider.id, kind: provider.kind, name: provider.name, url: provider.url, enabled: provider.enabled, hasApiKey: provider.hasApiKey, maxOutputTokens: 2048, dimensions: 1024, model: '', topK: 5, searchDepth: 'advanced' as const, timeoutMs: 8000, includeAnswer: 'none' as const }
     if (provider.kind === 'llm') {
       const models = config.models.filter(model => model.providerId === provider.id)
       return models.length ? models.map(model => ({ ...base, id: model.id, name: model.name, model: model.model, maxOutputTokens: model.maxOutputTokens, enabled: provider.enabled && model.enabled })) : [{ ...base, enabled: false }]
     }
     if (provider.kind === 'web-search') {
       const binding = config.webSearch ?? defaultWebSearch
-      return [{ ...base, ...(binding.providerId === provider.id ? { topK: binding.topK, searchDepth: binding.searchDepth, timeoutMs: binding.timeoutMs } : {}), enabled: provider.enabled && binding.enabled && binding.providerId === provider.id }]
+      return [{ ...base, ...(binding.providerId === provider.id ? { topK: binding.topK, searchDepth: binding.searchDepth, timeoutMs: binding.timeoutMs, includeAnswer: binding.includeAnswer ?? 'none' } : {}), enabled: provider.enabled && binding.enabled && binding.providerId === provider.id }]
     }
     const binding = config[provider.kind]
     return [{ ...base, dimensions: 'dimensions' in binding && binding.providerId === provider.id ? binding.dimensions : 1024, model: binding.providerId === provider.id ? ('model' in binding ? binding.model : binding.agentId) : '', enabled: provider.enabled && binding.enabled && binding.providerId === provider.id }]
@@ -50,7 +50,7 @@ export function applyService(config: Config, form: ServiceForm, remove = false):
       next.models = [...next.models.filter(item => item.id !== id), { id, name: form.name.trim(), providerId: form.providerId, model: form.model.trim(), enabled: form.enabled, maxOutputTokens: form.maxOutputTokens }]
     } else if (form.kind === 'web-search') {
       if (!form.enabled && next.webSearch.providerId && next.webSearch.providerId !== form.providerId) throw new Error('当前联网搜索使用其他服务，请启用此项以切换服务及搜索参数。')
-      next.webSearch = { enabled: form.enabled, providerId: form.providerId, topK: form.topK, searchDepth: form.searchDepth, timeoutMs: form.timeoutMs }
+      next.webSearch = { enabled: form.enabled, providerId: form.providerId, topK: form.topK, searchDepth: form.searchDepth, timeoutMs: form.timeoutMs, includeAnswer: form.includeAnswer }
     } else if (form.enabled || !next[form.kind].providerId || next[form.kind].providerId === form.providerId) {
       if (form.kind === 'asr') next.asr = { enabled: form.enabled, providerId: form.providerId, model: form.model.trim() }
       else if (form.kind === 'embedding') next.embedding = { enabled: form.enabled, providerId: form.providerId, model: form.model.trim(), dimensions: 1024 }

@@ -4,9 +4,11 @@
 
 ## Tavily 联网搜索
 
-Tavily 的地址、API Key、Top K（1–20）、搜索深度（`basic` / `advanced`）和超时（1000–30000 毫秒）由管理后台「模型与服务」配置，通过既有 `platform_config` JSONB 版本化发布。服务类型为 `web-search`，地址必须明确填写完整的 `https://api.tavily.com/search`；不会自动补齐路径。选择并启用一个服务后立即生效，搜索请求各自使用不可变配置快照。
+Tavily 的地址、API Key、Top K（1–20）、搜索深度（`basic` / `advanced`）、包含摘要答案（`none` / `basic` / `advanced`）和超时（1000–30000 毫秒）由管理后台「模型与服务」配置，通过既有 `platform_config` JSONB 版本化发布。服务类型为 `web-search`，地址必须明确填写完整的 `https://api.tavily.com/search`；不会自动补齐路径。选择并启用一个服务后立即生效，搜索请求各自使用不可变配置快照。
 
 API Key 沿用平台密钥加密机制保存在数据库；管理 API 只返回 `hasApiKey`，留空保留原有 Key，修改地址或服务类型时必须重填。默认关闭、Top K 为 5、深度为 `advanced`、超时为 8000 毫秒。旧配置缺少搜索字段时默认关闭；旧管理客户端省略此字段保存时保留已发布的搜索设置。无需新增 SQL 或 DDL。`application.yml` 和服务器外部 YML 不再配置 Tavily，也没有环境回退。
+
+`includeAnswer` 默认为 `none`（发送 Tavily `include_answer: false`）；`basic` / `advanced` 发送对应字符串，与搜索深度独立。开启后返回的摘要追加到网页片段之后，标记 `generatedSummary: true`，标题为「Tavily 生成摘要（非网页原文）」，无网页 URL，不占网页 Top K。最多 20 条网页和 1 条摘要，共享每条 2000、总计 8000 字符预算。摘要是供应商生成的技术参考，不代表网页原文或事实验证。旧存储缺少模式时默认为 `none`；旧管理请求省略该字段时保留此前保存的模式。
 
 管理员沿用「高级设置授权用户」名单授予权限；用户还需在桌面设置保存「开启联网搜索」，并处于已开始的面试会话中。`POST /api/v1/web-search` 接收 `{query,requestId}`，身份来自登录 Token，服务端验证权限、保存的开关、面试与检索额度。撤销高级设置权限会清除开关，重新授权仍默认关闭。`GET /api/v1/platform` 只公开可用状态和超时，不返回 Tavily Key。
 

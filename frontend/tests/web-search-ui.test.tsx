@@ -13,6 +13,14 @@ afterEach(() => { cleanup(); vi.unstubAllEnvs(); Reflect.deleteProperty(window, 
 const web: RetrievalContext = { status: 'ready', web: { status: 'ready' }, excerpts: [{ source: 'web', documentId: 'web:one', chunkId: 'web:chunk', revision: 1, name: '官网', title: '官方说明', url: 'https://example.com/guide', text: '网页片段', kind: 'technical' }] }
 
 describe('web search settings and sources', () => {
+  it('labels generated summaries separately and provides no invented source link', async () => {
+    render(<ReferenceSources retrieval={{ status: 'ready', web: { status: 'ready' }, excerpts: [{ source: 'web', generatedSummary: true, documentId: 'web:summary', chunkId: 's1', revision: 1, name: 'Tavily 生成摘要（非网页原文）', text: '供应商生成摘要正文', kind: 'technical' }] }} />)
+    await userEvent.setup().click(screen.getByRole('button', { name: /本次检索资料/ }))
+    expect(screen.getByText('生成摘要 · 非网页原文')).toBeTruthy()
+    expect(screen.getByText('供应商生成摘要正文')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /打开网页来源/ })).toBeNull()
+    expect(screen.queryByText('网页片段')).toBeNull()
+  })
   it('hides the setting for ordinary accounts', () => {
     render(<WebSearchPreferences catalog={defaultSettings} draft={settingsInput(defaultSettings)} onChange={vi.fn()} />)
     expect(screen.queryByRole('switch', { name: '开启联网搜索' })).toBeNull()

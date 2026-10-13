@@ -80,7 +80,7 @@ public final class PlatformConfigCodec {
                 config.defaultModelId(),
                 config.asr(),
                 config.knowledge(),
-                config.embedding(), config.webSearch() == null ? PlatformConfig.WebSearch.disabled() : config.webSearch());
+                config.embedding(), config.webSearch() == null ? PlatformConfig.WebSearch.disabled() : config.webSearch().withDefaultAnswer("none"));
     }
 
     public PlatformSnapshot snapshot(PlatformConfigRow row, PlatformPolicy policy) {

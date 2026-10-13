@@ -83,7 +83,17 @@ public record PlatformConfig(
             @NotNull @Size(max = 64) String providerId,
             @Min(1) @Max(20) int topK,
             @NotNull @Pattern(regexp = "basic|advanced") String searchDepth,
-            @Min(1000) @Max(30000) int timeoutMs) {
+            @Min(1000) @Max(30000) int timeoutMs,
+            @Pattern(regexp = "none|basic|advanced") String includeAnswer) {
+        public WebSearch(boolean enabled, String providerId, int topK, String searchDepth, int timeoutMs) {
+            this(enabled, providerId, topK, searchDepth, timeoutMs, "none");
+        }
+
+        public WebSearch withDefaultAnswer(String previous) {
+            return includeAnswer == null
+                    ? new WebSearch(enabled, providerId, topK, searchDepth, timeoutMs, previous)
+                    : this;
+        }
         public static WebSearch disabled() {
             return new WebSearch(false, "", 5, "advanced", 8000);
         }

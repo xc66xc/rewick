@@ -1,5 +1,13 @@
 # 单机部署（复用现有 PostgreSQL）
 
+## 2026-10-13 Tavily 摘要选项发布
+
+管理端新增「包含摘要答案」none/basic/advanced，搜索深度与摘要分别配置，默认none。none映射上游false，其他映射同名字符串；配置仍数据库加密管理，无YML。摘要追加到网页后，标记generatedSummary=true、无URL且明确非网页原文；不占网页topK，与网页共享8000字符预算。新桌面源码已适配类型/校验/资料展示/Prompt及历史、Excel，使用摘要时需运行最新桌面代码，旧安装包需另行更新。
+
+后端387项单元/架构及572项数据库集成全套、管理端78项和Chromium交互验证通过；桌面59项相关测试及生产构建通过，全量638通过/1项已知购买页文案断言失败。部署后端JAR SHA256 `094a4689bd2dc2e22cfc23e468afa2ba6d05c69cf5c936d1dd282e9a35946454`、管理JS `index-CAyyN4cj.js`，后端healthy、服务器HTTPS健康UP/管理资源200。真实管理草稿连接测试none1270ms、basic904ms、advanced3208ms均成功；已发布配置不变，仍none，临时维护凭证已撤销，无SQL迁移。
+
+回滚材料 `releases/tavily-summary-20261013/` 保存旧JAR/管理构建与运行静态/数据库dump/原platform_config单行SQL；旧镜像 `interview-copilot-backend:before-tavily-summary-20261013`、`interview-copilot-admin:before-tavily-summary-20261013`。旧后端不支持新增includeAnswer，回滚前停止后端并核对当前配置，只恢复原platform_config行而非整个业务库，再还原镜像/JAR/管理静态。生产未自动开启摘要，没有替换本机安装包。
+
 ## 2026-10-13 Tavily 管理后台配置发布（当前方式）
 
 Tavily 已改用管理后台「模型与服务 → 联网搜索」，可编辑地址、Key、topK、搜索深度与超时，保存后新请求立即生效。现有 Key 和5/advanced/8000ms 已迁入平台数据库加密配置，版本21，保持启用；此前服务器 `config/web-search.yml`、`compose.override.yaml` 与挂载/`SPRING_CONFIG_ADDITIONAL_LOCATION` 已删除，源码 YML 也删除对应字段，不再提供回退。下面旧章节的 YML 方式仅为历史记录。

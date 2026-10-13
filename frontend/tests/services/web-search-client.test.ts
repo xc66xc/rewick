@@ -15,6 +15,29 @@ const result = { status: 'ready', excerpts: [{ source: 'web', documentId: 'web:o
 afterEach(() => vi.unstubAllGlobals())
 
 describe('platform web search', () => {
+  const summary = { source: 'web', generatedSummary: true, documentId: 'web:summary', chunkId: 's1', revision: 1, kind: 'technical', name: 'Tavily 生成摘要（非网页原文）', text: '生成摘要' }
+  it('accepts a generated summary without inventing a source URL, including a summary-only result', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ status: 'ready', excerpts: [summary] })))
+    const response = await new WebSearchClient(settings(), 'token').retrieve('问题', new AbortController().signal)
+    expect(response.excerpts).toEqual([summary])
+    expect(response.web?.status).toBe('ready')
+  })
+
+  it('retains all twenty webpage slots and one distinct summary within the text budget', async () => {
+    const excerpts = [...Array.from({ length: 20 }, (_, index) => ({ ...result.excerpts[0], chunkId: `web:${index}`, text: '实际网页' })), summary]
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ status: 'ready', excerpts })))
+    expect((await new WebSearchClient(settings(), 'token').retrieve('问题', new AbortController().signal)).excerpts).toEqual(excerpts)
+  })
+
+  it.each(['duplicate', 'fake-url', 'personal', 'unmarked', 'twenty-one-pages'] as const)('rejects invalid summary metadata or count (%s)', async reason => {
+    const excerpts = reason === 'duplicate' ? [summary, { ...summary, chunkId: 's2' }]
+      : reason === 'fake-url' ? [{ ...summary, url: 'https://example.com' }]
+      : reason === 'personal' ? [{ ...summary, kind: 'personal' }]
+      : reason === 'unmarked' ? [{ ...summary, generatedSummary: false }]
+      : Array.from({ length: 21 }, (_, index) => ({ ...result.excerpts[0], chunkId: String(index) }))
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ status: 'ready', excerpts })))
+    expect((await new WebSearchClient(settings(), 'token').retrieve('问题', new AbortController().signal)).status).toBe('degraded')
+  })
   it('sends only the current query and a unique request id, retaining safe metadata', async () => {
     const fetcher = vi.fn(async () => Response.json(result))
     vi.stubGlobal('fetch', fetcher)

@@ -63,4 +63,55 @@ class TavilySearchClientTest {
         assertThat(new WebSearchEndpoint(true, "https://api.tavily.com/search", "secret", 5, "advanced", 8000).toString())
                 .doesNotContain("secret");
     }
+    @Test
+    void extract_requestedSummary_appendsMarkedSummaryWithoutInventedSource() {
+        var response = json.createObjectNode();
+        response.putArray("results").addObject().put("url", "https://example.com").put("content", "Page text");
+        response.put("answer", " Summary text ");
+        var excerpts = client.extract(response, 5, "basic").excerpts();
+        assertThat(excerpts).hasSize(2);
+        assertThat(excerpts.getFirst().generatedSummary()).isNull();
+        var summary = excerpts.getLast();
+        assertThat(summary.generatedSummary()).isTrue();
+        assertThat(summary.url()).isNull();
+        assertThat(summary.title()).isEqualTo("Tavily 生成摘要（非网页原文）");
+        assertThat(summary.text()).isEqualTo("Summary text");
+        assertThat(client.extract(response, 5, "basic").excerpts().getLast().chunkId()).isEqualTo(summary.chunkId());
+        assertThat(client.extract(response, 5).excerpts()).hasSize(1);
+    }
+
+    @Test
+    void extract_onlySummary_returnsReadyAndOmitsNullableUrl() throws Exception {
+        var response = json.createObjectNode().put("answer", "summary only");
+        var result = client.extract(response, 5, "advanced");
+        assertThat(result.status()).isEqualTo("ready");
+        assertThat(result.excerpts()).hasSize(1);
+        var encoded = json.readTree(json.writeValueAsString(result.excerpts().getFirst()));
+        assertThat(encoded.path("generatedSummary").asBoolean()).isTrue();
+        assertThat(encoded.has("url")).isFalse();
+        assertThat(encoded.has("score")).isFalse();
+    }
+
+    @Test
+    void extract_invalidOrBlankSummary_keepsWebPages() {
+        var response = json.createObjectNode();
+        response.putArray("results").addObject().put("url", "https://example.com").put("content", "Page");
+        response.putObject("answer").put("content", "not a string");
+        assertThat(client.extract(response, 5, "advanced").excerpts()).hasSize(1);
+        response.put("answer", " ");
+        assertThat(client.extract(response, 5, "basic").excerpts()).hasSize(1);
+    }
+
+    @Test
+    void extract_twentyPagesAndSummary_sharesEightThousandCharacterBudget() {
+        var response = json.createObjectNode().put("answer", "s".repeat(3000));
+        var results = response.putArray("results");
+        for (int i = 0; i < 22; i++) results.addObject().put("url", "https://example.com/" + i).put("content", "p".repeat(3000));
+        var excerpts = client.extract(response, 20, "advanced").excerpts();
+        assertThat(excerpts).hasSize(21);
+        assertThat(excerpts.stream().mapToInt(value -> value.text().length()).sum()).isLessThanOrEqualTo(8000);
+        assertThat(excerpts).allSatisfy(value -> assertThat(value.text().length()).isLessThanOrEqualTo(2000));
+        assertThat(excerpts.getLast().generatedSummary()).isTrue();
+    }
+
 }
