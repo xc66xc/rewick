@@ -39,6 +39,14 @@ describe('SettingsStore', () => {
     expect(await readFile(join(directory, 'settings.json'), 'utf8')).not.toContain('local-secret')
   })
 
+  it('drops undefined service selections submitted by the settings dialog before cloud sync', async () => {
+    const store = new SettingsStore(directory, crypto, true)
+    const saved = await store.saveSettings({ ...input(), serviceSelections: { llm: { source: 'platform', id: 'platform-model' }, asr: undefined } })
+    expect(saved.serviceSelections?.llm?.id).toBe('platform-model')
+    expect(saved.serviceSelections).not.toHaveProperty('asr')
+    expect(JSON.parse(await readFile(join(directory, 'settings.json'), 'utf8')).settings.serviceSelections).toEqual({})
+  })
+
   it('persists encrypted keys across restarts without returning secrets to the renderer', async () => {
     const store = new SettingsStore(directory, crypto)
     expect(await store.getSettings()).toEqual(defaultSettings)

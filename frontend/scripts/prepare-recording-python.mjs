@@ -43,7 +43,8 @@ try {
   await downloadVerified(url, archive, sha256)
   await rm(staging, { recursive: true, force: true })
   await mkdir(staging, { recursive: true })
-  const extracted = spawnSync('tar', ['-xzf', archive, '-C', staging], { stdio: 'inherit' })
+  // Relative paths with cwd: Windows GNU tar treats "G:\..." drive letters as remote host specs.
+  const extracted = spawnSync('tar', ['-xzf', 'runtime.tar.gz', '-C', 'staging'], { stdio: 'inherit', cwd: base })
   if (extracted.status !== 0) throw new Error('Python runtime extraction failed; tar is required for packaging')
   await rm(destination, { recursive: true, force: true })
   await rename(join(staging, 'python'), destination)

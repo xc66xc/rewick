@@ -23,7 +23,8 @@ if (!prepared) {
   for (const wheel of wheels) {
     const archive = join(root, 'build/asr-wheel-cache', wheel.file)
     await downloadVerified(wheel.url, archive, wheel.sha256)
-    const extracted = spawnSync('tar', ['-xf', archive, '-C', sitePackages], { stdio: 'inherit' })
+    // Relative paths from root with cwd: Windows GNU tar treats "G:\..." drive letters as remote host specs.
+    const extracted = spawnSync('tar', ['-xf', archive.replace(root + '\\', ''), '-C', sitePackages.replace(root + '\\', '')], { stdio: 'inherit', cwd: root })
     if (extracted.status !== 0) throw new Error(`Cannot extract ASR wheel ${wheel.file}; tar with ZIP support is required`)
   }
   // Wheel data directories use installation schemes, not importable package paths.

@@ -21,7 +21,10 @@ interface SettingsDialogProps {
 const kinds: ServiceKind[] = ['llm', 'asr', 'knowledge']
 const groupClass = 'm-0 mb-6 min-w-0 border-0 border-b border-border p-0 pb-6'
 function initialDraft(settings: Settings): SettingsInput {
-  return { ...settingsInput(settings), serviceSelections: Object.fromEntries(kinds.map(kind => [kind, selectionFor(settings, kind)])) }
+  // Omit unselected kinds entirely instead of storing `kind: undefined`, which survives IPC and zod as an explicit undefined entry.
+  const serviceSelections: SettingsInput['serviceSelections'] = {}
+  for (const kind of kinds) { const selection = selectionFor(settings, kind); if (selection) serviceSelections[kind] = selection }
+  return { ...settingsInput(settings), serviceSelections }
 }
 export default function SettingsDialog({ settings, bridge, onSave, onApply, onLogout, onClose, windowControls }: SettingsDialogProps) {
   const form = useRef<HTMLFormElement>(null)
@@ -61,8 +64,13 @@ export default function SettingsDialog({ settings, bridge, onSave, onApply, onLo
     finally { inFlight.current = false; setBusy(false) }
   }
   function applyCustom(value: Settings, kind: ServiceKind) {
+    const selection = value.serviceSelections?.[kind]
     setCatalog(value); onApply?.(value)
-    setDraft(current => ({ ...current, serviceSelections: { ...current.serviceSelections, [kind]: value.serviceSelections?.[kind] } }))
+    setDraft(current => {
+      const serviceSelections = { ...current.serviceSelections }
+      if (selection) serviceSelections[kind] = selection; else delete serviceSelections[kind]
+      return { ...current, serviceSelections }
+    })
     setEditor(undefined); setRemoving(undefined); setNotice('自定义服务已更新')
   }
   function requestClose() { if (!inFlight.current) onClose() }

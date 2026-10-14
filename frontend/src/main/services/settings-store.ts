@@ -122,6 +122,8 @@ export class SettingsStore {
       const parsed = parseInput(settingsInputSchema, input)
       const previous = await this.read()
       parsed.serviceSelections ??= previous.settings.serviceSelections
+      // The settings dialog submits `{ kind: undefined }` for unselected services; drop those keys so cloud sync never reads `.source` of undefined.
+      if (parsed.serviceSelections) for (const kind of serviceKinds) if (!parsed.serviceSelections[kind]) delete parsed.serviceSelections[kind]
       for (const kind of serviceKinds) {
         const choice = parsed.serviceSelections?.[kind]
         if (choice?.source === 'custom' && !previous.customServices.some(profile => profile.id === choice.id && profile.kind === kind)
@@ -224,7 +226,7 @@ export class SettingsStore {
     delete (config.llm as Record<string, unknown>).temperature
     delete (config.remoteKnowledge as Record<string, unknown>).enabled
     delete (config.platform as Record<string, unknown>).selectedModelId
-    config.serviceSelections = Object.fromEntries(Object.entries(config.serviceSelections as Record<string, { source: string }> ?? {}).filter(([, selection]) => selection.source === 'custom'))
+    config.serviceSelections = Object.fromEntries(Object.entries(config.serviceSelections as Record<string, { source: string }> ?? {}).filter(([, selection]) => selection?.source === 'custom'))
     await writeJsonAtomic(this.path, saved)
   }
 
