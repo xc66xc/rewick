@@ -19,6 +19,7 @@ const statuses = { parsing: '解析中', pending: '等待建索引', indexing: '
 /* 五种文档状态映射到状态章四态(spec §6.1):解析/建索引中=busy,pending=pending,ready=ready,error=error */
 const statusTone = { parsing: 'busy', pending: 'pending', indexing: 'busy', ready: 'ready', error: 'error' } as const
 export default function ReferenceDocumentRow({ document, busy, removing, onPreview, onUpdate, onReindex, onRemove }: ReferenceDocumentRowProps) {
+  const failureMessage = document.indexError || document.error
   const processing = document.status === 'parsing' || document.indexStatus === 'indexing' || document.indexStatus === 'pending'
   return <article className="border-b border-border p-5 last:border-b-0 max-[560px]:p-4" aria-label={`参考资料 ${document.name}`}>
     <div className="mb-4 flex items-center gap-3 max-[560px]:items-start"><div className="grid size-10 shrink-0 place-items-center rounded-chip border border-border bg-canvas text-text-secondary max-[560px]:hidden"><FileText size={22} weight="duotone" /></div><div className="min-w-0">
@@ -33,7 +34,6 @@ export default function ReferenceDocumentRow({ document, busy, removing, onPrevi
     </div>
     {document.indexStatus === 'indexing' && document.status === 'ready' && <p className="text-xs text-text-secondary">正在重建，当前索引仍可用。</p>}
     {document.splitterVersion === 0 && document.status === 'ready' && <p className="text-xs text-text-secondary">旧索引不参与新检索，请重建 Markdown/Word 资料。</p>}
-    {document.indexError && <p className={inlineErrorClass}>{document.indexError}</p>}
-    {document.error && <p className={inlineErrorClass}>{document.error}</p>}
+    {failureMessage && <p role="alert" className={inlineErrorClass}>{failureMessage}</p>}
   </article>
 }

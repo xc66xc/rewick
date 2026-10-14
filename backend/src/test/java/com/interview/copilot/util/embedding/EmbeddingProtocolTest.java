@@ -63,4 +63,14 @@ public class EmbeddingProtocolTest {
         assertThatThrownBy(() -> EmbeddingProtocol.response(response, 1, 2))
                 .isInstanceOf(ApiException.class);
     }
+    @Test
+    void response_dimensionMismatch_reportsExpectedAndActualWithoutVectorValues() {
+        var response=json.valueToTree(Map.of("data",List.of(Map.of("index",0,"embedding",List.of(1,2)))));
+        assertThatThrownBy(() -> EmbeddingProtocol.response(response,1,1024))
+                .isInstanceOfSatisfying(com.interview.copilot.exception.ai.ProviderFailure.class, failure -> {
+                    assertThat(failure.reason()).isEqualTo("embedding_dimensions");
+                    assertThat(failure.getMessage()).contains("要求 1024 维","实际 2 维");
+                });
+    }
+
 }

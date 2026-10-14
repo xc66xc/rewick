@@ -29,3 +29,12 @@ it('keeps ready documents usable while displaying the rebuild state and parent c
   expect(screen.getByRole('button', { name: /重建索引/ })).toHaveProperty('disabled', true)
   expect(screen.getByRole('button', { name: /预览资料/ })).toHaveProperty('disabled', false)
 })
+it('shows one actionable failure when the document and build carry the same error', () => {
+  const document: ReferenceDocument = { id: 'doc', name: '资料.md', kind: 'technical', enabled: true, status: 'error', contentHash: 'hash', revision: 0,
+    createdAt: '', updatedAt: '', chunkCount: 0, contextCount: 0, sectionCount: 0, format: '', headingMode: '', splitterVersion: 0, indexStatus: 'error',
+    indexError: '向量生成失败：供应商返回 HTTP 401。', error: '向量生成失败：供应商返回 HTTP 401。' }
+  render(<ReferenceDocumentRow document={document} busy={false} removing={false} onPreview={vi.fn()} onUpdate={vi.fn()} onReindex={vi.fn()} onRemove={vi.fn()} />)
+  expect(screen.getAllByRole('alert')).toHaveLength(1)
+  expect(screen.getByRole('alert').textContent).toBe(document.indexError)
+  expect(screen.getByRole('button', { name: /重建索引/ })).toHaveProperty('disabled', false)
+})

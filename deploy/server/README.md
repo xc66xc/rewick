@@ -1,5 +1,9 @@
 # 单机部署（复用现有 PostgreSQL）
 
+## 2026-10-14 索引失败诊断后端发布
+
+后端1.0.1-SNAPSHOT已部署，仅backend重建/重启，无DDL；JAR SHA256 `6c947b3bb4563a02f44ee7a1ebc250341a7f31951085243be7df52eee68533a4`，本地/运行容器一致。HTTPS健康UP、资料及管理策略未登录401、管理首页200、Prom2UP。回滚备份 `releases/before-index-diagnostics-20261014-1402/` 保存旧JAR/镜像、业务库及私有环境。平台配置25、参考策略1（用户已启用混合检索/缓存）及运营5/开启指纹保持；没有调用真实供应商或自动重试文档。桌面1.0.1未打包，重复提示修复需最新源码/安装包。详见 `workspace/interview-copilot/notes/impl-reference-index-diagnostics.md`。
+
 ## 2026-10-14 父子分片与混合召回发布
 
 后端1.0.0-SNAPSHOT/管理端1.0.0已发布，SQL25手工执行并授予新表/序列权限；混合检索和缓存仍关闭，满容量BM25未达到30ms目标。11项服务器HTTPS/DB验证通过，健康与Prom抓取UP，临时账号/资料清理。平台配置23和运营配置5/开启指纹保持。后端SHA256 `16cd4a1ed2633dc49946f72e63ed9a2a2b94da4ad58cd9e6e60465ed5d910cce`；回滚备份 `releases/before-reference-hybrid-20261014-0119/`，同时保留旧backend/admin镜像。桌面1.0.0未打包，旧桌面协议未做兼容；需协调更新桌面，符合新格式的资料重新构建。详见 `workspace/interview-copilot/notes/impl-heading-parent-child-retrieval.md`。

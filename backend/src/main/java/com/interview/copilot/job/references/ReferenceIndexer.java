@@ -15,8 +15,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 
 @Component
 @EnableScheduling
@@ -51,37 +49,49 @@ public class ReferenceIndexer {
     }
 
     public void process(ReferenceModels.Job job) {
+        var stage = new java.util.concurrent.atomic.AtomicReference<>("load");
         try {
             var document = repository.require(job.userId(), job.documentId());
             jobs.indexing(job);
+            stage.set("parse");
             var parsed = parser.parse(files.path(job.documentId()), document.name(), com.interview.copilot.common.references.ReferenceIndexPolicy.read(job));
+            stage.set("configuration");
             var selection = embedding.selection();
-            if (!jobs.prepare(job, parsed)) return;
-            for (int offset = 0; offset < parsed.chunks().size(); offset += 10) {
-                if (!jobs.renew(job)) {
-                    return;
-                }
-                var texts =
-                        parsed
-                                .chunks()
-                                .subList(offset, Math.min(offset + 10, parsed.chunks().size()))
-                                .stream()
-                                .map(ReferenceModels.Chunk::text)
-                                .toList();
-                var batch = parsed.chunks().subList(offset, Math.min(offset + 10, parsed.chunks().size()));
-                if (!jobs.stage(job, batch, embedding.embed(selection, texts), selection.fingerprint())) return;
-            }
-            if (!selection.fingerprint().equals(embedding.selection().fingerprint())) {
+            stage.set("prepare");
+            if (!jobs.prepare(job, parsed) || !buildBatches(job, parsed, selection, stage)) return;
+            stage.set("configuration");
+            if (!selection.fingerprint().equals(embedding.selection().fingerprint()))
                 throw ReferenceErrors.invalid("平台向量模型已变更，请重建资料。");
-            }
+            stage.set("publish");
             jobs.publish(job, parsed, selection.fingerprint());
         } catch (IOException | RuntimeException error) {
-            LOG.error(
-                    "Reference index failed job={} document={} exceptionType={}",
-                    job.id(),
-                    job.documentId(),
-                    error.getClass().getSimpleName());
-            jobs.fail(job, "资料处理失败，请检查平台向量服务或文件内容后重试。");
+            fail(job, stage.get(), error);
         }
+    }
+
+    private boolean buildBatches(ReferenceModels.Job job, ReferenceModels.Parsed parsed,
+            PlatformEmbeddingClient.Selection selection, java.util.concurrent.atomic.AtomicReference<String> stage) {
+        for (int offset = 0; offset < parsed.chunks().size(); offset += 10) {
+            if (!jobs.renew(job)) return false;
+            var batch = parsed.chunks().subList(offset, Math.min(offset + 10, parsed.chunks().size()));
+            var texts = batch.stream().map(ReferenceModels.Chunk::text).toList();
+            stage.set("embedding");
+            var vectors = embedding.embed(selection, texts);
+            stage.set("write");
+            if (!jobs.stage(job, batch, vectors, selection.fingerprint())) return false;
+        }
+        return true;
+    }
+
+    private void fail(ReferenceModels.Job job, String stage, Throwable error) {
+        String reason = error instanceof com.interview.copilot.exception.ai.ProviderFailure failure
+                ? failure.reason() : error.getClass().getSimpleName();
+        int upstreamStatus = error instanceof com.interview.copilot.exception.ai.ProviderFailure failure
+                ? failure.upstreamStatus() : 0;
+        var diagnostic = new IllegalStateException("Reference index failure: " + stage + " / " + reason);
+        diagnostic.setStackTrace(error.getStackTrace());
+        LOG.error("Reference index failed job={} document={} stage={} reason={} upstreamStatus={}",
+                job.id(), job.documentId(), stage, reason, upstreamStatus, diagnostic);
+        jobs.fail(job, com.interview.copilot.common.references.ReferenceIndexFailure.message(stage, error));
     }
 }

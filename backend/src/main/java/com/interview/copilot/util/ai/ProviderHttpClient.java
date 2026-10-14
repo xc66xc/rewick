@@ -48,13 +48,13 @@ public class ProviderHttpClient {
                         response -> {
                             if (!response.statusCode().is2xxSuccessful()) {
                                 return response.releaseBody()
-                                        .then(Mono.error(ProviderErrors.failed()));
+                                        .then(Mono.error(com.interview.copilot.exception.ai.ProviderFailure.http(response.statusCode().value())));
                             }
                             return response.bodyToMono(JsonNode.class)
-                                    .switchIfEmpty(Mono.error(ProviderErrors.failed()));
+                                    .switchIfEmpty(Mono.error(new com.interview.copilot.exception.ai.ProviderFailure("empty_response", "供应商返回了空响应。")));
                         })
                 .timeout(timeout)
-                .onErrorMap(error -> ProviderErrors.failed());
+                .onErrorMap(ProviderFailureClassifier::classify);
     }
 
     public Flux<ServerSentEvent<String>> stream(

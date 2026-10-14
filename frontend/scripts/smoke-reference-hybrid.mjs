@@ -210,6 +210,20 @@ try {
     const ready = (await page.evaluate(() => window.copilot.listReferences())).find(value => value.id === document.id)
     assert.equal(ready.format, 'doc'); assert.ok(ready.contextCount > 0); assert.ok(ready.chunkCount > 0)
   })
+  await check('Failed first embedding batch preserves HTTP status without publishing or exposing supplier body', async () => {
+    mock.setEmbeddingMode('error')
+    const failedFile = join(userData, 'failed-index.md')
+    await writeFile(failedFile, '# 合成失败测试\n只用于自动化验证。')
+    await application.evaluate(({ dialog }, file) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file] }) }, failedFile)
+    const imported = await page.evaluate(() => window.copilot.importReferences())
+    const document = imported.find(value => value.name === 'failed-index.md'); assert.ok(document)
+    await until(async () => (await page.evaluate(() => window.copilot.listReferences())).find(value => value.id === document.id)?.status === 'error', 'Failed index diagnostic readiness')
+    const failed = (await page.evaluate(() => window.copilot.listReferences())).find(value => value.id === document.id)
+    assert.ok(failed.indexError.includes('HTTP 503'))
+    assert.equal(failed.revision, 0); assert.equal(failed.chunkCount, 0)
+    assert.equal(failed.indexError.includes('模拟向量服务'), false); noSecrets(failed)
+    mock.setEmbeddingMode('fast')
+  })
   report.passed = true
 } finally {
   await application?.close().catch(() => undefined)
