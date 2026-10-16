@@ -3,6 +3,7 @@ package com.interview.copilot.validation.history;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.validation.background.JobExperiencePolicy;
+import com.interview.copilot.validation.background.InterviewTypePolicy;
 
 import org.springframework.http.HttpStatus;
 
@@ -81,8 +82,7 @@ public final class SessionRecordPolicy {
     private static void environment(JsonNode node) {
         if (!JobExperiencePolicy.isValid(node.get(JobExperiencePolicy.FIELD))) throw invalid();
         if (node.has("interviewType")
-                && (!node.path("interviewType").isTextual()
-                        || !Set.of("technical", "general").contains(node.path("interviewType").asText()))) {
+                && !InterviewTypePolicy.isValid(node.path("interviewType"))) {
             throw invalid();
         }
     }

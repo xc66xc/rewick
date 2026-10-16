@@ -35,7 +35,7 @@ afterEach(async () => {
 })
 
 describe('LlmClient', () => {
-  it.each(jobExperienceLevels.flatMap(level => (['technical', 'general'] as const).flatMap(interviewType => (['concise', 'detailed'] as const).flatMap(style => [false, true].map(platform => [level, interviewType, style, platform] as const)))))('uses %s with %s/%s in actual and recorded messages (platform=%s)', async (level, interviewType, style, platform) => {
+  it.each(jobExperienceLevels.flatMap(level => (['technical', 'general', 'hr'] as const).flatMap(interviewType => (['concise', 'detailed'] as const).flatMap(style => [false, true].map(platform => [level, interviewType, style, platform] as const)))))('uses %s with %s/%s in actual and recorded messages (platform=%s)', async (level, interviewType, style, platform) => {
     const fetcher = vi.fn(async (_url: string | URL | Request, _options?: RequestInit) => Response.json({ choices: [{ message: { content: '方案说明。' } }] }))
     vi.stubGlobal('fetch', fetcher)
     const settings: Settings = { ...structuredClone(defaultSettings), answerStyle: style, interviewEnvironment: { id: 'env', name: '准备', interviewType, jobExperienceLevel: level, resumeId: null, resumeName: '', targetId: null, targetName: '', referenceIds: [] } }
@@ -44,16 +44,16 @@ describe('LlmClient', () => {
     await client.generate(request)
     const payload = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))
     expect(JSON.parse(payload.messages[1].content)).toMatchObject({ jobExperienceLevel: level, question: request.question, referenceContext: [] })
-    expect(payload.messages[0].content).toContain(jobExperienceStrategy(level))
+    expect(payload.messages[0].content).toContain(jobExperienceStrategy(level, interviewType))
     expect(payload.messages[0].content).toContain('个人经历只能引用 personalContext 中明确提供的事实')
     expect(payload.messages[0].content).toContain('当前问题、追问和具体 JD 的明确职责优先')
     expect(payload.messages[0].content).toContain('不必等待面试官追问')
-    expect(payload.messages[0].content).toContain('通常选择最有价值的1–2个维度')
-    expect(payload.messages[0].content).toContain('主动补充必须服务当前问题')
-    expect(payload.messages[0].content).toContain('综合面试中的相关补充优先体现判断依据')
-    expect(payload.messages[0].content).toContain('无依据的方案用明确假设表达')
-    if (level === 'three_to_five_years') expect(payload.messages[0].content).toContain('即使面试官未明确询问设计或权衡')
-    if (level === 'five_plus_years') expect(payload.messages[0].content).toContain('即使面试官未逐项追问')
+    if (interviewType !== 'hr') expect(payload.messages[0].content).toContain('通常选择最有价值的1–2个维度')
+    if (interviewType !== 'hr') expect(payload.messages[0].content).toContain('主动补充必须服务当前问题')
+    if (interviewType !== 'hr') expect(payload.messages[0].content).toContain('综合面试中的相关补充优先体现判断依据')
+    if (interviewType !== 'hr') expect(payload.messages[0].content).toContain('无依据的方案用明确假设表达')
+    if (interviewType === 'technical' && level === 'three_to_five_years') expect(payload.messages[0].content).toContain('即使面试官未明确询问设计或权衡')
+    if (interviewType === 'technical' && level === 'five_plus_years') expect(payload.messages[0].content).toContain('即使面试官未逐项追问')
     expect(payload.messages[0].content).toContain(style === 'concise' ? '简短口语' : '展开口语')
     expect(events.find(event => event.kind === 'answer-request')?.modelInput.messages).toEqual(payload.messages)
     expect(fetcher).toHaveBeenCalledTimes(1)

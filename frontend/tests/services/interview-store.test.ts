@@ -29,22 +29,22 @@ describe('server background', () => {
     expect((await store.resolve(defaultSettings)).interviewEnvironment?.jobExperienceLevel).toBe(level)
   })
 
-  it.each([undefined, '', 'hr', null])('rejects invalid interview type %s before save', interviewType => {
+  it.each([undefined, '', 'HR', null])('rejects invalid interview type %s before save', interviewType => {
     expect(environmentInputSchema.safeParse({ ...environment, interviewType }).success).toBe(false)
   })
-  it('saves general interview type and resolves it into the answer context', async () => {
-    const saved = { ...environment, interviewType: 'general', version: 2 }
+  it.each(['general', 'hr'] as const)('saves %s interview type and resolves it into the answer context', async interviewType => {
+    const saved = { ...environment, interviewType, version: 2 }
     const fetcher = vi.fn(async (_url: string, init: RequestInit) => {
       if (init.method === 'POST') {
-        expect(JSON.parse(String(init.body)).content.interviewType).toBe('general')
+        expect(JSON.parse(String(init.body)).content.interviewType).toBe(interviewType)
         return Response.json(saved)
       }
       return Response.json({ ...library, environments: [saved] })
     })
     vi.stubGlobal('fetch', fetcher)
     const { store } = setup()
-    await store.saveEnvironment({ id: environment.id, version: 1, name: environment.name, interviewType: 'general', resumeId: null, targetId: null, referenceIds: [] })
-    expect((await store.resolve(defaultSettings)).interviewEnvironment?.interviewType).toBe('general')
+    await store.saveEnvironment({ id: environment.id, version: 1, name: environment.name, interviewType, resumeId: null, targetId: null, referenceIds: [] })
+    expect((await store.resolve(defaultSettings)).interviewEnvironment?.interviewType).toBe(interviewType)
   })
   it('reads the authenticated server library without creating or seeding local records', async () => {
     const fetcher = vi.fn().mockResolvedValue(Response.json(library)); vi.stubGlobal('fetch', fetcher)

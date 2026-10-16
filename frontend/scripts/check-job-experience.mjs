@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import { expect } from '@playwright/test'
 
 export async function checkJobExperience({ page, application, output, baseUrl, token, supplierRequests, llmUrl }) {
@@ -64,6 +65,13 @@ export async function checkJobExperience({ page, application, output, baseUrl, t
   await reload()
   await setLevel('3–5年经验')
   checks.push('clear, old-client preservation, invalid input and version conflict protect drafts')
+  const hrDialog = await editor()
+  await hrDialog.getByRole('radio', { name: /^HR 面试/ }).click()
+  await expect(hrDialog.getByText('责任边界、跨团队协作与结果验证', { exact: true })).toBeVisible()
+  await hrDialog.getByRole('button', { name: '保存环境', exact: true }).click()
+  await expect(hrDialog).toHaveCount(0)
+  assert.equal((await current()).interviewType, 'hr')
+  checks.push('HR type persists through real UI/IPC/Java with HR experience descriptions')
   const dialog = await editor()
   await page.screenshot({ path: join(output, 'job-experience-dialog.png') })
   await dialog.getByRole('button', { name: '取消', exact: true }).click()
@@ -92,6 +100,7 @@ export async function checkJobExperience({ page, application, output, baseUrl, t
   await expect(page.getByRole('textbox', { name: '当前问题' })).toBeVisible()
   const frozen = await page.evaluate(() => window.copilot.getSettings())
   assert.equal(frozen.interviewEnvironment.jobExperienceLevel, 'three_to_five_years')
+  assert.equal(frozen.interviewEnvironment.interviewType, 'hr')
   row = await current()
   assert.equal((await saveApi(row, { ...legacyContent(row), jobExperienceLevel: 'five_plus_years' })).status, 409)
   assert.equal((await current()).jobExperienceLevel, 'three_to_five_years')
@@ -125,6 +134,9 @@ export async function checkJobExperience({ page, application, output, baseUrl, t
     assert.deepEqual(snapshot.messages, supplierRequests.at(-1).messages)
     const user = JSON.parse(snapshot.messages.find(message => message.role === 'user').content)
     assert.equal(user.jobExperienceLevel, 'three_to_five_years')
+    assert.equal(user.interviewType, 'hr')
+    assert.ok(snapshot.messages[0].content.includes('本场为 HR 面试'))
+    assert.equal(snapshot.messages[0].content.includes('系统边界、一致性、故障隔离'), false)
     return snapshot
   }
   const platform = await answer()
@@ -141,11 +153,25 @@ export async function checkJobExperience({ page, application, output, baseUrl, t
   }).toBe(true)
   const storedAnswer = recorded.answers.find(answer => answer.question === question)
   assert.equal(recorded.interviewEnvironment.jobExperienceLevel, 'three_to_five_years')
+  assert.equal(recorded.interviewEnvironment.interviewType, 'hr')
+  assert.equal(storedAnswer.interviewEnvironment.interviewType, 'hr')
   assert.equal(storedAnswer.status, 'complete')
   assert.ok(storedAnswer.text.trim())
   assert.equal(storedAnswer.interviewEnvironment.jobExperienceLevel, 'three_to_five_years')
   assert.deepEqual(storedAnswer.modelInput.messages, platform.messages)
-  checks.push('saved session and answer snapshots preserve the actual request job level')
+  checks.push('saved HR session and answer snapshots preserve the actual request type and job level')
+  const markdownPath = join(output, 'hr-interview-export.md')
+  await application.evaluate(({ dialog }, filePath) => {
+    globalThis.__hrOriginalSaveDialog = dialog.showSaveDialog
+    dialog.showSaveDialog = async () => ({ canceled: false, filePath })
+  }, markdownPath)
+  try {
+    assert.equal(await page.evaluate(record => window.copilot.exportSession(record, { includeAiAnswers: true, includeTranscript: true, includeInterviewInfo: true }), recorded), true)
+    assert.ok((await readFile(markdownPath, 'utf8')).includes('面试类型：HR 面试'))
+  } finally {
+    await application.evaluate(({ dialog }) => { dialog.showSaveDialog = globalThis.__hrOriginalSaveDialog; delete globalThis.__hrOriginalSaveDialog })
+  }
+  checks.push('real history export preserves HR label in Markdown')
   await page.getByRole('button', { name: '准备面试', exact: true }).click()
   await page.evaluate(async llmUrl => { await window.copilot.saveCustomService({ name: '本地合成模型', kind: 'llm', url: llmUrl, model: 'mock-fast', apiKey: 'synthetic-custom-key' }) }, llmUrl)
   await reload()

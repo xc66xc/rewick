@@ -209,3 +209,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON client_downloads, client_download_upload
 
 ### 25_reference_hybrid.sql
 在新后端启动前手工执行：新增MD/Word标题父子分片、BM25倒排/统计、索引版本与管理策略。只扩展schema，不转换或删除历史片段，旧索引不参与新检索；MD/Word须明确重建，旧PDF/TXT须重新上传支持格式。后端与桌面需同步升级。SQL执行后本地混合检索默认关闭，在管理页开启后生效，缓存默认关闭。生产未执行此脚本。
+
+## 26：HR 面试类型
+
+`26_hr_interview_type.sql` 在 SQL23 之后、部署 HR 类型后端之前手动执行。事务内仅替换 `interview_environments.interview_type_valid`，允许 `technical/general/hr`，保留删除与非空语义；锁等待最多 5 秒，失败回滚后排查再执行。不新增表/列，不修改已有环境、活动或历史快照，不重建参考资料索引。
+
+发布顺序：SQL26 → 后端 1.1.0 → 桌面 1.1.0。同账号多设备需协调升级：旧桌面不能解析新值 `hr`。产生 HR 数据后不能直接回滚旧校验代码或收窄约束；必须保留 HR 读取支持，或另行确认数据与草稿处理方案。此次开发不会自动执行生产/本地业务库升级。

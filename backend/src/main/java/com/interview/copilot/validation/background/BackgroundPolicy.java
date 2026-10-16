@@ -79,10 +79,10 @@ public final class BackgroundPolicy {
             throw invalid("资料字段长度或格式无效：" + key);
     }
 
-    /** 校验面试类型，仅接受明确的技术面试或综合面试。 */
+    /** 校验面试类型，接受技术面试、综合面试或 HR 面试。 */
     public static void interviewType(JsonNode value) {
-        if (!value.isTextual() || !Set.of("technical", "general").contains(value.asText())) {
-            throw invalid("请选择有效的面试类型：技术面试或综合面试。");
+        if (!InterviewTypePolicy.isValid(value)) {
+            throw invalid("请选择有效的面试类型：技术面试、综合面试或 HR 面试。");
         }
     }
 

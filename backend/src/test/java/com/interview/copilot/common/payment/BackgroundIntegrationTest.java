@@ -66,13 +66,30 @@ class BackgroundIntegrationTest extends PaymentHttpFixture {
     }
 
     @Test
+    void hrMigration_preservesExistingContentAndRejectsUnknownDatabaseValues() throws Exception {
+        String env = library(aliceToken).path("activeEnvironmentId").asText();
+        var content = environment(null);
+        content.put("interviewType", "general");
+        save("environments", env, saveBody(1, content));
+        String before = jdbc.queryForObject(
+                "SELECT content::text FROM interview_environments WHERE id=CAST(? AS uuid)", String.class, env);
+        jdbc.execute(java.nio.file.Files.readString(java.nio.file.Path.of("sql/26_hr_interview_type.sql")));
+        assertThat(jdbc.queryForObject(
+                "SELECT content::text FROM interview_environments WHERE id=CAST(? AS uuid)", String.class, env))
+                .isEqualTo(before);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.update(
+                "UPDATE interview_environments SET content=jsonb_set(content,'{interviewType}','\"invalid\"'::jsonb) WHERE id=CAST(? AS uuid)", env))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    }
+
+    @Test
     void interviewType_requiresKnownValue_andSurvivesLibraryReload() {
         var initial = library(aliceToken);
         assertThat(initial.path("environments").get(0).path("interviewType").asText())
                 .isEqualTo("technical");
         String env = initial.path("activeEnvironmentId").asText();
         var content = environment(null);
-        for (String invalid : List.of("", "hr", "TECHNICAL")) {
+        for (String invalid : List.of("", "HR", "TECHNICAL")) {
             content.put("interviewType", invalid);
             assertThat(call(HttpMethod.POST, "/background/environments/" + env, aliceToken,
                     saveBody(1, content)).getStatusCode().value()).isEqualTo(400);
@@ -88,20 +105,21 @@ class BackgroundIntegrationTest extends PaymentHttpFixture {
                 .isEqualTo("technical");
     }
 
-    @Test
-    void interviewType_isFrozenDuringSession_andHistorySurvivesLaterEdits() {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"general", "hr"})
+    void interviewType_isFrozenDuringSession_andHistorySurvivesLaterEdits(String type) {
         long user = jdbc.queryForObject("SELECT id FROM app_users WHERE display_name='alice'", Long.class);
         jdbc.update("INSERT INTO time_wallets(app_users_id,available_seconds) VALUES(?,3600)", user);
         String env = library(aliceToken).path("activeEnvironmentId").asText();
         String resume = uuid();
         save("resumes", resume, saveBody(0, Map.of("name", "简历", "text", "真实经历")));
         var content = environment(resume);
-        content.put("interviewType", "general");
+        content.put("interviewType", type);
         save("environments", env, saveBody(1, content));
         var start = Map.of("requestId", uuid(), "environmentId", env);
         var first = call(HttpMethod.POST, "/interview-sessions/start", aliceToken, start).getBody();
         var snapshot = first.path("background").path("interviewEnvironment");
-        assertThat(snapshot.path("interviewType").asText()).isEqualTo("general");
+        assertThat(snapshot.path("interviewType").asText()).isEqualTo(type);
         content.put("interviewType", "technical");
         assertThat(call(HttpMethod.POST, "/background/environments/" + env, aliceToken,
                 saveBody(2, content)).getStatusCode().value()).isEqualTo(409);
@@ -116,7 +134,7 @@ class BackgroundIntegrationTest extends PaymentHttpFixture {
                 Map.of()).getStatusCode().value()).isEqualTo(200);
         save("environments", env, saveBody(2, content));
         assertThat(call(HttpMethod.GET, "/session-records/typed-session", aliceToken, null)
-                .getBody().path("record").path("interviewEnvironment").path("interviewType").asText()).isEqualTo("general");
+                .getBody().path("record").path("interviewEnvironment").path("interviewType").asText()).isEqualTo(type);
         assertThat(library(aliceToken).path("environments").get(0).path("interviewType").asText()).isEqualTo("technical");
     }
 
