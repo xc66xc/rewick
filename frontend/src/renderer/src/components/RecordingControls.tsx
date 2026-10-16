@@ -10,7 +10,7 @@ export default function RecordingControls({ session }: RecordingControlsProps) {
   const active = ['connecting', 'listening', 'stopping'].includes(session.status)
   return <section className="shrink-0" aria-label="音频控制">
     <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-2">
-      <Segmented aria-label="音频来源" value={session.source} disabled={active} onValueChange={value => session.setSource(value as SessionController['source'])}
+      <Segmented aria-label="音频来源" value={session.source} disabled={session.switchingSource || session.status === 'connecting' || session.status === 'stopping'} onValueChange={value => void session.setSource(value as SessionController['source'])}
         options={[{ value: 'system', label: '系统音频', icon: <Monitor aria-hidden="true" /> }, { value: 'microphone', label: '麦克风', icon: <Microphone aria-hidden="true" /> }]} />
       {active
         ? <Button size="xs" className="border-danger-line bg-danger-subtle text-danger hover:border-danger-line hover:bg-danger-subtle hover:text-danger" disabled={!session.desktop || session.status === 'stopping'}

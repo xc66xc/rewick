@@ -1,3 +1,4 @@
+import type { SourceShortcutSettings } from './source-shortcut'
 import type { JobExperienceLevel } from './job-experience-level'
 import type { EnvironmentStamp, EnvironmentStampInput } from './environment-stamp'
 export interface SessionExportOptions { includeAiAnswers: boolean; includeTranscript: boolean; includeInterviewInfo: boolean }
@@ -211,7 +212,7 @@ export type AppEvent =
   | { kind: 'answer-delta'; requestId: string; delta: string }
   | { kind: 'answer-done'; requestId: string; cancelled: boolean }
   | { kind: 'answer-error'; requestId: string; message: string }
-  | { kind: 'shortcut'; action: 'answer' }
+  | { kind: 'shortcut'; action: 'answer' | 'toggle-source' }
 export interface DesktopBridge {
   openWebSource?(url: string): Promise<void>
   recordings?: {
@@ -251,6 +252,8 @@ export interface DesktopBridge {
   removeCustomService(id: string): Promise<Settings>
   platformLogout(): Promise<Settings>
   refreshPlatform(): Promise<Settings>
+  getSourceShortcut(): Promise<SourceShortcutSettings>
+  saveSourceShortcut(input: { accelerator: string }): Promise<SourceShortcutSettings>
   saveSettings(input: SettingsInput): Promise<Settings>
   testModel(): Promise<{ latencyMs: number; message: string }>
   importContext(): Promise<{ name: string; text: string } | null>

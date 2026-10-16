@@ -1,3 +1,4 @@
+import { SourceShortcutManager } from './services/source-shortcut-manager'
 import { canSaveOtherEnvironment } from './services/environment-edit-policy'
 import { environmentStampInputSchema } from '../shared/environment-stamp'
 import { randomUUID as telemetryUUID } from 'node:crypto'
@@ -94,6 +95,7 @@ function notifyHidden(): void {
     buttons: ['知道了'] }).catch(() => undefined)
 }
 let windowPreferences = { ...defaultWindowPreferences }
+const sourceShortcuts = new SourceShortcutManager(join(app.getPath('userData'), 'source-shortcut.json'), globalShortcut, () => emit({ kind: 'shortcut', action: 'toggle-source' }))
 const windowPreferencesPath = join(app.getPath('userData'), 'window-preferences.json')
 const windowPreferencesQueue = new SerialQueue()
 const recordings = new InterviewRecordingStore(join(app.getPath('userData'), 'interview-recordings'))
@@ -360,7 +362,7 @@ function assertSender(event: IpcMainInvokeEvent): void {
 }
 
 function registerHandlers(): void {
-  const publicChannels = new Set(['invitation:settings', 'settings:get', 'settings:save', 'platform:remembered-login', 'platform:login', 'platform:register', 'platform:email-code', 'platform:password-reset-code', 'platform:password-reset', 'platform:logout', 'platform:refresh', 'asr:stop', 'answer:cancel', 'window:compact', 'window:pin', 'window:scrim'])
+  const publicChannels = new Set(['shortcut:source:get', 'shortcut:source:save', 'invitation:settings', 'settings:get', 'settings:save', 'platform:remembered-login', 'platform:login', 'platform:register', 'platform:email-code', 'platform:password-reset-code', 'platform:password-reset', 'platform:logout', 'platform:refresh', 'asr:stop', 'answer:cancel', 'window:compact', 'window:pin', 'window:scrim'])
   const handle = (channel: string, callback: (arg: unknown) => unknown): void => {
     ipcMain.handle(channel, async (event, envelope: unknown) => {
       assertSender(event)
@@ -441,6 +443,8 @@ function registerHandlers(): void {
     return state
   }))
   handle('interview:end', () => interviewTimer.end())
+  handle('shortcut:source:get', () => sourceShortcuts.get())
+  handle('shortcut:source:save', input => sourceShortcuts.save(input))
   handle('settings:get', async () => { await accounts.active?.preferences.load(true); return effectiveSettings() })
   handle('platform:remembered-login', () => authSettings.getRememberedLogin())
   handle('platform:login', input => {
@@ -587,7 +591,9 @@ function registerHandlers(): void {
     let release: (() => void) | undefined
     let ownedAsr: AsrClient | undefined
     try {
-      asr?.dispose()
+      const previousAsr = asr
+      previousAsr?.dispose()
+      await previousAsr?.waitUntilClosed()
       releasePlatformAsr?.(); releasePlatformAsr = undefined
       const snapshot = await settings.getConnectionSnapshot()
       if (epoch !== asrEpoch) throw new Error('转写连接已取消。')
@@ -842,6 +848,7 @@ if (hasInstanceLock) app.whenReady().then(async () => {
   const startupSettings = await authSettings.getSettings()
   if (startupSettings.platform?.baseUrl !== platformBaseUrl) await authSettings.saveSettings({ ...startupSettings, platform: { ...startupSettings.platform, enabled: true, baseUrl: platformBaseUrl } })
   await syncAccount()
+  await sourceShortcuts.initialize()
   registerHandlers()
   if (supportsTray) {
     menuBar = new MenuBar(() => desktopWindows?.show(), () => desktopWindows?.hide(), () => app.quit())

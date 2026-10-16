@@ -32,6 +32,8 @@ function createBridge(accountScope?: string): DesktopBridge {
   endInterview: () => invoke('interview:end'),
   getCaptureError: () => invoke('audio:capture-error'),
   getSettings: () => invoke('settings:get'),
+  getSourceShortcut: () => invoke('shortcut:source:get'),
+  saveSourceShortcut: input => invoke('shortcut:source:save', input),
   getRememberedLogin: () => invoke('platform:remembered-login'),
   platformLogin: input => invoke('platform:login', input),
   platformRegister: input => invoke('platform:register', input),

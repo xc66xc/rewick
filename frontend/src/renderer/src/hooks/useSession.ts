@@ -46,6 +46,8 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
   const removedSessionIds = useRef(new Set<string>())
   const operation = useRef(0)
   const stopping = useRef(false)
+  const switchingSource = useRef(false)
+  const [sourceSwitching, setSourceSwitching] = useState(false)
   const changingTarget = useRef(false)
   const settingsRef = useRef(settings)
   settingsRef.current = settings
@@ -77,7 +79,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
   })
   const automatic = useAutoAnswer({ settingsRef, saveSettings,
     read: () => ({ source: sourceRef.current, status: statusRef.current, busy: requestId.current !== null,
-      editing: isEditing(), assembling: questionAssemblingRef.current, segments: recordRef.current.segments }),
+      editing: isEditing(), assembling: questionAssemblingRef.current || switchingSource.current, segments: recordRef.current.segments }),
     onFiltered: observation.feedback,
     onAnswer: selection => { void generate(selection, true) },
   })
@@ -107,8 +109,22 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
     setError(current => current === questionLimitMessage ? '' : current)
     return true
   }
-  function setSource(next: 'system' | 'microphone') {
-    sourceRef.current = next; updateSource(next); automatic.coordinator.current?.refresh()
+  async function setSource(next: 'system' | 'microphone'): Promise<void> {
+    if (next === sourceRef.current || switchingSource.current || stopping.current || changingTarget.current
+      || statusRef.current === 'connecting') return
+    if (statusRef.current !== 'listening') {
+      sourceRef.current = next; updateSource(next); automatic.coordinator.current?.refresh()
+      return
+    }
+    switchingSource.current = true; setSourceSwitching(true)
+    automatic.coordinator.current?.refresh()
+    const expectedOperation = operation.current + 1
+    try {
+      const stopped = await stopTranscription()
+      if (!stopped || operation.current !== expectedOperation) return
+      sourceRef.current = next; updateSource(next)
+      await start()
+    } finally { switchingSource.current = false; setSourceSwitching(false); automatic.coordinator.current?.refresh() }
   }
   function beginSegmentEdit(id: string) {
     beginEdit(id)
@@ -128,14 +144,20 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
     setLevel(0)
   }
   async function stop() {
-    if (stopping.current) return
+    if (switchingSource.current) operation.current += 1
+    await stopTranscription()
+  }
+  async function stopTranscription(): Promise<boolean> {
+    if (stopping.current) return false
+    let succeeded = true
     stopping.current = true
     operation.current += 1
     updateStatus('stopping')
     try { await releaseAudio(); await bridge?.stopAsr() }
-    catch (reason) { setError(errorMessage(reason)) }
+    catch (reason) { succeeded = false; setError(errorMessage(reason)) }
     finally { asrId.current = null; updateStatus('idle'); startedAt.current = null; stopping.current = false }
     try { await persist() } catch (reason) { setError(errorMessage(reason)) }
+    return succeeded
   }
   async function start() {
     if (!bridge || stopping.current || changingTarget.current || !['idle', 'error'].includes(statusRef.current)) return
@@ -148,7 +170,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
     capture.current = activeCapture
     permittedCapture.current = activeCapture
     try {
-      await activeCapture.start(source, audio => {
+      await activeCapture.start(sourceRef.current, audio => {
         if (permittedCapture.current === activeCapture && asrId.current) bridge.sendAudio(asrId.current, audio)
       }, setLevel, () => { if (currentOperation === operation.current) void stop() })
       if (currentOperation !== operation.current) { await activeCapture.stop(); return }
@@ -225,7 +247,12 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
     }
     if (event.kind === 'documents-changed' || event.kind === 'interviews-changed' || event.kind === 'settings-changed') return
     if (event.kind === 'documents-error') { setReferenceError(event.message); return }
-    if (event.kind === 'shortcut') { void generate(); return }
+    if (event.kind === 'shortcut') {
+      if (document.activeElement?.getAttribute('data-shortcut-recorder') === 'true') return
+      if (event.action === 'toggle-source') void setSource(sourceRef.current === 'system' ? 'microphone' : 'system')
+      else void generate()
+      return
+    }
     if ((event.kind === 'asr-status' || event.kind === 'transcript') && !asrId.current && statusRef.current === 'connecting') {
       // Main-process events can arrive before startAsr's IPC promise resolves.
       pendingAsrEvents.current = [...pendingAsrEvents.current.slice(-31), event]
@@ -378,7 +405,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
       if (isCurrent) changingTarget.current = false
     }
   }
-  return { record, status, source, setSource, level, question, setQuestion, questionAssembling, appendSegmentToQuestion,
+  return { record, status, source, setSource, switchingSource: sourceSwitching, level, question, setQuestion, questionAssembling, appendSegmentToQuestion,
     error: error || referenceError, clearError: () => { setError(''); setReferenceError('') },
     autoAnswer: settings.autoAnswer, autoAnswerState: automatic.state, autoAnswerSaving: automatic.saving,
     setAutoAnswer: automatic.setPreferences, autoAnswerModelReady: isAnswerModelReady(settings),

@@ -40,6 +40,7 @@ const resultSchema = z.object({
 
 export class AsrClient {
   private active?: Session
+  private closing: Promise<void> = Promise.resolve()
   constructor(private readonly settings: Settings['asr'], private readonly apiKey: string, private readonly emit: (event: AppEvent) => void, private readonly telemetry?: OperationsTelemetry, private readonly observation?: OperationContext) {}
 
   async start(): Promise<{ sessionId: string }> {
@@ -211,6 +212,9 @@ export class AsrClient {
     this.telemetry?.record(this.observation, 'asr.backlog', performance.now(), state.maxBacklog > 128000 ? 'rejected' : 'success', { bufferedBytes: state.maxBacklog })
   }
 
+  /** Wait for the previous transport close before acquiring another platform ASR slot. */
+  async waitUntilClosed(): Promise<void> { await this.closing }
+
   private release(state: Session): void {
     clearTimeout(state.startupTimer)
     clearTimeout(state.finishTimer)
@@ -219,6 +223,7 @@ export class AsrClient {
     state.socket.removeAllListeners()
     // A CONNECTING socket can emit an asynchronous error when terminated.
     state.socket.on('error', () => undefined)
+    if (state.socket.readyState !== WebSocket.CLOSED) this.closing = new Promise(resolve => state.socket.once('close', () => resolve()))
     if (state.socket.readyState === WebSocket.OPEN) {
       state.socket.close()
       const timer = setTimeout(() => state.socket.terminate(), 500)

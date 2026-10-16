@@ -1,6 +1,6 @@
 {
   "name": "interview-copilot",
-  "version": "1.1.0",
+  "version": "1.2.2",
   "private": true,
   "description": "Mac 上的实时面试辅助工作台",
   "type": "module",

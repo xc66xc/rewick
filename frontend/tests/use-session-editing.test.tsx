@@ -54,6 +54,8 @@ function setup(fakeTimers = false) {
     refreshPlatform: vi.fn(async () => settings),
     getCaptureError: vi.fn(async () => null),
     getSettings: vi.fn(async () => settings),
+    getSourceShortcut: vi.fn(async () => ({ accelerator: '' })),
+    saveSourceShortcut: vi.fn(async (value: { accelerator: string }) => value),
     saveSettings: vi.fn(async (input: SettingsInput) => {
       settings.interviewTarget = input.interviewTarget
       return { ...settings, interviewTarget: input.interviewTarget }
@@ -779,4 +781,89 @@ describe('forced sign-out draft handshake', () => {
       answers: expect.arrayContaining([expect.objectContaining({ text: '可以使用数据库事务', status: 'cancelled' })])
     })))
   })
+})
+
+
+describe('audio source shortcut', () => {
+  it('toggles the selected source in both directions while idle without starting or answering', async () => {
+    const { result, bridge, run } = setup()
+    await run(() => result.current.setSource('microphone'))
+    expect(result.current.source).toBe('microphone')
+    await run(() => result.current.setSource('system'))
+    expect(result.current.source).toBe('system')
+    expect(bridge.startAsr).not.toHaveBeenCalled()
+    expect(bridge.generateAnswer).not.toHaveBeenCalled()
+  })
+  it('stops then restarts a listening stream with the new source without generating an answer', async () => {
+    const { result, bridge, run } = setup()
+    await run(() => result.current.start())
+    expect(result.current.status).toBe('listening')
+    await run(() => result.current.setSource('microphone'))
+    expect(result.current.source).toBe('microphone')
+    expect(result.current.status).toBe('listening')
+    await run(() => result.current.setSource('system'))
+    expect(result.current.source).toBe('system')
+    expect(bridge.stopAsr).toHaveBeenCalledTimes(2)
+    expect(bridge.startAsr).toHaveBeenCalledTimes(3)
+    expect(bridge.generateAnswer).not.toHaveBeenCalled()
+  })
+  it('does not restart when the old ASR stop fails', async () => {
+    const { result, bridge, run } = setup()
+    await run(() => result.current.start())
+    bridge.stopAsr.mockRejectedValueOnce(new Error('结束转写失败'))
+    await run(() => result.current.setSource('microphone'))
+    expect(result.current.source).toBe('system')
+    expect(result.current.status).toBe('idle')
+    expect(result.current.error).toContain('结束转写失败')
+    expect(bridge.startAsr).toHaveBeenCalledTimes(1)
+  })
+})
+
+it('ignores shortcut actions while the recorder has focus', async () => {
+  const { result, bridge, emit } = setup(true)
+  const recorder = document.createElement('input')
+  recorder.setAttribute('data-shortcut-recorder', 'true')
+  document.body.append(recorder)
+  try {
+    recorder.focus()
+    await emit({ kind: 'shortcut', action: 'toggle-source' })
+    await emit({ kind: 'shortcut', action: 'answer' })
+    expect(result.current.source).toBe('system')
+    expect(bridge.generateAnswer).not.toHaveBeenCalled()
+    recorder.blur()
+    await emit({ kind: 'shortcut', action: 'toggle-source' })
+    expect(result.current.source).toBe('microphone')
+  } finally { recorder.remove() }
+})
+
+it('routes toggle-source events independently of answer shortcuts', async () => {
+  const { result, bridge, emit } = setup()
+  await emit({ kind: 'shortcut', action: 'toggle-source' })
+  expect(result.current.source).toBe('microphone')
+  await emit({ kind: 'shortcut', action: 'toggle-source' })
+  expect(result.current.source).toBe('system')
+  expect(bridge.startAsr).not.toHaveBeenCalled()
+  expect(bridge.generateAnswer).not.toHaveBeenCalled()
+})
+it('keeps the newly selected source and exposes device failure without silently reverting', async () => {
+  const { result, bridge, run } = setup()
+  await run(() => result.current.start())
+  bridge.startAsr.mockRejectedValueOnce(new Error('麦克风不可用'))
+  await run(() => result.current.setSource('microphone'))
+  expect(result.current.source).toBe('microphone')
+  expect(result.current.status).toBe('error')
+  expect(result.current.error).toContain('麦克风不可用')
+  expect(bridge.generateAnswer).not.toHaveBeenCalled()
+})
+it('does not reopen ASR if the interview ends during a source switch', async () => {
+  const { result, bridge, run, emit } = setup()
+  await run(() => result.current.start())
+  let finish: () => void = () => undefined
+  bridge.stopAsr.mockImplementationOnce(() => new Promise<undefined>(resolve => { finish = () => resolve(undefined) }))
+  let changing: Promise<void> = Promise.resolve()
+  await act(async () => { changing = result.current.setSource('microphone'); await Promise.resolve() })
+  await emit({ kind: 'wallet-changed', wallet: { availableSeconds: 0, version: 1, serverTime: new Date().toISOString(), session: null } })
+  await act(async () => { finish(); await changing })
+  expect(bridge.startAsr).toHaveBeenCalledTimes(1)
+  expect(result.current.status).toBe('idle')
 })

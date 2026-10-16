@@ -1,3 +1,4 @@
+import { checkSourceShortcut } from './check-source-shortcut.mjs'
 import assert from 'node:assert/strict'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { spawn, execFile } from 'node:child_process'
@@ -233,7 +234,11 @@ try {
   await page.evaluate(() => { window.__operationEvents = []; window.copilot.onEvent(event => window.__operationEvents.push(event)); return window.copilot.getSettings() })
   await until(() => page.evaluate(() => window.copilot.telemetryEnabled()).catch(() => false), 'Desktop did not enable graylisted collection')
   assert.equal(await page.evaluate(() => window.__operationsSyntheticMedia), true)
-  if (process.env.OPERATIONS_SMOKE_EXPERIENCE === '1') {
+  if (process.env.OPERATIONS_SMOKE_SOURCE_SHORTCUT === '1') {
+    const shortcutChecks = await checkSourceShortcut({ page, application, output, supplierRequests, mock })
+    checks.push(...shortcutChecks)
+    for (const value of shortcutChecks) process.stdout.write(`PASS ${value}\n`)
+  } else if (process.env.OPERATIONS_SMOKE_EXPERIENCE === '1') {
     // Reuse only the synthetic login from this disposable application's profile.
     // A second desktop login would revoke the app's single active desktop token.
     const fixtureAuth = JSON.parse(await readFile(join(temporary, 'desktop', 'authentication-v3', 'settings.json'), 'utf8'))
@@ -545,7 +550,7 @@ try {
   supplier.closeAllConnections(); await new Promise(resolve => supplier.close(resolve)); await mock.close()
   for (const secret of [password, 'synthetic-platform-key', 'synthetic-custom-key', 'synthetic-asr-key']) logs = logs.replaceAll(secret, '[redacted]')
   await writeFile(join(output, 'operations-electron-backend.log'), logs)
-  if (process.env.OPERATIONS_SMOKE_FIXTURE_ONLY !== '1') await writeFile(join(output, process.env.OPERATIONS_SMOKE_EXPERIENCE === '1' ? 'job-experience-report.json' : process.env.OPERATIONS_SMOKE_STAMP === '1' ? 'environment-stamp-report.json' : 'operations-electron-report.json'), JSON.stringify({ realElectron: true, realJava: true, businessDatabase: 'PostgreSQL 15.19/pgvector0.8.6', independentOperationsDatabase: true, realProviderTested: false, realAudioTested: false, syntheticAudio: true, checks }, null, 2))
+  if (process.env.OPERATIONS_SMOKE_FIXTURE_ONLY !== '1') await writeFile(join(output, process.env.OPERATIONS_SMOKE_SOURCE_SHORTCUT === '1' ? 'source-shortcut-report.json' : process.env.OPERATIONS_SMOKE_EXPERIENCE === '1' ? 'job-experience-report.json' : process.env.OPERATIONS_SMOKE_STAMP === '1' ? 'environment-stamp-report.json' : 'operations-electron-report.json'), JSON.stringify({ realElectron: true, realJava: true, businessDatabase: 'PostgreSQL 15.19/pgvector0.8.6', independentOperationsDatabase: true, realProviderTested: false, realAudioTested: false, syntheticAudio: true, checks }, null, 2))
   await rm(temporary, { recursive: true, force: true })
   if (process.env.OPERATIONS_SMOKE_READY_FILE) {
     await rm(process.env.OPERATIONS_SMOKE_READY_FILE, { force: true })
