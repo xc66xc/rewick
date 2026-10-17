@@ -1,5 +1,5 @@
 import { Button } from './ui/button'
-import { ClockCounterClockwise, FileText, Plus, SquaresFour, ShoppingBag } from '@phosphor-icons/react'
+import { ChatsCircle, ClockCounterClockwise, FileText, Plus, SquaresFour, ShoppingBag } from '@phosphor-icons/react'
 import { cn } from '../lib/cn'
 
 export type Page = 'preparation' | 'workspace' | 'context' | 'history' | 'purchase' | 'mock'
@@ -7,7 +7,7 @@ interface SidebarProps { page: Page; onChange: (page: Page) => void; account?: s
 const navigation = [
   { page: 'preparation' as const, label: '准备面试', icon: Plus },
   { page: 'workspace' as const, label: '工作台', icon: SquaresFour },
-  { page: 'mock' as const, label: '模拟面试', icon: SquaresFour },
+  { page: 'mock' as const, label: '模拟面试', icon: ChatsCircle },
   { page: 'context' as const, label: '个人背景', icon: FileText },
   { page: 'purchase' as const, label: '购买时长', icon: ShoppingBag },
   { page: 'history' as const, label: '会话记录', icon: ClockCounterClockwise }
