@@ -61,6 +61,8 @@ public class SecurityConfiguration {
                                         .hasRole("ADMIN")
                                         .requestMatchers("/api/v1/**")
                                         .authenticated()
+                                        .requestMatchers("/ws/v1/mock-interviews/*")
+                                        .authenticated()
                                         .anyRequest()
                                         .denyAll())
                 .exceptionHandling(

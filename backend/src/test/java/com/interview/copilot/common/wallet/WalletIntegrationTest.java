@@ -51,6 +51,12 @@ import java.util.concurrent.atomic.AtomicReference;
             "copilot.auth.admin.bootstrap-username=", "copilot.auth.admin.bootstrap-password="
         })
 public class WalletIntegrationTest {
+    // These cases advance their own clock and explicitly trigger settlement. Background sweeps
+    // must not race the per-case TRUNCATE CASCADE or change another case's fixture state.
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.interview.copilot.job.wallet.WalletExpiryJob walletExpiryJob;
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.interview.copilot.job.mockinterview.MockInterviewJob mockInterviewJob;
     @Container static final PostgreSQLContainer<?> DATABASE = new WalletDatabase();
     @Autowired WalletService wallets;
     @Autowired UsageService usage;
@@ -414,7 +420,7 @@ public class WalletIntegrationTest {
                         "25_reference_hybrid.sql",
                         "10_time_wallet.sql",
                         "16_desktop_sessions.sql",
-                        "17_desktop_settings.sql");
+                        "17_desktop_settings.sql", "27_mock_interview.sql");
 
         WalletDatabase() {
             super(

@@ -47,6 +47,7 @@ import java.util.concurrent.Executors;
 @Testcontainers
 @org.springframework.test.annotation.DirtiesContext(
         classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
+@org.springframework.test.context.bean.override.mockito.MockitoBean(types = com.interview.copilot.job.mockinterview.MockInterviewJob.class)
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"copilot.auth.bootstrap-username=", "copilot.auth.bootstrap-password="})
@@ -426,6 +427,7 @@ SELECT id, ('[' || id || ',0,0]')::vector FROM generate_series(1, 32) AS id
             withCopyFileToContainer(
                     MountableFile.forHostPath(Path.of("sql", "17_desktop_settings.sql")),
                     "/tmp/17_desktop_settings.sql");
+            withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "27_mock_interview.sql")), "/tmp/27_mock_interview.sql");
         }
 
         @Override
@@ -471,7 +473,7 @@ SELECT id, ('[' || id || ',0,0]')::vector FROM generate_series(1, 32) AS id
                                 "-f",
                                 "/tmp/16_desktop_sessions.sql",
                                 "-f",
-                                "/tmp/17_desktop_settings.sql");
+                                "/tmp/17_desktop_settings.sql", "-f", "/tmp/27_mock_interview.sql");
                 if (result.getExitCode() != 0) {
                     throw new IllegalStateException(
                             "Database SQL initialization failed: " + result.getStderr());

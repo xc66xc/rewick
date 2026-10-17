@@ -114,4 +114,12 @@ public interface WalletMapper {
                 + " s.status='active' AND s.expires_at>#{now} AND u.is_enabled)")
     boolean active(
             @Param("userId") long userId, @Param("id") String id, @Param("now") LocalDateTime now);
+    @Select("SELECT EXISTS(SELECT 1 FROM mock_usage_periods WHERE app_users_id=#{userId} AND ended_at IS NULL AND expires_at>(clock_timestamp() AT TIME ZONE 'Asia/Shanghai'))")
+    boolean mockActive(long userId);
+
+    @Insert("INSERT INTO interview_activity_leases(app_users_id,mode,session_id,expires_at) VALUES(#{userId},'assist',#{sessionId},#{expiry}) ON CONFLICT(app_users_id) DO UPDATE SET mode='assist',session_id=EXCLUDED.session_id,expires_at=EXCLUDED.expires_at")
+    void assistLease(@Param("userId") long userId,@Param("sessionId") String sessionId,@Param("expiry") LocalDateTime expiry);
+
+    @Update("DELETE FROM interview_activity_leases WHERE app_users_id=#{userId} AND mode='assist'")
+    void releaseAssist(long userId);
 }

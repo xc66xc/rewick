@@ -1,3 +1,4 @@
+import MockInterviewPage from './features/mock-interview/MockInterviewPage'
 import JobExperienceTag from './components/JobExperienceTag'
 import InterviewRecordingControl from './components/InterviewRecordingControl'
 import { useInterviewRecording } from './hooks/useInterviewRecording'
@@ -43,6 +44,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
     await session.prepareRecording(id)
   })
   const [page, setPage] = useState<Page>('preparation')
+  const [mockActive, setMockActive] = useState(false)
   useEffect(() => {
     if (recording.error) toast.show(recording.error, { type: 'error' })
   }, [recording.error])
@@ -117,7 +119,12 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
     await session.saveEnvironment(input)
     if (input.id) await session.activateEnvironment(input.id)
   }
-  function navigate(next: Page) { setPage(next === 'workspace' && !timer.active ? 'preparation' : next) }
+  function navigate(next: Page) {
+    if (next === page) return
+    if (mockActive) { toast.show('请先暂停或结束模拟面试，再切换页面。'); return }
+    if (next === 'mock' && (timer.active || session.busy || !['idle', 'error'].includes(session.status))) { toast.show('请先结束辅助面试和转写，再进入模拟面试。'); return }
+    setPage(next === 'workspace' && !timer.active ? 'preparation' : next)
+  }
   useEffect(() => {
     if (!timer.active && page === 'workspace') setPage('preparation')
   }, [timer.active, page])
@@ -149,6 +156,7 @@ export default function Workbench({ bridge: unscopedBridge, config, onLogout }: 
             compact && 'flex overflow-hidden')}>{!compact && <TranscriptPanel session={session} />}<AnswerPanel session={session} settings={config.settings} onSettings={handleSettings} onContext={handleContext} compact={compact} /></div>
           {!compact && <footer className="flex min-h-[42px] shrink-0 items-center justify-between gap-4 text-[10px] text-text-muted max-[560px]:[&>span:last-child]:hidden"><span>会话云端保存：{session.historySyncStatus}</span><span>系统音频可自动回答，也可随时手动生成</span></footer>}
         </div>}
+        {page === 'mock' && <MockInterviewPage bridge={bridge} onActive={setMockActive} />}
         {page === 'purchase' && <PurchasePage key={config.settings.accountScope} bridge={bridge} scope={config.settings.accountScope ?? ''} remaining={timer.remaining} onCredited={timer.refresh} />}
         {page === 'context' && <ContextPage settings={config.settings} bridge={bridge} onSave={config.save} />}
         {page === 'history' && <HistoryPage bridge={bridge} records={session.history} activeSessionId={session.record.id} activeSessionLocked={timer.active || session.busy || !['idle', 'error'].includes(session.status)} onExport={session.exportRecord} onDelete={session.removeSession} />}

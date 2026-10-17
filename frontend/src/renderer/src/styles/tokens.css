@@ -315,3 +315,10 @@ html.compact-transparent #root { background: transparent; }
 @media (prefers-reduced-motion: reduce) { .environment-stamp { transition: none; } }
 
 .environment-card__tags { display: flex; flex: 1; min-width: 0; flex-wrap: wrap; gap: var(--spacing-stamp-status-gap); align-items: center; }
+
+@keyframes mock-avatar-breathe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes mock-avatar-blink { 0%, 44%, 48%, 100% { transform: scaleY(1); } 46% { transform: scaleY(.1); } }
+.mock-avatar--alive { animation: mock-avatar-breathe 4s ease-in-out infinite; }
+.mock-avatar__eyes { transform-origin: 160px 141px; }
+.mock-avatar--alive .mock-avatar__eyes { animation: mock-avatar-blink 5s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .mock-avatar--alive, .mock-avatar__eyes { animation: none; } }

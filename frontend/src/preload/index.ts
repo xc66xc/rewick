@@ -10,6 +10,27 @@ function createBridge(accountScope?: string): DesktopBridge {
   }
   return {
   withAccountScope: scope => createBridge(scope),
+  mock: {
+    capabilities: () => invoke('mock:request', { action: 'capabilities' }),
+    wallet: () => invoke('mock:request', { action: 'wallet' }),
+    ledger: () => invoke('mock:request', { action: 'ledger' }),
+    list: () => invoke('mock:request', { action: 'list' }),
+    create: input => invoke('mock:request', { action: 'create', input }),
+    get: id => invoke('mock:request', { action: 'get', input: { id } }),
+    command: (id, command) => invoke('mock:request', { action: 'command', input: { id, command } }),
+    report: id => invoke('mock:request', { action: 'report', input: { id } }),
+    retryReport: (id, requestId) => invoke('mock:request', { action: 'retryReport', input: { id, requestId } }),
+    remove: id => invoke('mock:request', { action: 'remove', input: { id } }),
+    connect: id => invoke('mock:connect', id),
+    disconnect: () => invoke('mock:disconnect'),
+    sendAudio: frame => ipcRenderer.send('mock:audio', frame, accountScope ?? latestScope),
+    credit: (bytes, speechId, generation) => ipcRenderer.send('mock:credit', { bytes, speechId, generation }, accountScope ?? latestScope),
+    onEvent: callback => {
+      const listener = (_event: Electron.IpcRendererEvent, scope: string, data: import('../shared/mock-interview').MockMessage) => { if (scope === (accountScope ?? latestScope)) callback(data) }
+      ipcRenderer.on('mock:event', listener)
+      return () => ipcRenderer.removeListener('mock:event', listener)
+    }
+  },
   openWebSource: url => invoke('web-search:open-source', url),
   recordings: {
     start: sessionId => invoke('recordings:start', sessionId),

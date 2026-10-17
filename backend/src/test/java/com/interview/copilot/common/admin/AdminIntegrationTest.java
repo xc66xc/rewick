@@ -42,6 +42,7 @@ import java.util.concurrent.Executors;
 @Testcontainers
 @org.springframework.test.annotation.DirtiesContext(
         classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
+@org.springframework.test.context.bean.override.mockito.MockitoBean(types = com.interview.copilot.job.mockinterview.MockInterviewJob.class)
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
@@ -457,7 +458,7 @@ public class AdminIntegrationTest {
                         "25_reference_hybrid.sql",
                             "10_time_wallet.sql",
                             "16_desktop_sessions.sql",
-                            "17_desktop_settings.sql")) {
+                            "17_desktop_settings.sql", "27_mock_interview.sql")) {
                 withCopyFileToContainer(
                         MountableFile.forHostPath(Path.of("sql", name)), "/tmp/" + name);
             }
@@ -502,7 +503,7 @@ public class AdminIntegrationTest {
                                 "-f",
                                 "/tmp/16_desktop_sessions.sql",
                                 "-f",
-                                "/tmp/17_desktop_settings.sql");
+                                "/tmp/17_desktop_settings.sql", "-f", "/tmp/27_mock_interview.sql");
                 if (result.getExitCode() != 0)
                     throw new IllegalStateException("Admin test SQL initialization failed");
             } catch (IOException error) {

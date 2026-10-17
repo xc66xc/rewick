@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { DotsThree } from '@phosphor-icons/react'
 import styles from '../styles.module.css'
-type Action = 'history' | 'password' | 'revoke'
-const actions: { kind: Action; label: string }[] = [{ kind: 'history', label: '时长记录' }, { kind: 'password', label: '重置密码' }, { kind: 'revoke', label: '撤销登录' }]
+type Action = 'mock-wallet' | 'history' | 'password' | 'revoke'
+const actions: { kind: Action; label: string }[] = [{ kind: 'history', label: '时长记录' }, { kind: 'mock-wallet', label: '调整模拟时长' }, { kind: 'password', label: '重置密码' }, { kind: 'revoke', label: '撤销登录' }]
 export default function UserMoreActions({ name, onSelect }: { name: string; onSelect: (action: Action) => void }) {
   const trigger = useRef<HTMLButtonElement>(null)
   const panel = useRef<HTMLDivElement>(null)
@@ -31,7 +31,7 @@ export default function UserMoreActions({ name, onSelect }: { name: string; onSe
   }, [position])
   return <><button ref={trigger} className={styles.linkButton} aria-label={`更多操作 ${name}`} aria-expanded={Boolean(position)} onClick={() => {
     const rect = trigger.current!.getBoundingClientRect()
-    setPosition(position ? null : { top: Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - 146)), left: Math.max(8, Math.min(rect.right - 160, window.innerWidth - 168)) })
+    setPosition(position ? null : { top: Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - 190)), left: Math.max(8, Math.min(rect.right - 160, window.innerWidth - 168)) })
   }}>更多 <DotsThree size={18} aria-hidden="true" /></button>{position && createPortal(<div ref={panel} className={styles.actionPopover} style={position} role="group" aria-label={`${name} 的更多操作`} onBlur={event => {
     if (!event.currentTarget.contains(event.relatedTarget)) setPosition(null)
   }}>{actions.map(action => <button key={action.kind} aria-label={`${action.label} ${name}`} onClick={() => { trigger.current?.focus(); setPosition(null); onSelect(action.kind) }}>{action.label}</button>)}</div>, document.body)}</>

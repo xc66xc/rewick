@@ -51,6 +51,7 @@ public class WalletServiceImpl implements WalletService {
             return view(userId, previous, now);
         }
         if (!repository.enabled(userId)) throw inactive();
+        if (repository.mockActive(userId)) throw new ApiException(HttpStatus.CONFLICT,"mock_busy","请先结束或暂停模拟面试。");
         if (current.session() != null && "active".equals(current.session().status())) {
             throw new ApiException(
                     HttpStatus.CONFLICT, "interview_already_active", "该账号已有进行中的面试，请先结束。");
@@ -65,6 +66,7 @@ public class WalletServiceImpl implements WalletService {
                 now,
                 now.plusSeconds(Math.min(30, current.availableSeconds())),
                 CurrentLogin.tokenId());
+        repository.assistLease(userId,id,now.plusSeconds(Math.min(30,current.availableSeconds())));
         return view(userId, repository.byId(userId, id), now);
     }
 
@@ -85,6 +87,7 @@ public class WalletServiceImpl implements WalletService {
                             session.usedSeconds(),
                             null);
             repository.save(session, now);
+            repository.assistLease(userId,id,session.expiresAt());
         }
         return view(userId, session, now);
     }
@@ -97,6 +100,7 @@ public class WalletServiceImpl implements WalletService {
         var session = requireSession(userId, id);
         if ("active".equals(session.status())) {
             session = session.update(session.expiresAt(), now, session.usedSeconds(), "ended");
+            repository.releaseAssist(userId);
             repository.save(session, now);
         }
         return view(userId, session, now);
@@ -152,6 +156,7 @@ public class WalletServiceImpl implements WalletService {
                         wallet.availableSeconds() - debit);
         repository.save(session, now);
         if (!"active".equals(session.status())) {
+            repository.releaseAssist(userId);
             org.slf4j.LoggerFactory.getLogger(WalletServiceImpl.class).info(
                     "Interview auto-ended user={} interview={} reason={} usedSeconds={} remainingSeconds={}",
                     userId, session.id(), session.endReason(), session.usedSeconds(), wallet.availableSeconds() - debit);

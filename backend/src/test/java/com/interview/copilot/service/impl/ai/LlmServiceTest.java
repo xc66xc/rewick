@@ -64,7 +64,8 @@ public class LlmServiceTest {
                         new ProviderHttpClient(),
                         new ProviderJson(mapper),
                         usage,
-                        com.interview.copilot.common.platform.DesktopSettingsFixture.advanced());
+                        com.interview.copilot.common.platform.DesktopSettingsFixture.advanced(),
+                        new com.interview.copilot.common.ai.LlmConcurrency());
     }
 
     @AfterEach

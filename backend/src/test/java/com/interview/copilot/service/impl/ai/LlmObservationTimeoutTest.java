@@ -24,7 +24,7 @@ class LlmObservationTimeoutTest {
         var endpoint=new ProviderProperties.Llm();endpoint.setTotalTimeoutSeconds(1);endpoint.setIdleTimeoutSeconds(10);
         var http=mock(ProviderHttpClient.class);
         when(http.stream(eq(endpoint),any())).thenReturn(Flux.never());
-        var service=new LlmServiceImpl(null,http,json,null,null);
+        var service=new LlmServiceImpl(null,http,json,null,null,new com.interview.copilot.common.ai.LlmConcurrency());
         assertThatThrownBy(() -> observation.lifecycle(service.stream(endpoint,Map.of(),observation)).blockLast(Duration.ofSeconds(3)))
                 .isInstanceOf(com.interview.copilot.exception.ApiException.class);
         assertThat(events).hasSize(1);assertThat(events.getFirst().outcome()).isEqualTo("timeout");

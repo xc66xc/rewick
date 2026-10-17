@@ -1,3 +1,4 @@
+import type { MockBridge } from './mock-interview'
 import type { SourceShortcutSettings } from './source-shortcut'
 import type { JobExperienceLevel } from './job-experience-level'
 import type { EnvironmentStamp, EnvironmentStampInput } from './environment-stamp'
@@ -214,6 +215,7 @@ export type AppEvent =
   | { kind: 'answer-error'; requestId: string; message: string }
   | { kind: 'shortcut'; action: 'answer' | 'toggle-source' }
 export interface DesktopBridge {
+  mock: MockBridge
   openWebSource?(url: string): Promise<void>
   recordings?: {
     start(sessionId: string): Promise<void>

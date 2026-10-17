@@ -44,6 +44,7 @@ import java.util.concurrent.Executors;
 @Testcontainers
 @org.springframework.test.annotation.DirtiesContext(
         classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
+@org.springframework.test.context.bean.override.mockito.MockitoBean(types = com.interview.copilot.job.mockinterview.MockInterviewJob.class)
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
@@ -267,7 +268,7 @@ public class PlatformConfigIntegrationTest {
                                 "-f",
                                 "/tmp/copilot-sql/16_desktop_sessions.sql",
                                 "-f",
-                                "/tmp/copilot-sql/17_desktop_settings.sql");
+                                "/tmp/copilot-sql/17_desktop_settings.sql", "-f", "/tmp/copilot-sql/27_mock_interview.sql");
                 if (result.getExitCode() != 0) {
                     throw new IllegalStateException(
                             "Test SQL initialization failed: " + result.getStderr());

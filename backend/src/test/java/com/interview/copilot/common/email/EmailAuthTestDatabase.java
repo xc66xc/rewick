@@ -26,7 +26,7 @@ public final class EmailAuthTestDatabase extends PostgreSQLContainer<EmailAuthTe
                         "25_reference_hybrid.sql",
                     "10_time_wallet.sql",
                     "16_desktop_sessions.sql",
-                    "17_desktop_settings.sql",
+                    "17_desktop_settings.sql", "27_mock_interview.sql",
                     "18_invitations.sql",
                     "19_client_downloads.sql");
 

@@ -32,15 +32,17 @@ public class LlmServiceImpl implements LlmService {
     private final ProviderHttpClient http;
     private final ProviderJson json;
     private final UsageService usage;
-    private final LlmConcurrency concurrency = new LlmConcurrency();
+    private final LlmConcurrency concurrency;
 
     public LlmServiceImpl(
             PlatformRuntimeService providers,
             ProviderHttpClient http,
             ProviderJson json,
             UsageService usage,
-            DesktopSettingsService desktop) {
+            DesktopSettingsService desktop,
+            LlmConcurrency concurrency) {
         this.desktop = desktop;
+        this.concurrency = concurrency;
         this.providers = providers;
         this.http = http;
         this.json = json;

@@ -105,6 +105,7 @@ function setup(fakeTimers = false) {
     getWindowPreferences: vi.fn(async () => ({ backgroundOpacity: 35, contentProtection: true })),
     saveWindowPreferences: vi.fn(async value => value),
     onEvent: (listener: (event: AppEvent) => void) => { listeners.add(listener); return () => { listeners.delete(listener) } },
+    mock: {} as DesktopBridge['mock'],
   } satisfies DesktopBridge
   let action: () => void | Promise<void> = () => undefined
   let actionResult: Promise<void> = Promise.resolve()

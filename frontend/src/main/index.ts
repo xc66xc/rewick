@@ -1,3 +1,4 @@
+import { MockInterviewClient } from './services/mock-interview-client'
 import { SourceShortcutManager } from './services/source-shortcut-manager'
 import { canSaveOtherEnvironment } from './services/environment-edit-policy'
 import { environmentStampInputSchema } from '../shared/environment-stamp'
@@ -134,6 +135,9 @@ async function walletConnection() {
   if (!snapshot.settings.platform?.authenticated || !snapshot.secrets.platformAccessToken) throw new Error('请先登录。')
   return { baseUrl: snapshot.settings.platform.baseUrl, token: snapshot.secrets.platformAccessToken }
 }
+const mockInterviews = new MockInterviewClient(walletConnection, message => {
+  if (accounts.active && window && !window.webContents.isDestroyed()) window.webContents.send('mock:event', accounts.active.id, message)
+})
 async function syncAccount() {
   void telemetry.refresh()
   const authenticated = await authSettings.getSettings()
@@ -298,6 +302,7 @@ function cancelAnswerWork(): void {
 const serviceTests = new Set<AbortController>()
 
 function disposeWork(): void {
+  mockInterviews.disconnect()
   for (const controller of reviewJobs.values()) controller.abort()
   recordingCleanup = recordingCleanup.then(() => recordings.closeAll()).catch(() => console.error('录音关闭失败，将在下次读取时尝试恢复。'))
   answerDispatchEpoch++
@@ -434,6 +439,21 @@ function registerHandlers(): void {
   handle('web-search:open-source', async value => {
     const url = webSourceUrlSchema.parse(value)
     await shell.openExternal(url)
+  })
+  handle('mock:request', input => {
+    const value = z.object({ action: z.string().max(30), input: z.unknown().optional() }).strict().parse(input)
+    return mockInterviews.request(value.action, value.input)
+  })
+  handle('mock:connect', id => mockInterviews.connect(id))
+  handle('mock:disconnect', () => mockInterviews.disconnect())
+  for (const channel of ['mock:audio', 'mock:credit']) ipcMain.on(channel, (event, input: unknown, scope: unknown) => {
+    assertSender(event)
+    if (!accounts.active || scope !== accounts.active.id || quitPending) return
+    try {
+      sessionMonitor.assertVerified(undefined)
+      if (channel === 'mock:audio') mockInterviews.sendAudio(input)
+      else mockInterviews.credit(input)
+    } catch { mockInterviews.disconnect(); if (window && !window.webContents.isDestroyed()) window.webContents.send('mock:event', accounts.active.id, { kind: 'disconnected', message: '模拟音频传输已停止，请检查登录状态后重新连接。' }) }
   })
   handle('wallet:get', async () => interviewTimer.read(await walletConnection()))
   handle('interview:start', input => interviewMutations.run(async () => {

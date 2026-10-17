@@ -1,0 +1,112 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { MockBridge, MockEvent, MockMessage, MockSession } from '../src/shared/mock-interview'
+const audio = vi.hoisted(() => ({ start: vi.fn(async (_source: string, _audio: (pcm: ArrayBuffer) => void, _level: (value: number) => void, _ended: () => void) => undefined), stop: vi.fn(async () => undefined), playerStart: vi.fn(async () => undefined), playerStop: vi.fn(), push: vi.fn(), end: vi.fn() }))
+vi.mock('../src/renderer/src/audio/capture', () => ({ AudioCapture: class { start = audio.start; stop = audio.stop } }))
+vi.mock('../src/renderer/src/features/mock-interview/tts-player', () => ({ MockTtsPlayer: class { start = audio.playerStart; stop = audio.playerStop; push = audio.push; end = audio.end } }))
+import { MockSessionController, type MockView } from '../src/renderer/src/features/mock-interview/mock-session-controller'
+const id = '12345678-1234-4234-8234-123456789012'
+const turnId = '22345678-1234-4234-8234-123456789012'
+function session(patch: Partial<MockSession> = {}): MockSession { return { id, state: 'listening', version: 1, generation: 1, environmentName: '测试岗位', interviewType: 'technical', durationMinutes: 15, usedSeconds: 0, remainingSeconds: 900, avatarId: 'rewick-interviewer', voiceId: 'test', turns: [{ id: turnId, number: 1, question: '介绍项目', answerText: '', status: 'pending' }], currentTurnId: turnId, reportStatus: 'pending', createdAt: '2026-10-17T12:00:00', ...patch } }
+function setup() {
+  let listener: ((message: MockMessage) => void) | undefined; let sequence = 0; let view: MockView | undefined
+  const bridge = { onEvent: vi.fn((value: (message: MockMessage) => void) => { listener = value; return vi.fn() }), connect: vi.fn(async () => undefined), disconnect: vi.fn(async () => undefined), credit: vi.fn(), sendAudio: vi.fn(), command: vi.fn(async () => session({ state: 'deciding', version: 2 })) } as unknown as MockBridge
+  const controller = new MockSessionController(bridge, value => { view = value })
+  const event = (kind: MockEvent['kind'], payload: unknown, generation = 1) => listener?.({ kind: 'event', event: { protocolVersion: 1, sessionId: id, sequence: sequence++, generation, kind, payload } })
+  return { bridge, controller, event, view: () => view }
+}
+beforeEach(() => { vi.useFakeTimers(); vi.clearAllMocks() })
+afterEach(() => vi.useRealTimers())
+describe('mock interview coordinator', () => {
+  it('waits for server ASR readiness before opening microphone', async () => {
+    const value = setup(); await value.controller.open(session()); expect(audio.start).not.toHaveBeenCalled()
+    value.event('state', { ...session(), asrReady: true }); await vi.advanceTimersByTimeAsync(0)
+    expect(audio.start).toHaveBeenCalledOnce(); value.event('state', { ...session(), asrReady: true }); await vi.advanceTimersByTimeAsync(0); expect(audio.start).toHaveBeenCalledOnce()
+    await value.controller.dispose()
+  })
+  it('automatically submits final answer after 1.8 seconds, not each sentence', async () => {
+    const value = setup(); await value.controller.open(session())
+    value.event('transcript.final', { id: '1', text: '项目使用了缓存。', isFinal: true, startMs: 0 })
+    await vi.advanceTimersByTimeAsync(1700); expect(value.bridge.command).not.toHaveBeenCalled()
+    value.event('transcript.partial', { id: '2', text: '还包括', isFinal: false, startMs: 10 })
+    await vi.advanceTimersByTimeAsync(2000); expect(value.bridge.command).not.toHaveBeenCalled()
+    value.event('transcript.final', { id: '2', text: '还包括缓存失效处理。', isFinal: true, startMs: 10 })
+    await vi.advanceTimersByTimeAsync(1800)
+    expect(value.bridge.command).toHaveBeenCalledWith(id, expect.objectContaining({ command: 'submit_answer', text: '项目使用了缓存。还包括缓存失效处理。' }))
+    await value.controller.dispose()
+  })
+  it('does not auto-submit acknowledgements or while editing', async () => {
+    const value = setup(); await value.controller.open(session())
+    value.event('transcript.final', { id: '1', text: '嗯。', isFinal: true, startMs: 0 }); await vi.advanceTimersByTimeAsync(1800); expect(value.bridge.command).not.toHaveBeenCalled()
+    value.controller.editing(true); value.controller.edit('修改后的项目回答'); await vi.advanceTimersByTimeAsync(1800); expect(value.bridge.command).not.toHaveBeenCalled()
+    value.controller.editing(false); await vi.advanceTimersByTimeAsync(1800); expect(value.bridge.command).toHaveBeenCalledOnce()
+    await value.controller.dispose()
+  })
+  it('invalidates stale events and clears draft when generation switches', async () => {
+    const value = setup(); await value.controller.open(session()); value.event('transcript.final', { id: '1', text: '旧回答', isFinal: true, startMs: 0 })
+    value.event('state', session({ state: 'paused', generation: 2, version: 2 }), 2)
+    value.event('transcript.final', { id: '2', text: '迟到旧回答', isFinal: true, startMs: 0 })
+    await vi.advanceTimersByTimeAsync(1800); expect(value.view()?.draft).toBe(''); expect(value.bridge.command).not.toHaveBeenCalled(); expect(audio.playerStop).toHaveBeenCalled()
+    await value.controller.dispose()
+  })
+  it('stops local playback before interrupt command and keeps failed request id for safe retry', async () => {
+    const value = setup(); await value.controller.open(session({ state: 'speaking' }))
+    const mock = vi.mocked(value.bridge.command); mock.mockRejectedValueOnce(new Error('网络错误'))
+    await expect(value.controller.command('interrupt')).rejects.toThrow('网络错误')
+    const originalInput = mock.mock.calls[0][1]
+    value.event('state', session({ state: 'speaking', version: 2 }))
+    await value.controller.command('interrupt'); expect(mock.mock.calls[1][1]).toEqual(originalInput)
+    expect(audio.playerStop.mock.invocationCallOrder[1]).toBeLessThan(mock.mock.invocationCallOrder[0])
+    await value.controller.dispose()
+  })
+  it('respects frozen pauseMs and cancels submission while new microphone speech is active', async () => {
+    const value = setup(); await value.controller.open(session({ pauseMs: 2400 }))
+    value.event('state', { ...session({ pauseMs: 2400 }), asrReady: true }); await vi.advanceTimersByTimeAsync(0)
+    value.event('transcript.final', { id: '1', text: '先介绍缓存', isFinal: true, startMs: 0 })
+    await vi.advanceTimersByTimeAsync(1800); expect(value.bridge.command).not.toHaveBeenCalled()
+    audio.start.mock.calls[0]?.[2]?.(0.5)
+    await vi.advanceTimersByTimeAsync(3000); expect(value.bridge.command).not.toHaveBeenCalled()
+    audio.start.mock.calls[0]?.[2]?.(0)
+    await vi.advanceTimersByTimeAsync(2400); expect(value.bridge.command).toHaveBeenCalledOnce()
+    await value.controller.dispose()
+  })
+  it('prompts after45 seconds without inventing an answer or submitting', async () => {
+    const value = setup(); vi.mocked(value.bridge.command).mockResolvedValue(session()); await value.controller.open(session())
+    value.event('state', { ...session(), asrReady: true }); await vi.advanceTimersByTimeAsync(45000)
+    expect(value.view()?.hint).toContain('说说你的思路')
+    expect(vi.mocked(value.bridge.command).mock.calls.every(call => call[1].command === 'heartbeat')).toBe(true)
+    await value.controller.dispose()
+  })
+  it('preserves edited wording against ASR corrections and appends newly finalized speech', async () => {
+    const value = setup(); await value.controller.open(session())
+    value.event('transcript.final', { id: '1', text: '原错误转写', isFinal: true, startMs: 0 })
+    value.controller.editing(true); value.controller.edit('正确术语 Redis')
+    value.event('transcript.final', { id: '1', text: '迟到的错误修正', isFinal: true, startMs: 0 })
+    value.event('transcript.final', { id: '2', text: '保证一致性。', isFinal: true, startMs: 10 })
+    value.controller.editing(false); await value.controller.command('submit_answer')
+    expect(value.bridge.command).toHaveBeenCalledWith(id, expect.objectContaining({ text: '正确术语 Redis保证一致性。' }))
+    await value.controller.dispose()
+  })
+  it('manual answer completion includes current partial text without waiting for final', async () => {
+    const value = setup(); await value.controller.open(session())
+    value.event('transcript.partial', { id: '1', text: '我负责缓存', isFinal: false, startMs: 0 })
+    await value.controller.command('submit_answer')
+    expect(value.bridge.command).toHaveBeenCalledWith(id, expect.objectContaining({ text: '我负责缓存' }))
+    await value.controller.dispose()
+  })
+  it('lets finish interrupt a pending model decision and ignores its late result', async () => {
+    const value = setup(); await value.controller.open(session()); value.controller.edit('项目回答')
+    let complete: ((session: MockSession) => void) | undefined
+    vi.mocked(value.bridge.command).mockImplementationOnce(() => new Promise(resolve => { complete = resolve })).mockResolvedValueOnce(session({ state: 'completed', version: 3, generation: 3 }))
+    const pending = value.controller.command('submit_answer')
+    await value.controller.command('finish')
+    expect(value.view()?.session?.state).toBe('completed')
+    complete?.(session({ state: 'deciding', version: 2, generation: 2 })); await pending
+    expect(value.view()?.session?.state).toBe('completed')
+    await value.controller.dispose()
+  })
+  it('cleans subscriptions, mic, playback and pending automatic submission on disposal', async () => {
+    const value = setup(); await value.controller.open(session()); value.event('transcript.final', { id: '1', text: '未提交回答', isFinal: true, startMs: 0 }); await value.controller.dispose(); await vi.advanceTimersByTimeAsync(12000)
+    expect(value.bridge.disconnect).toHaveBeenCalled(); expect(value.bridge.command).not.toHaveBeenCalled(); expect(audio.stop).toHaveBeenCalled()
+  })
+})

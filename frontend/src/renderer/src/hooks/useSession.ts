@@ -248,6 +248,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
     if (event.kind === 'documents-changed' || event.kind === 'interviews-changed' || event.kind === 'settings-changed') return
     if (event.kind === 'documents-error') { setReferenceError(event.message); return }
     if (event.kind === 'shortcut') {
+      if (document.body.dataset.mockMode === 'true') return
       if (document.activeElement?.getAttribute('data-shortcut-recorder') === 'true') return
       if (event.action === 'toggle-source') void setSource(sourceRef.current === 'system' ? 'microphone' : 'system')
       else void generate()
