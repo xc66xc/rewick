@@ -298,7 +298,7 @@ html.compact-transparent #root { background: transparent; }
 .compact-composer:focus-within { border-color: var(--color-accent); box-shadow: var(--shadow-focus-ring); }
 .compact-composer textarea { max-height: 110px; }
 
-.compact-transcript__text, .compact-composer textarea { font-size: var(--compact-font-size, 19px); line-height: 1.65; }
+.compact-composer textarea { font-size: var(--compact-font-size, 19px); line-height: 1.65; }
 
 /* Pair status and stamp in one compact row instead of reserving a blank bottom row. */
 .environment-card__status { --text-stamp: var(--text-stamp-card); --stamp-tilt: var(--stamp-card-tilt); display: flex; justify-content: space-between; align-items: center; gap: var(--spacing-stamp-status-gap); min-height: var(--spacing-stamp-status); margin-top: var(--spacing-stamp-status-top); }

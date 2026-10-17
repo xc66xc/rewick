@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import AnswerPanel from '../src/renderer/src/components/AnswerPanel'
 import { defaultSettings } from '../src/shared/defaults'
-import type { Answer } from '../src/shared/types'
+import type { Answer, TranscriptSegment } from '../src/shared/types'
 
 afterEach(() => cleanup())
 
@@ -24,14 +24,41 @@ function setup(answers: Answer[]) {
   }
   const view = render(<AnswerPanel {...props} />)
   const viewport = screen.getByRole('region', { name: '回答与面试信息' })
-  function update(next: Answer[], compact = false) {
+  function update(next: Answer[], compact = false, segments: TranscriptSegment[] = []) {
     view.rerender(<AnswerPanel {...props} compact={compact} session={{ ...props.session,
-      record: { ...props.session.record, answers: next }, busy: next.some(value => value.status === 'streaming') }} />)
+      record: { ...props.session.record, answers: next, segments }, busy: next.some(value => value.status === 'streaming') }} />)
   }
   return { viewport, update, user: userEvent.setup() }
 }
 
 describe('answer scrolling', () => {
+  it('renders live speech inside the compact chat and deduplicates the submitted question', () => {
+    const { viewport, update } = setup([])
+    const segment: TranscriptSegment = { id: 'live-one', text: '如何设计', startMs: 0, isFinal: false }
+    update([], true, [segment])
+    expect(screen.queryByRole('region', { name: '实时转写' })).toBeNull()
+    expect(viewport.contains(screen.getByRole('heading', { name: '如何设计' }))).toBe(true)
+    expect(screen.queryByText('准备好，听下一个问题。')).toBeNull()
+    const final = { ...segment, text: '如何设计缓存？', isFinal: true }
+    update([], true, [final])
+    update([{ ...answer('one', '缓存回答'), question: final.text }], true, [final])
+    expect(screen.getAllByRole('heading', { name: final.text })).toHaveLength(1)
+    update([{ ...answer('one', '缓存回答'), question: final.text }], true, [final, { ...segment, id: 'live-two', text: '怎么处理穿透' }])
+    expect(screen.getByRole('heading', { name: final.text })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: '怎么处理穿透' })).toBeTruthy()
+  })
+  it('follows live transcript growth only while the compact reader is at the bottom', () => {
+    const { viewport, update } = setup([])
+    Object.defineProperty(viewport, 'clientHeight', { configurable: true, value: 400 })
+    Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 900 })
+    const segment: TranscriptSegment = { id: 'live', text: '请介绍', startMs: 0, isFinal: false }
+    update([], true, [segment])
+    expect(viewport.scrollTop).toBe(500)
+    viewport.scrollTop = 100; fireEvent.scroll(viewport)
+    Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 1200 })
+    update([], true, [{ ...segment, text: '请介绍你的项目' }])
+    expect(viewport.scrollTop).toBe(100)
+  })
   it('keeps both chat turns and the reading position while the compact reply streams', async () => {
     const first = answer('one', '第一轮已完成。', 'complete')
     const next = answer('two', '第二轮正在输出。')

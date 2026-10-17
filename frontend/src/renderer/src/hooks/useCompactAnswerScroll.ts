@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from 'react'
 import type { Answer } from '../../../shared/types'
 
-export function useCompactAnswerScroll(compact: boolean, answers: Answer[]) {
+export function useCompactAnswerScroll(compact: boolean, answers: Answer[], transcript?: string) {
   const viewport = useRef<HTMLDivElement>(null)
   const following = useRef(true)
   useLayoutEffect(() => { following.current = true }, [compact])
@@ -10,7 +10,7 @@ export function useCompactAnswerScroll(compact: boolean, answers: Answer[]) {
     if (compact && following.current && element) {
       element.scrollTop = Math.max(0, element.scrollHeight - element.clientHeight)
     }
-  }, [compact, answers])
+  }, [compact, answers, transcript])
 
   function handleScroll() {
     const element = viewport.current

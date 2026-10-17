@@ -1,23 +1,30 @@
-import { useLayoutEffect, useRef } from 'react'
-import type { TranscriptSegment } from '../../../shared/types'
+import { useLayoutEffect, useRef, useState } from 'react'
+import type { Answer, TranscriptSegment } from '../../../shared/types'
 
-interface CompactTranscriptProps { segment?: TranscriptSegment }
+interface CompactTranscriptProps { segment?: TranscriptSegment; answer?: Answer; recordId: string }
+const normalized = (text: string) => text.trim().replace(/\s+/g, ' ')
 
-export default function CompactTranscript({ segment }: CompactTranscriptProps) {
-  const viewport = useRef<HTMLParagraphElement>(null)
+/** A pending question uses the same bubble as submitted turns, without a second transcript panel. */
+export default function CompactTranscript({ segment, answer, recordId }: CompactTranscriptProps) {
+  const observed = useRef<{ recordId: string; answerId?: string }>({ recordId })
+  const [submitted, setSubmitted] = useState<{ recordId: string; segmentId: string } | null>(null)
   useLayoutEffect(() => {
-    const element = viewport.current
-    if (element) element.scrollTop = element.scrollHeight
-  }, [segment?.id, segment?.text])
-
-  return <section aria-label="实时转写" className="shrink-0 border-b border-border px-4 py-3">
-    <div className="mb-1 flex items-center justify-between gap-2 text-xs text-text-secondary">
-      <h2 className="font-medium">实时转写</h2>
-      <span>{segment ? segment.isFinal ? '已识别' : '识别中…' : '等待语音'}</span>
-    </div>
-    <p ref={viewport} tabIndex={0} aria-label="最新转写文字" aria-live="polite" aria-atomic="true"
-      className="compact-transcript__text m-0 max-h-24 overflow-y-auto whitespace-pre-wrap break-words text-sm leading-relaxed text-text-primary">
-      {segment?.text || '开始转写后，识别文字会实时显示在这里。'}
-    </p>
+    if (observed.current.recordId !== recordId) {
+      observed.current = { recordId }
+      setSubmitted(null)
+    }
+    if (observed.current.answerId === answer?.id) return
+    observed.current.answerId = answer?.id
+    // Only a newly submitted answer consumes speech. Repeating the same question later is still visible.
+    if (segment?.text.trim() && answer && normalized(answer.question).endsWith(normalized(segment.text))) {
+      setSubmitted({ recordId, segmentId: segment.id })
+    }
+  }, [answer, segment, recordId])
+  if (!segment?.text.trim() || submitted?.recordId === recordId && submitted.segmentId === segment.id) return null
+  return <section aria-label="当前转写问题" className="compact-answer">
+    <header className="compact-answer__question">
+      <p className="text-xs font-medium text-text-secondary">当前问题</p>
+      <h3 aria-live="polite" aria-atomic="true" className="compact-answer__question-bubble whitespace-pre-wrap [overflow-wrap:anywhere]">{segment.text}</h3>
+    </header>
   </section>
 }
