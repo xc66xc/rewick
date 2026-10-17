@@ -48,7 +48,7 @@ export function useAutoAnswer(options: AutoAnswerOptions) {
         const settings = latest.current.settingsRef.current
         const snapshot = latest.current.read()
         return { ...snapshot, pauseMs: settings.autoAnswer.pauseMs,
-          active: !changing.current && !snapshot.assembling && settings.autoAnswer.enabled && snapshot.source === 'system'
+          active: !changing.current && !snapshot.assembling && settings.autoAnswer.enabled
             && snapshot.status === 'listening' && isAnswerModelReady(settings) }
       },
       includeTiming: true,

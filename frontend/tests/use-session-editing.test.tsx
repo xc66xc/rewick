@@ -58,6 +58,7 @@ function setup(fakeTimers = false) {
     saveSourceShortcut: vi.fn(async (value: { accelerator: string }) => value),
     saveSettings: vi.fn(async (input: SettingsInput) => {
       settings.interviewTarget = input.interviewTarget
+      settings.autoAnswer = input.autoAnswer
       return { ...settings, interviewTarget: input.interviewTarget }
     }),
     testModel: vi.fn(async () => ({ latencyMs: 1, message: 'OK' })),
@@ -785,6 +786,57 @@ describe('forced sign-out draft handshake', () => {
 
 
 describe('audio source shortcut', () => {
+  it('automatically answers finalized microphone speech after the configured pause', async () => {
+    const { result, bridge, run, receive } = setup(true)
+    await run(() => result.current.setSource('microphone'))
+    await run(() => result.current.start())
+    await receive(segment('先做个简单的自我介绍'))
+    await run(() => { vi.advanceTimersByTime(3000) })
+    expect(bridge.generateAnswer).not.toHaveBeenCalled()
+    await receive(segment('先做个简单的自我介绍。', { isFinal: true }))
+    await run(() => { vi.advanceTimersByTime(1499) })
+    expect(bridge.generateAnswer).not.toHaveBeenCalled()
+    await run(() => { vi.advanceTimersByTime(1) })
+    expect(bridge.generateAnswer).toHaveBeenCalledTimes(1)
+    expect(bridge.generateAnswer.mock.calls[0][0].question).toBe('先做个简单的自我介绍。')
+    await run(() => { vi.advanceTimersByTime(5000) })
+    expect(bridge.generateAnswer).toHaveBeenCalledTimes(1)
+  })
+  it('filters pure microphone acknowledgements and respects disabling automatic answers', async () => {
+    const { result, bridge, run, receive } = setup(true)
+    await run(() => result.current.setSource('microphone'))
+    await run(() => result.current.start())
+    await receive(segment('嗯，好的。', { isFinal: true }))
+    await run(() => { vi.advanceTimersByTime(2000) })
+    expect(bridge.generateAnswer).not.toHaveBeenCalled()
+    await run(() => result.current.setAutoAnswer({ enabled: false, pauseMs: 1500 }))
+    await receive(segment('介绍一下你的项目。', { id: 'disabled-question', isFinal: true }))
+    await run(() => { vi.advanceTimersByTime(2000) })
+    expect(bridge.generateAnswer).not.toHaveBeenCalled()
+    await run(() => result.current.setAutoAnswer({ enabled: true, pauseMs: 1500 }))
+    await run(() => { vi.advanceTimersByTime(2000) })
+    expect(bridge.generateAnswer).not.toHaveBeenCalled()
+    await receive(segment('怎么设计缓存？', { id: 'enabled-question', isFinal: true }))
+    await run(() => { vi.advanceTimersByTime(1500) })
+    expect(bridge.generateAnswer).toHaveBeenCalledTimes(1)
+    expect(bridge.generateAnswer.mock.calls[0][0].question).toBe('怎么设计缓存？')
+  })
+  it.each(['system', 'microphone'] as const)('drops the pending %s question on switching and answers only fresh speech', async source => {
+    const { result, bridge, run, receive, emit, setAsrSessionId } = setup(true)
+    await run(() => result.current.setSource(source))
+    await run(() => result.current.start())
+    await receive(segment('上一音源的问题', { id: 'old-question', isFinal: true }))
+    await run(() => { vi.advanceTimersByTime(1499) })
+    setAsrSessionId('new-audio-session')
+    await emit({ kind: 'shortcut', action: 'toggle-source' })
+    await emit({ kind: 'transcript', sessionId: 'asr-one', segment: segment('迟到的旧音源问题', { id: 'late-old', isFinal: true }) })
+    await run(() => { vi.advanceTimersByTime(2000) })
+    expect(bridge.generateAnswer).not.toHaveBeenCalled()
+    await emit({ kind: 'transcript', sessionId: 'new-audio-session', segment: segment('当前音源的新问题', { id: 'new-question', isFinal: true }) })
+    await run(() => { vi.advanceTimersByTime(1500) })
+    expect(bridge.generateAnswer).toHaveBeenCalledTimes(1)
+    expect(bridge.generateAnswer.mock.calls[0][0].question).toBe('当前音源的新问题')
+  })
   it('toggles the selected source in both directions while idle without starting or answering', async () => {
     const { result, bridge, run } = setup()
     await run(() => result.current.setSource('microphone'))

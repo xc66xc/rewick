@@ -20,8 +20,8 @@ export default function ServicePreferences({ advanced = false, kind, draft, onCh
   if (kind === 'asr') return <>
     <div className={fieldRowClass}><label className={fieldClass} htmlFor={silenceId}>句末静音（毫秒）<TextField id={silenceId} type="number" min={200} max={6000} step={100} required value={draft.asr.silenceMs} onChange={event => onChange({ ...draft, asr: { ...draft.asr, silenceMs: Number(event.target.value) } })} /></label>
       <label className={fieldClass} htmlFor={pauseId}>自动回答等待（毫秒）<TextField id={pauseId} type="number" min={1000} max={5000} step={100} required value={draft.autoAnswer.pauseMs} onChange={event => onChange({ ...draft, autoAnswer: { ...draft.autoAnswer, pauseMs: Number(event.target.value) } })} /></label></div>
-    <CheckRow className="mb-4" checked={draft.autoAnswer.enabled} onChange={checked => onChange({ ...draft, autoAnswer: { ...draft.autoAnswer, enabled: checked } })} label="系统音频自动回答" />
-    <p className={formNoteClass}>句末静音控制转写分句；自动回答等待面试官停顿后提交问题。更改转写服务后，重新开始转写生效。</p>
+    <CheckRow className="mb-4" checked={draft.autoAnswer.enabled} onChange={checked => onChange({ ...draft, autoAnswer: { ...draft.autoAnswer, enabled: checked } })} label="自动回答（当前音源）" />
+    <p className={formNoteClass}>系统音频和麦克风均适用：转写定稿并达到设定停顿后自动提交问题。句末静音控制转写分句；更改转写服务后，重新开始转写生效。</p>
   </>
   return <><CheckRow className="mb-4" checked={draft.remoteKnowledge.enabled} onChange={checked => onChange({ ...draft, remoteKnowledge: { ...draft.remoteKnowledge, enabled: checked } })} label="启用远程知识库" />
     <p className={formNoteClass}>开启后只检索所选远程知识库，不检索平台个人资料。检索失败仍继续回答；简历和岗位 JD 始终作为参考。</p></>
