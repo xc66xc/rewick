@@ -48,7 +48,7 @@ export class MockSessionController {
     }
     if (session.state !== 'listening') { this.clearAutomatic(); this.captureEpoch++; this.listening = false; void this.capture.stop().catch(error => this.fail(error)); this.update({ micReady: false }) }
     if (['paused', 'completed', 'error'].includes(session.state)) this.stopAudio()
-    this.update({ session })
+    this.update({ session, ...(session.state === 'completed' ? { connected: false, error: '' } : {}) })
     if (asrReady && session.state === 'listening' && !this.view.micReady && !this.listening) void this.listen(session).catch(error => this.transportFailure(error))
   }
   private async listen(session: MockSession) {
@@ -152,6 +152,10 @@ export class MockSessionController {
     } catch (error) { this.fail(error); throw error }
     finally { if (command !== 'heartbeat') { this.operations--; this.update({ busy: this.operations > 0 }) } }
   }
-  private transportFailure(reason: unknown) { this.stopAudio(); this.update({ connected: false }); this.fail(reason); void this.bridge.disconnect().catch(error => this.fail(error)) }
+  private transportFailure(reason: unknown) {
+    // A completed session is authoritative. Closing its socket must not abort an in-flight finish response.
+    if (this.view.session?.state === 'completed') { this.update({ connected: false }); return }
+    this.stopAudio(); this.update({ connected: false }); this.fail(reason); void this.bridge.disconnect().catch(error => this.fail(error))
+  }
   async dispose() { this.stopAudio(); this.unsubscribe?.(); this.disposed = true; await this.bridge.disconnect() }
 }

@@ -65,6 +65,10 @@ const server = http.createServer(async (req, res) => {
       else if (body.command === 'submit_answer') { current.turns = current.turns.map(turn => turn.id === body.turnId ? { ...turn, answerText: body.text, status: 'answered' } : turn); current = { ...current, state: 'deciding', version: current.version + 1, generation: current.generation + 1 }; state() }
       else if (body.command === 'skip') { current.turns = current.turns.map(turn => turn.id === current.currentTurnId ? { ...turn, status: 'skipped' } : turn); current = { ...current, state: 'paused', version: current.version + 1, generation: current.generation + 1 }; state() }
       else if (body.command === 'pause' || body.command === 'finish') { current = { ...current, state: body.command === 'finish' ? 'completed' : 'paused', version: current.version + 1, generation: current.generation + 1 }; state() }
+      if (body.command === 'finish' && socket?.readyState === 1) {
+        const closing = socket
+        await new Promise(resolve => { closing.once('close', resolve); closing.close(1000, 'completed') })
+      }
       return reply(res, current)
     }
     suppliers.push(req.url); return reply(res, {}, 404)
@@ -91,6 +95,7 @@ try {
   application = await _electron.launch({ executablePath: electronPath, args: [temporary, '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'], cwd: frontend, env, timeout: 45000 })
   page = await application.firstWindow(); page.setDefaultTimeout(15000)
   page.on('pageerror', error => errors.push(error.message))
+  page.on('console', message => { if (message.type() === 'error' && !message.text().includes('WebGL context lost')) errors.push(message.text()) })
   await page.waitForFunction(() => Boolean(window.copilot))
   await page.evaluate(() => {
     navigator.mediaDevices.getUserMedia = async () => {
@@ -128,6 +133,33 @@ try {
   await page.getByRole('button', { name: '暂停', exact: true }).click(); await expect(page.getByRole('button', { name: '恢复面试', exact: true })).toBeVisible()
   await page.getByRole('button', { name: '恢复面试', exact: true }).click(); await page.getByRole('button', { name: '打断并回答', exact: true }).click()
   await expect(page.getByRole('button', { name: '我回答完了', exact: true })).toBeVisible()
+  const portrait = page.getByRole('region', { name: '卡通面试官', exact: true })
+  await expect(portrait.getByRole('group', { name: /^面试官，/ })).toBeVisible()
+  await expect(portrait.getByText('在线', { exact: true })).toBeVisible()
+  await expect(portrait.locator('[data-model-ready="true"]')).toBeVisible({ timeout: 30000 })
+  await expect(portrait.locator('canvas')).toBeVisible()
+  await portrait.screenshot({ path: join(output, 'mock-interviewer-panel.png') })
+  await portrait.getByRole('button', { name: '2D', exact: true }).click()
+  await expect(portrait.locator('img')).toHaveJSProperty('complete', true)
+  await expect(portrait.locator('canvas')).toHaveCount(0)
+  await portrait.getByRole('button', { name: '3D', exact: true }).click()
+  await expect(portrait.locator('[data-model-ready="true"]')).toBeVisible({ timeout: 30000 })
+  await portrait.locator('canvas').evaluate(canvas => canvas.dispatchEvent(new Event('webglcontextlost', { cancelable: true })))
+  await expect(portrait.getByRole('alert')).toContainText('3D 角色加载或渲染失败')
+  await portrait.getByRole('button', { name: '重试加载', exact: true }).click()
+  await expect(portrait.locator('[data-model-ready="true"]')).toBeVisible({ timeout: 30000 })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  const still = await portrait.locator('canvas').screenshot()
+  await new Promise(resolve => setTimeout(resolve, 250))
+  assert.ok(still.equals(await portrait.locator('canvas').screenshot()), 'reduced motion must stop portrait movement')
+  await portrait.screenshot({ path: join(output, 'mock-interviewer-panel.png') })
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  checks.push('local VRM renders; 2D releases canvas; WebGL loss shows retry; reduced motion stays still')
+  await application.evaluate(({ BaseWindow }) => { const window = BaseWindow.getAllWindows()[0]; window?.setMinimumSize(640, 640); window?.setContentSize(760, 1000) })
+  await expect(page.getByRole('textbox', { name: /你的回答/ })).toBeVisible()
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+  await page.screenshot({ path: join(output, 'mock-interviewer-narrow.png') })
+  await application.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows()[0]?.setContentSize(1440, 1000))
   checks.push('pause/resume and immediate button interruption return to microphone safely')
   const before = commands.length
   await application.evaluate(({ webContents }, url) => webContents.getAllWebContents().find(value => value.getURL() === url)?.send('copilot:event', { kind: 'shortcut', action: 'toggle-source' }), page.url())
@@ -139,10 +171,11 @@ try {
   await application.evaluate(({ dialog }, filePath) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath }) }, exportPath)
   await page.getByRole('button', { name: '导出 Q&A Markdown', exact: true }).click()
   await expect(page.getByRole('button', { name: '导出 Q&A Markdown', exact: true })).toBeEnabled()
+  await expect(page.getByText('模拟面试连接已断开，服务端将暂停计时，请重新连接。', { exact: true })).toHaveCount(0)
   await expect.poll(async () => readFile(exportPath, 'utf8').catch(() => '')).toContain('我负责缓存和数据库的一致性。')
   const markdown = await readFile(exportPath, 'utf8')
   assert.ok(markdown.includes('请介绍你负责的项目。'))
-  checks.push('finish releases media; native save dialog exports actual saved Q&A Markdown')
+  checks.push('confirmed finish closes websocket before REST returns without a disconnect toast; Q&A exports')
   await page.getByRole('button', { name: '余额流水', exact: true }).click(); await expect(page.getByText(/合成管理员发放/)).toBeVisible()
   assert.equal(errors.length, 0, errors.join('\n'))
   assert.ok(!suppliers.some(value => /answer|asr|llm|report/.test(value)), JSON.stringify(suppliers))

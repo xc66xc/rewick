@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import './ui/setup-dom'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MockConversation from '../src/renderer/src/features/mock-interview/MockConversation'
@@ -9,9 +10,10 @@ import { toast } from '../src/renderer/src/components/ui/toast'
 import AvatarStage from '../src/renderer/src/features/mock-interview/AvatarStage'
 import type { useMockInterview } from '../src/renderer/src/features/mock-interview/useMockInterview'
 import type { MockBridge, MockSession } from '../src/shared/mock-interview'
+vi.mock('../src/renderer/src/features/mock-interview/Avatar3D', () => ({ default: () => <div>3D 测试场景</div> }))
 const id = '12345678-1234-4234-8234-123456789012'
 const session: MockSession = { id, state: 'listening', version: 1, generation: 1, environmentName: '测试岗位', interviewType: 'technical', durationMinutes: 15, pauseMs: 2400, usedSeconds: 0, remainingSeconds: 900, avatarId: 'rewick-interviewer', voiceId: 'test', turns: [{ id, number: 1, question: '介绍项目', answerText: '', status: 'pending' }], currentTurnId: id, reportStatus: 'pending', createdAt: '2026-10-17T12:00:00' }
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 describe('mock interview interactions', () => {
   it('shows growing speech directly in the answer field without duplicating it below', () => {
     const interview = { session, draft: '我负责缓存。', partial: '还包括', busy: false, connected: true, micReady: true, edit: vi.fn(), editing: vi.fn() } as unknown as ReturnType<typeof useMockInterview>
@@ -67,11 +69,33 @@ describe('mock interview interactions', () => {
     expect(report).not.toHaveBeenCalled(); expect(retryReport).not.toHaveBeenCalled()
     notify.mockRestore()
   })
-  it('uses audio level for speaking mouth state and a closed mouth while paused', () => {
+  it('lets the user switch from 3D to the animated 2D portrait', async () => {
+    vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
     const { rerender } = render(<AvatarStage state="speaking" level={1} />)
-    expect(screen.getByRole('img').getAttribute('aria-label')).toContain('讲话中')
-    const mouth = document.querySelector('ellipse[cx="160"][cy="179"]'); expect(mouth?.getAttribute('ry')).toBe('15')
+    await userEvent.setup().click(screen.getByRole('button', { name: '2D' }))
+    expect(screen.getByRole('group', { name: /面试官，/ }).getAttribute('aria-label')).toContain('讲话中')
+    const portrait = document.querySelector('img[aria-hidden="true"]')
+    expect(portrait?.getAttribute('data-frame')).toBe('2')
     rerender(<AvatarStage state="paused" level={1} />)
-    expect(document.querySelector('ellipse[cx="160"][cy="179"]')?.getAttribute('visibility')).toBe('hidden')
+    expect(portrait?.getAttribute('data-frame')).toBe('0')
+    expect(screen.getByText('未连接')).toBeTruthy()
+    rerender(<AvatarStage state="listening" level={0} connected />)
+    expect(screen.getByText('在线')).toBeTruthy()
+    expect(screen.getByText('保持自然表达')).toBeTruthy()
+    rerender(<AvatarStage state="completed" level={1} connected />)
+    expect(screen.getByText('已结束')).toBeTruthy()
+    expect(portrait?.getAttribute('data-frame')).toBe('0')
+  })
+  it('keeps the 2D portrait still when reduced motion is requested', async () => {
+    const frame = vi.fn(() => 1)
+    vi.stubGlobal('requestAnimationFrame', frame)
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() } as unknown as MediaQueryList)
+    render(<AvatarStage state="speaking" level={1} connected />)
+    await userEvent.setup().click(screen.getByRole('button', { name: '2D' }))
+    expect(document.querySelector('img[aria-hidden="true"]')?.getAttribute('data-frame')).toBe('0')
+    expect(frame).not.toHaveBeenCalled()
+    expect(screen.getByText('面试官讲话中')).toBeTruthy()
   })
 })

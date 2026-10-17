@@ -37,6 +37,8 @@ nsis:
   artifactName: Rewick-${version}-win-${arch}-setup.${ext}
 
 extraResources:
+  - from: src/renderer/src/assets/interviewer-3d/README.md
+    to: licenses/interviewer-3d.md
   - from: build/python-runtime/python
     to: python
   - from: scripts/recording-review.py

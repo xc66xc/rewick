@@ -13,7 +13,7 @@ function setup() {
   const bridge = { onEvent: vi.fn((value: (message: MockMessage) => void) => { listener = value; return vi.fn() }), connect: vi.fn(async () => undefined), disconnect: vi.fn(async () => undefined), credit: vi.fn(), sendAudio: vi.fn(), command: vi.fn(async () => session({ state: 'deciding', version: 2 })) } as unknown as MockBridge
   const controller = new MockSessionController(bridge, value => { view = value })
   const event = (kind: MockEvent['kind'], payload: unknown, generation = 1) => listener?.({ kind: 'event', event: { protocolVersion: 1, sessionId: id, sequence: sequence++, generation, kind, payload } })
-  return { bridge, controller, event, view: () => view }
+  return { bridge, controller, event, disconnect: () => listener?.({ kind: 'disconnected', message: '模拟面试连接已断开，服务端将暂停计时，请重新连接。' }), view: () => view }
 }
 beforeEach(() => { vi.useFakeTimers(); vi.clearAllMocks() })
 afterEach(() => vi.useRealTimers())
@@ -148,6 +148,53 @@ describe('mock interview coordinator', () => {
     expect(value.view()?.session?.state).toBe('completed')
     complete?.(session({ state: 'deciding', version: 2, generation: 2 })); await pending
     expect(value.view()?.session?.state).toBe('completed')
+    await value.controller.dispose()
+  })
+  it('does not report a disconnect after the server confirms completion before finish REST resolves', async () => {
+    const value = setup(); await value.controller.open(session())
+    let complete: ((result: MockSession) => void) | undefined
+    vi.mocked(value.bridge.command).mockImplementationOnce(() => new Promise(resolve => { complete = resolve }))
+    const pending = value.controller.command('finish')
+    value.event('state', session({ state: 'completed', version: 2, generation: 2 }), 2)
+    value.disconnect()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(value.view()?.session?.state).toBe('completed')
+    expect(value.view()?.connected).toBe(false)
+    expect(value.view()?.error).toBe('')
+    expect(value.bridge.disconnect).not.toHaveBeenCalled()
+    complete?.(session({ state: 'completed', version: 2, generation: 2 })); await pending
+    expect(value.view()?.error).toBe('')
+    await value.controller.dispose()
+  })
+  it('does not report a disconnect after the finish response confirms completion first', async () => {
+    const value = setup(); await value.controller.open(session())
+    vi.mocked(value.bridge.command).mockResolvedValueOnce(session({ state: 'completed', version: 2, generation: 2 }))
+    await value.controller.command('finish'); value.disconnect()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(value.view()?.connected).toBe(false)
+    expect(value.view()?.error).toBe('')
+    expect(value.bridge.disconnect).not.toHaveBeenCalled()
+    await value.controller.dispose()
+  })
+  it('still reports a genuine disconnect while finish has not been confirmed', async () => {
+    const value = setup(); await value.controller.open(session())
+    let reject: ((error: Error) => void) | undefined
+    vi.mocked(value.bridge.command).mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail }))
+    const pending = value.controller.command('finish')
+    const assertion = expect(pending).rejects.toThrow('结束请求失败')
+    value.disconnect(); await vi.advanceTimersByTimeAsync(0)
+    expect(value.view()?.error).toContain('连接已断开')
+    expect(value.bridge.disconnect).toHaveBeenCalledOnce()
+    reject?.(new Error('结束请求失败')); await assertion
+    expect(value.view()?.session?.state).toBe('listening')
+    await value.controller.dispose()
+  })
+  it('still reports an unexpected disconnect in an active interview', async () => {
+    const value = setup(); await value.controller.open(session())
+    value.disconnect(); await vi.advanceTimersByTimeAsync(0)
+    expect(value.view()?.connected).toBe(false)
+    expect(value.view()?.error).toContain('连接已断开')
+    expect(value.bridge.disconnect).toHaveBeenCalledOnce()
     await value.controller.dispose()
   })
   it('cleans subscriptions, mic, playback and pending automatic submission on disposal', async () => {

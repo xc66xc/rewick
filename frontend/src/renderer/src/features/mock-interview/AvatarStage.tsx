@@ -1,44 +1,35 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { lazy, Suspense, useState, type RefObject } from 'react'
+import { CheckCircle, DotsThree, PauseCircle, Waveform } from '@phosphor-icons/react'
 import type { MockSession } from '../../../../shared/mock-interview'
-interface AvatarStageProps { state?: MockSession['state']; level: number; audioLevel?: RefObject<number> }
+import { Pill, Dot } from '../../components/ui/pill'
+import Avatar2D from './Avatar2D'
+import AvatarRenderBoundary from './AvatarRenderBoundary'
+import { Segmented } from '../../components/ui/segmented'
+const Avatar3D = lazy(() => import('./Avatar3D'))
+
+interface AvatarStageProps { state?: MockSession['state']; level: number; audioLevel?: RefObject<number>; connected?: boolean }
 const labels = { ready: '准备就绪', starting: '正在准备问题', speaking: '面试官讲话中', listening: '正在听你回答', deciding: '正在思考追问', paused: '已暂停', completed: '面试结束', error: '需要处理异常' }
-export default function AvatarStage({ state = 'ready', level, audioLevel }: AvatarStageProps) {
-  const [visible, setVisible] = useState(!document.hidden)
-  useEffect(() => { const changed = () => setVisible(!document.hidden); document.addEventListener('visibilitychange', changed); return () => document.removeEventListener('visibilitychange', changed) }, [])
-  const animate = visible && !['paused', 'completed', 'error'].includes(state)
-  const openMouth = useRef<SVGEllipseElement>(null)
-  const closedMouth = useRef<SVGPathElement>(null)
-  useEffect(() => {
-    if (!audioLevel) return
-    let frame = 0, last = 0
-    const draw = (time: number) => {
-      if (time - last >= 50) {
-        last = time
-        const value = state === 'speaking' && !document.hidden ? Math.round(Math.min(1, audioLevel.current) * 3) : 0
-        openMouth.current?.setAttribute('rx', String(12 + value * 2)); openMouth.current?.setAttribute('ry', String(3 + value * 4))
-        openMouth.current?.setAttribute('visibility', value ? 'visible' : 'hidden'); closedMouth.current?.setAttribute('visibility', value ? 'hidden' : 'visible')
-      }
-      if (!document.hidden) frame = requestAnimationFrame(draw)
-    }
-    const visibility = () => { cancelAnimationFrame(frame); last = 0; draw(performance.now()) }
-    document.addEventListener('visibilitychange', visibility); draw(performance.now())
-    return () => { cancelAnimationFrame(frame); document.removeEventListener('visibilitychange', visibility) }
-  }, [audioLevel, state])
-  const mouth = state === 'speaking' ? Math.round(Math.min(1, level) * 3) : 0
-  return <section className="flex flex-col items-center justify-center rounded-card bg-accent-subtle p-6" aria-label="卡通面试官">
-    <svg viewBox="0 0 320 320" className={`w-full max-h-[340px] text-accent ${animate ? 'mock-avatar--alive' : ''}`} role="img" aria-label={`面试官，${labels[state]}`}>
-      <ellipse cx="160" cy="300" rx="100" ry="10" className="fill-accent-line" />
-      <path d="M62 294v-39c0-46 40-68 98-68s98 22 98 68v39z" className="fill-accent" />
-      <path d="m134 198 26 34 26-34v-28h-52z" className="fill-card" />
-      <rect x="89" y="62" width="142" height="143" rx="64" className="fill-card stroke-border-strong" strokeWidth="3" />
-      <path d="M88 124C65 54 108 26 156 30c67-12 94 31 78 95l-20-44c-51 15-73-4-87-18l-18 64z" className="fill-text-primary" />
-      <path d="m111 124 27-3m45 0 27 3" className="stroke-text-primary" strokeWidth="5" strokeLinecap="round" />
-      <g className="mock-avatar__eyes"><circle cx="125" cy="141" r="5" className="fill-text-primary" /><circle cx="195" cy="141" r="5" className="fill-text-primary" /></g>
-      <path d="m157 148-4 14h10" className="stroke-text-secondary" fill="none" strokeWidth="3" strokeLinecap="round" />
-      <path ref={closedMouth} visibility={mouth ? 'hidden' : 'visible'} d="M143 178q17 13 34 0" fill="none" className="stroke-text-primary" strokeWidth="4" strokeLinecap="round" /><ellipse ref={openMouth} visibility={mouth ? 'visible' : 'hidden'} cx="160" cy="179" rx={12 + mouth * 2} ry={3 + mouth * 4} className="fill-text-primary" />
-      <path d="m120 216 40 50 40-50" className="stroke-accent-line" strokeWidth="3" fill="none" />
-      <circle cx="160" cy="280" r="3" className="fill-card" />
-    </svg>
-    <h2 className="mt-3 text-lg font-semibold">Rewick 面试官</h2><p className="mt-2 text-sm text-text-secondary" role="status">{labels[state]}</p>
+const hints = { ready: '准备好后，我们就开始', starting: '马上开始，请稍候', speaking: '听完问题，再自然作答', listening: '保持自然表达', deciding: '正在整理你的回答', paused: '准备好后，继续面试', completed: '本场问答已保存', error: '检查连接后再继续' }
+export default function AvatarStage({ state = 'ready', level, audioLevel, connected = false }: AvatarStageProps) {
+  const [mode, setMode] = useState('3d')
+  const Icon = state === 'paused' ? PauseCircle : state === 'completed' ? CheckCircle : ['starting', 'deciding'].includes(state) ? DotsThree : Waveform
+  const online = connected && !['completed', 'error'].includes(state)
+  const connectionLabel = state === 'completed' ? '已结束' : state === 'error' ? '连接异常' : online ? '在线' : '未连接'
+  return <section className="mock-interviewer self-start overflow-hidden rounded-card border border-border bg-card" aria-label="卡通面试官" data-state={state}>
+    <div className="mock-interviewer__portrait" role="group" aria-label={`面试官，${labels[state]}`}>
+      <AvatarRenderBoundary key={mode}>{mode === '2d' ? <Avatar2D state={state} level={level} audioLevel={audioLevel} /> : <Suspense fallback={<p className="mock-interviewer__loading" role="status">正在加载 3D 引擎…</p>}><Avatar3D state={state} level={level} audioLevel={audioLevel} /></Suspense>}</AvatarRenderBoundary>
+      <header className="mock-interviewer__header">
+        <Pill className="rounded-full border-transparent bg-card/95 px-3 py-0.5 text-xs font-medium leading-5">Rewick 面试官</Pill>
+        <Pill className="rounded-full border-transparent bg-card/95 px-3 py-0.5 text-xs leading-5 text-text-secondary"><Dot tone={online ? 'success' : state === 'error' ? 'danger' : 'muted'} pulse={false} />{connectionLabel}</Pill>
+      </header>
+    </div>
+    <footer className="mock-interviewer__footer">
+      <Icon className="mock-interviewer__signal shrink-0 text-accent" size={32} weight="regular" aria-hidden="true" />
+      <div className="min-w-0"><h2 className="text-sm font-semibold leading-5" role="status">{labels[state]}</h2><p className="mt-1 text-xs text-text-secondary">{hints[state]}</p></div>
+    </footer>
+    <div className="flex items-center justify-between gap-2 border-t border-border px-4 py-2">
+      <span className="text-xs text-text-secondary">{mode === '3d' ? '3D 示例角色 · pixiv' : '2D 卡通角色'}</span>
+      <Segmented value={mode} onValueChange={setMode} options={[{ value: '2d', label: '2D' }, { value: '3d', label: '3D' }]} aria-label="面试官显示方式" />
+    </div>
   </section>
 }

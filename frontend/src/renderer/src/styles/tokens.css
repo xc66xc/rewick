@@ -316,9 +316,25 @@ html.compact-transparent #root { background: transparent; }
 
 .environment-card__tags { display: flex; flex: 1; min-width: 0; flex-wrap: wrap; gap: var(--spacing-stamp-status-gap); align-items: center; }
 
-@keyframes mock-avatar-breathe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
-@keyframes mock-avatar-blink { 0%, 44%, 48%, 100% { transform: scaleY(1); } 46% { transform: scaleY(.1); } }
-.mock-avatar--alive { animation: mock-avatar-breathe 4s ease-in-out infinite; }
-.mock-avatar__eyes { transform-origin: 160px 141px; }
-.mock-avatar--alive .mock-avatar__eyes { animation: mock-avatar-blink 5s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) { .mock-avatar--alive, .mock-avatar__eyes { animation: none; } }
+/* Mock interviewer: local 2x2 artwork atlas with compositor-only frame changes. */
+.mock-interviewer__portrait { position: relative; aspect-ratio: 3 / 4; overflow: hidden; }
+.mock-interviewer__atlas { display: block; width: 200%; height: 200%; max-width: none; user-select: none; pointer-events: none; }
+.mock-interviewer__header { position: absolute; inset: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px; }
+.mock-interviewer__footer { display: flex; align-items: center; gap: 12px; min-height: 80px; padding: 16px 20px; }
+@keyframes mock-interviewer-signal { 0%, 100% { opacity: .55; transform: scaleY(.8); } 50% { opacity: 1; transform: scaleY(1); } }
+.mock-interviewer[data-state='listening'] .mock-interviewer__signal, .mock-interviewer[data-state='speaking'] .mock-interviewer__signal { animation: mock-interviewer-signal 1.6s ease-in-out infinite; }
+@media (max-width: 820px) {
+  .mock-interviewer { display: grid; grid-template-columns: minmax(0, 195px) minmax(0, 1fr); }
+  .mock-interviewer__header { gap: 4px; padding: 8px; }
+  .mock-interviewer__footer { min-height: 80px; }
+}
+@media (prefers-reduced-motion: reduce) { .mock-interviewer[data-state] .mock-interviewer__signal { animation: none; } }
+
+.mock-interviewer__3d { position: absolute; inset: 0; background-size: cover; background-position: center; }
+.mock-interviewer__loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; background: var(--color-card); color: var(--color-text-secondary); }
+.mock-interviewer__header { pointer-events: none; }
+@media (max-width: 820px) {
+  .mock-interviewer__portrait { grid-column: 1; grid-row: 1 / span 2; }
+  .mock-interviewer__footer { grid-column: 2; grid-row: 1; }
+  .mock-interviewer > :last-child { grid-column: 2; grid-row: 2; align-self: end; }
+}
