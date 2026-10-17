@@ -118,7 +118,7 @@ public class MockInterviewServiceImpl implements MockInterviewService {
    case "repeat" -> {if(!Set.of("speaking","listening").contains(row.state())) throw invalidState();records.state(user,row.id(),"speaking",1,null);}
    case "interrupt" -> {if(!"speaking".equals(row.state())) throw invalidState();records.state(user,row.id(),"listening",1,null);}
    case "pause" -> {if(!ACTIVE.contains(row.state())) throw invalidState();meter.stop(user,row.id());records.state(user,row.id(),"paused",1,null);}
-   case "finish" -> {if("completed".equals(row.state())) return;meter.stop(user,row.id());records.state(user,row.id(),"completed",1,null);records.enqueue(row.id());records.reportStatus(row.id(),"pending");}
+   case "finish" -> {if("completed".equals(row.state())) return;meter.stop(user,row.id());records.state(user,row.id(),"completed",1,null);}
    default -> throw MockInput.error("mock_invalid_command","不支持的模拟面试操作。");
   }
  }
@@ -135,19 +135,14 @@ public class MockInterviewServiceImpl implements MockInterviewService {
   ((ObjectNode)config.path("tts")).set("apiKey",live.path("tts").path("apiKey"));
   return config;
  }
+ // Retain the old endpoints for installed clients without scheduling model work.
  public JsonNode report(long user,UUID id) {
-  require(user,id.toString());String result=records.report(id.toString());
-  return result==null?json.createObjectNode().put("status","pending"):MockJson.parse(json,result);
+  require(user,id.toString());
+  return json.createObjectNode().put("status","failed").put("error","AI复盘已停用，请使用新版客户端导出问答Markdown。");
  }
  public JsonNode retryReport(long user,UUID id,JsonNode input) {
-  String request=MockInput.uuid(input,"requestId");
-  return tx.execute(status->{
-   meter.lock(user);var row=require(user,id.toString());
-   var prior=records.command(user,row.id(),request);
-   if(prior!=null) {if(!prior.payloadHash().equals(MockJson.hash(input))) throw MockInput.error("mock_idempotency_conflict","重试请求内容不同。");return MockJson.parse(json,prior.result());}
-   if(!"completed".equals(row.state()) || records.retryReport(row.id())!=1) throw MockInput.error("mock_report_retry_limit","报告不可重试或已达到三次生成上限。");
-   records.reportStatus(row.id(),"pending");JsonNode result=report(user,id);records.record(user,row.id(),request,MockJson.hash(input),result.toString());return result;
-  });
+  MockInput.uuid(input,"requestId");
+  return report(user,id);
  }
  public JsonNode remove(long user,UUID id) {
   tx.executeWithoutResult(status->{meter.lock(user);var row=require(user,id.toString());if(ACTIVE.contains(row.state())) throw MockInput.error("mock_busy","请先结束面试再删除。");records.delete(user,row.id());records.deleteTurns(row.id());records.scrubCommands(row.id());records.scrubEvents(row.id());records.reportSave(row.id(),"failed",null,"记录已删除。");});
@@ -159,10 +154,9 @@ public class MockInterviewServiceImpl implements MockInterviewService {
  }
  public void expire() {
   for(var row:records.active()) {
-   try {tx.executeWithoutResult(status->{meter.lock(row.userId());meter.settle(row.userId(),row.id());var current=require(row.userId(),row.id());if("paused".equals(current.state()) && Duration.between(current.updatedAt(),meter.now()).toMinutes()>=10) {records.state(row.userId(),row.id(),"completed",1,null);records.enqueue(row.id());}});}
+   try {tx.executeWithoutResult(status->{meter.lock(row.userId());meter.settle(row.userId(),row.id());var current=require(row.userId(),row.id());if("paused".equals(current.state()) && Duration.between(current.updatedAt(),meter.now()).toMinutes()>=10) {records.state(row.userId(),row.id(),"completed",1,null);}});}
    catch(com.interview.copilot.exception.ApiException error) {org.slf4j.LoggerFactory.getLogger(getClass()).warn("Mock expiry rejected session={} code={}",row.id(),error.getMessage());}
   }
-  orchestration.reports();
  }
  private boolean hasPendingTurn(MockSessionEntity row) {
   if(row.currentTurnId()==null)return false;
@@ -175,7 +169,7 @@ public class MockInterviewServiceImpl implements MockInterviewService {
  private JsonNode view(MockSessionEntity row) {return view(row,true);}
  private JsonNode view(MockSessionEntity row,boolean includeTurns) {
   var snapshot=MockJson.parse(json,row.snapshot());var env=snapshot.path("interviewEnvironment");
-  var result=json.createObjectNode().put("id",row.id()).put("state",row.state()).put("version",row.version()).put("generation",row.generation()).put("environmentName",env.path("name").asText()).put("interviewType",env.path("interviewType").asText("technical")).put("durationMinutes",row.durationMinutes()).put("usedSeconds",row.usedSeconds()).put("remainingSeconds",Math.max(0,row.durationMinutes()*60L-row.usedSeconds())).put("avatarId",snapshot.path("avatarId").asText()).put("voiceId",snapshot.path("voiceId").asText()).put("reportStatus",row.reportStatus()).put("createdAt",ServerTime.instant(row.createdAt()).toString());
+  var result=json.createObjectNode().put("id",row.id()).put("state",row.state()).put("version",row.version()).put("generation",row.generation()).put("environmentName",env.path("name").asText()).put("interviewType",env.path("interviewType").asText("technical")).put("durationMinutes",row.durationMinutes()).put("usedSeconds",row.usedSeconds()).put("remainingSeconds",Math.max(0,row.durationMinutes()*60L-row.usedSeconds())).put("avatarId",snapshot.path("avatarId").asText()).put("voiceId",snapshot.path("voiceId").asText()).put("reportStatus","disabled").put("createdAt",ServerTime.instant(row.createdAt()).toString());
   result.put("pauseMs",MockJson.parse(json,row.config()).path("pauseMs").asInt(1800));
   if(row.currentTurnId()!=null) result.put("currentTurnId",row.currentTurnId());if(row.error()!=null) result.put("error",row.error());
   var turns=result.putArray("turns");if(includeTurns)records.turns(row.id()).forEach(text->turns.add(MockJson.parse(json,text)));return result;

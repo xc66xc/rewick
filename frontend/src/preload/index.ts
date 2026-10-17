@@ -20,6 +20,7 @@ function createBridge(accountScope?: string): DesktopBridge {
     command: (id, command) => invoke('mock:request', { action: 'command', input: { id, command } }),
     report: id => invoke('mock:request', { action: 'report', input: { id } }),
     retryReport: (id, requestId) => invoke('mock:request', { action: 'retryReport', input: { id, requestId } }),
+    exportQa: id => invoke('mock:export-qa', id),
     remove: id => invoke('mock:request', { action: 'remove', input: { id } }),
     connect: id => invoke('mock:connect', id),
     disconnect: () => invoke('mock:disconnect'),

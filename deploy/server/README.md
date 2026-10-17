@@ -211,3 +211,11 @@ API 域名只开放 `/api/` 与健康检查，`/api/v1/admin/` 和页面根路�
 回滚材料：`/home/ubuntu/interview-copilot/releases/admin-ui-20260923-0133/previous-live`（运行站点备份）、`previous-source`（构建目录备份），旧镜像标签 `interview-copilot-admin:before-ui-20260923-0133`。旧哈希资源保留供已打开页面使用。入口 JS `index-BmSunuPZ.js`、CSS `index-BVmnf07G.css`。
 
 验收：上传包 SHA-256 一致；Nginx 配置检查通过；服务器本机使用管理域名 SNI 校验 HTTPS 首页、JS、CSS 均 200；后端健康 UP，容器运行时间未变化。本机公网 curl 连接重置，浏览器访问超时，公网浏览器验收未完成。
+
+## 2026-10-17 模拟问答导出部署
+
+后端1.3.0-SNAPSHOT与管理端1.2.0已发布，不执行DDL。停止AI复盘生成/重试和旧任务调度，桌面1.5.0提供Q&A Markdown导出，未生成桌面安装包。
+
+发布目录 `releases/qa-export-20261017/`；回滚材料 `releases/before-qa-export-20261017/` 含两库dump、旧JAR、实际运行/源码管理静态、私有环境与配置，旧镜像标签 `before-qa-export-20261017`。仅后端容器重建，管理运行容器复制新哈希资源、原子替换index并热重载Nginx；已构建管理镜像供以后重建。
+
+后端JAR SHA256为 `5833d8f9c6e0e76f4047eea9ca5b772b32e7b088b31d8ac07a310985830335ac`。服务器侧证书验证HTTPS健康UP、问答原文读取、报告停用与不入队、匿名401/跨账号404及测试数据清理通过。管理index哈希一致、新JS HTTPS200，Prom两个目标UP。平台28/模拟3及加密语音Key指纹与部署前一致，没有更改用户余额。临时身份/令牌/会话/钱包已清理，未调用供应商。公网本机curl仍连接重置，未宣称已通过公网客户端验收。

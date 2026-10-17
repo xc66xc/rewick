@@ -13,6 +13,9 @@ export class MockSessionController {
   private finals = new Map<string, string>()
   private draftEdited = false
   private pendingFinals: string[] = []
+  private partialId?: string
+  private editedSegments = new Set<string>()
+  private pendingPartial?: { id: string; text: string }
   private sequence = 0
   private eventSequence = -1
   private speech?: { id: string; generation: number; sequence: number }
@@ -30,7 +33,7 @@ export class MockSessionController {
   private fail(reason: unknown) { this.update({ error: reason instanceof Error ? reason.message : '模拟面试操作失败。' }) }
   async open(session: MockSession) {
     this.disposed = false; this.stopAudio(); this.unsubscribe?.()
-    this.eventSequence = -1; this.finals.clear(); this.draftEdited = false; this.pendingFinals = []; this.pendingCommands.clear(); this.update({ session, draft: '', partial: '', error: '', connected: false })
+    this.eventSequence = -1; this.finals.clear(); this.draftEdited = false; this.pendingFinals = []; this.partialId = undefined; this.pendingPartial = undefined; this.editedSegments.clear(); this.pendingCommands.clear(); this.update({ session, draft: '', partial: '', editing: false, hint: undefined, error: '', connected: false })
     if (session.state === 'completed') return
     this.unsubscribe = this.bridge.onEvent(message => { void this.receive(message).catch(error => this.transportFailure(error)) })
     await this.bridge.connect(session.id); this.update({ connected: true })
@@ -40,6 +43,7 @@ export class MockSessionController {
     if (previous && (previous.id !== session.id || session.version < previous.version || session.generation < previous.generation)) return
     if (previous?.generation !== session.generation || previous?.currentTurnId !== session.currentTurnId) {
       this.stopAudio(); this.finals.clear(); this.draftEdited = false; this.pendingFinals = []; this.pendingCommands.clear(); this.sequence = 0
+      this.partialId = undefined; this.pendingPartial = undefined; this.editedSegments.clear()
       this.update({ draft: '', partial: '', editing: false, hint: undefined })
     }
     if (session.state !== 'listening') { this.clearAutomatic(); this.captureEpoch++; this.listening = false; void this.capture.stop().catch(error => this.fail(error)); this.update({ micReady: false }) }
@@ -85,12 +89,19 @@ export class MockSessionController {
     if (event.kind === 'transcript.partial' || event.kind === 'transcript.final') {
       if (session.state !== 'listening') return
       const part = z.object({ id: z.string(), text: z.string(), isFinal: z.boolean(), startMs: z.number() }).parse(event.payload)
+      if (this.editedSegments.has(part.id) || (event.kind === 'transcript.partial' && this.finals.has(part.id))) return
       this.clearAutomatic()
-      if (event.kind === 'transcript.partial') { this.update({ partial: part.text }); return }
+      if (event.kind === 'transcript.partial') {
+        if (this.view.editing && this.draftEdited) this.pendingPartial = part
+        else { this.partialId = part.id; this.update({ partial: part.text, hint: undefined }) }
+        return
+      }
       const isNew = !this.finals.has(part.id)
       this.finals.set(part.id, part.text)
-      this.update({ partial: '', hint: undefined })
-      if (this.view.editing) { if (isNew) this.pendingFinals.push(part.text) }
+      if (this.pendingPartial?.id === part.id) this.pendingPartial = undefined
+      if (this.partialId === part.id) { this.partialId = undefined; this.update({ partial: '' }) }
+      this.update({ hint: undefined })
+      if (this.view.editing && this.draftEdited) { if (isNew) this.pendingFinals.push(part.text) }
       else if (!this.draftEdited) this.update({ draft: [...this.finals.values()].join('') })
       else if (isNew) this.update({ draft: this.view.draft + part.text })
       this.schedule(); return
@@ -105,16 +116,29 @@ export class MockSessionController {
   }
   private schedule() {
     this.clearAutomatic()
-    if (this.view.editing || this.view.busy || this.view.session?.state !== 'listening' || !this.view.draft.trim()) return
+    if (this.view.editing || this.view.busy || this.view.partial.trim() || this.view.session?.state !== 'listening' || !this.view.draft.trim()) return
     if (/^(嗯+|啊+|哦+|好+的?|对+的?|是的|明白了?|收到|ok|okay)[。！!，,\s]*$/i.test(this.view.draft.trim())) return
     this.automatic = setTimeout(() => { void this.command('submit_answer').catch(error => this.fail(error)) }, this.view.session?.pauseMs ?? 1800)
   }
-  edit(text: string) { this.draftEdited = true; this.clearAutomatic(); this.update({ draft: text }) }
-  editing(editing: boolean) { if (!editing && this.pendingFinals.length) { this.update({ draft: this.view.draft + this.pendingFinals.join('') }); this.pendingFinals = [] }; this.update({ editing }); if (editing) this.clearAutomatic(); else this.schedule() }
+  edit(text: string) {
+    // The displayed partial is now part of the user's edited text; late ASR must not add it again.
+    if (this.partialId) this.editedSegments.add(this.partialId)
+    this.partialId = undefined
+    this.draftEdited = true; this.clearAutomatic(); this.update({ draft: text, partial: '' })
+  }
+  editing(editing: boolean) {
+    if (!editing && this.pendingFinals.length) { this.update({ draft: this.view.draft + this.pendingFinals.join('') }); this.pendingFinals = [] }
+    if (!editing && this.pendingPartial) {
+      this.partialId = this.pendingPartial.id
+      this.update({ partial: this.pendingPartial.text })
+      this.pendingPartial = undefined
+    }
+    this.update({ editing }); if (editing) this.clearAutomatic(); else this.schedule()
+  }
   async command(command: MockCommand['command']) {
     const session = this.view.session
     if (!session || (this.view.busy && !['heartbeat', 'pause', 'finish', 'interrupt', 'playback_completed'].includes(command))) return
-    const answer = (this.view.draft + (!this.draftEdited ? this.view.partial : '')).trim()
+    const answer = (this.view.draft + this.view.partial).trim()
     if (command === 'submit_answer' && !answer) return
     const key = `${session.id}:${session.currentTurnId}:${command}:${command === 'submit_answer' ? answer : ''}`
     const input: MockCommand = this.pendingCommands.get(key) ?? { requestId: crypto.randomUUID(), expectedVersion: session.version, command, ...(session.currentTurnId ? { turnId: session.currentTurnId } : {}), ...(command === 'submit_answer' ? { text: answer } : {}) }

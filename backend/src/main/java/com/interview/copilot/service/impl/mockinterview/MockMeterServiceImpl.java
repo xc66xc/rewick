@@ -54,7 +54,6 @@ public class MockMeterServiceImpl implements MockMeterService {
    wallets.release(user,"mock");
    String state=(balance-debit<=0 || remaining-debit<=0)?"completed":"paused";
    interviews.state(user,id,state,1,"completed".equals(state)?null:"连接超时，模拟面试已暂停。");
-   if("completed".equals(state)) {interviews.enqueue(id);interviews.reportStatus(id,"pending");}
   }
  }
  public void stop(long user,String id) {

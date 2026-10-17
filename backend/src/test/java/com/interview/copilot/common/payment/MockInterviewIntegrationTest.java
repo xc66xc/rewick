@@ -79,9 +79,11 @@ class MockInterviewIntegrationTest extends PaymentHttpFixture {
   session=cmd(session,"pause");assertThat(session.path("state").asText()).isEqualTo("paused");
   session=cmd(session,"resume");assertThat(session.path("state").asText()).isEqualTo("speaking");
   session=cmd(session,"finish");assertThat(session.path("state").asText()).isEqualTo("completed");
-  interviews.expire();long deadline=System.nanoTime()+Duration.ofSeconds(5).toNanos();JsonNode report;
-  do {report=interviews.report(1,UUID.fromString(session.path("id").asText()));if("ready".equals(report.path("status").asText()))break;Thread.sleep(10);}while(System.nanoTime()<deadline);
-  assertThat(report.path("status").asText()).isEqualTo("ready");
+  interviews.expire();
+  UUID id=UUID.fromString(session.path("id").asText());
+  assertThat(jdbc.queryForObject("SELECT count(*) FROM mock_reports WHERE session_id=?",Integer.class,id)).isZero();
+  assertThat(interviews.get(1,id).path("turns").get(0).path("answerText").asText()).isEqualTo("我负责实现缓存并进行压测。");
+  org.mockito.Mockito.verify(provider,org.mockito.Mockito.never()).completion(anyLong(),org.mockito.ArgumentMatchers.eq("fixture-report"),anyString(),any(),anyInt());
  }
  @Test void idempotency_sameCreateAndCommandOnlyOnceDifferentPayloadRejected() {
   grant(1,100);var body=createInput();var first=interviews.create(1,body);assertThat(interviews.create(1,body)).isEqualTo(first);
@@ -136,11 +138,12 @@ class MockInterviewIntegrationTest extends PaymentHttpFixture {
   assertThat(jdbc.queryForObject("SELECT used_seconds FROM mock_interviews WHERE app_users_id=1",Long.class)).isBetween(5L,6L);
   assertThat(mockWallets.state(1).path("availableSeconds").asLong()).isBetween(4L,5L);
  }
- @Test void reportRetry_exhaustionIsExplicitAndDoesNotLeavePendingForever() {
+ @Test void reportRetry_disabledDoesNotScheduleWorkAndEnforcesOwnership() {
   var session=cmd(interviews.create(1,createInput()),"finish");UUID id=UUID.fromString(session.path("id").asText());
-  jdbc.update("UPDATE mock_reports SET status='failed',attempts=3 WHERE session_id=?",id);jdbc.update("UPDATE mock_interviews SET report_status='failed' WHERE id=?",id);
-  assertThatThrownBy(()->interviews.retryReport(1,id,json.createObjectNode().put("requestId",UUID.randomUUID().toString()))).isInstanceOf(ApiException.class).hasMessageContaining("三次");
-  assertThat(interviews.report(1,id).path("status").asText()).isEqualTo("failed");
+  var result=interviews.retryReport(1,id,json.createObjectNode().put("requestId",UUID.randomUUID().toString()));
+  assertThat(result.path("error").asText()).contains("AI复盘已停用");
+  assertThat(jdbc.queryForObject("SELECT count(*) FROM mock_reports WHERE session_id=?",Integer.class,id)).isZero();
+  assertThatThrownBy(()->interviews.report(2,id)).isInstanceOf(ApiException.class);
  }
  @Test void capacity_isSharedAcrossDifferentUsers() throws InterruptedException {
   grant(1,100);grant(2,100);
@@ -175,17 +178,18 @@ class MockInterviewIntegrationTest extends PaymentHttpFixture {
   var resumed=cmd(cmd(deciding,"pause"),"resume");assertThat(resumed.path("state").asText()).isEqualTo("deciding");
   var next=speaking(resumed);release.countDown();assertThat(next.path("turns").size()).isEqualTo(2);assertThat(next.path("turns").get(1).path("question").asText()).isEqualTo("恢复后的新问题");
  }
- @Test void reportCrashedOnFinalAttempt_expiredLeaseBecomesFailedInsteadOfRunningForever() throws InterruptedException {
-  var session=cmd(interviews.create(1,createInput()),"finish");
-  UUID id=UUID.fromString(session.path("id").asText());
-  jdbc.update("UPDATE mock_reports SET status='running',attempts=3,lease_until=LOCALTIMESTAMP-INTERVAL '1 second' WHERE session_id=?",id);
-  jdbc.update("UPDATE mock_interviews SET report_status='running' WHERE id=?",id);
+ @Test void historicalPendingReports_expiryDoesNotInvokeTheModel() {
+  var session=cmd(interviews.create(1,createInput()),"finish");UUID id=UUID.fromString(session.path("id").asText());
+  jdbc.update("INSERT INTO mock_reports(session_id,status,attempts) VALUES(?,'pending',0)",id);
+  org.mockito.Mockito.clearInvocations(provider);
   interviews.expire();
-  long deadline=System.nanoTime()+Duration.ofSeconds(5).toNanos();JsonNode report;
-  do {report=interviews.report(1,id);if("failed".equals(report.path("status").asText()))break;Thread.sleep(10);}while(System.nanoTime()<deadline);
-  assertThat(report.path("status").asText()).isEqualTo("failed");
-  assertThat(report.path("error").asText()).contains("三次上限");
-  assertThat(interviews.get(1,id).path("reportStatus").asText()).isEqualTo("failed");
-  assertThat(jdbc.queryForObject("SELECT attempts FROM mock_reports WHERE session_id=?",Integer.class,id)).isEqualTo(3);
+  org.mockito.Mockito.verifyNoInteractions(provider);
+  assertThat(jdbc.queryForObject("SELECT attempts FROM mock_reports WHERE session_id=?",Integer.class,id)).isZero();
+  assertThat(interviews.report(1,id).path("error").asText()).contains("AI复盘已停用");
+ }
+ @Test void settings_withoutReportModel_canStillEnableMockInterview() {
+  var draft=(ObjectNode)configs.get();draft.put("reportModelId","");
+  configs.save(3,draft);
+  assertThat(configs.capabilities(1).path("enabled").asBoolean()).isTrue();
  }
 }

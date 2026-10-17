@@ -31,6 +31,7 @@ export interface MockBridge {
   command(id: string, input: MockCommand): Promise<MockSession>
   report(id: string): Promise<MockReport>
   retryReport(id: string, requestId: string): Promise<MockReport>
+  exportQa(id: string): Promise<boolean>
   remove(id: string): Promise<{ deleted: boolean }>
   connect(id: string): Promise<void>
   disconnect(): Promise<void>

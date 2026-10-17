@@ -1,4 +1,6 @@
 import { MockInterviewClient } from './services/mock-interview-client'
+import { mockQaToMarkdown } from './services/mock-qa-export'
+import { mockSessionSchema } from '../shared/mock-interview'
 import { SourceShortcutManager } from './services/source-shortcut-manager'
 import { canSaveOtherEnvironment } from './services/environment-edit-policy'
 import { environmentStampInputSchema } from '../shared/environment-stamp'
@@ -445,6 +447,19 @@ function registerHandlers(): void {
     return mockInterviews.request(value.action, value.input)
   })
   handle('mock:connect', id => mockInterviews.connect(id))
+  handle('mock:export-qa', async input => {
+    const id = z.string().uuid().parse(input)
+    const owner = accounts.active
+    if (!owner || !window) throw new Error('请登录后导出问答。')
+    const record = mockSessionSchema.parse(await mockInterviews.request('get', { id }))
+    if (accounts.active !== owner) throw new Error('账户已切换，请重新导出。')
+    const markdown = mockQaToMarkdown(record)
+    const result = await dialog.showSaveDialog(window, { title: '导出模拟面试问答', defaultPath: `模拟面试-QA-${id.slice(0, 8)}.md`, filters: [{ name: 'Markdown', extensions: ['md'] }] })
+    if (result.canceled || !result.filePath) return false
+    if (accounts.active !== owner) throw new Error('账户已切换，请重新导出。')
+    await writeFile(result.filePath, markdown, 'utf8')
+    return true
+  })
   handle('mock:disconnect', () => mockInterviews.disconnect())
   for (const channel of ['mock:audio', 'mock:credit']) ipcMain.on(channel, (event, input: unknown, scope: unknown) => {
     assertSender(event)

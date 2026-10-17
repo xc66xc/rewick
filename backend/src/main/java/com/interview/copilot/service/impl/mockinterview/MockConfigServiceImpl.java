@@ -84,7 +84,7 @@ public class MockConfigServiceImpl implements MockConfigService {
   if(!input.path("allowedUserIds").isArray() || input.path("allowedUserIds").size()>1000) throw MockInput.error("mock_invalid_input","灰度用户列表无效。");
   for(JsonNode user:input.path("allowedUserIds"))if(!user.isIntegralNumber() || user.asLong()<1)throw MockInput.error("mock_invalid_input","灰度用户ID必须为正整数。");
   if(!input.path("enabled").asBoolean()) return;
-  for(String field:java.util.List.of("llmModelId","reportModelId","asrServiceId")) if(input.path(field).asText().isBlank()) throw MockInput.error("mock_invalid_input","请选择平台模型与转写服务。");
+  for(String field:java.util.List.of("llmModelId","asrServiceId")) if(input.path(field).asText().isBlank()) throw MockInput.error("mock_invalid_input","请选择平台模型与转写服务。");
   JsonNode tts=input.path("tts");
   URI endpoint;
   try {endpoint=URI.create(tts.path("endpoint").asText());} catch(IllegalArgumentException error) {throw MockInput.error("mock_invalid_input","语音地址无效。");}

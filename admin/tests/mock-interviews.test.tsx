@@ -19,6 +19,7 @@ describe('mock interview settings', () => {
     }))
     const actor = userEvent.setup(); render(<MockInterviewConfigPage api={new ApiClient('token')} />)
     await screen.findByLabelText('主持模型')
+    expect(screen.queryByLabelText('报告模型')).toBeNull()
     expect(screen.getByLabelText('TTS API Key')).toHaveProperty('value', '')
     expect(screen.getByLabelText('ASR 服务')).toHaveProperty('value', 'asr-1')
     await actor.clear(screen.getByLabelText('灰度用户 ID')); await actor.type(screen.getByLabelText('灰度用户 ID'), '2, 5, 5')

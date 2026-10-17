@@ -10,7 +10,7 @@ import AvatarStage from './AvatarStage'
 import MockPreparation from './MockPreparation'
 import MockConversation from './MockConversation'
 import MockHistory from './MockHistory'
-import MockReportView from './MockReportView'
+import MockQaExport from './MockQaExport'
 interface Props { bridge: DesktopBridge; onActive: (active: boolean) => void }
 export default function MockInterviewPage({ bridge, onActive }: Props) {
   const pendingCreate = useRef<{ key: string; requestId: string } | null>(null)
@@ -45,8 +45,8 @@ export default function MockInterviewPage({ bridge, onActive }: Props) {
     {capabilities && !capabilities.enabled && <p className="text-sm text-text-secondary">模拟面试暂未开放，请联系管理员确认功能开关、账号授权和语音服务配置。历史记录仍可查看。</p>}
     {current ? <><div className="flex flex-wrap items-center justify-between gap-3"><div><strong>{current.environmentName}</strong><span className="ml-3 text-sm text-text-secondary">本场剩余 {formatDuration(current.remainingSeconds)} · 已用 {formatDuration(current.usedSeconds)}</span></div>{['completed', 'ready', 'paused', 'error'].includes(current.state) && <Button onClick={() => { void interview.close(); setSelected(false); void refresh() }}>返回准备</Button>}{!interview.connected && current.state !== 'completed' && <Button disabled={busy} onClick={() => void open(current)}>重新连接</Button>}</div>
       <div className="grid grid-cols-[minmax(220px,.65fr)_minmax(0,1.35fr)] gap-5 max-[820px]:grid-cols-1"><AvatarStage state={current.state} level={interview.level} audioLevel={interview.audioLevel} /><MockConversation interview={interview} onCommand={value => void command(value)} /></div>
-      {current.state === 'completed' && <MockReportView bridge={bridge.mock} id={current.id} />}</> : <>{capabilities?.enabled && <MockPreparation environments={environments} capabilities={capabilities} busy={busy} balance={balance} onCreate={input => void create(input)} />}<MockHistory sessions={sessions} onOpen={value => void open(value)} onRemove={setDeleting} /></>}
+      {current.state === 'completed' && <MockQaExport bridge={bridge.mock} id={current.id} />}</> : <>{capabilities?.enabled && <MockPreparation environments={environments} capabilities={capabilities} busy={busy} balance={balance} onCreate={input => void create(input)} />}<MockHistory sessions={sessions} onOpen={value => void open(value)} onRemove={setDeleting} /></>}
     {ledger && <section className="space-y-3 rounded-card border border-border bg-card p-5"><div className="flex justify-between"><h2 className="font-semibold">独立模拟余额流水</h2><Button size="sm" onClick={() => setLedger(undefined)}>收起</Button></div>{ledger.items.length === 0 && <p className="text-sm text-text-secondary">暂无流水。</p>}{ledger.items.map(item => <p key={item.id} className="text-sm text-text-secondary">{item.createdAt.replace('T', ' ')} · {item.reason} · {item.deltaSeconds > 0 ? '+' : ''}{item.deltaSeconds} 秒 · 余额 {formatDuration(item.balanceAfterSeconds)}</p>)}</section>}
-    {deleting && <ConfirmModal title="删除模拟面试记录" description="将删除本场的问答和复盘报告，余额流水仍保留。" open onOpenChange={open => { if (!open) setDeleting(undefined) }} confirmText="删除记录" danger onConfirm={() => { if (!busy) void remove() }} />}
+    {deleting && <ConfirmModal title="删除模拟面试记录" description="将删除本场问答记录，余额流水仍保留。" open onOpenChange={open => { if (!open) setDeleting(undefined) }} confirmText="删除记录" danger onConfirm={() => { if (!busy) void remove() }} />}
   </div>
 }
