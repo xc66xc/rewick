@@ -29,10 +29,10 @@ export default function CompactAppearance({ preferences, saving, onChange, onPre
       </div>
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-3"><label htmlFor="compact-font-size" className="text-sm text-text-primary">字体大小</label><output htmlFor="compact-font-size" className="font-mono text-sm tabular-nums text-text-primary">{preferences.fontSize ?? defaultCompactFontSize}px</output></div>
-        <Slider className="accent-accent" id="compact-font-size" value={preferences.fontSize ?? defaultCompactFontSize} min={14} max={28} step={1} disabled={saving}
+        <Slider className="accent-accent" id="compact-font-size" value={preferences.fontSize ?? defaultCompactFontSize} min={10} max={28} step={1} disabled={saving}
           aria-valuetext={`字体大小 ${preferences.fontSize ?? defaultCompactFontSize} 像素`}
           onValueChange={value => onFontPreview?.(value)} onValueCommit={value => onChange({ ...preferences, fontSize: value })} />
-        <div className="flex justify-between text-xs text-text-secondary"><span>14px</span><span>28px</span></div>
+        <div className="flex justify-between text-xs text-text-secondary"><span>10px</span><span>28px</span></div>
       </div>
       <ContentProtectionControl checked={preferences.contentProtection} disabled={saving}
         onChange={value => onChange({ ...preferences, contentProtection: value })} />

@@ -15,17 +15,22 @@ it('previews font size and commits it without changing other preferences', async
   await user.click(screen.getByRole('button', { name: '透明与共享设置' }))
   const slider = screen.getByRole('slider', { name: '字体大小' })
   expect((slider as HTMLInputElement).value).toBe('23')
-  fireEvent.change(slider, { target: { value: '28' } })
-  expect(preview).toHaveBeenLastCalledWith(28)
+  expect((slider as HTMLInputElement).min).toBe('10')
+  expect((slider as HTMLInputElement).max).toBe('28')
+  fireEvent.change(slider, { target: { value: '10' } })
+  expect(preview).toHaveBeenLastCalledWith(10)
   expect(change).not.toHaveBeenCalled()
-  rerender(<CompactAppearance preferences={{ ...preferences, fontSize: 28 }} saving={false} onChange={change} onPreview={vi.fn()} onFontPreview={preview} />)
+  rerender(<CompactAppearance preferences={{ ...preferences, fontSize: 10 }} saving={false} onChange={change} onPreview={vi.fn()} onFontPreview={preview} />)
   fireEvent.pointerUp(slider)
-  expect(change).toHaveBeenLastCalledWith({ ...preferences, fontSize: 28 })
+  expect(change).toHaveBeenLastCalledWith({ ...preferences, fontSize: 10 })
 })
 
 it('accepts old preferences and rejects out-of-range font sizes', () => {
   expect(windowPreferencesSchema.safeParse(defaultWindowPreferences).success).toBe(true)
-  for (const fontSize of [13, 29, 18.5, NaN]) {
+  for (const fontSize of [10, 13, 14, 28]) {
+    expect(windowPreferencesSchema.safeParse({ ...defaultWindowPreferences, fontSize }).success).toBe(true)
+  }
+  for (const fontSize of [9, 29, 10.5, NaN]) {
     expect(windowPreferencesSchema.safeParse({ ...defaultWindowPreferences, fontSize }).success).toBe(false)
   }
 })
