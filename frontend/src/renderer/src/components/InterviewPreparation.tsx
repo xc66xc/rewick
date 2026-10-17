@@ -45,11 +45,12 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
     editor.request(() => { editor.replace(environmentInput(environment)); openModal() })
   }
   async function handleSave() {
-    if (busy || editingBlocked || !editor.draft.name.trim()) return
+    if (busy || editingBlocked || !data.referencesReady || !editor.draft.name.trim()) return
     const hotwordsError = environmentHotwordsError(editor.draft.hotwords ?? [])
     if (hotwordsError) { setError(hotwordsError); return }
     setBusy(true); setError(''); setNotice('')
-    const input = { ...editor.draft, name: editor.draft.name.trim() }
+    const existing = new Set(data.references.map(document => document.id))
+    const input = { ...editor.draft, name: editor.draft.name.trim(), referenceIds: editor.draft.referenceIds.filter(id => existing.has(id)) }
     const savedCurrent = input.id !== undefined && input.id === activeId
     try {
       await onSave(input)
@@ -74,6 +75,12 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
   }
   async function start(environment: InterviewEnvironment) {
     if (busy || timer.active) return
+    if (!data.referencesReady) { setError('正在读取参考资料，请稍后再开始面试。'); return }
+    if (environment.referenceIds.some(id => !data.references.some(document => document.id === id))) {
+      requestEdit(environment)
+      setError('环境中有已删除的参考资料。请确认当前资料选择后保存，失效引用会自动清理，再点击开始面试。')
+      return
+    }
     setBusy(true); setError('')
     try { await onPrepare(environmentInput(environment)); await timer.start(environment.id); onStarted() }
     catch (reason) { setError(errorMessage(reason)) }

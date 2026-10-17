@@ -35,6 +35,8 @@ export default function EnvironmentDialog({ open, onOpenChange, draft, dirty, li
   if (!library) return null
   const missingResume = Boolean(draft.resumeId && !library.resumes.some(record => record.id === draft.resumeId))
   const missingTarget = Boolean(draft.targetId && !library.targets.some(record => record.id === draft.targetId))
+  const missingReferences = referencesReady && draft.referenceIds.some(id => !references.some(document => document.id === id))
+  const needsSave = dirty || missingReferences
   const fieldsDisabled = busy || editingBlocked || !referencesReady
   const resumeOptions = [
     { value: '', label: '不选择简历' },
@@ -50,11 +52,11 @@ export default function EnvironmentDialog({ open, onOpenChange, draft, dirty, li
     <Modal open={open} onOpenChange={onOpenChange} title={draft.id ? '编辑面试准备' : '新建面试准备'}
       footer={<>
         <span className="mr-3 inline-flex items-center gap-1.5 text-xs text-text-secondary" role="status" aria-live="polite">
-          <Dot tone={dirty ? 'accent' : draft.id ? 'success' : 'muted'} pulse={false} />
-          {dirty ? '尚未保存' : draft.id ? '已同步' : '新环境草稿'}
+          <Dot tone={needsSave ? 'accent' : draft.id ? 'success' : 'muted'} pulse={false} />
+          {needsSave ? '尚未保存' : draft.id ? '已同步' : '新环境草稿'}
         </span>
         <Button variant="default" disabled={busy} onClick={() => onOpenChange(false)}>取消</Button>
-        <Button variant="primary" disabled={fieldsDisabled || !dirty || !draft.name.trim() || missingResume || missingTarget || Boolean(environmentHotwordsError(draft.hotwords ?? []))} onClick={onSave}>{busy ? '保存中…' : '保存环境'}</Button>
+        <Button variant="primary" disabled={fieldsDisabled || !needsSave || !draft.name.trim() || missingResume || missingTarget || Boolean(environmentHotwordsError(draft.hotwords ?? []))} onClick={onSave}>{busy ? '保存中…' : '保存环境'}</Button>
       </>}>
       <form onSubmit={event => { event.preventDefault(); onSave() }} noValidate>
         {editingBlocked && <p className="mb-4 rounded-chip border border-accent-line bg-accent-subtle px-4 py-3 text-xs leading-[1.8] text-text-secondary">面试进行中，当前面试准备已锁定。结束面试后可修改。</p>}
@@ -80,7 +82,7 @@ export default function EnvironmentDialog({ open, onOpenChange, draft, dirty, li
             <AppSelect id="environment-target" size="lg" value={draft.targetId ?? ''} options={targetOptions} aria-invalid={missingTarget} disabled={fieldsDisabled} onValueChange={value => onChange({ ...draft, targetId: value || null })} />
           </div>
           {(missingResume || missingTarget) && <p className={cn(inlineErrorClass, 'mt-0 mb-4')} role="alert">存在失效的简历或岗位，请重新选择或改为不选择后保存。</p>}
-          <EnvironmentReferencePicker documents={references} selected={draft.referenceIds} disabled={fieldsDisabled} onChange={referenceIds => onChange({ ...draft, referenceIds })} />
+          {referencesReady && <EnvironmentReferencePicker documents={references} selected={draft.referenceIds} disabled={fieldsDisabled} onChange={referenceIds => onChange({ ...draft, referenceIds })} />}
           {open && <EnvironmentHotwords key={draft.id ?? 'new'} draft={draft} disabled={fieldsDisabled} onChange={onChange} onExtract={onExtractHotwords} />}
         </fieldset>
       </form>
