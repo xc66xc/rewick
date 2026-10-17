@@ -1,5 +1,17 @@
 # 单机部署（复用现有 PostgreSQL）
 
+## 2026-10-17 2D AI 模拟面试发布
+
+已发布后端1.2.0-SNAPSHOT及管理端1.1.0，手工执行SQL27并授予copilot_backend新增10表/账本序列权限。仅重建backend容器；管理静态先上传哈希资源再原子替换index，Nginx三个入口新增 `/ws/v1/mock-interviews/` Upgrade代理并热重载，管理端镜像同步重建供后续启动。两库、Prometheus和管理容器未重启。
+
+JAR与运行容器SHA256均为 `bb0eb9c11af4120db0752893205c7eb9fe9ed3039cc60944931c2438c2597056`；管理资源 `index-D50ag4HY.js` / `index-pN7VSlBA.css`。SQL SHA256 `3a77e589990b5ed2e8a95feba0551efbd7426f90ddf93bf6aa092295099bd6dc`。发布产物/验收脚本/JSON位于服务器 `releases/mock-interview-20261017/`。
+
+备份 `releases/before-mock-interview-20261017/`（目录700）包含旧JAR、Nginx/Compose/Dockerfile、受限私有环境、管理源静态/运行静态、业务及运营库自定义dump（均已验证归档目录）。旧镜像：`interview-copilot-backend:before-mock-interview-20261017`、`interview-copilot-admin:before-mock-interview-20261017`。回滚先停用并结束全部模拟会话，保留新增表和账本；恢复旧JAR、Nginx与管理静态并还原旧镜像标签，使用既有Compose+operations仅重建backend，Nginx先test再reload。不要直接恢复整库覆盖发布后数据。
+
+服务器侧TLS验证：健康UP、新管理JS/CSS200；未登录模拟API/WS401，普通用户管理配置403，公开API域管理路由404；临时账号模拟余额幂等只加一次、原辅助钱包不变，功能关闭时准备请求503；真实WSS握手101并收到ready/asrReady=false状态。7项验收通过、临时账号/令牌/模拟流水与会话全清理，原平台配置26、参考策略1、运营设置5及真实余额指纹不变，两个Prom目标UP。未调用真实供应商。模拟开关保持false、配置版本0，无实际用户模拟余额，TTS待管理员配置。
+
+桌面1.4.0源码/构建已完成，但安装包尚未更新；旧客户端不会出现模拟入口。本机公网admin/API HTTPS仍ECONNRESET，服务器回环TLS/WS验证通过，未宣称所有公网客户端可用、未降低TLS或回退HTTP。
+
 ## 2026-10-14 索引失败诊断后端发布
 
 后端1.0.1-SNAPSHOT已部署，仅backend重建/重启，无DDL；JAR SHA256 `6c947b3bb4563a02f44ee7a1ebc250341a7f31951085243be7df52eee68533a4`，本地/运行容器一致。HTTPS健康UP、资料及管理策略未登录401、管理首页200、Prom2UP。回滚备份 `releases/before-index-diagnostics-20261014-1402/` 保存旧JAR/镜像、业务库及私有环境。平台配置25、参考策略1（用户已启用混合检索/缓存）及运营5/开启指纹保持；没有调用真实供应商或自动重试文档。桌面1.0.1未打包，重复提示修复需最新源码/安装包。详见 `workspace/interview-copilot/notes/impl-reference-index-diagnostics.md`。

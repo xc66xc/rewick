@@ -215,3 +215,16 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON client_downloads, client_download_upload
 `26_hr_interview_type.sql` 在 SQL23 之后、部署 HR 类型后端之前手动执行。事务内仅替换 `interview_environments.interview_type_valid`，允许 `technical/general/hr`，保留删除与非空语义；锁等待最多 5 秒，失败回滚后排查再执行。不新增表/列，不修改已有环境、活动或历史快照，不重建参考资料索引。
 
 发布顺序：SQL26 → 后端 1.1.0 → 桌面 1.1.0。同账号多设备需协调升级：旧桌面不能解析新值 `hr`。产生 HR 数据后不能直接回滚旧校验代码或收窄约束；必须保留 HR 读取支持，或另行确认数据与草稿处理方案。此次开发不会自动执行生产/本地业务库升级。
+
+## 27：2D 模拟面试与独立余额
+
+先备份业务库，手工执行 `27_mock_interview.sql`，再更新后端1.2.0、管理端1.1.0和桌面1.4.0。新增10张表，默认关闭功能、余额零；不转换原钱包数据。原辅助计时服务也会查询新增表，不可跳过迁移直接升级后端。
+
+独立应用角色需执行：
+
+```sql
+GRANT SELECT,INSERT,UPDATE,DELETE ON mock_interview_config,mock_wallets,mock_interviews,mock_turns,mock_commands,mock_events,mock_reports,mock_usage_periods,mock_wallet_ledger,interview_activity_leases TO copilot_backend;
+GRANT USAGE,SELECT ON SEQUENCE mock_wallet_ledger_id_seq TO copilot_backend;
+```
+
+2026-10-17 生产已执行并完成权限验收。另需更新 Nginx 的 `/ws/v1/mock-interviews/` Upgrade 代理。回滚代码前先停用并结束模拟会话，保留新表和账本；不要直接恢复旧全库备份覆盖发布后的业务数据。配置、启用及发放余额见仓库 `MOCK_INTERVIEW.md`。
