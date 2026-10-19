@@ -11,7 +11,7 @@ import { testCustomService } from '../../src/main/services/custom-service-test'
 
 const crypto = { isEncryptionAvailable: () => true, encryptString: (value: string) => Buffer.from(value.split('').reverse().join('')), decryptString: (value: Buffer) => value.toString().split('').reverse().join('') }
 const draft = { name: '我的回答', kind: 'llm' as const, url: 'https://models.example/v1', model: 'own-model', apiKey: 'private-api-key' }
-const info: PlatformInfo = { advancedSettingsEnabled: true, user: { id: '1', displayName: 'u_demo', email: 'demo@example.com' }, capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'fast', asr: 'asr-model', available: [{ id: 'fast', name: '平台快速' }] }, services: { asr: [{ id: 'asr-one', name: '平台语音' }], knowledge: [{ id: 'knowledge-one', name: '平台知识库' }] }, limits: { maxAsrSessionSeconds: 600 } }
+const info: PlatformInfo = { advancedSettingsEnabled: true, user: { id: '1', displayName: 'u_demo', email: 'demo@example.com' }, capabilities: { llm: true, asr: true, }, models: { llm: 'fast', asr: 'asr-model', available: [{ id: 'fast', name: '平台快速' }] }, services: { asr: [{ id: 'asr-one', name: '平台语音' }], }, limits: { maxAsrSessionSeconds: 600 } }
 let directory: string
 let store: SettingsStore
 beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'copilot-custom-')); store = new SettingsStore(directory, crypto) })
@@ -28,7 +28,7 @@ describe('custom service library', () => {
     const connection = routeService(authenticated, { ...(await store.getSecrets()), platformAccessToken: 'business-token' }, 'llm')
     expect(connection.platform).toBe(true)
     expect(connection.settings.llm.model).toBe('fast')
-    expect(() => routeService({ ...authenticated, serviceSelections: { llm: { source: 'platform', id: 'unpublished' } } }, { platformAccessToken: 'business-token', llmApiKey: '', asrApiKey: '', remoteKnowledgeApiKey: '' }, 'llm')).toThrow('所选平台模型已下架')
+    expect(() => routeService({ ...authenticated, serviceSelections: { llm: { source: 'platform', id: 'unpublished' } } }, { platformAccessToken: 'business-token', llmApiKey: '', asrApiKey: '', }, 'llm')).toThrow('所选平台模型已下架')
   })
   it('clears inherited platform selections when changing addresses without a new selection', async () => {
     await store.saveSettings({ ...defaultSettings, platform: { enabled: true, baseUrl: 'https://old.example' }, serviceSelections: { llm: { source: 'platform', id: 'fast' } } })
@@ -93,11 +93,10 @@ describe('custom service library', () => {
     await store.initializeServices()
     await store.saveCustomService(draft)
     await store.savePlatformSession(defaultSettings.platform!.baseUrl, 'business-token', new Date(Date.now() + 60000).toISOString(), info)
-    await store.saveSettings({ ...await store.getSettings(), serviceSelections: { llm: { source: 'platform', id: 'fast' }, asr: { source: 'platform', id: 'asr-one' }, knowledge: { source: 'platform', id: 'knowledge-one' } } })
+    await store.saveSettings({ ...await store.getSettings(), serviceSelections: { llm: { source: 'platform', id: 'fast' }, asr: { source: 'platform', id: 'asr-one' }, } })
     const { settings, secrets } = await store.getConnectionSnapshot()
     expect(routeService(settings, secrets, 'llm')).toMatchObject({ platform: true, apiKey: 'business-token', settings: { llm: { model: 'fast' } } })
     expect(routeService(settings, secrets, 'asr').settings.asr.url).toContain('serviceId=asr-one')
-    expect(routeService(settings, secrets, 'knowledge').settings.remoteKnowledge.serviceId).toBe('knowledge-one')
     expect(secrets.llmApiKey).toBe('')
   })
   it('rejects stale platform service selection instead of using a newly published binding', async () => {

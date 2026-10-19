@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { defaultSettings } from '../../shared/defaults'
 import type { CustomServiceInput, PlatformInfo, Settings, SettingsInput } from '../../shared/types'
 import { profileSettings, profileView, serviceKinds, storedCustomServiceSchema, validateCustomDraft } from './custom-service-profiles'
-import { parseInput, remoteKnowledgeSettingsSchema, settingsInputSchema } from './validation'
+import { parseInput, settingsInputSchema } from './validation'
 import { platformSessionSchema } from './platform-schema'
 import { readJson, SerialQueue, writeJsonAtomic } from './storage'
 
@@ -19,10 +19,10 @@ const persistedSchema = z.object({
   serviceProfilesInitialized: z.boolean().default(false),
   platformSession: platformSessionSchema.optional(),
   rememberedLogin: z.string().max(16_384).optional(),
-  secrets: z.object({ asr: z.string().max(16_384), llm: z.string().max(16_384), remoteKnowledge: z.string().max(16_384).default(''), platformAccessToken: z.string().max(16_384).default('') }),
+  secrets: z.object({ asr: z.string().max(16_384), llm: z.string().max(16_384), platformAccessToken: z.string().max(16_384).default('') }),
 })
 type Persisted = z.infer<typeof persistedSchema>
-export interface ServiceSecrets { platformAccessToken: string; asrApiKey: string; llmApiKey: string; remoteKnowledgeApiKey: string }
+export interface ServiceSecrets { platformAccessToken: string; asrApiKey: string; llmApiKey: string }
 
 export class SettingsStore {
   private readonly path: string
@@ -55,11 +55,10 @@ export class SettingsStore {
     return this.queue.run(async () => {
       const saved = await this.read()
       if (saved.serviceProfilesInitialized) return
-      const { llm, asr, remoteKnowledge } = saved.settings
+      const { llm, asr } = saved.settings
       const candidates = [
         { id: 'legacy-llm', kind: 'llm' as const, name: llm.model, url: llm.baseUrl, model: llm.model, secret: saved.secrets.llm },
         { id: 'legacy-asr', kind: 'asr' as const, name: asr.model, url: asr.url, model: asr.model, secret: saved.secrets.asr },
-        { id: 'legacy-knowledge', kind: 'knowledge' as const, name: '我的百炼知识库', url: remoteKnowledge.url, agentId: remoteKnowledge.agentId, secret: saved.secrets.remoteKnowledge },
       ].filter(value => value.secret || (['llm', 'asr'].includes(value.kind) && /^(localhost|127\.\d+\.\d+\.\d+|\[::1\])$/.test(new URL(value.url).hostname)))
       const selections = { ...saved.settings.serviceSelections }
       for (const profile of candidates) {
@@ -101,7 +100,7 @@ export class SettingsStore {
     return this.queue.run(async () => {
       const saved = await this.read()
       saved.customServices = saved.customServices.filter(value => value.id !== id)
-      const legacySecret = { 'legacy-llm': 'llm', 'legacy-asr': 'asr', 'legacy-knowledge': 'remoteKnowledge' } as const
+      const legacySecret = { 'legacy-llm': 'llm', 'legacy-asr': 'asr' } as const
       if (id in legacySecret) saved.secrets[legacySecret[id as keyof typeof legacySecret]] = ''
       // Preserve a missing selection so removal never silently switches a paid provider.
       await this.write( saved)
@@ -136,21 +135,17 @@ export class SettingsStore {
       }
       const { apiKey: asrKey, ...asr } = parsed.asr
       const { apiKey: llmKey, ...llm } = parsed.llm
-      const { apiKey: remoteKnowledgeKey, ...remoteKnowledge } = parsed.remoteKnowledge
       const next: Persisted = {
         customServices: previous.customServices, serviceProfilesInitialized: previous.serviceProfilesInitialized,
-        version: 1, settings: { ...parsed, asr, llm, remoteKnowledge, context: { name: '', text: '' }, interviewTarget: { companyName: '', roleName: '', jobDescription: '' } },
+        version: 1, settings: { ...parsed, asr, llm, context: { name: '', text: '' }, interviewTarget: { companyName: '', roleName: '', jobDescription: '' } },
         rememberedLogin: parsed.platform.baseUrl === previous.settings.platform.baseUrl ? previous.rememberedLogin : undefined,
         platformSession: parsed.platform.baseUrl === previous.settings.platform.baseUrl ? previous.platformSession : undefined,
         secrets: {
           platformAccessToken: parsed.platform.baseUrl === previous.settings.platform.baseUrl ? previous.secrets.platformAccessToken : '',
           asr: this.encrypt(asrKey, previous.secrets.asr),
           llm: this.encrypt(llmKey, previous.secrets.llm),
-          remoteKnowledge: this.encrypt(remoteKnowledgeKey, previous.secrets.remoteKnowledge),
         },
       }
-      if (remoteKnowledge.enabled && next.secrets.remoteKnowledge && parsed.serviceSelections?.knowledge?.source !== 'platform') parseInput(remoteKnowledgeSettingsSchema, remoteKnowledge)
-      if (remoteKnowledge.enabled && !parsed.platform.enabled && !next.secrets.remoteKnowledge) throw new Error('启用远程知识库前请填写远程知识库 API Key。')
       await this.write( next)
       return this.publicSettings(next)
     })
@@ -192,13 +187,13 @@ export class SettingsStore {
       if (choice.source === 'platform') return ''
       return this.decrypt(saved.customServices.find(value => value.id === choice.id && value.kind === kind)?.secret ?? '')
     }
-    return { platformAccessToken: this.decrypt(secrets.platformAccessToken), asrApiKey: secretFor('asr', secrets.asr), llmApiKey: secretFor('llm', secrets.llm), remoteKnowledgeApiKey: secretFor('knowledge', secrets.remoteKnowledge) }
+    return { platformAccessToken: this.decrypt(secrets.platformAccessToken), asrApiKey: secretFor('asr', secrets.asr), llmApiKey: secretFor('llm', secrets.llm) }
   }
 
   private async read(): Promise<Persisted> {
     const saved = await readJson(this.path, 1_048_576)
     if (saved === undefined) {
-      return { version: 1, customServices: [], serviceProfilesInitialized: false, settings: parseInput(settingsInputSchema, defaultSettings), secrets: { asr: '', llm: '', remoteKnowledge: '', platformAccessToken: '' } }
+      return { version: 1, customServices: [], serviceProfilesInitialized: false, settings: parseInput(settingsInputSchema, defaultSettings), secrets: { asr: '', llm: '', platformAccessToken: '' } }
     }
     const local = this.cloudManaged ? saved as Record<string, unknown> : undefined
     const settings = local?.settings as Record<string, unknown> | undefined
@@ -207,13 +202,12 @@ export class SettingsStore {
       webSearch: { enabled: false },
       asr: { ...settings.asr as object, silenceMs: defaultSettings.asr.silenceMs },
       llm: { ...settings.llm as object, temperature: defaultSettings.llm.temperature },
-      remoteKnowledge: { ...settings.remoteKnowledge as object, enabled: false } } } : saved
+    } } : saved
     const parsed = persistedSchema.safeParse(restored)
     if (!parsed.success) throw new Error('本地设置文件格式无效，请先备份后检查 settings.json。')
     // Never accept plaintext secrets from a manually altered settings file.
     delete parsed.data.settings.asr.apiKey
     delete parsed.data.settings.llm.apiKey
-    delete parsed.data.settings.remoteKnowledge.apiKey
     return parsed.data
   }
 
@@ -224,22 +218,20 @@ export class SettingsStore {
     for (const key of ['preferencesVersion', 'answerStyle', 'autoAnswer', 'retrieval', 'webSearch']) delete config[key]
     delete (config.asr as Record<string, unknown>).silenceMs
     delete (config.llm as Record<string, unknown>).temperature
-    delete (config.remoteKnowledge as Record<string, unknown>).enabled
     delete (config.platform as Record<string, unknown>).selectedModelId
     config.serviceSelections = Object.fromEntries(Object.entries(config.serviceSelections as Record<string, { source: string }> ?? {}).filter(([, selection]) => selection?.source === 'custom'))
     await writeJsonAtomic(this.path, saved)
   }
 
   private publicSettings(value: Persisted): Settings {
-    const { asr, llm, remoteKnowledge, retrieval, answerStyle, autoAnswer } = value.settings
+    const { asr, llm, retrieval, answerStyle, autoAnswer } = value.settings
     const authenticated = Boolean(value.secrets.platformAccessToken && value.platformSession && Date.parse(value.platformSession.expiresAt) > Date.now())
     const info = authenticated ? value.platformSession?.info : undefined
     let result: Settings = {
       customServices: value.customServices.map(profileView), serviceSelections: value.settings.serviceSelections,
-      platform: { ...value.settings.platform, authenticated, advancedSettingsEnabled: info?.advancedSettingsEnabled ?? false, webSearchAvailable: info?.webSearchAvailable ?? false, webSearchTimeoutMs: info?.webSearchTimeoutMs ?? 8000, desktopDefaults: info?.desktopDefaults, user: info?.user, expiresAt: value.platformSession?.expiresAt, capabilities: info?.capabilities ?? { llm: false, asr: false, knowledge: false }, models: info?.models ?? { llm: '', asr: '' }, services: info?.services, limits: info?.limits },
+      platform: { ...value.settings.platform, authenticated, advancedSettingsEnabled: info?.advancedSettingsEnabled ?? false, webSearchAvailable: info?.webSearchAvailable ?? false, webSearchTimeoutMs: info?.webSearchTimeoutMs ?? 8000, desktopDefaults: info?.desktopDefaults, user: info?.user, expiresAt: value.platformSession?.expiresAt, capabilities: info?.capabilities ?? { llm: false, asr: false }, models: info?.models ?? { llm: '', asr: '' }, services: info?.services, limits: info?.limits },
       asr: { url: asr.url, model: asr.model, silenceMs: asr.silenceMs, hasApiKey: Boolean(value.secrets.asr) },
       llm: { baseUrl: llm.baseUrl, model: llm.model, temperature: llm.temperature, hasApiKey: Boolean(value.secrets.llm) },
-      remoteKnowledge: { ...remoteKnowledge, hasApiKey: Boolean(value.secrets.remoteKnowledge) },
       context: { name: '', text: '' }, interviewTarget: { companyName: '', roleName: '', jobDescription: '' }, retrieval, webSearch: value.settings.webSearch, answerStyle, autoAnswer,
     }
     for (const kind of serviceKinds) {
@@ -247,8 +239,7 @@ export class SettingsStore {
       const profile = choice?.source === 'custom' ? value.customServices.find(item => item.id === choice.id && item.kind === kind) : undefined
       if (profile) result = profileSettings(result, profileView(profile))
       else if (choice?.source === 'custom') {
-        if (kind === 'knowledge') result.remoteKnowledge.hasApiKey = false
-        else result[kind].hasApiKey = false
+        result[kind].hasApiKey = false
       }
     }
     return result

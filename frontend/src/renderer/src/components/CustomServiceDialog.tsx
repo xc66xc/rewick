@@ -11,8 +11,7 @@ interface CustomServiceDialogProps { kind: ServiceKind; profile?: CustomServiceP
 function initial(kind: ServiceKind, settings: Settings, profile?: CustomServiceProfile): CustomServiceInput {
   if (profile) { const { hasApiKey: _hasApiKey, ...input } = profile; return input }
   if (kind === 'llm') return { kind, name: '', url: settings.llm.baseUrl, model: settings.llm.model }
-  if (kind === 'asr') return { kind, name: '', url: settings.asr.url, model: settings.asr.model }
-  return { kind, name: '', url: settings.remoteKnowledge.url, agentId: settings.remoteKnowledge.agentId }
+  return { kind, name: '', url: settings.asr.url, model: settings.asr.model }
 }
 export default function CustomServiceDialog({ kind, profile, settings, bridge, onSaved, onClose }: CustomServiceDialogProps) {
   const form = useRef<HTMLFormElement>(null)
@@ -30,7 +29,7 @@ export default function CustomServiceDialog({ kind, profile, settings, bridge, o
     if (inFlight.current || !form.current?.reportValidity()) return
     inFlight.current = true; setBusy(true); setError(''); setNotice('')
     try {
-      const input = { ...draft, name: draft.name.trim(), url: draft.url.trim(), model: draft.model?.trim(), agentId: draft.agentId?.trim(), apiKey: draft.apiKey?.trim() || undefined }
+      const input = { ...draft, name: draft.name.trim(), url: draft.url.trim(), model: draft.model?.trim(), apiKey: draft.apiKey?.trim() || undefined }
       if (test) { const result = await bridge.testCustomService(input); setNotice(`${result.message}（${result.latencyMs} ms）。测试未保存配置。`) }
       else { const saved = await bridge.saveCustomService(input); setDraft(value => ({ ...value, apiKey: undefined })); onSaved(saved) }
     } catch (reason) { setError(errorMessage(reason)) }

@@ -216,7 +216,7 @@ export async function checkAnswerScroll({ app, page, checked, checkpoint, settin
   try {
     await normalWindow()
     await settingsPatch({ llm: { baseUrl: provider.baseUrl, model: 'scroll-held' },
-      retrieval: { ...saved.retrieval, enabled: false }, remoteKnowledge: { ...saved.remoteKnowledge, enabled: false } })
+      retrieval: { ...saved.retrieval, enabled: false }, })
     await page.reload()
     await page.waitForFunction(() => Boolean(window.copilot))
     for (const mode of ['normal', 'compact']) {
@@ -309,7 +309,7 @@ export async function checkAnswerScroll({ app, page, checked, checkpoint, settin
       const cancel = page.getByRole('button', { name: '停止生成', exact: true })
       if (!page.isClosed() && await cancel.count()) await cancel.click()
       await normalWindow()
-      await settingsPatch({ llm: saved.llm, retrieval: saved.retrieval, remoteKnowledge: saved.remoteKnowledge })
+      await settingsPatch({ llm: saved.llm, retrieval: saved.retrieval, })
       await page.getByRole('button', { name: '新会话', exact: true }).click()
       if (originallyCompact) await page.getByRole('button', { name: '紧凑模式', exact: true }).click()
       await app.evaluate(({ BaseWindow }, bounds) => BaseWindow.getAllWindows().find(window => window.isVisible()).setBounds(bounds), originalBounds)

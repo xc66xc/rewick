@@ -23,19 +23,11 @@ public final class DesktopDefaultsValidator {
                 value.asrServiceId().isEmpty()
                         || snapshot.availableAsrServices().stream()
                                 .anyMatch(item -> item.id().equals(value.asrServiceId()));
-        boolean knowledge =
-                value.knowledgeServiceId().isEmpty()
-                        || snapshot.availableKnowledgeServices().stream()
-                                .anyMatch(item -> item.id().equals(value.knowledgeServiceId()));
-        if (!llm || !asr || !knowledge) {
+        if (!llm || !asr) {
             throw new ApiException(
                     HttpStatus.BAD_REQUEST,
                     "DESKTOP_DEFAULT_UNAVAILABLE",
                     "默认模型或服务不可用；停用或删除前请先更换桌面默认配置。");
-        }
-        if ("remote".equals(value.retrievalMode()) && value.knowledgeServiceId().isEmpty()) {
-            throw new ApiException(
-                    HttpStatus.BAD_REQUEST, "DESKTOP_DEFAULT_REQUIRED", "使用远程检索时请选择默认远程知识库。");
         }
     }
 }

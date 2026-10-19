@@ -81,7 +81,6 @@ function setup(fakeTimers = false) {
       Object.assign(settings, resolveInterviewSettings(settings, library))
       return structuredClone(settings)
     }),
-    testRemoteKnowledge: vi.fn(async () => ({ latencyMs: 1, message: 'OK' })),
     listReferences: vi.fn(async () => []),
     importReferences: vi.fn(async () => []),
     previewReference: vi.fn(async () => { throw new Error('没有测试资料') }),

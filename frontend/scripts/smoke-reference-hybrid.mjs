@@ -22,7 +22,7 @@ const suffix = randomBytes(6).toString('hex')
 const container = `copilot-platform-e2e-${suffix}`
 const databaseImage = 'interview-copilot-postgres:15.19-pgvector0.8.6'
 const password = randomBytes(20).toString('hex')
-const keys = { llm: `test-platform-llm-${suffix}`, asr: `test-platform-asr-${suffix}`, knowledge: `test-platform-knowledge-${suffix}`, embedding: `test-platform-embedding-${suffix}` }
+const keys = { llm: `test-platform-llm-${suffix}`, asr: `test-platform-asr-${suffix}`, embedding: `test-platform-embedding-${suffix}` }
 const report = { realProviderTested: false, realAudioTested: false, checks: [], screenshots: [] }
 const mock = await startMockServices()
 const webCalls = []
@@ -150,7 +150,7 @@ try {
     { id: 'embedding', name: '测试向量', kind: 'embedding', url: `${mock.llmBaseUrl}/embeddings`, enabled: true, apiKey: keys.embedding },
     { id: 'web', name: '测试联网', kind: 'web-search', url: `http://127.0.0.1:${web.address().port}/search`, enabled: true, apiKey: 'test-only-web' },
   ], models: [{ id: 'mock-fast', name: '测试模型', providerId: 'llm', model: 'mock-fast', enabled: true, maxOutputTokens: 2048 }], defaultModelId: 'mock-fast',
-    asr: { enabled: true, providerId: 'asr', model: 'fun-asr-realtime' }, knowledge: { enabled: false, providerId: '', agentId: '' }, embedding: { enabled: true, providerId: 'embedding', model: 'mock-embedding', dimensions: 1024 },
+    asr: { enabled: true, providerId: 'asr', model: 'fun-asr-realtime' }, embedding: { enabled: true, providerId: 'embedding', model: 'mock-embedding', dimensions: 1024 },
     webSearch: { enabled: true, providerId: 'web', topK: 2, searchDepth: 'basic', timeoutMs: 8000, includeAnswer: 'none' },
   })
   const policy = await (await request(baseUrl, '/api/v1/admin/reference-policy', undefined, adminToken)).json()
@@ -172,7 +172,7 @@ try {
     assert.equal(document.headingMode, 'headings'); assert.ok(document.contextCount >= 4); assert.equal(document.splitterVersion, 1)
     const preview = await page.evaluate(id => window.copilot.previewReference(id), id); assert.ok(preview.text.includes('热点缓存过期'))
   })
-  await page.evaluate(async id => { const resumes = await window.copilot.saveResume({ name: '合成候选人', text: '这是自动化测试使用的合成简历。' }); const resume = resumes.resumes.find(value => value.name === '合成候选人'); const library = await window.copilot.saveEnvironment({ name: '混合检索验证', interviewType: 'technical', resumeId: resume.id, targetId: null, referenceIds: [id] }); await window.copilot.activateEnvironment(library.environments.find(value => value.name === '混合检索验证').id); const settings = await window.copilot.getSettings(); await window.copilot.saveSettings({ ...settings, serviceSelections: { ...settings.serviceSelections, llm: { source: 'platform', id: 'mock-fast' }, asr: { source: 'platform', id: 'asr' } }, retrieval: { enabled: true }, remoteKnowledge: { ...settings.remoteKnowledge, enabled: false }, webSearch: { enabled: true } }) }, id)
+  await page.evaluate(async id => { const resumes = await window.copilot.saveResume({ name: '合成候选人', text: '这是自动化测试使用的合成简历。' }); const resume = resumes.resumes.find(value => value.name === '合成候选人'); const library = await window.copilot.saveEnvironment({ name: '混合检索验证', interviewType: 'technical', resumeId: resume.id, targetId: null, referenceIds: [id] }); await window.copilot.activateEnvironment(library.environments.find(value => value.name === '混合检索验证').id); const settings = await window.copilot.getSettings(); await window.copilot.saveSettings({ ...settings, serviceSelections: { ...settings.serviceSelections, llm: { source: 'platform', id: 'mock-fast' }, asr: { source: 'platform', id: 'asr' } }, retrieval: { enabled: true }, webSearch: { enabled: true } }) }, id)
   await check('Top5 + Top5 fuse distinct Top3 parents and join web content in real model request', async () => {
     const events = await answer('Redis 热点缓存过期如何保护数据库？')
     const retrieval = events.find(event => event.kind === 'answer-context').retrieval

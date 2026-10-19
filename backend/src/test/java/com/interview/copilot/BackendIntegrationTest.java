@@ -429,6 +429,7 @@ SELECT id, ('[' || id || ',0,0]')::vector FROM generate_series(1, 32) AS id
                     MountableFile.forHostPath(Path.of("sql", "17_desktop_settings.sql")),
                     "/tmp/17_desktop_settings.sql");
             withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "27_mock_interview.sql")), "/tmp/27_mock_interview.sql");
+            withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "29_remove_remote_knowledge.sql")), "/tmp/29_remove_remote_knowledge.sql");
         }
 
         @Override
@@ -474,7 +475,7 @@ SELECT id, ('[' || id || ',0,0]')::vector FROM generate_series(1, 32) AS id
                                 "-f",
                                 "/tmp/16_desktop_sessions.sql",
                                 "-f",
-                                "/tmp/17_desktop_settings.sql", "-f", "/tmp/27_mock_interview.sql");
+                                "/tmp/17_desktop_settings.sql", "-f", "/tmp/27_mock_interview.sql", "-f", "/tmp/29_remove_remote_knowledge.sql");
                 if (result.getExitCode() != 0) {
                     throw new IllegalStateException(
                             "Database SQL initialization failed: " + result.getStderr());

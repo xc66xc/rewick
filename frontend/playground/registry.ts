@@ -419,9 +419,9 @@ export const componentDocs: ComponentDoc[] = [
       },
       {
         label: '来源选择卡片',
-        code: `<ChoiceRow name="kb-source" value="local" defaultChecked label="本地知识库" description="默认" />
-<ChoiceRow name="kb-source" value="remote" label="远程知识库" description="需登录" />
-<ChoiceRow name="kb-source" value="none" label="不使用知识库" disabled />`,
+        code: `<ChoiceRow name="audio-source" value="system" defaultChecked label="系统音频" description="默认" />
+<ChoiceRow name="audio-source" value="microphone" label="麦克风" description="需登录" />
+<ChoiceRow name="audio-source" value="none" label="不使用知识库" disabled />`,
       },
     ],
   },

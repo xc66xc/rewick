@@ -21,7 +21,7 @@ const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
 const errors = []
 page.on('pageerror', error => errors.push(error.message))
-let config = { version: 1, providers: [], models: [], defaultModelId: '', asr: { enabled: false, providerId: '', model: '' }, knowledge: { enabled: false, providerId: '', agentId: '' }, embedding: { enabled: false, providerId: '', model: '', dimensions: 1024 } }
+let config = { version: 1, providers: [], models: [], defaultModelId: '', asr: { enabled: false, providerId: '', model: '' }, embedding: { enabled: false, providerId: '', model: '', dimensions: 1024 } }
 const tests = []
 const publications = []
 try {

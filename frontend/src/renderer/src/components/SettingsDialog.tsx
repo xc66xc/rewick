@@ -19,7 +19,7 @@ interface SettingsDialogProps {
   settings: Settings; bridge: DesktopBridge | undefined; onSave: (input: SettingsInput) => Promise<Settings>
   onApply?: (settings: Settings) => void; onLogout?: () => Promise<void>; onClose: () => void
 }
-const kinds: ServiceKind[] = ['llm', 'asr', 'knowledge']
+const kinds: ServiceKind[] = ['llm', 'asr']
 const groupClass = 'm-0 mb-6 min-w-0 border-0 border-b border-border p-0 pb-6'
 function initialDraft(settings: Settings): SettingsInput {
   // Omit unselected kinds entirely instead of storing `kind: undefined`, which survives IPC and zod as an explicit undefined entry.
@@ -57,8 +57,7 @@ export default function SettingsDialog({ settings, bridge, onSave, onApply, onLo
         const value = await onSave({ ...settingsInput(settings), preferencesVersion: draft.preferencesVersion, serviceSelections: advanced ? draft.serviceSelections : catalog.serviceSelections,
           answerStyle: draft.answerStyle, llm: { ...settingsInput(settings).llm, temperature: advanced ? draft.llm.temperature : catalog.llm.temperature },
           asr: { ...settingsInput(settings).asr, silenceMs: draft.asr.silenceMs }, autoAnswer: draft.autoAnswer,
-          retrieval: draft.retrieval, webSearch: { enabled: advanced && (draft.webSearch?.enabled ?? false) },
-          remoteKnowledge: { ...settingsInput(settings).remoteKnowledge, enabled: advanced ? draft.remoteKnowledge.enabled : catalog.remoteKnowledge.enabled } })
+          retrieval: draft.retrieval, webSearch: { enabled: advanced && (draft.webSearch?.enabled ?? false) } })
         setCatalog(value); setDraft(initialDraft(value)); toast.show('设置已保存', { type: 'success' }); onClose()
       }
     } catch (reason) { setError(errorMessage(reason)) }
@@ -88,7 +87,7 @@ export default function SettingsDialog({ settings, bridge, onSave, onApply, onLo
         <fieldset className="m-0 min-w-0 border-0 p-0" disabled={busy || !bridge}>
           <section aria-label="当前账号" className={groupClass}><h3 className="mb-2 text-sm font-semibold">当前账号</h3><p className={formNoteClass}>{catalog.platform?.user?.displayName || '尚未登录'}</p>
             <div className="mb-4 flex flex-wrap gap-2"><Button size="sm" onClick={() => void perform('refresh')}>刷新平台服务</Button><Button size="sm" onClick={() => setReloadConfirm(true)}>重新读取云端设置</Button><Button size="sm" variant="quiet" className="text-danger hover:bg-danger-subtle" onClick={() => void perform('logout')}>退出登录</Button></div></section>
-          {kinds.filter(kind => advanced || kind !== 'knowledge').map(kind => <fieldset className={groupClass} key={kind}><legend className="mb-4 w-full p-0 text-sm font-semibold">{serviceLabels[kind]}</legend>
+          {kinds.map(kind => <fieldset className={groupClass} key={kind}><legend className="mb-4 w-full p-0 text-sm font-semibold">{serviceLabels[kind]}</legend>
             {advanced && <ServiceSelector kind={kind} settings={catalog} selection={draft.serviceSelections?.[kind]}
               onChange={selection => setDraft(current => ({ ...current, serviceSelections: { ...current.serviceSelections, [kind]: selection } }))}
               onCustom={profile => setEditor({ kind, profile })} onRemove={setRemoving} />}

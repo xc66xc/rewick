@@ -27,12 +27,12 @@ describe('CheckRow / ChoiceRow 原生勾选', () => {
     const user = userEvent.setup()
     render(
       <>
-        <ChoiceRow name="kb-source" value="local" defaultChecked label="本地知识库" />
-        <ChoiceRow name="kb-source" value="remote" label="远程知识库" />
+        <ChoiceRow name="audio-source" value="system" defaultChecked label="系统音频" />
+        <ChoiceRow name="audio-source" value="microphone" label="麦克风" />
       </>,
     )
-    const local = screen.getByLabelText('本地知识库') as HTMLInputElement
-    const remote = screen.getByLabelText('远程知识库') as HTMLInputElement
+    const local = screen.getByLabelText('系统音频') as HTMLInputElement
+    const remote = screen.getByLabelText('麦克风') as HTMLInputElement
     expect(local.type).toBe('radio')
     expect(local.checked).toBe(true)
     await user.click(remote)

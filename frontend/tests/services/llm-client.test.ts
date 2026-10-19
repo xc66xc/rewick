@@ -68,7 +68,7 @@ describe('LlmClient', () => {
     settings.answerStyle = style === 'concise' ? 'concise' : 'detailed'
     settings.context.text = '统一封装训练、推理与评估接口。'
     const input = { ...request, question: '说一下示例 Harness，你认为它解决了什么问题？' }
-    const excerpt = { source: 'bailian' as const, kind: 'technical' as const, documentId: 'test-doc', chunkId: 'test-chunk', revision: 1, name: '测试资料', text: '数据集版本快照保证训练可复现。' }
+    const excerpt = { source: 'platform' as const, kind: 'technical' as const, documentId: 'test-doc', chunkId: 'test-chunk', revision: 1, name: '测试资料', text: '数据集版本快照保证训练可复现。' }
     const events: AppEvent[] = []
     client = new LlmClient(settings, 'test-key', event => events.push(event), platform)
     await client.generate(input, { status: 'ready', excerpts: [excerpt] })
@@ -83,7 +83,7 @@ describe('LlmClient', () => {
     expect(instruction).toContain(style === 'concise' ? '简短口语' : '展开口语')
     expect(JSON.parse(payload.messages[1].content)).toEqual({
       personalContext: settings.context.text, interviewTarget: settings.interviewTarget,
-      question: input.question, transcript: input.transcript, referenceContext: [excerpt.text],
+      question: input.question, transcript: input.transcript, referenceContext: [{ source: excerpt.source, name: excerpt.name, kind: excerpt.kind, text: excerpt.text }],
     })
     expect(events.find(event => event.kind === 'answer-request')?.modelInput.messages).toEqual(payload.messages)
     expect(fetcher).toHaveBeenCalledTimes(1)
@@ -336,35 +336,6 @@ describe('LlmClient', () => {
     expect(JSON.parse(snapshot?.messages[1].content ?? '{}')).toEqual(expectedInput)
     expect(JSON.stringify(snapshot)).not.toContain('fake-secret-must-stay-private')
     expect(events.at(-1)).toEqual({ kind: 'answer-done', requestId: request.requestId, cancelled: false })
-  })
-
-  it('sends only remote body text and captures the same input while retaining local personal classification', async () => {
-    const payloads: { model: string; messages: { role: string; content: string }[] }[] = []
-    vi.stubGlobal('fetch', vi.fn(async (_url: string, options: RequestInit) => {
-      payloads.push(JSON.parse(String(options.body)))
-      return new Response(JSON.stringify({ choices: [{ message: { content: '我会先考虑一致性。' } }] }), { headers: { 'Content-Type': 'application/json' } })
-    }))
-    const remote: RetrievalContext = { status: 'ready', remote: { agentId: 'internal-agent-marker', status: 'ready' }, excerpts: [
-      { source: 'bailian', documentId: 'internal-document-marker', chunkId: 'internal-chunk-marker', revision: 1,
-        name: 'private-document-name-marker', kind: 'technical', paragraphStart: 13, paragraphEnd: 15,
-        text: '第一段正文\n保留换行与技术内容。' },
-      { source: 'bailian', documentId: 'second-document-marker', chunkId: 'second-chunk-marker', revision: 1,
-        name: 'second-name-marker', kind: 'technical', text: '第二段正文。' },
-    ] }
-    const original = structuredClone(remote)
-    const events: AppEvent[] = []
-    client = new LlmClient(defaultSettings, 'fake-test-key', event => events.push(event))
-    await client.generate(request, remote)
-    const content = JSON.parse(payloads[0].messages[1].content)
-    expect(content.referenceContext).toEqual(['第一段正文\n保留换行与技术内容。', '第二段正文。'])
-    expect(payloads[0].messages[1].content).not.toMatch(/documentId|chunkId|revision|name-marker|pageStart|pageEnd|agent-marker|technical/)
-    expect(payloads[0].messages[0].content).toContain('纯文本片段来自远程知识库')
-    expect(payloads[0].messages[0].content).toContain('不能当作候选人亲历')
-    expect(events.find(event => event.kind === 'answer-request')?.modelInput).toEqual({ model: payloads[0].model, messages: payloads[0].messages })
-    expect(remote).toEqual(original)
-    const local = { documentId: 'local-project', chunkId: 'local-chunk', revision: 1, name: '我的项目', kind: 'personal' as const, text: '本人明确提供的经历。' }
-    await client.generate(request, { status: 'ready', excerpts: [local] })
-    expect(JSON.parse(payloads[1].messages[1].content).referenceContext).toEqual([{ name: local.name, kind: local.kind, text: local.text }])
   })
 
   it('always sends the saved JD and separates technical references from personal facts', async () => {

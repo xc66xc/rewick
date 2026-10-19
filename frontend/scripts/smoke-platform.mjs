@@ -11,7 +11,6 @@ import electronPath from 'electron'
 import { _electron } from 'playwright'
 import { expect } from '@playwright/test'
 import { startMockServices } from './mock-services.mjs'
-import { startRemoteKnowledgeMock, remoteMarker, remoteMetadataMarkers } from './mock-remote-knowledge.mjs'
 import { runAdminPlatformChecks } from '../tests/e2e/admin-platform.mjs'
 import { createPdfRagFixtures, syntheticResumeChineseMarker } from '../tests/fixtures/pdf-rag.mjs'
 import { startSmtpMock } from './mock-smtp.mjs'
@@ -26,10 +25,9 @@ const suffix = randomBytes(6).toString('hex')
 const container = `copilot-platform-e2e-${suffix}`
 const databaseImage = 'interview-copilot-postgres:15.19-pgvector0.8.6'
 const password = randomBytes(20).toString('hex')
-const keys = { llm: `test-platform-llm-${suffix}`, asr: `test-platform-asr-${suffix}`, knowledge: `test-platform-knowledge-${suffix}`, embedding: `test-platform-embedding-${suffix}` }
+const keys = { llm: `test-platform-llm-${suffix}`, asr: `test-platform-asr-${suffix}`, embedding: `test-platform-embedding-${suffix}` }
 const report = { realProviderTested: false, realAudioTested: false, checks: [], screenshots: [] }
 const mock = await startMockServices()
-const knowledge = await startRemoteKnowledgeMock()
 const smtp = await startSmtpMock()
 let application
 let backend
@@ -148,12 +146,10 @@ try {
         { id: 'initial-llm', name: '平台回答', kind: 'llm', url: `${mock.llmBaseUrl}/chat/completions`, enabled: true, apiKey: keys.llm },
         { id: 'initial-asr', name: '平台转写', kind: 'asr', url: `${mock.asrUrl}?mode=manual`, enabled: true, apiKey: keys.asr },
         { id: 'initial-embedding', name: '平台向量', kind: 'embedding', url: `${mock.llmBaseUrl}/embeddings`, enabled: true, apiKey: keys.embedding },
-        { id: 'initial-knowledge', name: '平台知识库', kind: 'knowledge', url: knowledge.url, enabled: true, apiKey: keys.knowledge },
       ],
       models: ['mock-fast', 'mock-held'].map(model => ({ id: model, name: model, providerId: 'initial-llm', model, enabled: true, maxOutputTokens: 2048 })),
       defaultModelId: 'mock-fast', asr: { enabled: true, providerId: 'initial-asr', model: 'fun-asr-realtime' },
       embedding: { enabled: true, providerId: 'initial-embedding', model: 'mock-embedding', dimensions: 1024 },
-      knowledge: { enabled: true, providerId: 'initial-knowledge', agentId: 'aid-server-only' },
     })
     await publishConfig('email-config', { version: 0, enabled: true, host: '127.0.0.1', port: smtp.port, username: '', from: 'copilot@example.test', startTls: false, ssl: false })
   })
@@ -181,7 +177,7 @@ try {
     const response = await request(baseUrl, '/api/v1/platform', undefined, accessToken)
     assert.equal(response.status, 200)
     const info = await response.json()
-    assert.deepEqual(info.capabilities, { llm: true, asr: true, knowledge: true })
+    assert.deepEqual(info.capabilities, { llm: true, asr: true, })
     assert.equal(info.models.llm, 'mock-fast')
     noSecrets(info)
   })
@@ -263,7 +259,7 @@ try {
     const resume = library.resumes.find(item => item.name === '验证简历')
     await window.copilot.saveEnvironment({ ...library.environments.find(item => item.id === library.activeEnvironmentId), resumeId: resume.id })
   })
-  await checkServiceSelectors({ page, mock, knowledge, check })
+  await checkServiceSelectors({ page, mock, check })
 
   await check('Electron question produces streamed answer through Java with server-owned Key', async () => {
     await page.getByRole('button', { name: '刷新时长', exact: true }).click()
@@ -322,7 +318,7 @@ try {
       const environment = library.environments.find(value => value.name === 'PG 检索验证')
       await window.copilot.activateEnvironment(environment.id)
       const settings = await window.copilot.getSettings()
-      await window.copilot.saveSettings({ ...settings, retrieval: { enabled: true }, remoteKnowledge: { ...settings.remoteKnowledge, enabled: false } })
+      await window.copilot.saveSettings({ ...settings, retrieval: { enabled: true }, })
     }, id)
     const events = await answer('Redis 缓存一致性怎么保证？')
     assert.ok(JSON.stringify(mock.requests.at(-1).body).includes(marker))
@@ -332,19 +328,6 @@ try {
     assert.equal(degraded.find(event => event.kind === 'answer-context').retrieval.status, 'degraded')
     assert.ok(JSON.stringify(mock.requests.at(-1).body).includes(marker))
     mock.setEmbeddingMode('fast')
-    const embeddedBeforeRemote = mock.embeddingRequests.length
-    await page.evaluate(async () => {
-      const settings = await window.copilot.getSettings()
-      await window.copilot.saveSettings({ ...settings, remoteKnowledge: { ...settings.remoteKnowledge, enabled: true } })
-    })
-    await answer('Redis 缓存一致性怎么保证？')
-    assert.equal(mock.embeddingRequests.length, embeddedBeforeRemote)
-    assert.equal(JSON.stringify(mock.requests.at(-1).body).includes(marker), false)
-    assert.ok(JSON.stringify(mock.requests.at(-1).body).includes(remoteMarker))
-    await page.evaluate(async () => {
-      const settings = await window.copilot.getSettings()
-      await window.copilot.saveSettings({ ...settings, remoteKnowledge: { ...settings.remoteKnowledge, enabled: false } })
-    })
     await page.evaluate(id => window.copilot.updateReference(id, { enabled: false }), id)
     await page.evaluate(async () => { const library = await window.copilot.getInterviewLibrary(); await window.copilot.saveEnvironment({ ...library.environments.find(item => item.id === library.activeEnvironmentId), referenceIds: [] }) })
     await answer('Redis 缓存一致性怎么保证？')
@@ -354,28 +337,6 @@ try {
     noSecrets(events)
     const schema = await execute('docker', ['exec', container, 'psql', '-U', 'copilot_test', '-d', 'copilot_test', '-At', '-c', "SELECT format_type(atttypid,atttypmod) FROM pg_attribute WHERE attrelid='reference_embeddings'::regclass AND attname='embedding'"])
     assert.equal(schema.stdout.trim(), 'vector(1024)')
-  })
-
-  await check('platform RAG sends only text to model and uses server Agent ID', async () => {
-    await page.evaluate(async () => {
-      const settings = await window.copilot.getSettings()
-      await window.copilot.saveSettings({ ...settings, remoteKnowledge: { enabled: true, url: '', agentId: '' } })
-    })
-    const events = await answer('Redis 缓存一致性怎么保证？')
-    assert.equal(knowledge.requests.at(-1).body.agent_id, 'aid-server-only')
-    assert.equal(knowledge.requests.at(-1).authorization, `Bearer ${keys.knowledge}`)
-    const sent = JSON.stringify(mock.requests.at(-1).body)
-    assert.ok(sent.includes(remoteMarker))
-    for (const marker of Object.values(remoteMetadataMarkers)) assert.equal(sent.includes(String(marker)), false)
-    noSecrets(events)
-  })
-
-  await check('remote failure continues model answer with degraded retrieval', async () => {
-    knowledge.setMode('http-error')
-    const events = await answer('远程检索失败时继续回答。')
-    assert.equal(events.find(event => event.kind === 'answer-context').retrieval.status, 'degraded')
-    assert.ok(events.some(event => event.kind === 'answer-done'))
-    knowledge.setMode('ready')
   })
 
   await check('PCM and final transcript cross the authenticated Java WebSocket relay', async () => {
@@ -391,7 +352,7 @@ try {
     await until(() => mock.asrConnections.at(-1).closed, 'Upstream ASR connection did not close')
   })
 
-  await runAdminPlatformChecks({ baseUrl, password, keys, page, mock, knowledge, answer, begin: beginDesktop, until, check, noSecrets })
+  await runAdminPlatformChecks({ baseUrl, password, keys, page, mock, answer, begin: beginDesktop, until, check, noSecrets })
 
   await check('personal credentials take precedence without sending a platform Key to their endpoint', async () => {
     await page.evaluate(async baseUrl => {
@@ -509,7 +470,6 @@ try {
   }
   if (databaseStarted) await execute('docker', ['rm', '-f', container]).catch(() => undefined)
   await mock.close()
-  await knowledge.close()
   await smtp.close()
   for (const secret of [...Object.values(keys), password]) logs = logs.replaceAll(secret, '[redacted]')
   await writeFile(join(output, 'platform-smoke-backend.log'), logs)

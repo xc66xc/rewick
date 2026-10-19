@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { expect } from '@playwright/test'
 
-export async function checkServiceSelectors({ page, mock, knowledge, check }) {
+export async function checkServiceSelectors({ page, mock, check }) {
   await check('all three selectors support separate custom drafts, real connection tests and explicit platform selection', async () => {
     await page.getByRole('button', { name: '打开设置', exact: true }).click()
     await expect(page.getByRole('checkbox', { name: '启用平台服务' })).toHaveCount(0)
@@ -9,7 +9,6 @@ export async function checkServiceSelectors({ page, mock, knowledge, check }) {
     const cases = [
       { label: '回答模型', kind: 'llm', url: mock.llmBaseUrl, model: 'mock-fast', platformId: 'mock-fast', platformName: 'mock-fast' },
       { label: '实时语音转写', kind: 'asr', url: `${mock.asrUrl}?mode=manual`, model: 'fun-asr-realtime', platformId: 'initial-asr', platformName: '平台转写' },
-      { label: '远程知识库', kind: 'knowledge', url: knowledge.url, agentId: 'aid-custom', platformId: 'initial-knowledge', platformName: '平台知识库' },
     ]
     for (const [index, item] of cases.entries()) {
       const select = page.getByRole('combobox', { name: new RegExp(`^${item.label}`) })
@@ -20,7 +19,6 @@ export async function checkServiceSelectors({ page, mock, knowledge, check }) {
       await modal.getByLabel('配置名称', { exact: true }).fill(`自定义${item.label}`)
       await modal.getByLabel(item.kind === 'asr' ? 'WebSocket 地址' : 'API 地址', { exact: true }).fill(item.url)
       if (item.model) await modal.getByLabel('模型名称', { exact: true }).fill(item.model)
-      if (item.agentId) await modal.getByLabel('Agent ID', { exact: true }).fill(item.agentId)
       await modal.getByLabel('API Key', { exact: true }).fill(`custom-${item.kind}-key`)
       const before = await page.evaluate(() => window.copilot.getSettings())
       await modal.getByRole('button', { name: '测试连接', exact: true }).click()

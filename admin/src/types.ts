@@ -13,8 +13,8 @@ export const usersSchema = pageSchema(userSchema)
 export const usagePageSchema = pageSchema(usageSchema)
 export const auditPageSchema = pageSchema(auditSchema)
 export interface Page<T> { items: T[]; total: number; page: number; size: number }
-export type Capability = 'llm' | 'asr' | 'knowledge' | 'embedding' | 'web-search'
-const providerSchema = z.object({ id: z.string(), name: z.string(), kind: z.enum(['llm', 'asr', 'knowledge', 'embedding', 'web-search']), url: z.string(), enabled: z.boolean(), hasApiKey: z.boolean().optional() })
+export type Capability = 'llm' | 'asr' | 'embedding' | 'web-search'
+const providerSchema = z.object({ id: z.string(), name: z.string(), kind: z.enum(['llm', 'asr', 'embedding', 'web-search']), url: z.string(), enabled: z.boolean(), hasApiKey: z.boolean().optional() })
 export interface Provider extends z.infer<typeof providerSchema> { apiKey?: string }
 const modelSchema = z.object({ id: z.string(), name: z.string(), providerId: z.string(), model: z.string(), enabled: z.boolean(), maxOutputTokens: z.number() })
 export type Model = z.infer<typeof modelSchema>
@@ -22,7 +22,7 @@ export const searchDepthSchema = z.enum(['advanced', 'basic', 'fast', 'ultra-fas
 export const searchDepthNames: Record<z.infer<typeof searchDepthSchema>, string> = { advanced: '高级搜索', basic: '基础搜索', fast: '快速搜索', 'ultra-fast': '极速搜索' }
 export const defaultWebSearch = { enabled: false, providerId: '', topK: 5, searchDepth: 'advanced' as const, timeoutMs: 8000, includeAnswer: 'none' as const }
 export const webSearchSchema = z.object({ enabled: z.boolean(), providerId: z.string(), topK: z.number().int().min(1).max(20), searchDepth: searchDepthSchema, timeoutMs: z.number().int().min(1000).max(30000), includeAnswer: z.enum(['none', 'basic', 'advanced']).default('none') })
-export const configSchema = z.object({ version: z.number(), providers: z.array(providerSchema), models: z.array(modelSchema), defaultModelId: z.string(), asr: z.object({ enabled: z.boolean(), providerId: z.string(), model: z.string() }), knowledge: z.object({ enabled: z.boolean(), providerId: z.string(), agentId: z.string() }), embedding: z.object({ enabled: z.boolean(), providerId: z.string(), model: z.string(), dimensions: z.literal(1024) }), webSearch: webSearchSchema.default(defaultWebSearch) })
+export const configSchema = z.object({ version: z.number(), providers: z.array(providerSchema), models: z.array(modelSchema), defaultModelId: z.string(), asr: z.object({ enabled: z.boolean(), providerId: z.string(), model: z.string() }), embedding: z.object({ enabled: z.boolean(), providerId: z.string(), model: z.string(), dimensions: z.literal(1024) }), webSearch: webSearchSchema.default(defaultWebSearch) })
 export interface Config extends Omit<z.infer<typeof configSchema>, 'providers'> { providers: Provider[] }
 export const testSchema = z.object({ success: z.boolean(), message: z.string(), latencyMs: z.number() })
 export const emailConfigSchema = z.object({ version: z.number().int().nonnegative(), enabled: z.boolean(), host: z.string().max(253), port: z.number().int().min(1).max(65535), username: z.string().max(254), hasPassword: z.boolean(), from: z.string().max(254), startTls: z.boolean(), ssl: z.boolean() })
@@ -30,7 +30,7 @@ export interface EmailConfig extends z.infer<typeof emailConfigSchema> { passwor
 export function cleanEmailPassword({ password: _password, ...config }: EmailConfig): EmailConfig { return config }
 export function emailConfigPayload({ hasPassword: _saved, password, ...config }: EmailConfig) { return { ...config, host: config.host.trim(), username: config.username.trim(), from: config.from.trim(), ...(config.username.trim() && password ? { password } : {}) } }
 export function emailPasswordRequired(draft: EmailConfig, saved: EmailConfig | null): boolean { return !!draft.username.trim() && (!saved?.hasPassword || draft.host.trim() !== saved.host || draft.port !== saved.port || draft.username.trim() !== saved.username) }
-export const capabilityNames: Record<Capability, string> = { llm: '回答模型', asr: '语音转写', knowledge: '远程知识库', embedding: '资料检索向量模型', 'web-search': '联网搜索' }
+export const capabilityNames: Record<Capability, string> = { llm: '回答模型', asr: '语音转写', embedding: '资料检索向量模型', 'web-search': '联网搜索' }
 export const statusNames: Record<string, string> = { started: '进行中', complete: '已完成', failed: '失败', cancelled: '已取消', expired: '已过期' }
 export function dateTime(value: string | null): string { return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—' }
 export function cleanSecrets(config: Config): Config { return { ...config, providers: config.providers.map(({ apiKey: _key, ...provider }) => provider) } }

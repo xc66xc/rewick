@@ -85,7 +85,6 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
                 view.models(),
                 view.defaultModelId(),
                 view.asr(),
-                view.knowledge(),
                 view.embedding(), view.webSearch());
     }
 
@@ -100,8 +99,7 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
             return defaults;
         }
         return new DesktopSettingsEntity(
-                defaults.version(), defaults.llmModelId(), defaults.temperature(), newId,
-                defaults.retrievalMode(), defaults.knowledgeServiceId());
+                defaults.version(), defaults.llmModelId(), defaults.temperature(), newId);
     }
 
     public PlatformSnapshot draft(PlatformConfig input) {
@@ -133,7 +131,7 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
         var search = input.webSearch() == null ? previous.webSearch()
                 : input.webSearch().withDefaultAnswer(previous.webSearch().includeAnswer());
         return new PlatformConfig(input.version(), input.providers(), input.models(), input.defaultModelId(),
-                input.asr(), input.knowledge(), input.embedding(), search);
+                input.asr(), input.embedding(), search);
     }
 
     private boolean localEmbedding(PlatformConfig.Provider provider) {
@@ -159,8 +157,7 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
                         List.of(),
                         List.of(),
                         "",
-                        new PlatformConfig.Asr(false, "", ""),
-                        new PlatformConfig.Knowledge(false, "", ""));
+                        new PlatformConfig.Asr(false, "", ""));
         return new PlatformSnapshot(config, Map.of(), PlatformPolicy.from(properties));
     }
 

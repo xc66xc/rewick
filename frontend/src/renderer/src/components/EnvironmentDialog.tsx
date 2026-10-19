@@ -60,7 +60,7 @@ export default function EnvironmentDialog({ open, onOpenChange, draft, dirty, li
       </>}>
       <form onSubmit={event => { event.preventDefault(); onSave() }} noValidate>
         {editingBlocked && <p className="mb-4 rounded-chip border border-accent-line bg-accent-subtle px-4 py-3 text-xs leading-[1.8] text-text-secondary">面试进行中，当前面试准备已锁定。结束面试后可修改。</p>}
-        {!settings.remoteKnowledge.enabled && !settings.retrieval.enabled && draft.referenceIds.length > 0 && <p className="mb-4 text-xs leading-[1.85] text-text-secondary">本地资料检索已关闭，需在个人背景 → 参考资料开启后使用。当前选择会保留。</p>}
+        {!settings.retrieval.enabled && draft.referenceIds.length > 0 && <p className="mb-4 text-xs leading-[1.85] text-text-secondary">本地资料检索已关闭，需在个人背景 → 参考资料开启后使用。当前选择会保留。</p>}
         {!referencesReady && <p className={formNoteClass} role="status">正在读取可选参考资料…</p>}
         {error && <p className={cn(inlineErrorClass, 'mt-0 mb-4')} role="alert">{error}</p>}
         <fieldset className="m-0 min-w-0 border-0 p-0" disabled={fieldsDisabled}>

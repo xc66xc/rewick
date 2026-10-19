@@ -21,7 +21,7 @@ const library = { resumes: [{ id: resumeId, name: '合成简历', text: '合成�
 let current = { id, state: 'ready', version: 1, generation: 1, environmentName: environment.name, interviewType: 'technical', durationMinutes: 15, usedSeconds: 0, remainingSeconds: 900, avatarId: 'rewick-interviewer', voiceId: 'test', turns: [], reportStatus: 'pending', createdAt: now }
 let socket, sequence = 0, micFrames = 0, consumedCredit = 0, speech
 const commands = [], checks = [], errors = [], suppliers = []
-const preferences = { version: 1, preferences: { answerStyle: 'concise', temperature: .5, silenceMs: 800, autoAnswer: { enabled: true, pauseMs: 1500 }, retrievalEnabled: false, remoteKnowledgeEnabled: false, webSearchEnabled: false, platformSelections: { llm: null, asr: null, knowledge: null } }, unavailableSelections: [] }
+const preferences = { version: 1, preferences: { answerStyle: 'concise', temperature: .5, silenceMs: 800, autoAnswer: { enabled: true, pauseMs: 1500 }, retrievalEnabled: false, webSearchEnabled: false, platformSelections: { llm: null, asr: null, } }, unavailableSelections: [] }
 const reply = (res, value, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)) }
 function send(kind, payload, generation = current.generation) { socket?.send(JSON.stringify({ protocolVersion: 1, sessionId: id, kind, generation, sequence: sequence++, payload })) }
 function state(asrReady = false) { send('state', { ...current, asrReady }) }
@@ -46,7 +46,7 @@ const server = http.createServer(async (req, res) => {
     if (req.url === '/api/v1/auth/login') return reply(res, { accessToken: 'local-synthetic-token', expiresAt: new Date(Date.now() + 3600000).toISOString(), user: { id: 'mock-test-user', displayName: '模拟测试', email: 'mock@example.test' } })
     if (req.headers.authorization !== 'Bearer local-synthetic-token') return reply(res, {}, 401)
     if (req.url === '/api/v1/auth/session' || req.url === '/api/v1/auth/logout') return reply(res, {})
-    if (req.url === '/api/v1/platform') return reply(res, { user: { id: 'mock-test-user', displayName: '模拟测试', email: 'mock@example.test' }, capabilities: { llm: false, asr: false, knowledge: false }, models: { llm: '', asr: '', available: [] }, services: { asr: [], knowledge: [] }, limits: { maxAsrSessionSeconds: 3600 } })
+    if (req.url === '/api/v1/platform') return reply(res, { user: { id: 'mock-test-user', displayName: '模拟测试', email: 'mock@example.test' }, capabilities: { llm: false, asr: false, }, models: { llm: '', asr: '', available: [] }, services: { asr: [], }, limits: { maxAsrSessionSeconds: 3600 } })
     if (req.url === '/api/v1/background') return reply(res, library)
     if (req.url === '/api/v1/user-preferences') return reply(res, preferences)
     if (req.url === '/api/v1/wallet') return reply(res, { availableSeconds: 0, version: 1, session: null, serverTime: new Date().toISOString() })

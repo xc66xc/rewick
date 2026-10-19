@@ -3,7 +3,6 @@ package com.interview.copilot.request.platform;
 import com.interview.copilot.model.platform.PlatformConfig.Asr;
 import com.interview.copilot.model.platform.PlatformConfig.WebSearch;
 import com.interview.copilot.model.platform.PlatformConfig.Embedding;
-import com.interview.copilot.model.platform.PlatformConfig.Knowledge;
 import com.interview.copilot.model.platform.PlatformConfig.Model;
 import com.interview.copilot.model.platform.PlatformConfig.Provider;
 
@@ -20,7 +19,6 @@ public record PlatformConfigRequest(
         @NotNull @Size(max = 100) List<@NotNull @Valid Model> models,
         @NotNull @Size(max = 64) String defaultModelId,
         @NotNull @Valid Asr asr,
-        @NotNull @Valid Knowledge knowledge,
         @Valid Embedding embedding,
         @Valid WebSearch webSearch) {
     @Override

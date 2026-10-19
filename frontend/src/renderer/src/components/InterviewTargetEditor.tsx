@@ -59,7 +59,7 @@ export default function InterviewTargetEditor({ library, bridge, onLibrary, pref
   /* v30 资料库布局(同我的简历):左列岗位列表 + 底部虚线「新增岗位」,右侧编辑卡 + 原版右侧说明栏 */
   return <div className="grid h-full grid-cols-[270px_minmax(0,1fr)_240px] gap-5 max-[1060px]:grid-cols-[220px_minmax(0,1fr)_210px] max-[820px]:grid-cols-[minmax(0,1fr)]">
     <aside className="flex min-w-0 flex-col gap-1" aria-label="岗位列表">
-      {library?.targets.map(record => {
+      {library?.targets.slice().sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).map(record => {
         const active = target.id === record.id
         return <button key={record.id} type="button" onClick={() => select(record.id)} aria-current={active ? 'true' : undefined} title={record.name}
           className={cn('flex w-full items-center gap-2.5 rounded-control px-3 py-2.5 text-left transition-colors', active ? 'bg-border text-text-primary' : 'text-text-regular hover:bg-subtle')}>

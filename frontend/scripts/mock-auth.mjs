@@ -27,7 +27,7 @@ export function mockAuthHandler() {
     if (request.url === '/api/v1/auth/session') { reply(204); return true }
     if (request.url === '/api/v1/auth/logout') { tokens.delete(token); reply(204); return true }
     if (request.url === '/api/v1/platform') {
-      reply(200, { user, capabilities: { llm: false, asr: false, knowledge: false }, models: { llm: '', asr: '', available: [] }, services: { asr: [], knowledge: [] }, limits: { maxAsrSessionSeconds: 3600 } })
+      reply(200, { user, capabilities: { llm: false, asr: false, }, models: { llm: '', asr: '', available: [] }, services: { asr: [], }, limits: { maxAsrSessionSeconds: 3600 } })
       return true
     }
     if (request.url === '/api/v1/references') {

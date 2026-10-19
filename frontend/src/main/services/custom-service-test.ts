@@ -2,13 +2,11 @@ import type { CustomServiceInput } from '../../shared/types'
 import type { SettingsStore } from './settings-store'
 import { AsrClient } from './asr-client'
 import { LlmClient } from './llm-client'
-import { RemoteKnowledgeClient } from './remote-knowledge-client'
 
 export async function testCustomService(store: SettingsStore, input: CustomServiceInput, signal?: AbortSignal) {
   const { settings, apiKey } = await store.customServiceConnection(input)
   signal?.throwIfAborted()
   if (input.kind === 'llm') return new LlmClient(settings, apiKey, () => undefined).test(signal)
-  if (input.kind === 'knowledge') return new RemoteKnowledgeClient({ ...settings.remoteKnowledge, enabled: true }, apiKey).test(signal)
   const started = performance.now()
   const client = new AsrClient(settings.asr, apiKey, () => undefined)
   const abort = () => client.dispose()

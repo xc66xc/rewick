@@ -26,7 +26,4 @@ public interface DesktopSettingsService {
 
     String asr(long user, String requested);
 
-    String knowledge(long user, String requested);
-
-    void requireLocal(long user);
 }

@@ -40,7 +40,7 @@ public final class PlatformConfigFixture implements AutoCloseable {
         when(mapper.desktopDefaults())
                 .thenReturn(
                         new com.interview.copilot.entity.platform.DesktopSettingsEntity(
-                                0, "", 0.7, "", "local", ""));
+                                0, "", 0.7, ""));
         when(mapper.publish(anyLong(), anyString()))
                 .thenAnswer(
                         call -> {
@@ -85,8 +85,7 @@ public final class PlatformConfigFixture implements AutoCloseable {
                         new PlatformConfig.Model(
                                 "careful", "完整回答", "primary", "upstream-careful", true, 2000)),
                 "fast",
-                new PlatformConfig.Asr(false, "", ""),
-                new PlatformConfig.Knowledge(false, "", ""));
+                new PlatformConfig.Asr(false, "", ""));
     }
 
     public static PlatformConfig empty(long version) {
@@ -95,8 +94,7 @@ public final class PlatformConfigFixture implements AutoCloseable {
                 List.of(),
                 List.of(),
                 "",
-                new PlatformConfig.Asr(false, "", ""),
-                new PlatformConfig.Knowledge(false, "", ""));
+                new PlatformConfig.Asr(false, "", ""));
     }
 
     @Override

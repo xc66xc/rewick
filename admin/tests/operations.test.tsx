@@ -149,6 +149,7 @@ describe('operations monitoring', () => {
     expect(screen.getByText('偏移 未知', { exact: false })).toBeTruthy()
     expect(screen.getByText(/未采集该来源/)).toBeTruthy()
     expect(eventSchema.safeParse({ ...event, source: 'external' }).success).toBe(false)
+    expect(eventSchema.safeParse({ ...event, providerType: 'bailian' }).success).toBe(false)
   })
   it('accepts nullable backend measurements as unknown and nullable event fields as absent', () => {
     const parsed = overviewSchema.parse({ ...overview, performance: Object.fromEntries(Object.keys(overview.performance).map(key => [key, null])) })

@@ -5,22 +5,22 @@ import type { EnvironmentStamp, EnvironmentStampInput } from './environment-stam
 export interface SessionExportOptions { includeAiAnswers: boolean; includeTranscript: boolean; includeInterviewInfo: boolean }
 import type { InterviewType } from './interview-type'
 import type { PackageCatalog, PaymentOrder, CreatePaymentOrder } from './payment'
-export type ServiceKind = 'llm' | 'asr' | 'knowledge'
+export type ServiceKind = 'llm' | 'asr'
 export interface ServiceSelection { source: 'platform' | 'custom'; id: string }
 export interface CustomServiceInput {
   id?: string; name: string; kind: ServiceKind; url: string
-  model?: string; agentId?: string; apiKey?: string
+  model?: string; apiKey?: string
 }
 export interface CustomServiceProfile extends Omit<CustomServiceInput, 'id' | 'apiKey'> { id: string; hasApiKey: boolean }
-export interface PlatformServices { asr: { id: string; name: string }[]; knowledge: { id: string; name: string }[] }
-export interface DesktopDefaults { version: number; llmModelId: string; temperature: number; asrServiceId: string; retrievalMode: 'local' | 'remote'; knowledgeServiceId: string }
+export interface PlatformServices { asr: { id: string; name: string }[] }
+export interface DesktopDefaults { version: number; llmModelId: string; temperature: number; asrServiceId: string }
 export interface PlatformInfo {
   advancedSettingsEnabled?: boolean
   webSearchAvailable?: boolean
   webSearchTimeoutMs?: number
   desktopDefaults?: DesktopDefaults
   user: { id: string; displayName: string; email?: string | null }
-  capabilities: { llm: boolean; asr: boolean; knowledge: boolean }
+  capabilities: { llm: boolean; asr: boolean }
   models: { llm: string; asr: string; available?: { id: string; name: string }[] }
   services?: PlatformServices
   limits: { maxAsrSessionSeconds: number }
@@ -56,7 +56,6 @@ export interface Settings {
   interviewEnvironment?: InterviewEnvironmentSnapshot
   retrieval: { enabled: boolean }
   webSearch?: { enabled: boolean }
-  remoteKnowledge: { enabled: boolean; url: string; agentId: string; hasApiKey: boolean; serviceId?: string }
   answerStyle: 'concise' | 'detailed'
   autoAnswer: { enabled: boolean; pauseMs: number }
 }
@@ -70,7 +69,6 @@ export interface SettingsInput {
   interviewTarget: InterviewTarget
   retrieval: Settings['retrieval']
   webSearch?: Settings['webSearch']
-  remoteKnowledge: Omit<Settings['remoteKnowledge'], 'hasApiKey'> & { apiKey?: string }
   answerStyle: Settings['answerStyle']
   autoAnswer: Settings['autoAnswer']
 }
@@ -119,7 +117,7 @@ export interface ReferenceDocument {
   chunkCount: number
 }
 export interface ReferenceExcerpt {
-  source?: 'platform' | 'bailian' | 'web'
+  source?: 'platform' | 'web'
   generatedSummary?: boolean
   url?: string
   title?: string
@@ -146,7 +144,6 @@ export interface RetrievalContext {
     vector: { status: 'ready' | 'empty' | 'degraded'; candidateCount: number; durationMs: number }
     fusion: { method: 'rrf'; rankConstant: number; resultCount: number }
   } | null
-  remote?: { agentId: string; status: 'ready' | 'degraded' | 'empty'; message?: string }
   web?: { status: 'ready' | 'degraded' | 'empty'; message?: string }
 }
 export interface TranscriptSegment {
@@ -272,7 +269,6 @@ export interface DesktopBridge {
   saveEnvironmentStamp(input: EnvironmentStampInput): Promise<InterviewLibrary>
   removeEnvironment(id: string): Promise<InterviewLibrary>
   activateEnvironment(id: string): Promise<Settings>
-  testRemoteKnowledge(): Promise<{ latencyMs: number; message: string }>
   listReferences(): Promise<ReferenceDocument[]>
   importReferences(): Promise<ReferenceDocument[]>
   previewReference(id: string): Promise<{ document: ReferenceDocument; text: string }>

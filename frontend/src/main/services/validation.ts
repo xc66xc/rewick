@@ -29,19 +29,9 @@ export const llmSettingsSchema = z.object({
 export const interviewTargetSchema = z.object({
   companyName: z.string().trim().max(200), roleName: z.string().trim().max(200), jobDescription: z.string().max(12_000),
 })
-const remoteKnowledgeBaseSchema = z.object({
-  enabled: z.boolean(),
-  url: z.union([z.literal(''), endpoint('http')]).refine(value => !/[{}]|%7[bd]/i.test(value), '请将请求地址中的业务空间占位符替换为真实 Workspace ID。'),
-  agentId: z.string().trim().max(200).refine(value => !/\s/.test(value), 'Agent ID 不能包含空白字符。'),
-})
-export const remoteKnowledgeSettingsSchema = remoteKnowledgeBaseSchema.superRefine((value, context) => {
-  if (!value.enabled) return
-  if (!value.url) context.addIssue({ code: 'custom', path: ['url'], message: '启用远程知识库前请填写完整检索请求地址。' })
-  if (!value.agentId) context.addIssue({ code: 'custom', path: ['agentId'], message: '启用远程知识库前请填写 Agent ID。' })
-})
 export const referencePatchSchema = z.object({ enabled: z.boolean().optional(), kind: z.enum(['technical', 'personal']).optional() }).strict()
 export const referenceExcerptSchema = z.object({
-    source: z.enum(['platform', 'bailian', 'web']).optional(),
+    source: z.enum(['platform', 'web']).optional(),
     generatedSummary: z.boolean().optional(),
     url: webSourceUrlSchema.optional(), title: z.string().max(255).optional(), score: z.number().finite().optional(),
     documentId: z.string().min(1).max(128), revision: z.number().int().positive(),
@@ -60,7 +50,6 @@ export const retrievalContextSchema = z.object({
   status: z.enum(['disabled', 'ready', 'degraded', 'empty']), message: z.string().max(2000).optional(),
   excerpts: z.array(referenceExcerptSchema).max(33),
   hybrid: z.object({ bm25: recallBranchSchema, vector: recallBranchSchema, fusion: z.object({ method: z.literal('rrf'), rankConstant: z.number().int().positive(), resultCount: z.number().int().min(0).max(3) }) }).nullable().optional(),
-  remote: z.object({ agentId: z.string().max(200), status: z.enum(['ready', 'degraded', 'empty']), message: z.string().max(2000).optional() }).optional(),
   web: z.object({ status: z.enum(['ready', 'degraded', 'empty']), message: z.string().max(2000).optional() }).optional(),
 })
 export const platformSettingsSchema = z.object({
@@ -73,7 +62,6 @@ export const settingsInputSchema = z.object({
   serviceSelections: z.object({
     llm: z.object({ source: z.enum(['platform', 'custom']), id: z.string().max(200) }).optional(),
     asr: z.object({ source: z.enum(['platform', 'custom']), id: z.string().max(200) }).optional(),
-    knowledge: z.object({ source: z.enum(['platform', 'custom']), id: z.string().max(200) }).optional(),
   }).optional(),
   platform: platformSettingsSchema.default({ enabled: false, baseUrl: productionPlatformUrl }),
   asr: asrSettingsSchema.extend({ apiKey }),
@@ -82,15 +70,9 @@ export const settingsInputSchema = z.object({
   interviewTarget: interviewTargetSchema.default({ companyName: '', roleName: '', jobDescription: '' }),
   retrieval: z.object({ enabled: z.boolean() }).default({ enabled: false }),
   webSearch: z.object({ enabled: z.boolean() }).default({ enabled: false }),
-  remoteKnowledge: remoteKnowledgeBaseSchema.extend({ apiKey }).default({ enabled: false, url: '', agentId: '' }),
   answerStyle: z.enum(['concise', 'detailed']),
   autoAnswer: z.object({ enabled: z.boolean(), pauseMs: z.number().int().min(1000).max(5000) })
     .default({ enabled: true, pauseMs: 1500 }),
-}).superRefine((value, context) => {
-  if (value.remoteKnowledge.enabled && (!value.platform.enabled || value.remoteKnowledge.apiKey)) {
-    const remote = remoteKnowledgeSettingsSchema.safeParse(value.remoteKnowledge)
-    if (!remote.success) for (const issue of remote.error.issues) context.addIssue({ ...issue, path: ['remoteKnowledge', ...issue.path] })
-  }
 })
 export const answerRequestSchema = z.object({
   operationId: z.string().uuid().optional(), autoWaitMs: z.number().finite().nonnegative().max(86400000).optional(),

@@ -5,5 +5,4 @@ import com.interview.copilot.model.platform.PlatformSnapshot;
 import java.util.List;
 
 public record PlatformServicesResponse(
-        List<PlatformSnapshot.AvailableService> asr,
-        List<PlatformSnapshot.AvailableService> knowledge) {}
+        List<PlatformSnapshot.AvailableService> asr) {}

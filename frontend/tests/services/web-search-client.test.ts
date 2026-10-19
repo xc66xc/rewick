@@ -7,7 +7,7 @@ import { SessionFault } from '../../src/main/services/session-fault'
 function settings(): Settings {
   return { ...structuredClone(defaultSettings), webSearch: { enabled: true }, platform: {
     ...defaultSettings.platform, enabled: true, authenticated: true, baseUrl: 'https://platform.example',
-    capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'test', asr: 'test' },
+    capabilities: { llm: true, asr: true, }, models: { llm: 'test', asr: 'test' },
     advancedSettingsEnabled: true, webSearchAvailable: true, webSearchTimeoutMs: 8000,
   } }
 }

@@ -75,9 +75,7 @@ public class DesktopSettingsServiceImpl implements DesktopSettingsService {
                         input.version(),
                         input.llmModelId(),
                         input.temperature(),
-                        input.asrServiceId(),
-                        input.retrievalMode(),
-                        input.knowledgeServiceId());
+                        input.asrServiceId());
         DesktopDefaultsValidator.validate(value, runtime.snapshot());
         if (mapper.save(value) != 1) {
             throw new ApiException(
@@ -109,23 +107,6 @@ public class DesktopSettingsServiceImpl implements DesktopSettingsService {
         return advanced(user) ? requested : selection(requested, get().asrServiceId());
     }
 
-    public String knowledge(long user, String requested) {
-        if (advanced(user)) {
-            return requested;
-        }
-        var value = get();
-        if (!"remote".equals(value.retrievalMode())) {
-            throw forbidden();
-        }
-        return selection(requested, value.knowledgeServiceId());
-    }
-
-    public void requireLocal(long user) {
-        if (!advanced(user) && !"local".equals(get().retrievalMode())) {
-            throw forbidden();
-        }
-    }
-
     private String selection(String requested, String configured) {
         if (configured.isEmpty()) {
             throw new ApiException(
@@ -151,8 +132,6 @@ public class DesktopSettingsServiceImpl implements DesktopSettingsService {
                 value.version(),
                 value.llmModelId(),
                 value.temperature(),
-                value.asrServiceId(),
-                value.retrievalMode(),
-                value.knowledgeServiceId());
+                value.asrServiceId());
     }
 }

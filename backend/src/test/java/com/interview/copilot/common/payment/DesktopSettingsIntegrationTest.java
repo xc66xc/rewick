@@ -26,7 +26,7 @@ class DesktopSettingsIntegrationTest extends PaymentHttpFixture {
     void defaults() {
         jdbc.update(
                 "UPDATE desktop_settings SET"
-                    + " version=0,llm_model_id='',temperature=0.7,asr_service_id='',retrieval_mode='local',knowledge_service_id=''"
+                    + " version=0,llm_model_id='',temperature=0.7,asr_service_id=''"
                     + " WHERE id=1");
         jdbc.update(
                 "UPDATE platform_config SET version=0,is_published=FALSE,payload='{}'::jsonb WHERE"
@@ -47,10 +47,6 @@ class DesktopSettingsIntegrationTest extends PaymentHttpFixture {
                 "temperature",
                 0.4,
                 "asrServiceId",
-                "",
-                "retrievalMode",
-                "local",
-                "knowledgeServiceId",
                 "");
     }
 
@@ -169,7 +165,6 @@ class DesktopSettingsIntegrationTest extends PaymentHttpFixture {
                                 .toList(),
                         "careful",
                         previous.asr(),
-                        previous.knowledge(),
                         previous.embedding());
         assertThatThrownBy(() -> platform.publish(id("administrator"), disabled))
                 .isInstanceOf(ApiException.class);
@@ -206,8 +201,6 @@ class DesktopSettingsIntegrationTest extends PaymentHttpFixture {
                                     .value())
                     .isEqualTo(403);
         }
-        assertThatThrownBy(() -> desktop.knowledge(id("alice"), "remote-service"))
-                .isInstanceOf(ApiException.class);
         grant(true);
         assertThat(desktop.asr(id("alice"), "custom-choice")).isEqualTo("custom-choice");
         grant(false);

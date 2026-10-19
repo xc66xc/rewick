@@ -11,7 +11,7 @@ export default function AdvancedSettingsUsers({ api }: Props) {
   const granted = users.state.kind === 'ready' ? users.state.data : []
   return <section aria-label="高级设置授权用户">
     <h3>高级设置授权用户</h3>
-    <p className={styles.hint}>添加已有用户后，该用户可以调整回答模型、生成温度、语音转写服务和远程知识库。新用户默认不开放；移除权限不会删除其自定义配置。</p>
+    <p className={styles.hint}>添加已有用户后，该用户可以调整回答模型、生成温度和语音转写服务。新用户默认不开放；移除权限不会删除其自定义配置。</p>
     {users.error && <p role="alert" className={styles.error}>{users.error}</p>}
     {users.notice && <p role="status" className={styles.notice}>{users.notice}</p>}
     <form className={styles.toolbar} onSubmit={event => { event.preventDefault(); if (query.trim()) users.search(query) }}>

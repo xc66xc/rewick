@@ -12,9 +12,9 @@ const frontend = resolve(repository, 'frontend')
 const require = createRequire(resolve(frontend, 'package.json'))
 const { createServer } = await import(pathToFileURL(require.resolve('vite')).href)
 const loader = await createServer({ root: frontend, configFile: false, appType: 'custom', server: { middlewareMode: true } })
-const [{ OperationsTelemetry }, { LlmClient }, { RemoteKnowledgeClient }, { WebSearchClient }, { retrieveAnswerContext }, { defaultSettings }] = await Promise.all([
+const [{ OperationsTelemetry }, { LlmClient }, { ReferenceService }, { WebSearchClient }, { retrieveAnswerContext }, { defaultSettings }] = await Promise.all([
   '/src/main/services/operations-telemetry.ts', '/src/main/services/llm-client.ts',
-  '/src/main/services/remote-knowledge-client.ts', '/src/main/services/web-search-client.ts',
+  '/src/main/services/reference-service.ts', '/src/main/services/web-search-client.ts',
   '/src/main/services/answer-retrieval.ts', '/src/shared/defaults.ts',
 ].map(path => loader.ssrLoadModule(path)))
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
@@ -48,9 +48,9 @@ const server = http.createServer(async (request, response) => {
       }
       return response.writeHead(202, { 'Content-Type': 'application/json' }).end(JSON.stringify({ accepted: batch.events.length, dropped: 0 }))
     }
-    if (request.url === '/rag') {
+    if (request.url === '/api/v1/references/search') {
       await delay(5)
-      return response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ success: true, data: { nodes: [{ text: '本地模拟知识资料' }] } }))
+      return response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ status: 'ready', excerpts: [{ source: 'platform', kind: 'technical', documentId: 'bench-doc', chunkId: 'bench-chunk', revision: 1, name: '本地模拟参考资料', text: '本地模拟知识资料' }] }))
     }
     if (request.url === '/api/v1/web-search') {
       await delay(8)
@@ -75,7 +75,7 @@ const server = http.createServer(async (request, response) => {
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
 const url = `http://127.0.0.1:${server.address().port}`
 const config = { ...structuredClone(defaultSettings), llm: { ...defaultSettings.llm, baseUrl: `${url}/v1`, model: 'benchmark-local' },
-  remoteKnowledge: { enabled: true, url: `${url}/rag`, agentId: 'benchmark', hasApiKey: true }, webSearch: { enabled: true },
+  retrieval: { enabled: true }, interviewEnvironment: { id: 'bench-environment', name: 'benchmark', referenceIds: ['bench-doc'] }, webSearch: { enabled: true },
   platform: { ...defaultSettings.platform, enabled: true, authenticated: true, baseUrl: url, advancedSettingsEnabled: true, webSearchAvailable: true } }
 
 async function run(capturing, count, broken = false, workers = concurrency, thinkMs = 0) {
@@ -95,7 +95,7 @@ async function run(capturing, count, broken = false, workers = concurrency, thin
         const requestId = randomUUID()
         const operation = telemetry.operation({ operationId: randomUUID(), requestId, model: 'benchmark-local', serviceSource: 'custom' })
         const retrieval = await telemetry.measure(operation, 'retrieval.join', () => retrieveAnswerContext(
-          signal => telemetry.measure(operation, 'retrieval.rag', () => new RemoteKnowledgeClient(config.remoteKnowledge, 'local-key').retrieve('BENCH_QUESTION_PRIVATE', signal), 'bailian'),
+          signal => telemetry.measure(operation, 'retrieval.rag', () => new ReferenceService(() => {}, async () => ({ settings: config, secrets: { platformAccessToken: 'local-test-token' } })).retrieve('BENCH_QUESTION_PRIVATE', '', config, signal), 'pg'),
           signal => telemetry.measure(operation, 'retrieval.web', () => new WebSearchClient(config, 'local-test-token').retrieve('BENCH_QUESTION_PRIVATE', signal), 'tavily'),
           new AbortController().signal))
         let displayed = false
@@ -138,7 +138,7 @@ try {
   assert.equal(steady.queue.dropped, 0, 'Normal paced reporting should retain all events')
   steady.reported = reported - beforeSteady
   assert.equal(steady.reported, 24 * 6)
-  const report = { scope: 'Real desktop RAG + web HTTP parallel retrieval and custom LLM streaming services; excludes Java/IPC/render timings. Burst comparison exercises intentional queue dropping; paced run verifies the normal ten-second flush.',
+  const report = { scope: 'Real desktop PG reference + web HTTP parallel retrieval and custom LLM streaming services; excludes Java/IPC/render timings. Burst comparison exercises intentional queue dropping; paced run verifies the normal ten-second flush.',
     samplesPerMode: samples * 3, concurrency, rounds, p95IncreaseMs, throughputDecrease, accepted: p95IncreaseMs <= 5 && throughputDecrease <= .02,
     fault, steady, reported, reportedStages: Object.fromEntries(reportedStages), providerRequests, supplier: 'local deterministic HTTP double', productionCalled: false }
   await mkdir(resolve(frontend, 'test-results'), { recursive: true })

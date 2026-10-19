@@ -11,15 +11,10 @@ import java.util.List;
 @ConfigurationProperties(prefix = "copilot.providers")
 public class ProviderProperties {
     private final Llm llm = new Llm();
-    private final Knowledge knowledge = new Knowledge();
     private final Asr asr = new Asr();
 
     public Llm getLlm() {
         return llm;
-    }
-
-    public Knowledge getKnowledge() {
-        return knowledge;
     }
 
     public Asr getAsr() {
@@ -29,7 +24,6 @@ public class ProviderProperties {
     public PlatformSummary summary() {
         return new PlatformSummary(
                 llm.isEnabled(),
-                knowledge.isEnabled(),
                 asr.isEnabled(),
                 llm.getModel(),
                 llm.models(),
@@ -38,7 +32,6 @@ public class ProviderProperties {
 
     public record PlatformSummary(
             boolean llmEnabled,
-            boolean knowledgeEnabled,
             boolean asrEnabled,
             String defaultModel,
             List<String> allowedModels,
@@ -187,32 +180,6 @@ public class ProviderProperties {
         @Override
         public boolean isEnabled() {
             return (super.isEnabled() || isLocalWithoutKey()) && !model.isBlank();
-        }
-    }
-
-    public static class Knowledge extends Endpoint {
-        private String agentId = "";
-        private int timeoutSeconds = 5;
-
-        public String getAgentId() {
-            return agentId;
-        }
-
-        public void setAgentId(String value) {
-            agentId = value == null ? "" : value.trim();
-        }
-
-        public int getTimeoutSeconds() {
-            return Math.clamp(timeoutSeconds, 1, 30);
-        }
-
-        public void setTimeoutSeconds(int value) {
-            timeoutSeconds = value;
-        }
-
-        @Override
-        public boolean isEnabled() {
-            return super.isEnabled() && !agentId.isBlank();
         }
     }
 

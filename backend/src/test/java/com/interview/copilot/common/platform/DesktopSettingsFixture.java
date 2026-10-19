@@ -20,8 +20,6 @@ public final class DesktopSettingsFixture {
                 .thenAnswer(call -> call.<ObjectNode>getArgument(1).deepCopy());
         when(service.asr(anyLong(), nullable(String.class)))
                 .thenAnswer(call -> call.getArgument(1));
-        when(service.knowledge(anyLong(), nullable(String.class)))
-                .thenAnswer(call -> call.getArgument(1));
         return service;
     }
 }

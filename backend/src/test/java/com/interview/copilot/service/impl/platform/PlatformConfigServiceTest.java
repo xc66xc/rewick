@@ -36,6 +36,18 @@ public class PlatformConfigServiceTest {
     }
 
     @Test
+    void publish_removedProviderKind_rejectsBeforePersisting() {
+        var provider = new PlatformConfig.Provider("removed", "旧服务", "knowledge",
+                "https://example.invalid/search", true, false, "test-secret");
+        var config = new PlatformConfig(0, List.of(provider), List.of(), "",
+                new PlatformConfig.Asr(false, "", ""));
+
+        assertThatThrownBy(() -> fixture.service.publish(1, config))
+                .isInstanceOf(ApiException.class);
+        assertThat(fixture.row.get().published()).isFalse();
+    }
+
+    @Test
     void reload_savedConfiguration_restoresModelRoutingAndSecret() {
         fixture.service.publish(1, PlatformConfigFixture.config(0, "fixture-secret"));
 
@@ -102,8 +114,7 @@ public class PlatformConfigServiceTest {
                                                 List.of(provider),
                                                 draft.models(),
                                                 draft.defaultModelId(),
-                                                draft.asr(),
-                                                draft.knowledge())))
+                                                draft.asr())))
                 .isInstanceOf(ApiException.class)
                 .hasMessage("服务地址或类型变更后，请重新填写 API Key。");
     }
@@ -149,8 +160,7 @@ public class PlatformConfigServiceTest {
                         Arrays.asList((PlatformConfig.Provider) null),
                         List.of(),
                         "",
-                        new PlatformConfig.Asr(false, "", ""),
-                        new PlatformConfig.Knowledge(false, "", ""));
+                        new PlatformConfig.Asr(false, "", ""));
 
         assertThatThrownBy(() -> fixture.service.draft(draft))
                 .isInstanceOf(ApiException.class)
@@ -192,7 +202,7 @@ public class PlatformConfigServiceTest {
         var saved = fixture.service.publish(1, searchConfig(0, "search-secret", "https://api.tavily.com/search", new PlatformConfig.WebSearch(true, "tavily", 3, "basic", 1500)));
         assertThat(fixture.row.get().payload()).contains("v1:").doesNotContain("search-secret");
         assertThat(fixture.json.writeValueAsString(saved)).doesNotContain("search-secret", "apiKey", "encryptedKey");
-        var request = fixture.json.readValue("{\"version\":1,\"providers\":[{\"id\":\"tavily\",\"name\":\"Search\",\"kind\":\"web-search\",\"url\":\"https://api.tavily.com/search\",\"enabled\":true}],\"models\":[],\"defaultModelId\":\"\",\"asr\":{\"enabled\":false,\"providerId\":\"\",\"model\":\"\"},\"knowledge\":{\"enabled\":false,\"providerId\":\"\",\"agentId\":\"\"}}", com.interview.copilot.request.platform.PlatformConfigRequest.class);
+        var request = fixture.json.readValue("{\"version\":1,\"providers\":[{\"id\":\"tavily\",\"name\":\"Search\",\"kind\":\"web-search\",\"url\":\"https://api.tavily.com/search\",\"enabled\":true}],\"models\":[],\"defaultModelId\":\"\",\"asr\":{\"enabled\":false,\"providerId\":\"\",\"model\":\"\"}}", com.interview.copilot.request.platform.PlatformConfigRequest.class);
         new AdminPlatformConfigServiceImpl(fixture.service).publish(1, request);
         var runtime = fixture.service.snapshot().webSearch();
         assertThat(runtime.apiKey()).isEqualTo("search-secret");
@@ -275,7 +285,7 @@ public class PlatformConfigServiceTest {
 
     private PlatformConfig searchConfig(long version, String key, String url, PlatformConfig.WebSearch search) {
         var base = PlatformConfigFixture.empty(version);
-        return new PlatformConfig(version, List.of(new PlatformConfig.Provider("tavily", "Search", "web-search", url, true, false, key)), List.of(), "", base.asr(), base.knowledge(), base.embedding(), search);
+        return new PlatformConfig(version, List.of(new PlatformConfig.Provider("tavily", "Search", "web-search", url, true, false, key)), List.of(), "", base.asr(), base.embedding(), search);
     }
 
 }

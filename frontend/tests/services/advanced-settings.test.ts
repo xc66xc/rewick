@@ -11,11 +11,11 @@ function configured(advancedSettingsEnabled = false): Settings {
     serviceSelections: { llm: { source: 'custom', id: 'own' }, asr: { source: 'custom', id: 'old' } },
     llm: { ...defaultSettings.llm, model: 'custom', temperature: 1.5 },
     platform: { enabled: true, authenticated: true, advancedSettingsEnabled, baseUrl: 'https://platform.example', expiresAt: new Date(Date.now() + 60000).toISOString(),
-      capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'platform-model', asr: 'asr', available: [{ id: 'platform-model', name: 'Platform' }] },
-      services: { asr: [{ id: 'speech', name: 'Speech' }], knowledge: [{ id: 'knowledge', name: 'Knowledge' }] },
-      desktopDefaults: { version: 1, llmModelId: 'platform-model', asrServiceId: 'speech', temperature: 0.3, retrievalMode: 'remote', knowledgeServiceId: 'knowledge' } } }
+      capabilities: { llm: true, asr: true, }, models: { llm: 'platform-model', asr: 'asr', available: [{ id: 'platform-model', name: 'Platform' }] },
+      services: { asr: [{ id: 'speech', name: 'Speech' }], },
+      desktopDefaults: { version: 1, llmModelId: 'platform-model', asrServiceId: 'speech', temperature: 0.3, } } }
 }
-const secrets = { platformAccessToken: 'platform-token', llmApiKey: 'own-key', asrApiKey: 'own-asr-key', remoteKnowledgeApiKey: 'own-rag-key' }
+const secrets = { platformAccessToken: 'platform-token', llmApiKey: 'own-key', asrApiKey: 'own-asr-key', }
 
 describe('advanced settings authorization', () => {
   it('routes every ordinary capability through platform defaults despite saved custom choices and keys', () => {
@@ -24,7 +24,6 @@ describe('advanced settings authorization', () => {
     expect(answer.apiKey).toBe('platform-token')
     expect(answer.settings.llm).toMatchObject({ model: 'platform-model', temperature: 0.3 })
     expect(routeService(saved, secrets, 'asr').settings.asr.url).toBe('wss://platform.example/api/v1/asr?serviceId=speech')
-    expect(routeService(saved, secrets, 'knowledge').settings.remoteKnowledge).toMatchObject({ serviceId: 'knowledge', enabled: true })
     expect(saved.serviceSelections?.llm).toEqual({ source: 'custom', id: 'own' })
     expect(saved.llm.temperature).toBe(1.5)
   })
@@ -36,9 +35,8 @@ describe('advanced settings authorization', () => {
   })
   it('retains custom values for a later grant and applies local retrieval when configured', () => {
     const saved = configured()
-    if (saved.platform?.desktopDefaults) saved.platform.desktopDefaults.retrievalMode = 'local'
     const effective = applyDesktopDefaults(saved)
-    expect(effective.remoteKnowledge.enabled).toBe(false)
+    expect(effective.retrieval).toEqual(saved.retrieval)
     const input = { ...effective, answerStyle: 'detailed' } as SettingsInput
     expect(() => assertAllowedSettings(input, effective)).not.toThrow()
     const preserved = preserveLocalAdvancedSettings(input, saved)

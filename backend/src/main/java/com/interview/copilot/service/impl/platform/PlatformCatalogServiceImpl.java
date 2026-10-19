@@ -34,15 +34,14 @@ public class PlatformCatalogServiceImpl implements PlatformCatalogService {
                         Long.toString(user.id()), user.displayName(), user.role(), user.email()),
                 new PlatformCapabilitiesResponse(
                         !snapshot.availableModels().isEmpty(),
-                        !snapshot.availableAsrServices().isEmpty(),
-                        !snapshot.availableKnowledgeServices().isEmpty()),
+                        !snapshot.availableAsrServices().isEmpty()),
                 new PlatformModelsResponse(
                         snapshot.defaultModelId(),
                         snapshot.asr().getModel(),
                         snapshot.availableModels()),
                 new PlatformLimitsResponse(limits.maxAsrSessionSeconds()),
                 new PlatformServicesResponse(
-                        snapshot.availableAsrServices(), snapshot.availableKnowledgeServices()),
+                        snapshot.availableAsrServices()),
                 desktop.advanced(user.id()),
                 desktop.get(), snapshot.webSearch().enabled(), snapshot.webSearch().timeoutMs());
     }

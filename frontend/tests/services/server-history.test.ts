@@ -7,7 +7,7 @@ import { defaultSettings } from '../../src/shared/defaults'
 import type { Settings } from '../../src/shared/types'
 let directory: string
 const crypto = { isEncryptionAvailable: () => true, encryptString: (s: string) => Buffer.from(s.split('').reverse().join('')), decryptString: (b: Buffer) => b.toString().split('').reverse().join('') }
-const auth = async () => ({ settings: { ...defaultSettings, platform: { ...defaultSettings.platform, baseUrl: 'https://example.test', authenticated: true } } as Settings, secrets: { platformAccessToken: 'token', asrApiKey: '', llmApiKey: '', remoteKnowledgeApiKey: '' } })
+const auth = async () => ({ settings: { ...defaultSettings, platform: { ...defaultSettings.platform, baseUrl: 'https://example.test', authenticated: true } } as Settings, secrets: { platformAccessToken: 'token', asrApiKey: '', llmApiKey: '', } })
 const record = { id: 'one', createdAt: '2026-09-12T10:00:00Z', title: '秘密面试内容', segments: [], answers: [] }
 beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'server-history-')) })
 afterEach(async () => { vi.unstubAllGlobals(); await rm(directory, { recursive: true, force: true }) })

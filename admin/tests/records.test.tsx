@@ -16,6 +16,17 @@ describe('request and audit records', () => {
     await actor.click(screen.getByRole('button', { name: '筛选记录' }))
     await waitFor(() => expect(calls.some(url => url.includes('userId=20&query=reader%40example.com&capability=llm&status=complete&model=%E4%B8%AD%E6%96%87+%E6%A8%A1%E5%9E%8B&page=1'))).toBe(true))
   })
+  it('keeps generic retrieval usage available after removing the remote service', async () => {
+    const calls: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => { calls.push(url); return response(page([{ id: '2', userId: '20', displayName: '示例用户', requestId: 'retrieval-request', capability: 'knowledge', model: 'tavily-search', status: 'complete', createdAt: '2026-09-08T08:00:00Z', finishedAt: null }])) }))
+    const actor = userEvent.setup(); render(<UsagePage api={new ApiClient('token')} />)
+    await screen.findByText('tavily-search')
+    await actor.selectOptions(screen.getByLabelText('服务能力'), 'knowledge')
+    await actor.click(screen.getByRole('button', { name: '筛选记录' }))
+    await waitFor(() => expect(calls.some(url => url.includes('capability=knowledge'))).toBe(true))
+    expect(screen.getAllByText('资料检索').length).toBeGreaterThan(0)
+    expect(screen.queryByText('远程知识库')).toBeNull()
+  })
   it('shows an email display name in usage records without a generated username', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => response(page([{ id: '1', userId: '20', displayName: 'reader@example.com', requestId: 'request-1', capability: 'llm', model: 'model-1', status: 'complete', createdAt: '2026-09-08T08:00:00Z', finishedAt: null }]))))
     render(<UsagePage api={new ApiClient('token')} />)

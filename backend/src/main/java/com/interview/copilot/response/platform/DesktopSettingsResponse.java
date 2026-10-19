@@ -9,6 +9,4 @@ public record DesktopSettingsResponse(
         long version,
         String llmModelId,
         double temperature,
-        String asrServiceId,
-        String retrievalMode,
-        String knowledgeServiceId) {}
+        String asrServiceId) {}

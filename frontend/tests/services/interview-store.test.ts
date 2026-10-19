@@ -7,7 +7,7 @@ import { environmentInputSchema } from '../../src/main/services/interview-valida
 const environment = { id: '11111111-1111-4111-8111-111111111111', name: '默认环境', interviewType: 'technical', resumeId: null, targetId: null, referenceIds: [], version: 1, createdAt: '2026-09-13T12:00:00+08:00', updatedAt: '2026-09-13T12:00:00+08:00' }
 const library = { resumes: [], targets: [], environments: [environment], activeEnvironmentId: environment.id }
 function setup() {
-  const auth = vi.fn(async () => ({ settings: { ...defaultSettings, platform: { ...defaultSettings.platform, baseUrl: 'http://localhost:8080', authenticated: true } }, secrets: { platformAccessToken: 'session', asrApiKey: '', llmApiKey: '', remoteKnowledgeApiKey: '' } }))
+  const auth = vi.fn(async () => ({ settings: { ...defaultSettings, platform: { ...defaultSettings.platform, baseUrl: 'http://localhost:8080', authenticated: true } }, secrets: { platformAccessToken: 'session', asrApiKey: '', llmApiKey: '', } }))
   return { auth, store: new InterviewStore(auth as unknown as () => ReturnType<SettingsStore['getConnectionSnapshot']>) }
 }
 afterEach(() => vi.unstubAllGlobals())

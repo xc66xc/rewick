@@ -9,7 +9,6 @@ public record StoredPlatformConfig(
         List<PlatformConfig.Model> models,
         String defaultModelId,
         PlatformConfig.Asr asr,
-        PlatformConfig.Knowledge knowledge,
         PlatformConfig.Embedding embedding,
         PlatformConfig.WebSearch webSearch) {
     public StoredPlatformConfig {

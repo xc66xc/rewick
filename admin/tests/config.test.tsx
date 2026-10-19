@@ -23,6 +23,7 @@ describe('unified model service forms', () => {
     const { actor, bodies } = setup()
     await screen.findByRole('article', { name: '服务 快速模型' })
     expect(screen.queryByRole('form')).toBeNull()
+    expect(screen.queryByRole('button', { name: '远程知识库' })).toBeNull()
     await actor.click(screen.getByRole('button', { name: '语音转写' }))
     expect(screen.queryByRole('article')).toBeNull()
     expect(screen.getByText('此分类尚无模型或服务，请添加。')).toBeTruthy()
@@ -41,11 +42,13 @@ describe('unified model service forms', () => {
     const { actor } = setup()
     await actor.click(await screen.findByRole('button', { name: '编辑配置' }))
     await screen.findByDisplayValue('快速模型')
-    for (const name of ['添加回答模型', '添加语音转写', '添加远程知识库', '添加资料检索向量模型']) {
+    for (const name of ['添加回答模型', '添加语音转写', '添加资料检索向量模型', '添加联网搜索']) {
       await actor.click(screen.getByRole('button', { name: '添加服务' }))
       await actor.click(screen.getByRole('button', { name }))
     }
     expect(screen.getAllByRole('form')).toHaveLength(5)
+    await actor.click(screen.getByRole('button', { name: '添加服务' }))
+    expect(screen.queryByRole('button', { name: '添加远程知识库' })).toBeNull()
   })
   it('saves, disables and deletes an embedding model using a single form', async () => {
     const { actor, bodies } = setup()

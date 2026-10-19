@@ -160,10 +160,9 @@ try {
     providers: [{ id: 'ops-llm', name: '测试回答', kind: 'llm', url: `${llmUrl}/chat/completions`, enabled: true, apiKey: 'synthetic-platform-key' },
       { id: 'ops-asr', name: '测试转写', kind: 'asr', url: `${mock.asrUrl}?mode=manual`, enabled: true, apiKey: 'synthetic-asr-key' }],
     models: ['mock-fast', 'mock-held'].map(model => ({ id: model, name: model, providerId: 'ops-llm', model, enabled: true, maxOutputTokens: 1024 })),
-    defaultModelId: 'mock-fast', asr: { enabled: true, providerId: 'ops-asr', model: 'fun-asr-realtime' },
-    knowledge: { enabled: false, providerId: '', agentId: '' }, embedding: { enabled: false, providerId: '', model: '', dimensions: 1024 } }, 'PUT')
+    defaultModelId: 'mock-fast', asr: { enabled: true, providerId: 'ops-asr', model: 'fun-asr-realtime' }, embedding: { enabled: false, providerId: '', model: '', dimensions: 1024 } }, 'PUT')
   await json(baseUrl, `/api/v1/admin/desktop-settings/users/${userId}`, admin.accessToken, { enabled: true }, 'PUT')
-  await json(baseUrl, '/api/v1/admin/desktop-settings', admin.accessToken, { version: 0, llmModelId: 'mock-fast', temperature: 0.7, asrServiceId: 'ops-asr', retrievalMode: 'local', knowledgeServiceId: '' }, 'PUT')
+  await json(baseUrl, '/api/v1/admin/desktop-settings', admin.accessToken, { version: 0, llmModelId: 'mock-fast', temperature: 0.7, asrServiceId: 'ops-asr', }, 'PUT')
   const opsSettings = await json(baseUrl, '/api/v1/admin/operations/settings', admin.accessToken)
   await json(baseUrl, '/api/v1/admin/operations/settings', admin.accessToken, { ...opsSettings, enabled: true, allowedUserIds: [String(userId), ...benchmarkUsers.map(user => String(user.userId))] }, 'PUT')
   await sql(containers.business, 'INSERT INTO time_wallets(app_users_id,available_seconds) SELECT id,7200 FROM app_users ON CONFLICT(app_users_id) DO UPDATE SET available_seconds=7200')
@@ -227,7 +226,7 @@ try {
     const library = await window.copilot.saveResume({ name: '合成测试简历', text: '合成工程师，仅用于本地自动化测试。' })
     await window.copilot.saveEnvironment({ ...library.environments.find(item => item.id === library.activeEnvironmentId), resumeId: library.resumes[0].id })
     const configured = await window.copilot.getSettings()
-    await window.copilot.saveSettings({ ...configured, retrieval: { enabled: false }, remoteKnowledge: { ...configured.remoteKnowledge, enabled: false },
+    await window.copilot.saveSettings({ ...configured, retrieval: { enabled: false },
       serviceSelections: { llm: { source: 'platform', id: 'mock-fast' }, asr: { source: 'platform', id: 'ops-asr' } }, autoAnswer: { enabled: true, pauseMs: 1000 } })
   }, { baseUrl, password })
   await page.reload()

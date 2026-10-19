@@ -7,14 +7,14 @@ import { ReferenceService } from '../../src/main/services/reference-service'
 import type { Settings } from '../../src/shared/types'
 const id = 'b03138d3-b219-4a4c-b91b-09979927d452'
 const document = { id, name: '技术.md', kind: 'technical', enabled: true, status: 'pending', contextCount: 0, sectionCount: 0, format: 'md', headingMode: '', splitterVersion: 1, indexStatus: 'pending', indexError: '', contentHash: 'hash', revision: 1, createdAt: '2026-09-10T12:00:00', updatedAt: '2026-09-10T12:00:00', chunkCount: 0 }
-const config: Settings = { ...defaultSettings, retrieval: { enabled: true }, platform: { ...defaultSettings.platform, capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: '', asr: '' }, enabled: true, authenticated: true, baseUrl: 'https://platform.example', user: { id: '1', displayName: 'user' } }, interviewEnvironment: { id: 'env', name: 'env', resumeId: null, resumeName: '', targetId: null, targetName: '', referenceIds: [id] } }
+const config: Settings = { ...defaultSettings, retrieval: { enabled: true }, platform: { ...defaultSettings.platform, capabilities: { llm: true, asr: true, }, models: { llm: '', asr: '' }, enabled: true, authenticated: true, baseUrl: 'https://platform.example', user: { id: '1', displayName: 'user' } }, interviewEnvironment: { id: 'env', name: 'env', resumeId: null, resumeName: '', targetId: null, targetName: '', referenceIds: [id] } }
 let service: ReferenceService
 let directory: string
 const expired = vi.fn()
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'platform-references-'))
   expired.mockReset()
-  service = new ReferenceService(vi.fn(), async () => ({ settings: config, secrets: { platformAccessToken: 'business-token', llmApiKey: '', asrApiKey: '', remoteKnowledgeApiKey: '' } }), expired)
+  service = new ReferenceService(vi.fn(), async () => ({ settings: config, secrets: { platformAccessToken: 'business-token', llmApiKey: '', asrApiKey: '', } }), expired)
 })
 afterEach(async () => { service.dispose(); vi.unstubAllGlobals(); await rm(directory, { recursive: true, force: true }) })
 describe('platform reference library', () => {

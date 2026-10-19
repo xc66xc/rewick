@@ -25,7 +25,7 @@ export function serviceForms(config: Config): ServiceForm[] {
       return [{ ...base, ...(binding.providerId === provider.id ? { topK: binding.topK, searchDepth: binding.searchDepth, timeoutMs: binding.timeoutMs, includeAnswer: binding.includeAnswer ?? 'none' } : {}), enabled: provider.enabled && binding.enabled && binding.providerId === provider.id }]
     }
     const binding = config[provider.kind]
-    return [{ ...base, dimensions: 'dimensions' in binding && binding.providerId === provider.id ? binding.dimensions : 1024, model: binding.providerId === provider.id ? ('model' in binding ? binding.model : binding.agentId) : '', enabled: provider.enabled && binding.enabled && binding.providerId === provider.id }]
+    return [{ ...base, dimensions: 'dimensions' in binding && binding.providerId === provider.id ? binding.dimensions : 1024, model: binding.providerId === provider.id ? binding.model : '', enabled: provider.enabled && binding.enabled && binding.providerId === provider.id }]
   })
 }
 export function applyService(config: Config, form: ServiceForm, remove = false): Config {
@@ -39,7 +39,6 @@ export function applyService(config: Config, form: ServiceForm, remove = false):
     if (!next.models.some(model => model.providerId === form.providerId)) next.providers = next.providers.filter(provider => provider.id !== form.providerId)
     if (next.asr.providerId === form.providerId) next.asr = { enabled: false, providerId: '', model: '' }
     if (next.embedding.providerId === form.providerId) next.embedding = { enabled: false, providerId: '', model: '', dimensions: 1024 }
-    if (next.knowledge.providerId === form.providerId) next.knowledge = { enabled: false, providerId: '', agentId: '' }
     if (next.webSearch.providerId === form.providerId) next.webSearch = { ...next.webSearch, enabled: false, providerId: '' }
   } else {
     const provider = { id: form.providerId, kind: form.kind, name: form.name.trim(), url, enabled: form.kind === 'llm' ? true : form.enabled, ...(form.apiKey?.trim() ? { apiKey: form.apiKey.trim() } : {}) }
@@ -54,7 +53,6 @@ export function applyService(config: Config, form: ServiceForm, remove = false):
     } else if (form.enabled || !next[form.kind].providerId || next[form.kind].providerId === form.providerId) {
       if (form.kind === 'asr') next.asr = { enabled: form.enabled, providerId: form.providerId, model: form.model.trim() }
       else if (form.kind === 'embedding') next.embedding = { enabled: form.enabled, providerId: form.providerId, model: form.model.trim(), dimensions: 1024 }
-      else next.knowledge = { enabled: form.enabled, providerId: form.providerId, agentId: form.model.trim() }
     } else throw new Error('当前该能力已有其他服务配置，请启用此项以切换服务。')
   }
   const available = next.models.filter(model => model.enabled && next.providers.some(provider => provider.id === model.providerId && provider.enabled))

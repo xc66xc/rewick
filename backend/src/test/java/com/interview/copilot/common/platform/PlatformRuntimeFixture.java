@@ -29,13 +29,6 @@ public final class PlatformRuntimeFixture implements PlatformRuntimeService {
         Map<String, String> keys = new HashMap<>();
         add(providers, keys, "environment-llm", "环境回答服务", "llm", properties.getLlm());
         add(providers, keys, "environment-asr", "环境转写服务", "asr", properties.getAsr());
-        add(
-                providers,
-                keys,
-                "environment-knowledge",
-                "环境知识服务",
-                "knowledge",
-                properties.getKnowledge());
         List<PlatformConfig.Model> models = models();
         String defaultId =
                 properties.getLlm().isEnabled() ? modelId(properties.getLlm().getModel()) : "";
@@ -48,11 +41,7 @@ public final class PlatformRuntimeFixture implements PlatformRuntimeService {
                         new PlatformConfig.Asr(
                                 properties.getAsr().isEnabled(),
                                 reference("asr"),
-                                properties.getAsr().getModel()),
-                        new PlatformConfig.Knowledge(
-                                properties.getKnowledge().isEnabled(),
-                                reference("knowledge"),
-                                properties.getKnowledge().getAgentId()));
+                                properties.getAsr().getModel()));
         Map<String, String> aliases = new HashMap<>();
         models.forEach(model -> aliases.put(model.model(), model.id()));
         return new PlatformSnapshot(config, keys, PlatformPolicy.from(properties), aliases);
@@ -91,11 +80,7 @@ public final class PlatformRuntimeFixture implements PlatformRuntimeService {
     }
 
     private String reference(String kind) {
-        ProviderProperties.Endpoint endpoint =
-                switch (kind) {
-                    case "asr" -> properties.getAsr();
-                    default -> properties.getKnowledge();
-                };
+        ProviderProperties.Endpoint endpoint = properties.getAsr();
         return endpoint.isEnabled() ? "environment-" + kind : "";
     }
 

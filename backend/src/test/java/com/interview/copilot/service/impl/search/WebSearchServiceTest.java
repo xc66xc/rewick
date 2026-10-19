@@ -38,8 +38,8 @@ class WebSearchServiceTest {
         when(configs.snapshot()).thenReturn(snapshot);
         when(snapshot.webSearch()).thenReturn(endpoint);
         when(desktop.advanced(1)).thenReturn(true);
-        var value = new UserPreferences("concise", 0.7, 800, new UserPreferences.AutoAnswer(true, 1000), true, false,
-                new UserPreferences.PlatformSelections(null, null, null), true);
+        var value = new UserPreferences("concise", 0.7, 800, new UserPreferences.AutoAnswer(true, 1000), true,
+                new UserPreferences.PlatformSelections(null, null), true);
         when(preferences.get(1)).thenReturn(new PreferencesResponse(0, value, List.of()));
         when(usage.startForSession(1, "request", "knowledge", 9)).thenAnswer(input -> new UsageLease(usage, 1, "request", "knowledge", "session"));
         when(usage.active(1, "session")).thenReturn(true);

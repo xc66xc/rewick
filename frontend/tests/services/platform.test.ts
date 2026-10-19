@@ -11,13 +11,12 @@ import { PlatformClient, PlatformService } from '../../src/main/services/platfor
 import { needsPlatform, routeService } from '../../src/main/services/service-routing'
 import { AccountWorkspaces } from '../../src/main/services/account-workspace'
 import { LlmClient } from '../../src/main/services/llm-client'
-import { RemoteKnowledgeClient } from '../../src/main/services/remote-knowledge-client'
 
-const info: PlatformInfo = { advancedSettingsEnabled: true, user: { id: 'user-1', displayName: 'demo' }, capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'server-model', asr: 'server-asr' }, limits: { maxAsrSessionSeconds: 3600 } }
+const info: PlatformInfo = { advancedSettingsEnabled: true, user: { id: 'user-1', displayName: 'demo' }, capabilities: { llm: true, asr: true, }, models: { llm: 'server-model', asr: 'server-asr' }, limits: { maxAsrSessionSeconds: 3600 } }
 const expiresAt = () => new Date(Date.now() + 3_600_000).toISOString()
 const crypto = { isEncryptionAvailable: () => true, encryptString: (value: string) => Buffer.from(value.split('').reverse().join('')), decryptString: (value: Buffer) => value.toString().split('').reverse().join('') }
 const enabledInput = (): SettingsInput => ({ ...structuredClone(defaultSettings), platform: { enabled: true, baseUrl: 'http://127.0.0.1:8080' } })
-const secrets: ServiceSecrets = { platformAccessToken: 'business-token', llmApiKey: '', asrApiKey: '', remoteKnowledgeApiKey: '' }
+const secrets: ServiceSecrets = { platformAccessToken: 'business-token', llmApiKey: '', asrApiKey: '', }
 const authenticatedSettings = (): Settings => ({ ...structuredClone(defaultSettings), platform: { ...structuredClone(info), enabled: true, baseUrl: 'https://platform.example', authenticated: true, expiresAt: expiresAt() } })
 let directory: string
 let store: SettingsStore
@@ -100,7 +99,7 @@ describe('platform credentials and sessions', () => {
   })
   it('migrates old settings read-only with platform disabled', async () => {
     const { platform: _platform, ...legacy } = structuredClone(defaultSettings)
-    const raw = JSON.stringify({ version: 1, settings: legacy, secrets: { asr: '', llm: '', remoteKnowledge: '' } })
+    const raw = JSON.stringify({ version: 1, settings: legacy, secrets: { asr: '', llm: '', } })
     await writeFile(join(directory, 'settings.json'), raw)
     expect((await store.getSettings()).platform).toEqual(defaultSettings.platform)
     expect(await readFile(join(directory, 'settings.json'), 'utf8')).toBe(raw)
@@ -127,13 +126,6 @@ describe('platform credentials and sessions', () => {
     await expect(store.savePlatformSession('https://another.example', 'old-token', expiresAt(), info, 'old-token')).rejects.toThrow('登录已改变')
     await store.clearPlatformSession('old-token')
     expect((await store.getSecrets()).platformAccessToken).toBe('new-token')
-  })
-  it('allows keyless platform knowledge but still validates any saved BYOK configuration', async () => {
-    await store.saveSettings({ ...enabledInput(), remoteKnowledge: { enabled: true, url: '', agentId: '' } })
-    await store.saveSettings({ ...enabledInput(), remoteKnowledge: { enabled: true, url: 'https://knowledge.example/search', agentId: 'aid', apiKey: 'own-key' } })
-    await expect(store.saveSettings({ ...enabledInput(), remoteKnowledge: { enabled: true, url: '', agentId: '' } })).rejects.toThrow('请求地址')
-    await store.saveSettings({ ...enabledInput(), remoteKnowledge: { enabled: true, url: '', agentId: '', apiKey: '' } })
-    expect((await store.getSecrets()).remoteKnowledgeApiKey).toBe('')
   })
   it('rejects business credentials when secure storage is unavailable', async () => {
     const unsafe = new SettingsStore(directory, { ...crypto, isEncryptionAvailable: () => false })
@@ -213,9 +205,9 @@ describe('capability routing', () => {
     settings.platform.selectedModelId = ''
     expect(routeService(settings, secrets, 'llm').settings.llm.model).toBe('server-model')
   })
-  it.each(['llm', 'asr', 'knowledge'] as const)('routes %s with own key directly and never substitutes the business token', capability => {
+  it.each(['llm', 'asr'] as const)('routes %s with own key directly and never substitutes the business token', capability => {
     const settings = authenticatedSettings()
-    const supplied = { ...secrets, llmApiKey: 'invalid-own-llm', asrApiKey: 'invalid-own-asr', remoteKnowledgeApiKey: 'invalid-own-knowledge' }
+    const supplied = { ...secrets, llmApiKey: 'invalid-own-llm', asrApiKey: 'invalid-own-asr', }
     expect(needsPlatform(settings, supplied, capability)).toBe(false)
     expect(routeService(settings, supplied, capability).apiKey).toBe(`invalid-own-${capability}`)
     expect(routeService(settings, supplied, capability).settings).toBe(settings)
@@ -227,17 +219,17 @@ describe('capability routing', () => {
     expect(needsPlatform(settings, secrets, 'asr')).toBe(true)
     expect(needsPlatform({ ...settings, platform: undefined }, secrets, 'asr')).toBe(false)
   })
-  it('maps platform endpoint and actual model independently for all three capabilities', () => {
+  it('maps platform endpoint and actual model independently for both capabilities', () => {
     const settings = authenticatedSettings()
     expect(routeService(settings, secrets, 'llm')).toMatchObject({ apiKey: 'business-token', settings: { llm: { baseUrl: 'https://platform.example/api/v1/llm', model: 'server-model' } } })
     expect(routeService(settings, secrets, 'asr')).toMatchObject({ apiKey: 'business-token', settings: { asr: { url: 'wss://platform.example/api/v1/asr', model: 'server-asr' } } })
-    expect(routeService(settings, secrets, 'knowledge')).toMatchObject({ apiKey: 'business-token', settings: { remoteKnowledge: { url: 'https://platform.example/api/v1/knowledge/search', agentId: 'platform' } } })
   })
   it('reports unauthenticated, expired, and missing capabilities explicitly', () => {
     const settings = authenticatedSettings()
     if (!settings.platform) throw new Error('fixture')
-    settings.platform.capabilities.knowledge = false
-    expect(() => routeService(settings, secrets, 'knowledge')).toThrow('尚未启用远程知识库')
+    settings.platform.capabilities.asr = false
+    expect(() => routeService(settings, secrets, 'asr')).toThrow('尚未启用实时转写')
+    settings.platform.capabilities.asr = true
     settings.platform.expiresAt = '2000-01-01T00:00:00.000Z'
     expect(() => routeService(settings, secrets, 'llm')).toThrow('登录平台账号')
     settings.platform.authenticated = false
@@ -289,27 +281,6 @@ describe('capability routing', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock.mock.calls[0][0]).toBe('https://api.deepseek.com/v1/chat/completions')
     expect(fetchMock.mock.calls[0][1].headers).toEqual({ 'Content-Type': 'application/json', Authorization: 'Bearer bad-own-key' })
-  })
-  it('uses only the business token in real client requests and snapshots the actual server model', async () => {
-    const settings = authenticatedSettings()
-    settings.remoteKnowledge.enabled = true
-    const remote = routeService(settings, secrets, 'knowledge')
-    const model = routeService(settings, secrets, 'llm')
-    const fetchMock = vi.fn().mockResolvedValueOnce(Response.json({ success: true, data: { nodes: [{ text: '正文', metadata: { private: 'ignore' } }] } }))
-      .mockResolvedValueOnce(new Response('data: {"choices":[{"delta":{"content":"我会结合正文回答。"}}]}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } }))
-    vi.stubGlobal('fetch', fetchMock)
-    const retrieved = await new RemoteKnowledgeClient(remote.settings.remoteKnowledge, remote.apiKey).retrieve('问题', new AbortController().signal)
-    const events: AppEvent[] = []
-    await new LlmClient(model.settings, model.apiKey, event => events.push(event), model.platform).generate({ requestId: 'request', question: '问题', transcript: '' }, retrieved)
-    expect(fetchMock.mock.calls.map(call => call[0])).toEqual(['https://platform.example/api/v1/knowledge/search', 'https://platform.example/api/v1/llm/chat/completions'])
-    for (const call of fetchMock.mock.calls) expect(call[1].headers.Authorization).toBe('Bearer business-token')
-    expect(fetchMock.mock.calls[1][1].headers['X-Request-Id']).toBe('request')
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).not.toHaveProperty('requestId')
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ agent_id: 'platform', query: '问题', images: [] })
-    expect(events.find(event => event.kind === 'answer-request')).toMatchObject({ modelInput: { model: 'server-model' } })
-    expect(JSON.stringify(events)).not.toContain('business-token')
-    expect(JSON.stringify(events)).not.toContain('metadata')
-    expect(events.at(-1)).toMatchObject({ kind: 'answer-done', cancelled: false })
   })
 })
 

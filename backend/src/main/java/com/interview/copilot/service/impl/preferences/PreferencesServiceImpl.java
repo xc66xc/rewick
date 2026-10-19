@@ -64,7 +64,6 @@ public class PreferencesServiceImpl implements PreferencesService {
                             preferences.silenceMs(),
                             preferences.autoAnswer(),
                             preferences.retrievalEnabled(),
-                            original.remoteKnowledgeEnabled(),
                             original.platformSelections(), false);
         }
         if (mutation.toString().equals(before.mutationId())) {
@@ -107,10 +106,6 @@ public class PreferencesServiceImpl implements PreferencesService {
         if (choices.asr() != null
                 && snapshot.availableAsrServices().stream()
                         .noneMatch(item -> item.id().equals(choices.asr()))) result.add("asr");
-        if (choices.knowledge() != null
-                && snapshot.availableKnowledgeServices().stream()
-                        .noneMatch(item -> item.id().equals(choices.knowledge())))
-            result.add("knowledge");
         return List.copyOf(result);
     }
 
@@ -118,7 +113,7 @@ public class PreferencesServiceImpl implements PreferencesService {
         return switch (kind) {
             case "llm" -> choices.llm();
             case "asr" -> choices.asr();
-            default -> choices.knowledge();
+            default -> throw new IllegalArgumentException("Unknown platform selection: " + kind);
         };
     }
 

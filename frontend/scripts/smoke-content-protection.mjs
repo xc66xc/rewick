@@ -13,7 +13,7 @@ const directory = await mkdtemp(join(tmpdir(), 'copilot-protection-'))
 const now = new Date().toISOString()
 const user = { id: 'compact-smoke', displayName: '窗口测试', email: 'compact@example.test' }
 const environment = { id: '11111111-1111-4111-8111-111111111111', name: '技术面试', interviewType: 'technical', resumeId: 'resume', targetId: null, referenceIds: [], createdAt: now, updatedAt: now }
-const info = { user, advancedSettingsEnabled: true, capabilities: { llm: true, asr: false, knowledge: false }, models: { llm: 'model', asr: '', available: [{ id: 'model', name: '模拟回答模型' }] }, services: { asr: [], knowledge: [] }, limits: { maxAsrSessionSeconds: 3600 } }
+const info = { user, advancedSettingsEnabled: true, capabilities: { llm: true, asr: false, }, models: { llm: 'model', asr: '', available: [{ id: 'model', name: '模拟回答模型' }] }, services: { asr: [], }, limits: { maxAsrSessionSeconds: 3600 } }
 let settled = 0
 let wallet = { availableSeconds: 3600, version: 1, serverTime: now, session: null }
 const server = createServer(async (request, response) => {
@@ -27,7 +27,7 @@ const server = createServer(async (request, response) => {
   if (path === '/api/v1/auth/login') data = { user, accessToken: 'isolated-test-token', expiresAt: new Date(Date.now() + 3600000).toISOString() }
   else if (path === '/api/v1/auth/session') { response.writeHead(204); response.end(); return }
   else if (path === '/api/v1/platform') data = info
-  else if (path === '/api/v1/user-preferences') data = { version: 0, unavailableSelections: [], preferences: { answerStyle: 'concise', temperature: 0.5, silenceMs: 800, autoAnswer: { enabled: true, pauseMs: 1500 }, retrievalEnabled: false, remoteKnowledgeEnabled: false, platformSelections: { llm: 'model', asr: null, knowledge: null } } }
+  else if (path === '/api/v1/user-preferences') data = { version: 0, unavailableSelections: [], preferences: { answerStyle: 'concise', temperature: 0.5, silenceMs: 800, autoAnswer: { enabled: true, pauseMs: 1500 }, retrievalEnabled: false, platformSelections: { llm: 'model', asr: null, } } }
   else if (path === '/api/v1/background') data = { resumes: [{ id: 'resume', name: '测试简历', text: '测试开发工程师', createdAt: now, updatedAt: now }], targets: [], environments: [environment], activeEnvironmentId: '11111111-1111-4111-8111-111111111111' }
   else if (path === '/api/v1/background/environments/11111111-1111-4111-8111-111111111111') data = { ...environment, version: 1 }
   else if (path === '/api/v1/background/resumes/resume') data = { id: 'resume', name: '测试简历', text: '测试开发工程师' }

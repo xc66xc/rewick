@@ -19,7 +19,7 @@ public interface PlatformConfigMapper {
 
     @Select(
             "SELECT"
-                + " version,llm_model_id,temperature,asr_service_id,retrieval_mode,knowledge_service_id"
+                + " version,llm_model_id,temperature,asr_service_id"
                 + " FROM desktop_settings WHERE id=1")
     com.interview.copilot.entity.platform.DesktopSettingsEntity desktopDefaults();
 

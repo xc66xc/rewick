@@ -9,6 +9,4 @@ public record DesktopSettingsEntity(
         long version,
         String llmModelId,
         double temperature,
-        String asrServiceId,
-        String retrievalMode,
-        String knowledgeServiceId) {}
+        String asrServiceId) {}

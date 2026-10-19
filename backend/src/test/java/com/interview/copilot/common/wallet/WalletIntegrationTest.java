@@ -420,7 +420,7 @@ public class WalletIntegrationTest {
                         "25_reference_hybrid.sql", "28_reference_qa.sql",
                         "10_time_wallet.sql",
                         "16_desktop_sessions.sql",
-                        "17_desktop_settings.sql", "27_mock_interview.sql");
+                        "17_desktop_settings.sql", "27_mock_interview.sql", "29_remove_remote_knowledge.sql");
 
         WalletDatabase() {
             super(

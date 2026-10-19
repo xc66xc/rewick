@@ -3,10 +3,10 @@ import { defaultSettings } from '../../src/shared/defaults'
 import type { Settings, SettingsInput } from '../../src/shared/types'
 import type { SettingsStore } from '../../src/main/services/settings-store'
 import { UserPreferencesClient } from '../../src/main/services/user-preferences'
-const state = { version: 0, preferences: { answerStyle: 'detailed', temperature: 0.8, silenceMs: 900, autoAnswer: { enabled: false, pauseMs: 2000 }, retrievalEnabled: true, remoteKnowledgeEnabled: false,
-  platformSelections: { llm: 'platform-model', asr: 'platform-asr', knowledge: null } }, unavailableSelections: [] }
+const state = { version: 0, preferences: { answerStyle: 'detailed', temperature: 0.8, silenceMs: 900, autoAnswer: { enabled: false, pauseMs: 2000 }, retrievalEnabled: true,
+  platformSelections: { llm: 'platform-model', asr: 'platform-asr', } }, unavailableSelections: [] }
 function setup() {
-  const auth = vi.fn(async () => ({ settings: { ...defaultSettings, platform: { ...defaultSettings.platform, authenticated: true, baseUrl: 'http://localhost:8080' } }, secrets: { platformAccessToken: 'token', asrApiKey: '', llmApiKey: '', remoteKnowledgeApiKey: '' } }))
+  const auth = vi.fn(async () => ({ settings: { ...defaultSettings, platform: { ...defaultSettings.platform, authenticated: true, baseUrl: 'http://localhost:8080' } }, secrets: { platformAccessToken: 'token', asrApiKey: '', llmApiKey: '', } }))
   const client = new UserPreferencesClient(auth as unknown as () => ReturnType<SettingsStore['getConnectionSnapshot']>)
   return { client, auth }
 }

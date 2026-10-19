@@ -44,7 +44,7 @@ class DesktopSettingsServiceTest {
 
     @Test
     void llm_ordinaryMissingSelections_injectsPlatformDefaultsWithoutMutatingInput() {
-        when(mapper.read()).thenReturn(defaults("local"));
+        when(mapper.read()).thenReturn(defaults());
         var input = json.createObjectNode().put("stream", true);
 
         var output = service.llm(7, input);
@@ -57,7 +57,7 @@ class DesktopSettingsServiceTest {
 
     @Test
     void llm_matchingExplicitDefaults_acceptsRequest() {
-        when(mapper.read()).thenReturn(defaults("local"));
+        when(mapper.read()).thenReturn(defaults());
         var input = json.createObjectNode().put("model", "fast").put("temperature", 0.7);
 
         assertThat(service.llm(7, input)).isEqualTo(input);
@@ -66,7 +66,7 @@ class DesktopSettingsServiceTest {
     @ParameterizedTest
     @ValueSource(strings = {"model", "temperature", "invalid-temperature"})
     void llm_ordinaryOverride_rejectsForbidden(String field) {
-        when(mapper.read()).thenReturn(defaults("local"));
+        when(mapper.read()).thenReturn(defaults());
         var input = json.createObjectNode();
         switch (field) {
             case "model" -> input.put("model", "careful");
@@ -87,14 +87,12 @@ class DesktopSettingsServiceTest {
 
         assertThat(service.llm(7, input)).isEqualTo(input).isNotSameAs(input);
         assertThat(service.asr(7, "custom-asr")).isEqualTo("custom-asr");
-        assertThat(service.knowledge(7, "custom-knowledge")).isEqualTo("custom-knowledge");
-        service.requireLocal(7);
         verify(mapper, never()).read();
     }
 
     @Test
     void asr_ordinary_usesDefaultAndRejectsAnotherService() {
-        when(mapper.read()).thenReturn(defaults("local"));
+        when(mapper.read()).thenReturn(defaults());
 
         assertThat(service.asr(7, null)).isEqualTo("speech");
         assertThat(service.asr(7, "speech")).isEqualTo("speech");
@@ -106,7 +104,7 @@ class DesktopSettingsServiceTest {
 
     @Test
     void asr_missingDefault_reportsConfigurationUnavailable() {
-        when(mapper.read()).thenReturn(new DesktopSettingsEntity(0, "", 0.7, "", "local", ""));
+        when(mapper.read()).thenReturn(new DesktopSettingsEntity(0, "", 0.7, ""));
 
         assertThatThrownBy(() -> service.asr(7, null))
                 .isInstanceOfSatisfying(
@@ -121,29 +119,9 @@ class DesktopSettingsServiceTest {
     }
 
     @Test
-    void knowledge_localMode_disallowsRemoteRetrieval() {
-        when(mapper.read()).thenReturn(defaults("local"));
-
-        service.requireLocal(7);
-        assertThatThrownBy(() -> service.knowledge(7, null))
-                .isInstanceOfSatisfying(
-                        ApiException.class,
-                        error -> assertThat(error.status()).isEqualTo(HttpStatus.FORBIDDEN));
-    }
-
-    @Test
-    void knowledge_remoteMode_disallowsLocalRetrievalAndOtherService() {
-        when(mapper.read()).thenReturn(defaults("remote"));
-
-        assertThat(service.knowledge(7, null)).isEqualTo("knowledge");
-        assertThatThrownBy(() -> service.requireLocal(7)).isInstanceOf(ApiException.class);
-        assertThatThrownBy(() -> service.knowledge(7, "other")).isInstanceOf(ApiException.class);
-    }
-
-    @Test
     void save_unavailableModel_rejectsBeforeWriting() {
         when(runtime.snapshot()).thenReturn(snapshot());
-        var input = new DesktopSettingsResponse(0, "disabled", 0.7, "", "local", "");
+        var input = new DesktopSettingsResponse(0, "disabled", 0.7, "");
 
         assertThatThrownBy(() -> service.save(1, input))
                 .isInstanceOfSatisfying(
@@ -153,21 +131,9 @@ class DesktopSettingsServiceTest {
     }
 
     @Test
-    void save_remoteWithoutKnowledge_rejectsBeforeWriting() {
-        when(runtime.snapshot()).thenReturn(snapshot());
-        var input = new DesktopSettingsResponse(0, "fast", 0.7, "", "remote", "");
-
-        assertThatThrownBy(() -> service.save(1, input))
-                .isInstanceOfSatisfying(
-                        ApiException.class,
-                        error -> assertThat(error.code()).isEqualTo("DESKTOP_DEFAULT_REQUIRED"));
-        verify(mapper, never()).save(any());
-    }
-
-    @Test
     void save_staleVersion_reportsConflictAndDoesNotAudit() {
         when(runtime.snapshot()).thenReturn(snapshot());
-        var input = new DesktopSettingsResponse(0, "fast", 0.7, "", "local", "");
+        var input = new DesktopSettingsResponse(0, "fast", 0.7, "");
 
         assertThatThrownBy(() -> service.save(1, input))
                 .isInstanceOfSatisfying(
@@ -180,8 +146,8 @@ class DesktopSettingsServiceTest {
     void save_valid_serializesWithPlatformChangesAndReturnsNewVersion() {
         when(runtime.snapshot()).thenReturn(snapshot());
         when(mapper.save(any())).thenReturn(1);
-        when(mapper.read()).thenReturn(new DesktopSettingsEntity(1, "fast", 0.7, "", "local", ""));
-        var input = new DesktopSettingsResponse(0, "fast", 0.7, "", "local", "");
+        when(mapper.read()).thenReturn(new DesktopSettingsEntity(1, "fast", 0.7, ""));
+        var input = new DesktopSettingsResponse(0, "fast", 0.7, "");
 
         assertThat(service.save(1, input).version()).isEqualTo(1);
         var order = inOrder(config, runtime, mapper);
@@ -209,14 +175,14 @@ class DesktopSettingsServiceTest {
         verify(audit).record(1, "desktop.permission.update", "user:7,enabled:" + enabled);
     }
 
-    private DesktopSettingsEntity defaults(String mode) {
-        return new DesktopSettingsEntity(0, "fast", 0.7, "speech", mode, "knowledge");
+    private DesktopSettingsEntity defaults() {
+        return new DesktopSettingsEntity(0, "fast", 0.7, "speech");
     }
 
     private PlatformSnapshot snapshot() {
         return new PlatformSnapshot(
                 PlatformConfigFixture.config(0, "test-key"),
                 Map.of("primary", "test-key"),
-                new PlatformPolicy(2, 30, 180, 10, 3600));
+                new PlatformPolicy(2, 30, 180, 3600));
     }
 }

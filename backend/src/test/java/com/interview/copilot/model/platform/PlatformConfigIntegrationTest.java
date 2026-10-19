@@ -71,7 +71,7 @@ public class PlatformConfigIntegrationTest {
 
     @BeforeEach
     void reset() {
-        jdbc.update("UPDATE desktop_settings SET version=0,llm_model_id='',asr_service_id='',retrieval_mode='local',knowledge_service_id='' WHERE id=1");
+        jdbc.update("UPDATE desktop_settings SET version=0,llm_model_id='',asr_service_id='' WHERE id=1");
         jdbc.execute(
                 "TRUNCATE audit_events, auth_tokens, usage_events, app_users RESTART IDENTITY"
                         + " CASCADE");
@@ -178,11 +178,11 @@ public class PlatformConfigIntegrationTest {
         providers.add(new PlatformConfig.Provider("tavily", "Search", "web-search",
                 "https://api.tavily.com/search", true, false, "fixture-search-key"));
         service.publish(1, new PlatformConfig(0, providers, base.models(), base.defaultModelId(),
-                base.asr(), base.knowledge(), base.embedding(), new PlatformConfig.WebSearch(true, "tavily", 7, depth, 2000, "advanced")));
+                base.asr(), base.embedding(), new PlatformConfig.WebSearch(true, "tavily", 7, depth, 2000, "advanced")));
         var saved = service.get();
         new com.interview.copilot.service.impl.platform.AdminPlatformConfigServiceImpl(service).publish(1,
                 new com.interview.copilot.request.platform.PlatformConfigRequest(saved.version(), saved.providers(),
-                        saved.models(), saved.defaultModelId(), saved.asr(), saved.knowledge(), saved.embedding(), null));
+                        saved.models(), saved.defaultModelId(), saved.asr(), saved.embedding(), null));
         String payload = jdbc.queryForObject("SELECT payload::text FROM platform_config WHERE id=1", String.class);
         assertThat(payload).contains("v1:").doesNotContain("fixture-search-key");
         assertThat(service.get().webSearch().topK()).isEqualTo(7);
@@ -205,7 +205,7 @@ public class PlatformConfigIntegrationTest {
         providers.add(new PlatformConfig.Provider(id, id, "asr",
                 "wss://example.test/asr", enabled, false, "fixture-asr-key"));
         return new PlatformConfig(version, providers, base.models(), base.defaultModelId(),
-                new PlatformConfig.Asr(enabled, id, "paraformer-realtime-v1"), base.knowledge());
+                new PlatformConfig.Asr(enabled, id, "paraformer-realtime-v1"));
     }
 
     private Callable<Boolean> publishAfter(CountDownLatch start, String key) {
@@ -268,7 +268,7 @@ public class PlatformConfigIntegrationTest {
                                 "-f",
                                 "/tmp/copilot-sql/16_desktop_sessions.sql",
                                 "-f",
-                                "/tmp/copilot-sql/17_desktop_settings.sql", "-f", "/tmp/copilot-sql/27_mock_interview.sql");
+                                "/tmp/copilot-sql/17_desktop_settings.sql", "-f", "/tmp/copilot-sql/27_mock_interview.sql", "-f", "/tmp/copilot-sql/29_remove_remote_knowledge.sql");
                 if (result.getExitCode() != 0) {
                     throw new IllegalStateException(
                             "Test SQL initialization failed: " + result.getStderr());

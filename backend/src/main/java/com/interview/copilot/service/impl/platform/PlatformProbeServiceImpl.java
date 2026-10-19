@@ -49,7 +49,7 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
     public PlatformProbeResponse test(long actorId, PlatformProbeRequest input) {
         if (input == null
                 || input.capability() == null
-                || !Set.of("llm", "asr", "knowledge", "embedding", "web-search").contains(input.capability())) {
+                || !Set.of("llm", "asr", "embedding", "web-search").contains(input.capability())) {
             throw PlatformConfigErrors.invalid("请选择需要测试的服务能力。");
         }
         PlatformSnapshot snapshot = configs.draft(input.config());
@@ -77,7 +77,6 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
         switch (input.capability()) {
             case "llm" -> llm(snapshot, input.modelId());
             case "asr" -> asr.test(snapshot.asr());
-            case "knowledge" -> knowledge(snapshot);
             case "embedding" -> embedding(snapshot);
             case "web-search" -> webSearch(snapshot);
             default -> throw PlatformConfigErrors.invalid("服务能力无效。");
@@ -125,30 +124,6 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
                         .block();
         com.interview.copilot.util.embedding.EmbeddingProtocol.response(
                 response, 1, endpoint.getDimensions());
-    }
-
-    private void knowledge(PlatformSnapshot snapshot) {
-        var endpoint = snapshot.knowledge();
-        if (!endpoint.isEnabled()) {
-            throw ProviderErrors.unavailable();
-        }
-        JsonNode response =
-                http.json(
-                                endpoint,
-                                Map.of(
-                                        "query",
-                                        "连接测试",
-                                        "agent_id",
-                                        endpoint.getAgentId(),
-                                        "images",
-                                        List.of()),
-                                Duration.ofSeconds(Math.min(8, endpoint.getTimeoutSeconds())))
-                        .block();
-        if (response == null
-                || !response.path("success").asBoolean(false)
-                || !response.path("data").path("nodes").isArray()) {
-            throw ProviderErrors.failed();
-        }
     }
 
     private long elapsed(long started) {

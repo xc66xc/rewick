@@ -6,18 +6,16 @@ import DesktopSettingsPolicy from '../src/components/DesktopSettingsPolicy'
 import { config, data, page, response, user } from './fixtures'
 import type { Config } from '../src/types'
 
-const defaults = { version: 2, llmModelId: 'model-1', temperature: 0.7, asrServiceId: 'asr-1', retrievalMode: 'local', knowledgeServiceId: '' }
+const defaults = { version: 2, llmModelId: 'model-1', temperature: 0.7, asrServiceId: 'asr-1' }
 const platform: Config = {
   ...config,
   providers: [...config.providers,
     { id: 'asr-1', name: '平台转写', kind: 'asr', url: 'wss://example.test', enabled: true },
-    { id: 'kb-1', name: '面试资料库', kind: 'knowledge', url: 'https://example.test', enabled: true },
     { id: 'disabled', name: '已停用服务', kind: 'llm', url: 'https://example.test', enabled: false }],
   models: [...config.models,
     { ...config.models[0], id: 'hidden-1', name: '已停用模型', enabled: false },
     { ...config.models[0], id: 'hidden-2', name: '已停用服务的模型', providerId: 'disabled' }],
   asr: { enabled: true, providerId: 'asr-1', model: 'paraformer' },
-  knowledge: { enabled: true, providerId: 'kb-1', agentId: 'aid-test' },
 }
 
 function setupFetch(save?: (body: Record<string, unknown>) => Response) {
@@ -39,15 +37,15 @@ describe('desktop advanced settings policy', () => {
     const actor = userEvent.setup()
     render(<DesktopSettingsPolicy api={new ApiClient('test')} config={platform} />)
     const model = await screen.findByLabelText('默认回答模型')
+    expect(screen.queryByLabelText('默认检索方式')).toBeNull()
+    expect(screen.queryByLabelText('默认远程知识库')).toBeNull()
     expect(within(model).queryByRole('option', { name: '已停用模型' })).toBeNull()
     expect(within(model).queryByRole('option', { name: '已停用服务的模型' })).toBeNull()
-    await actor.selectOptions(screen.getByLabelText('默认检索方式'), 'remote')
-    await actor.selectOptions(screen.getByLabelText('默认远程知识库'), 'kb-1')
     await actor.clear(screen.getByLabelText('默认生成温度'))
     await actor.type(screen.getByLabelText('默认生成温度'), '1')
     await actor.click(screen.getByRole('button', { name: '保存默认服务' }))
     expect((await screen.findByRole('status')).textContent).toContain('默认服务已保存')
-    expect(requests).toEqual([{ url: '/api/v1/admin/desktop-settings', body: { ...defaults, retrievalMode: 'remote', knowledgeServiceId: 'kb-1', temperature: 1 } }])
+    expect(requests).toEqual([{ url: '/api/v1/admin/desktop-settings', body: { ...defaults, temperature: 1 } }])
   })
 
   it('preserves defaults after a failed save and shows the server correction', async () => {

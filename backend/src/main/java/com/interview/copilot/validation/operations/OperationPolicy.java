@@ -43,7 +43,7 @@ public final class OperationPolicy {
         if (event.stage()==null || event.outcome()==null || event.source()==null || event.providerType()==null
                 || !STAGES.contains(event.stage()) || !OUTCOMES.contains(event.outcome())
                 || !Set.of("desktop", "backend").contains(event.source())
-                || !Set.of("llm", "pg", "bailian", "tavily", "asr", "system").contains(event.providerType())) throw invalid();
+                || !Set.of("llm", "pg", "tavily", "asr", "system").contains(event.providerType())) throw invalid();
         if (!Double.isFinite(event.durationMs()) || event.durationMs() < 0 || event.durationMs() > 86400000) throw invalid();
         if (event.offsetMs() != null && (!Double.isFinite(event.offsetMs()) || event.offsetMs() < 0 || event.offsetMs() > 86400000)) throw invalid();
         bounded(event.requestId(), 128); bounded(event.sessionId(), 128); bounded(event.model(), 200); bounded(event.appVersion(), 32);

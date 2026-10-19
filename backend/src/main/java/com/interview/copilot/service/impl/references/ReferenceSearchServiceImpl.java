@@ -2,7 +2,6 @@ package com.interview.copilot.service.impl.references;
 
 import com.interview.copilot.model.operations.OperationContext;
 import com.interview.copilot.response.references.ReferenceRetrievalResponse;
-import com.interview.copilot.service.platform.DesktopSettingsService;
 import com.interview.copilot.service.references.ReferenceSearchService;
 import com.interview.copilot.service.references.ReferenceStorageService;
 import com.interview.copilot.service.references.ReferenceHybridService;
@@ -18,14 +17,12 @@ import java.util.UUID;
 @Service
 public class ReferenceSearchServiceImpl implements ReferenceSearchService {
     private static final Logger LOG = LoggerFactory.getLogger(ReferenceSearchServiceImpl.class);
-    private final DesktopSettingsService desktop;
     private final ReferenceStorageService repository;
     private final UsageService usage;
     private final ReferenceHybridService hybrid;
     private final com.interview.copilot.service.references.ReferenceCancellationService cancellations;
     public ReferenceSearchServiceImpl(ReferenceStorageService repository, UsageService usage,
-            ReferenceHybridService hybrid, DesktopSettingsService desktop, com.interview.copilot.service.references.ReferenceCancellationService cancellations) {
-        this.desktop = desktop;
+            ReferenceHybridService hybrid, com.interview.copilot.service.references.ReferenceCancellationService cancellations) {
         this.repository = repository;
         this.usage = usage;
         this.hybrid = hybrid;
@@ -44,7 +41,6 @@ public class ReferenceSearchServiceImpl implements ReferenceSearchService {
         }
     }
     private ReferenceRetrievalResponse retrieve(long user, String requestId, String query, List<UUID> ids, OperationContext context) {
-        desktop.requireLocal(user);
         if (ids.isEmpty()) {
             if (context != null) context.finish("retrieval.rag", "success", Map.of("fragmentCount", 0));
             return new ReferenceRetrievalResponse("disabled", "当前环境未选择参考资料。", List.of(), null);

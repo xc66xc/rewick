@@ -91,7 +91,6 @@ export async function checkHistoryDeletion(options) {
         llm: { ...settings.llm, baseUrl: url, model: 'mock-ui', apiKey: 'sk-history-delete-synthetic-llm-only' },
         asr: { ...settings.asr, url: asrUrl, apiKey: 'sk-history-delete-synthetic-asr-only' },
         autoAnswer: { enabled: false, pauseMs: 1500 }, retrieval: { enabled: false },
-        remoteKnowledge: { ...settings.remoteKnowledge, enabled: false },
       })
     }, { url: mock.llmBaseUrl, asrUrl: `${mock.asrUrl}?mode=manual` })
     for (const record of fixtures) {

@@ -35,7 +35,7 @@ API Key 沿用平台密钥加密机制保存在数据库；管理 API 只返回 
 
 Maven Wrapper 固定 3.9.16；Windows 使用 `mvnw.cmd`。第一次运行会从官方 Maven 仓库下载构建工具与依赖。数据库 SQL 放在 `backend/sql/`，不随应用自动执行，也不打入运行 jar。没有数据库凭据时不会使用内置账号或密码。
 
-数据库固定为 PostgreSQL 15.19 + pgvector 0.8.6。仓库根 `deploy/postgres/Dockerfile` 构建匹配版本的数据库镜像。空库依次执行 `sql/01_schema.sql` 至 `sql/07_email_code_purpose.sql`；已执行 `01`–`05` 的数据库，停止旧版后端后在事务内依次执行 `06_display_name.sql`、`07_email_code_purpose.sql`，再启动新版。迁移保留用户 ID、令牌、密码与管理员登录，邮箱账号使用邮箱作为显示名称。具体命令见 [SQL 升级说明](sql/README.md#已有数据库)。项目不使用 Flyway，也禁用了 Spring SQL 自动初始化。
+数据库固定为 PostgreSQL 15.19 + pgvector 0.8.6。仓库根 `deploy/postgres/Dockerfile` 构建匹配版本的数据库镜像。2.0空库按[SQL说明](sql/README.md#初始化空数据库)依次执行01至29；已执行01–28的库停止后端后执行29，再启动匹配新版。迁移保留用户 ID、令牌、密码与管理员登录，邮箱账号使用邮箱作为显示名称。具体命令见 [SQL 升级说明](sql/README.md#已有数据库)。项目不使用 Flyway，也禁用了 Spring SQL 自动初始化。
 
 自行部署或使用托管数据库时，先在数据库服务器安装 pgvector 0.8.6 扩展文件，由具备扩展创建权限的管理员在目标业务数据库执行：
 
@@ -45,7 +45,7 @@ SELECT current_setting('server_version'), extversion
 FROM pg_extension WHERE extname = 'vector';
 ```
 
-扩展和表结构准备好后，运行应用的账号不需要为此获得超级用户权限。参考资料通过 `/api/v1/references` 上传、管理与检索，后台持久任务调用平台向量服务并写入 `vector(1024)`。普通用户不直接调用向量接口；百炼检索保持独立。版本对应安装说明见 [pgvector 0.8.6 官方文档](https://github.com/pgvector/pgvector/tree/v0.8.6#installation)。
+扩展和表结构准备好后，运行应用的账号不需要为此获得超级用户权限。参考资料通过 `/api/v1/references` 上传、管理与检索，后台持久任务调用平台向量服务并写入 `vector(1024)`。普通用户不直接调用向量接口。版本对应安装说明见 [pgvector 0.8.6 官方文档](https://github.com/pgvector/pgvector/tree/v0.8.6#installation)。
 
 | 环境变量 | 用途 / 默认值 |
 | --- | --- |
@@ -64,7 +64,7 @@ FROM pg_extension WHERE extname = 'vector';
 | `COPILOT_EMAIL_HOURLY_SEND_LIMIT` / `COPILOT_EMAIL_MAXIMUM_ATTEMPTS` | 单邮箱每小时发送数 / 单验证码最多错误次数，5 / 5 |
 | `COPILOT_EMAIL_IP_HOURLY_SEND_LIMIT` / `COPILOT_EMAIL_IP_REGISTRATION_LIMIT` | 单来源发送 / 注册尝试窗口上限，20 / 30 |
 
-Bootstrap 只在该用户名不存在时创建，不覆盖旧密码。两项均不填就不创建账号；没有默认登录用户。首次创建后应移除 bootstrap 密码环境配置。两个部署密钥应分别用 `openssl rand -base64 32` 生成，保存在部署密钥管理中，不能写入源码、镜像或客户端。供应商地址、平台 Key、模型/Agent 绑定和 SMTP 主机/认证信息在管理后台填写；`application.yml` 与 `.env` 不提供这些连接的回退配置。未发布的能力保持不可用。
+Bootstrap 只在该用户名不存在时创建，不覆盖旧密码。两项均不填就不创建账号；没有默认登录用户。首次创建后应移除 bootstrap 密码环境配置。两个部署密钥应分别用 `openssl rand -base64 32` 生成，保存在部署密钥管理中，不能写入源码、镜像或客户端。供应商地址、平台 Key、模型绑定和 SMTP 主机/认证信息在管理后台填写；`application.yml` 与 `.env` 不提供这些连接的回退配置。未发布的能力保持不可用。
 
 ## 账号、权限与接口
 
@@ -99,7 +99,7 @@ HTTP 请求正文最多 1 MiB，同时验证 Content-Length 和实际读取字�
 | `POST /users/{id}/password` | 重置密码并撤销已有登录 |
 | `POST /users/{id}/revoke-tokens` | 撤销该用户所有 token 的后续访问 |
 | `GET /config` / `PUT /config` | 读取脱敏配置、带版本发布完整配置 |
-| `POST /config/test` | 测试未发布草稿的模型、转写或知识检索连接 |
+| `POST /config/test` | 测试未发布草稿的模型、转写、向量或联网连接 |
 | `GET /email-config` / `PUT /email-config` | 读取脱敏 SMTP 配置、带版本保存完整邮件配置 |
 | `POST /email-config/test` | `{config:邮件配置草稿}`；仅测试连接和认证，不发邮件、不发布配置 |
 | `GET /usage` | 按用户/能力/供应商模型/状态分页查询调用记录 |
@@ -109,7 +109,7 @@ HTTP 请求正文最多 1 MiB，同时验证 Content-Length 和实际读取字�
 
 平台配置拆分供应商连接（类型、地址、Key）和模型目录（平台 ID、显示名、供应商模型 ID、输出长度、开放状态）。`GET /api/v1/platform` 的 `models.available` 只包含 `{id,name}`；`models.llm` 是默认平台模型 ID，回答请求的 `model` 同样使用该 ID，后端映射实际供应商模型并校验开放状态。
 
-`services` 返回 `{asr:[{id,name}],knowledge:[{id,name}],embedding:[]}`。ASR 与知识库只列出当前启用、已配置 Key 且已绑定模型/Agent 的服务，不公开未绑定供应商、URL 或 Agent ID。当前各自只有一项全局绑定，平台暂不支持向量服务。桌面显式选择后，ASR 使用 `/api/v1/asr?serviceId=<providerId>`，知识库 JSON 增加可选 `serviceId` 并保留 `agent_id=platform`。后端在同一请求配置快照验证 ID；失效或与当前绑定不符时拒绝，不静默改用替代服务。旧客户端省略选择仍可调用当前绑定。
+`services` 返回 `{asr:[{id,name}]}`，只公开已启用并绑定的转写服务，不公开供应商地址或密钥。桌面显式选择后，ASR 使用 `/api/v1/asr?serviceId=<providerId>`；失效服务会拒绝，不静默替换。参考资料Embedding由平台独立配置，通过资料接口使用。
 
 配置整份发布，提交时带 `version`；并发修改返回 409，避免覆盖他人更改。`apiKey` 为只写字段，读取返回 `hasApiKey`，同一供应商省略/空密钥表示保留。修改完整地址或类型时必须重新录入密钥。连接测试不发布配置，失败不改变当前服务。已有回答和 ASR 连接保持启动时快照，新请求采用新版本。
 
@@ -144,7 +144,7 @@ docker build -t interview-copilot-postgres:15.19-pgvector0.8.6 ../deploy/postgre
 
 ## 发布边界
 
-正式对外必须通过 HTTPS/WSS 入口。平台模型、URL、知识库范围由服务端配置，不能让客户端选择任意地址后附加平台 Key。当前实现是首版商用基础链路，仍需实际供应商账号下的联调、容量测试和多平台客户端发行验收。
+正式对外必须通过 HTTPS/WSS 入口。平台模型、URL、参考资料范围由服务端配置，不能让客户端选择任意地址后附加平台 Key。当前实现是首版商用基础链路，仍需实际供应商账号下的联调、容量测试和多平台客户端发行验收。
 
 Spring Boot 3.5.16 已是 3.5.x 最后一个 OSS 发行；本项目按既定 Java 21 / Boot 3.x 选择构建，长期生产维护需要另行安排补丁与支持。[官方说明](https://spring.io/blog/2026/06/25/spring-boot-3-5-16-available-now/)
 
@@ -232,3 +232,7 @@ ASR 连接测试会等待 `task-started`，发送半秒合成静音 PCM（16 kHz
 管理页四个接口为 `/api/v1/admin/operations/{overview,performance,traces,health}`，另有版本化 `settings` 和 `traces/{operationId}?userId=`。报警只在页面呈现：5 分钟窗口且比例规则至少 20 样本，阈值持续 300 秒后 firing；恢复会保留 recovered 状态。连接池使用/等待、持续丢弃、存储触限与观测不可用单独评价，不要求回答样本量。ASR 连接数来自实际 WebSocket 会话，首字幕和错误为后端 24 小时样本；`audioBytes` 为实际接收的有效 PCM 字节，`bufferedBytes` 为实际发送队列高水位，不等同已发送字节。
 
 `COPILOT_OPERATIONS_MANAGEMENT_PORT` 默认 9091；`/actuator/prometheus` 只允许该端口和 `Authorization: Bearer <COPILOT_OPERATIONS_METRICS_TOKEN>`，使用恒定时间比较并绕过业务认证数据库。主端口请求即使携带相同 Key 也拒绝，原 `/actuator/health` 保留业务健康检查。Prometheus 地址 `COPILOT_OPERATIONS_PROMETHEUS_URL` 默认内部 `http://operations-prometheus:9090`；端口和凭据仅内部网络使用，不对公网发布。
+
+## 2.0升级
+
+远程知识库API/配置/默认路由已移除，无旧客户端兼容。新应用启动前必须手工执行业务库29脚本；独立运营库执行operations/02脚本。只清理退役远程配置、密钥与来源元数据/样本，问答正文、钱包、参考资料索引及通用knowledge检索计费保持。完整步骤见sql/README.md。

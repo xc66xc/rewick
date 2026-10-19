@@ -23,6 +23,5 @@ export default function ServicePreferences({ advanced = false, kind, draft, onCh
     <CheckRow className="mb-4" checked={draft.autoAnswer.enabled} onChange={checked => onChange({ ...draft, autoAnswer: { ...draft.autoAnswer, enabled: checked } })} label="自动回答（当前音源）" />
     <p className={formNoteClass}>系统音频和麦克风均适用：转写定稿并达到设定停顿后自动提交问题。句末静音控制转写分句；更改转写服务后，重新开始转写生效。</p>
   </>
-  return <><CheckRow className="mb-4" checked={draft.remoteKnowledge.enabled} onChange={checked => onChange({ ...draft, remoteKnowledge: { ...draft.remoteKnowledge, enabled: checked } })} label="启用远程知识库" />
-    <p className={formNoteClass}>开启后只检索所选远程知识库，不检索平台个人资料。检索失败仍继续回答；简历和岗位 JD 始终作为参考。</p></>
+  return null
 }

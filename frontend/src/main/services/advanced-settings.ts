@@ -12,10 +12,8 @@ export function applyDesktopDefaults(settings: Settings): Settings {
     serviceSelections: {
       llm: { source: 'platform', id: defaults?.llmModelId ?? '' },
       asr: { source: 'platform', id: defaults?.asrServiceId ?? '' },
-      knowledge: { source: 'platform', id: defaults?.knowledgeServiceId ?? '' },
     },
     llm: { ...settings.llm, temperature: defaults?.temperature ?? 0 },
-    remoteKnowledge: { ...settings.remoteKnowledge, enabled: defaults?.retrievalMode === 'remote' },
     webSearch: { enabled: false },
   }
 }
@@ -28,16 +26,16 @@ export function assertAllowedSettings(input: SettingsInput, current: Settings): 
   if (hasAdvancedSettings(current)) return
   const keys = (value: SettingsInput | Settings) => JSON.stringify({ selections: value.serviceSelections,
     llm: { baseUrl: value.llm.baseUrl, model: value.llm.model, temperature: value.llm.temperature },
-    asr: { url: value.asr.url, model: value.asr.model }, remote: { enabled: value.remoteKnowledge.enabled, url: value.remoteKnowledge.url, agentId: value.remoteKnowledge.agentId },
+    asr: { url: value.asr.url, model: value.asr.model },
     selectedModelId: value.platform?.selectedModelId,
     webSearchEnabled: value.webSearch?.enabled ?? false,
   })
-  if (keys(input) !== keys(current) || input.llm.apiKey || input.asr.apiKey || input.remoteKnowledge.apiKey) {
+  if (keys(input) !== keys(current) || input.llm.apiKey || input.asr.apiKey) {
     throw new Error('当前账号不能修改高级模型设置，请重新读取设置。')
   }
 }
 
 export function preserveLocalAdvancedSettings(input: SettingsInput, saved: Settings): SettingsInput {
   return { ...input, serviceSelections: saved.serviceSelections, llm: { ...saved.llm },
-    asr: { ...saved.asr, silenceMs: input.asr.silenceMs }, remoteKnowledge: { ...saved.remoteKnowledge }, webSearch: { enabled: false } }
+    asr: { ...saved.asr, silenceMs: input.asr.silenceMs }, webSearch: { enabled: false } }
 }

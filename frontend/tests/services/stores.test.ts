@@ -53,7 +53,6 @@ describe('SettingsStore', () => {
     const config = input()
     config.asr.apiKey = 'test-asr-secret'
     config.llm.apiKey = 'test-llm-secret'
-    config.remoteKnowledge = { enabled: true, url: 'https://workspace.example/api/v1/indices/knowledge/search', agentId: 'aid-test', apiKey: 'test-remote-secret' }
     config.interviewTarget = { companyName: '示例公司', roleName: '开发工程师', jobDescription: '需要 Redis 经验' }
     config.autoAnswer = { enabled: false, pauseMs: 2500 }
     const visible = await store.saveSettings(config)
@@ -63,9 +62,7 @@ describe('SettingsStore', () => {
     const persisted = await readFile(join(directory, 'settings.json'), 'utf8')
     expect(persisted).not.toContain('test-asr-secret')
     expect(persisted).not.toContain('test-llm-secret')
-    expect(persisted).not.toContain('test-remote-secret')
-    expect(visible.remoteKnowledge).toEqual({ enabled: true, url: config.remoteKnowledge.url, agentId: 'aid-test', hasApiKey: true })
-    expect(await new SettingsStore(directory, crypto).getSecrets()).toEqual({ platformAccessToken: '', asrApiKey: 'test-asr-secret', llmApiKey: 'test-llm-secret', remoteKnowledgeApiKey: 'test-remote-secret' })
+    expect(await new SettingsStore(directory, crypto).getSecrets()).toEqual({ platformAccessToken: '', asrApiKey: 'test-asr-secret', llmApiKey: 'test-llm-secret', })
     expect((await new SettingsStore(directory, crypto).getSettings()).interviewTarget).toEqual(defaultSettings.interviewTarget)
     expect((await new SettingsStore(directory, crypto).getSettings()).autoAnswer).toEqual({ enabled: false, pauseMs: 2500 })
     expect((await stat(join(directory, 'settings.json'))).mode & 0o777).toBe(0o600)
@@ -82,7 +79,7 @@ describe('SettingsStore', () => {
     update.context.text = '后端工程师'
     update.llm.apiKey = ''
     await store.saveSettings(update)
-    expect(await store.getSecrets()).toEqual({ platformAccessToken: '', asrApiKey: 'first-secret', llmApiKey: '', remoteKnowledgeApiKey: '' })
+    expect(await store.getSecrets()).toEqual({ platformAccessToken: '', asrApiKey: 'first-secret', llmApiKey: '', })
     expect((await store.getSettings()).context.text).toBe('')
     expect(await readFile(join(directory, 'settings.json'), 'utf8')).not.toContain('后端工程师')
   })
@@ -101,7 +98,7 @@ describe('SettingsStore', () => {
   })
 
   it('does not reuse local resume text while preserving encrypted service credentials', async () => {
-    const { interviewTarget: _target, retrieval: _retrieval, remoteKnowledge: _remote, ...legacy } = input()
+    const { interviewTarget: _target, retrieval: _retrieval, ...legacy } = input()
     legacy.context.text = '旧版个人背景保持原样'
     await writeFile(join(directory, 'settings.json'), JSON.stringify({ version: 1, settings: legacy,
       secrets: { asr: crypto.encryptString('legacy-asr').toString('base64'), llm: crypto.encryptString('legacy-llm').toString('base64') } }))
@@ -110,70 +107,21 @@ describe('SettingsStore', () => {
     expect(loaded.context.text).toBe('')
     expect(loaded.interviewTarget).toEqual(defaultSettings.interviewTarget)
     expect(loaded.retrieval.enabled).toBe(false)
-    expect(loaded.remoteKnowledge).toEqual(defaultSettings.remoteKnowledge)
-    expect(await store.getSecrets()).toEqual({ platformAccessToken: '', asrApiKey: 'legacy-asr', llmApiKey: 'legacy-llm', remoteKnowledgeApiKey: '' })
-  })
-
-  it('migrates 0.3.0 settings read-only with the remote service off and existing data untouched', async () => {
-    const { remoteKnowledge: _remote, ...legacy } = input()
-    const content = JSON.stringify({ version: 1, settings: legacy, secrets: { asr: '', llm: '' } })
-    await writeFile(join(directory, 'settings.json'), content)
-    const loaded = await new SettingsStore(directory, crypto).getSettings()
-    expect(loaded.remoteKnowledge).toEqual(defaultSettings.remoteKnowledge)
-    expect(loaded.interviewTarget).toEqual(legacy.interviewTarget)
-    expect(await readFile(join(directory, 'settings.json'), 'utf8')).toBe(content)
-  })
-
-  it('retains a remote key across edits and allows explicit clearing only after the service is off', async () => {
-    const store = new SettingsStore(directory, crypto)
-    await store.saveSettings({ ...input(), remoteKnowledge: { enabled: true, url: 'https://workspace.example/search', agentId: 'aid-one', apiKey: 'independent-key' } })
-    const update = await store.getSettings()
-    update.remoteKnowledge.agentId = 'aid-two'
-    await store.saveSettings(update)
-    expect((await store.getSecrets()).remoteKnowledgeApiKey).toBe('independent-key')
-    await expect(store.saveSettings({ ...update, remoteKnowledge: { ...update.remoteKnowledge, apiKey: '' } })).rejects.toThrow('API Key')
-    expect((await store.getSettings()).remoteKnowledge.enabled).toBe(true)
-    await store.saveSettings({ ...update, remoteKnowledge: { ...update.remoteKnowledge, enabled: false, apiKey: '' } })
-    expect((await store.getSecrets()).remoteKnowledgeApiKey).toBe('')
-    expect((await store.getSettings()).remoteKnowledge.hasApiKey).toBe(false)
-  })
-
-  it.each([
-    { enabled: true, url: '', agentId: 'aid-one' },
-    { enabled: true, url: 'https://workspace.example/search', agentId: '' },
-    { enabled: true, url: 'https://workspace.example/search', agentId: 'aid-one' },
-    { enabled: false, url: 'ftp://workspace.example/search', agentId: '' },
-    { enabled: false, url: 'https://user:secret@workspace.example/search', agentId: '' },
-    { enabled: false, url: 'https://{workspaceId}.cn-beijing.maas.aliyuncs.com/api/v1/indices/knowledge/search', agentId: '' },
-  ])('rejects incomplete or unsafe remote settings without replacing existing data %#', async remoteKnowledge => {
-    const store = new SettingsStore(directory, crypto)
-    await store.saveSettings(input())
-    const before = await readFile(join(directory, 'settings.json'), 'utf8')
-    await expect(store.saveSettings({ ...input(), remoteKnowledge })).rejects.toThrow()
-    expect(await readFile(join(directory, 'settings.json'), 'utf8')).toBe(before)
-  })
-
-  it('does not expose a plaintext remote key injected into the settings file', async () => {
-    const config = input()
-    config.remoteKnowledge.apiKey = 'injected-plaintext-secret'
-    await writeFile(join(directory, 'settings.json'), JSON.stringify({ version: 1, settings: config, secrets: { asr: '', llm: '', remoteKnowledge: '' } }))
-    const store = new SettingsStore(directory, crypto)
-    expect(JSON.stringify(await store.getSettings())).not.toContain('injected-plaintext-secret')
-    expect((await store.getSecrets()).remoteKnowledgeApiKey).toBe('')
+    expect(await store.getSecrets()).toEqual({ platformAccessToken: '', asrApiKey: 'legacy-asr', llmApiKey: 'legacy-llm', })
   })
 
   it('keeps an in-flight endpoint paired with its original key while settings change', async () => {
     const store = new SettingsStore(directory, crypto)
-    const first = { ...input(), remoteKnowledge: { enabled: true, url: 'https://first.example/search', agentId: 'aid-first', apiKey: 'first-remote-key' } }
-    const second = { ...input(), remoteKnowledge: { enabled: true, url: 'https://second.example/search', agentId: 'aid-second', apiKey: 'second-remote-key' } }
+    const first = { ...input(), llm: { ...input().llm, baseUrl: 'https://first.example/v1', apiKey: 'first-key' } }
+    const second = { ...input(), llm: { ...input().llm, baseUrl: 'https://second.example/v1', apiKey: 'second-key' } }
     await store.saveSettings(first)
     const pendingSnapshot = store.getConnectionSnapshot()
     const pendingSave = store.saveSettings(second)
     const [snapshot] = await Promise.all([pendingSnapshot, pendingSave])
-    expect(snapshot.settings.remoteKnowledge.url).toBe(first.remoteKnowledge.url)
-    expect(snapshot.secrets.remoteKnowledgeApiKey).toBe(first.remoteKnowledge.apiKey)
-    expect((await store.getConnectionSnapshot()).secrets.remoteKnowledgeApiKey).toBe(second.remoteKnowledge.apiKey)
-    expect((await store.getSettings()).remoteKnowledge.url).toBe(second.remoteKnowledge.url)
+    expect(snapshot.settings.llm.baseUrl).toBe(first.llm.baseUrl)
+    expect(snapshot.secrets.llmApiKey).toBe(first.llm.apiKey)
+    expect((await store.getConnectionSnapshot()).secrets.llmApiKey).toBe(second.llm.apiKey)
+    expect((await store.getSettings()).llm.baseUrl).toBe(second.llm.baseUrl)
   })
 
   it('validates incoming JD but never persists server background in local settings', async () => {

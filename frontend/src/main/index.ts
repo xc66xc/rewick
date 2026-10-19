@@ -44,7 +44,6 @@ import { LlmClient } from './services/llm-client'
 import { DisplayCaptureService } from './services/display-capture'
 import { ReferenceService } from './services/reference-service'
 import { extractDocument } from './services/document-extractor'
-import { RemoteKnowledgeClient } from './services/remote-knowledge-client'
 import { WebSearchClient } from './services/web-search-client'
 import { retrieveAnswerContext } from './services/answer-retrieval'
 import { webSourceUrlSchema } from '../shared/web-search'
@@ -155,7 +154,7 @@ const settings = new Proxy(authSettings, {
       const snapshot = own ? await own.settings.getConnectionSnapshot() : auth
       const merged = applyDesktopDefaults({ ...(own ? await own.preferences.merge(snapshot.settings) : snapshot.settings), platform: auth.settings.platform })
       const secrets = { ...snapshot.secrets }
-      if (own) for (const [kind, key] of [['llm', 'llmApiKey'], ['asr', 'asrApiKey'], ['knowledge', 'remoteKnowledgeApiKey']] as const) {
+      if (own) for (const [kind, key] of [['llm', 'llmApiKey'], ['asr', 'asrApiKey']] as const) {
         if (merged.serviceSelections?.[kind]?.source !== 'custom') secrets[key] = ''
       }
       const value = { settings: { ...merged, platform: auth.settings.platform, accountScope: own?.id }, secrets: { ...secrets, platformAccessToken: auth.secrets.platformAccessToken } }
@@ -198,7 +197,7 @@ async function serviceConnection(snapshot: { settings: Settings; secrets: Servic
   }
   return routeService(config, snapshot.secrets, capability)
 }
-async function testService(capability: 'llm' | 'knowledge'): Promise<{ latencyMs: number; message: string }> {
+async function testService(capability: 'llm'): Promise<{ latencyMs: number; message: string }> {
   const revision = platformWork.revision
   const controller = new AbortController()
   const snapshot = await settings.getConnectionSnapshot()
@@ -208,29 +207,8 @@ async function testService(capability: 'llm' | 'knowledge'): Promise<{ latencyMs
       release = platformWork.track(revision, () => controller.abort(new Error('平台连接已更改，连接测试已取消。')))
     }
     const connection = await serviceConnection(snapshot, capability, controller.signal)
-    return capability === 'llm'
-      ? await new LlmClient(connection.settings, connection.apiKey, () => undefined, connection.platform).test(controller.signal)
-      : await new RemoteKnowledgeClient(connection.settings.remoteKnowledge, connection.apiKey).test(controller.signal)
+    return await new LlmClient(connection.settings, connection.apiKey, () => undefined, connection.platform).test(controller.signal)
   } finally { release?.() }
-}
-async function retrieveRemote(snapshot: { settings: Settings; secrets: ServiceSecrets }, query: string, signal: AbortSignal, platformRevision: number): Promise<RetrievalContext> {
-  const controller = new AbortController()
-  const onAbort = () => controller.abort(signal.reason)
-  signal.addEventListener('abort', onAbort, { once: true })
-  if (signal.aborted) onAbort()
-  let release: (() => void) | undefined
-  try {
-    if (needsPlatform(snapshot.settings, snapshot.secrets, 'knowledge')) {
-      release = platformWork.track(platformRevision, () => controller.abort(new Error('平台连接已更改，本次跳过远程知识库。')))
-    }
-    const connection = await serviceConnection(snapshot, 'knowledge', controller.signal)
-    return await new RemoteKnowledgeClient(connection.settings.remoteKnowledge, connection.apiKey, 5000, connection.platform).retrieve(query, controller.signal)
-  } catch (error) {
-    signal.throwIfAborted()
-    if (error instanceof SessionFault) throw error
-    const message = error instanceof Error ? error.message : '远程知识库连接失败，本次继续回答。'
-    return { status: 'degraded', excerpts: [], message, remote: { agentId: needsPlatform(snapshot.settings, snapshot.secrets, 'knowledge') ? 'platform' : snapshot.settings.remoteKnowledge.agentId, status: 'degraded', message } }
-  } finally { release?.(); signal.removeEventListener('abort', onAbort) }
 }
 const history = scopedStore('history')
 const displayCapture = new DisplayCaptureService({
@@ -600,7 +578,6 @@ function registerHandlers(): void {
     const library = await interviews.activate(parseInput(profileId, input))
     return resolveInterviewSettings(config, library)
   }))
-  handle('remote-knowledge:test', async () => { requireAdvancedSettings(await settings.getSettings()); return testService('knowledge') })
   handle('references:list', () => references.list())
   handle('references:import', async () => {
     if (!window) return []
@@ -694,9 +671,7 @@ function registerHandlers(): void {
       if (observation) { observation.model = resolved.llm.model; observation.serviceSource = connection.platform ? 'platform' : 'custom'; observation.providerType = 'llm' }
       telemetry.record(observation, 'answer.prepare', preparing, 'success')
       const retrieval = await telemetry.measure(observation, 'retrieval.join', () => retrieveAnswerContext(
-        signal => telemetry.measure(observation, 'retrieval.rag', () => resolved.remoteKnowledge.enabled
-          ? retrieveRemote({ settings: resolved, secrets }, request.question, signal, platformRevision)
-          : references.retrieve(request.question, request.transcript, resolved, signal), resolved.remoteKnowledge.enabled ? 'bailian' : 'pg', resolved.remoteKnowledge.enabled && !needsPlatform(resolved, secrets, 'knowledge') ? 'custom' : 'platform'),
+        signal => telemetry.measure(observation, 'retrieval.rag', () => references.retrieve(request.question, request.transcript, resolved, signal), 'pg', 'platform'),
         resolved.webSearch?.enabled ? signal => telemetry.measure(observation, 'retrieval.web', () => new WebSearchClient(resolved, secrets.platformAccessToken).retrieve(request.question, signal), 'tavily', 'platform') : undefined,
         controller.signal), 'system')
       if (epoch !== answerEpoch || controller.signal.aborted) return

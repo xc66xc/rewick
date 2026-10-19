@@ -49,9 +49,7 @@ public class AdminDesktopSettingsController {
                         input.version(),
                         input.llmModelId(),
                         input.temperature(),
-                        input.asrServiceId(),
-                        input.retrievalMode(),
-                        input.knowledgeServiceId()));
+                        input.asrServiceId()));
     }
 
     @GetMapping("/users")

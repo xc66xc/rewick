@@ -4,7 +4,6 @@ import type { WebSocket } from 'ws'
 import { PlatformWork } from '../../src/main/services/platform-work'
 import { LlmClient } from '../../src/main/services/llm-client'
 import { AsrClient } from '../../src/main/services/asr-client'
-import { RemoteKnowledgeClient } from '../../src/main/services/remote-knowledge-client'
 import { defaultSettings } from '../../src/shared/defaults'
 import type { AppEvent } from '../../src/shared/types'
 
@@ -76,34 +75,14 @@ describe('platform work during account or endpoint changes', () => {
     finish()
   })
 
-  it('aborts only the platform retrieval scope so the parent BYOK answer may continue', async () => {
-    const work = new PlatformWork()
-    const answerController = new AbortController()
-    const retrievalController = new AbortController()
-    const fetchMock = vi.fn((_url: string, options: RequestInit) => new Promise<Response>((_resolve, reject) => {
-      options.signal?.addEventListener('abort', () => reject(options.signal?.reason), { once: true })
-    }))
-    vi.stubGlobal('fetch', fetchMock)
-    const release = work.track(work.revision, () => retrievalController.abort(new Error('平台连接已更改')))
-    const pending = new RemoteKnowledgeClient({ enabled: true, url: 'https://platform.example/api/v1/knowledge/search', agentId: 'platform', hasApiKey: true }, 'business-token')
-      .retrieve('问题', retrievalController.signal).finally(release)
-    const observed = expect(pending).rejects.toThrow('平台连接已更改')
-    work.beginChange()()
-    await observed
-    expect(answerController.signal.aborted).toBe(false)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-  })
-
-  it.each(['model', 'knowledge'] as const)('cancels an in-flight platform %s connection test', async capability => {
+  it('cancels an in-flight platform model connection test', async () => {
     const work = new PlatformWork()
     const controller = new AbortController()
     vi.stubGlobal('fetch', vi.fn((_url: string, options: RequestInit) => new Promise<Response>((_resolve, reject) => {
       options.signal?.addEventListener('abort', () => reject(options.signal?.reason), { once: true })
     })))
     const release = work.track(work.revision, () => controller.abort(new Error('平台测试已取消')))
-    const pending = capability === 'model'
-      ? new LlmClient(defaultSettings, 'business-token', () => undefined, true).test(controller.signal)
-      : new RemoteKnowledgeClient({ enabled: true, url: 'https://platform.example/api/v1/knowledge/search', agentId: 'platform', hasApiKey: true }, 'business-token').test(controller.signal)
+    const pending = new LlmClient(defaultSettings, 'business-token', () => undefined, true).test(controller.signal)
     const observed = expect(pending.finally(release)).rejects.toThrow('平台测试已取消')
     work.beginChange()()
     await observed

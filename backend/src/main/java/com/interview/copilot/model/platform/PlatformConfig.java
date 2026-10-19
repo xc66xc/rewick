@@ -20,21 +20,16 @@ public record PlatformConfig(
         @NotNull @Size(max = 100) List<@NotNull @Valid Model> models,
         @NotNull @Size(max = 64) String defaultModelId,
         @NotNull @Valid Asr asr,
-        @NotNull @Valid Knowledge knowledge,
         @Valid Embedding embedding,
         @Valid WebSearch webSearch) {
-    public PlatformConfig(long version, List<Provider> providers, List<Model> models, String defaultModelId,
-            Asr asr, Knowledge knowledge, Embedding embedding) {
-        this(version, providers, models, defaultModelId, asr, knowledge, embedding, WebSearch.disabled());
+    public PlatformConfig(long version, List<Provider> providers, List<Model> models,
+            String defaultModelId, Asr asr, Embedding embedding) {
+        this(version, providers, models, defaultModelId, asr, embedding, WebSearch.disabled());
     }
-    public PlatformConfig(
-            long version,
-            List<Provider> providers,
-            List<Model> models,
-            String defaultModelId,
-            Asr asr,
-            Knowledge knowledge) {
-        this(version, providers, models, defaultModelId, asr, knowledge, null);
+
+    public PlatformConfig(long version, List<Provider> providers, List<Model> models,
+            String defaultModelId, Asr asr) {
+        this(version, providers, models, defaultModelId, asr, null);
     }
 
     public PlatformConfig {
@@ -52,7 +47,7 @@ public record PlatformConfig(
     public record Provider(
             @NotBlank @Pattern(regexp = "[A-Za-z0-9_.-]{1,64}") String id,
             @NotBlank @Size(max = 120) String name,
-            @NotBlank @Pattern(regexp = "llm|asr|knowledge|embedding|web-search") String kind,
+            @NotBlank @Pattern(regexp = "llm|asr|embedding|web-search") String kind,
             @NotBlank @Size(max = 2048) String url,
             boolean enabled,
             @JsonProperty(access = JsonProperty.Access.READ_ONLY) boolean hasApiKey,
@@ -103,9 +98,4 @@ public record PlatformConfig(
             boolean enabled,
             @NotNull @Size(max = 64) String providerId,
             @NotNull @Size(max = 200) String model) {}
-
-    public record Knowledge(
-            boolean enabled,
-            @NotNull @Size(max = 64) String providerId,
-            @NotNull @Size(max = 200) String agentId) {}
 }

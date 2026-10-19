@@ -71,7 +71,6 @@ public class PlatformEmbeddingTest {
                 List.of(),
                 "",
                 new PlatformConfig.Asr(false, "", ""),
-                new PlatformConfig.Knowledge(false, "", ""),
                 new PlatformConfig.Embedding(enabled, "vector", "bge", 1024));
     }
 }

@@ -3,15 +3,15 @@ import { z } from 'zod'
 import type { ServiceKind, Settings, SettingsInput } from '../../shared/types'
 import type { SettingsStore } from './settings-store'
 import { PlatformClient } from './platform-client'
-const kinds: ServiceKind[] = ['llm', 'asr', 'knowledge']
+const kinds: ServiceKind[] = ['llm', 'asr']
 const choice = z.string().min(1).max(200).nullable()
 export const userPreferencesSchema = z.object({
   version: z.number().int().nonnegative(),
   preferences: z.object({ answerStyle: z.enum(['concise', 'detailed']), temperature: z.number().min(0).max(2), silenceMs: z.number().int().min(200).max(6000),
-    autoAnswer: z.object({ enabled: z.boolean(), pauseMs: z.number().int().min(1000).max(5000) }), retrievalEnabled: z.boolean(), remoteKnowledgeEnabled: z.boolean(),
+    autoAnswer: z.object({ enabled: z.boolean(), pauseMs: z.number().int().min(1000).max(5000) }), retrievalEnabled: z.boolean(),
     webSearchEnabled: z.boolean().default(false),
-    platformSelections: z.object({ llm: choice, asr: choice, knowledge: choice }) }),
-  unavailableSelections: z.array(z.enum(['llm', 'asr', 'knowledge'])),
+    platformSelections: z.object({ llm: choice, asr: choice }) }),
+  unavailableSelections: z.array(z.enum(['llm', 'asr'])),
 })
 type State = z.infer<typeof userPreferencesSchema>
 export class UserPreferencesClient {
@@ -47,8 +47,7 @@ export class UserPreferencesClient {
       unavailablePlatformSelections: Object.fromEntries(state.unavailableSelections.map(kind => [kind, value.platformSelections[kind]])),
       answerStyle: value.answerStyle, autoAnswer: { ...value.autoAnswer }, retrieval: { enabled: value.retrievalEnabled },
       webSearch: { enabled: value.webSearchEnabled },
-      llm: { ...local.llm, temperature: value.temperature }, asr: { ...local.asr, silenceMs: value.silenceMs },
-      remoteKnowledge: { ...local.remoteKnowledge, enabled: value.remoteKnowledgeEnabled } }
+      llm: { ...local.llm, temperature: value.temperature }, asr: { ...local.asr, silenceMs: value.silenceMs } }
   }
   async save(input: SettingsInput): Promise<void> {
     if (input.preferencesVersion === undefined) throw new Error('请先读取服务器设置，再保存。')
@@ -61,7 +60,7 @@ export class UserPreferencesClient {
       else if (!selection) platformSelections[kind] = null
     }
     const preferences: State['preferences'] = { answerStyle: input.answerStyle, temperature: input.llm.temperature, silenceMs: input.asr.silenceMs,
-      autoAnswer: input.autoAnswer, retrievalEnabled: input.retrieval.enabled, remoteKnowledgeEnabled: input.remoteKnowledge.enabled, webSearchEnabled: input.webSearch?.enabled ?? previous.preferences.webSearchEnabled, platformSelections }
+      autoAnswer: input.autoAnswer, retrievalEnabled: input.retrieval.enabled, webSearchEnabled: input.webSearch?.enabled ?? previous.preferences.webSearchEnabled, platformSelections }
     const key = JSON.stringify({ version: input.preferencesVersion, preferences })
     if (this.pending?.key !== key) this.pending = { key, mutationId: randomUUID() }
     const generation = this.generation

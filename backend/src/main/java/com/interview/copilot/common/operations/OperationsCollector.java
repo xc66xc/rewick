@@ -147,7 +147,7 @@ public final class OperationsCollector {
         } catch(com.fasterxml.jackson.core.JsonProcessingException error) {throw new IllegalStateException("Operation encoding failed",error);}
     }
     private java.util.List<String> providers(String stage) {
-        if("retrieval.rag".equals(stage)) return java.util.List.of("pg","bailian");
+        if("retrieval.rag".equals(stage)) return java.util.List.of("pg");
         if("retrieval.web".equals(stage)) return java.util.List.of("tavily");
         if("retrieval.embedding".equals(stage)||stage.startsWith("llm.")) return java.util.List.of("llm");
         if("retrieval.database".equals(stage)) return java.util.List.of("pg");

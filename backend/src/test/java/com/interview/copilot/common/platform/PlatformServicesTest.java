@@ -43,6 +43,10 @@ public class PlatformServicesTest {
                 new UserPrincipal(1, "fixture-user", "USER", "fixture@example.invalid");
         SecurityContextHolder.getContext()
                 .setAuthentication(new UsernamePasswordAuthenticationToken(user, null, List.of()));
+        var desktop = DesktopSettingsFixture.advanced();
+        org.mockito.Mockito.when(desktop.get()).thenReturn(
+                new com.interview.copilot.response.platform.DesktopSettingsResponse(
+                        1, "answer-model", 0.7, "asr-bound"));
         MockMvc mvc =
                 MockMvcBuilders.standaloneSetup(
                                 new PlatformController(
@@ -50,7 +54,7 @@ public class PlatformServicesTest {
                                                 .PlatformCatalogServiceImpl(
                                                 () -> snapshot,
                                                 limits,
-                                                DesktopSettingsFixture.advanced())))
+                                                desktop)))
                         .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                         .build();
 
@@ -65,7 +69,12 @@ public class PlatformServicesTest {
         assertThat(response.at("/services/asr")).hasSize(1);
         assertThat(response.at("/services/asr/0/id").asText()).isEqualTo("asr-bound");
         assertThat(response.at("/services/asr/0/name").asText()).isEqualTo("Selected ASR");
-        assertThat(response.at("/services/knowledge/0/id").asText()).isEqualTo("knowledge-bound");
+        assertThat(response.path("services").properties()).extracting(Map.Entry::getKey)
+                .containsExactly("asr");
+        assertThat(response.path("capabilities").properties()).extracting(Map.Entry::getKey)
+                .containsExactlyInAnyOrder("llm", "asr");
+        assertThat(response.path("desktopDefaults").properties()).extracting(Map.Entry::getKey)
+                .containsExactlyInAnyOrder("version", "llmModelId", "temperature", "asrServiceId");
         assertThat(response.at("/services/embedding").isMissingNode()).isTrue();
         assertThat(response.at("/models/available/0/id").asText()).isEqualTo("answer-model");
         assertThat(response.at("/models/llm").asText()).isEqualTo("answer-model");
@@ -74,10 +83,8 @@ public class PlatformServicesTest {
         assertThat(body)
                 .doesNotContain(
                         "asr-unbound",
-                        "knowledge-unbound",
                         "fixture-secret",
                         "provider.invalid",
-                        "fixture-agent",
                         "apiKey",
                         "providerId");
     }
@@ -90,7 +97,6 @@ public class PlatformServicesTest {
         PlatformSnapshot snapshot = snapshot(availability);
 
         assertThat(snapshot.availableAsrServices()).isEmpty();
-        assertThat(snapshot.availableKnowledgeServices()).isEmpty();
         assertThatThrownBy(() -> snapshot.asr("asr-bound"))
                 .isInstanceOf(ApiException.class)
                 .extracting("code")
@@ -105,10 +111,6 @@ public class PlatformServicesTest {
                 .isInstanceOf(ApiException.class)
                 .extracting("code")
                 .isEqualTo("SERVICE_UNAVAILABLE");
-        assertThatThrownBy(() -> snapshot.knowledge("retired-knowledge"))
-                .isInstanceOf(ApiException.class)
-                .extracting("code")
-                .isEqualTo("SERVICE_UNAVAILABLE");
     }
 
     @Test
@@ -116,8 +118,6 @@ public class PlatformServicesTest {
         PlatformSnapshot snapshot = snapshot(Availability.ENABLED);
 
         assertThat(snapshot.asr(null).getApiKey()).isEqualTo(snapshot.asr("asr-bound").getApiKey());
-        assertThat(snapshot.knowledge(null).getAgentId())
-                .isEqualTo(snapshot.knowledge("knowledge-bound").getAgentId());
     }
 
     private PlatformSnapshot snapshot(Availability availability) {
@@ -128,23 +128,13 @@ public class PlatformServicesTest {
                 List.of(
                         provider("asr-bound", "Selected ASR", "asr", providerEnabled),
                         provider("asr-unbound", "Unused ASR", "asr", true),
-                        provider(
-                                "knowledge-bound",
-                                "Selected knowledge",
-                                "knowledge",
-                                providerEnabled),
-                        provider("knowledge-unbound", "Unused knowledge", "knowledge", true),
                         provider("answer", "Answers", "llm", true));
         String key = availability == Availability.KEY_MISSING ? "" : "fixture-secret";
         Map<String, String> keys =
                 Map.of(
                         "asr-bound",
                         key,
-                        "knowledge-bound",
-                        key,
                         "asr-unbound",
-                        "unbound-secret",
-                        "knowledge-unbound",
                         "unbound-secret",
                         "answer",
                         "answer-secret");
@@ -164,12 +154,8 @@ public class PlatformServicesTest {
                         new PlatformConfig.Asr(
                                 serviceEnabled,
                                 "asr-bound",
-                                binding.isEmpty() ? "" : "transcriber-v1"),
-                        new PlatformConfig.Knowledge(
-                                serviceEnabled,
-                                "knowledge-bound",
-                                binding.isEmpty() ? "" : "fixture-agent"));
-        return new PlatformSnapshot(config, keys, new PlatformPolicy(8, 30, 180, 5, 3600));
+                                binding.isEmpty() ? "" : "transcriber-v1"));
+        return new PlatformSnapshot(config, keys, new PlatformPolicy(8, 30, 180, 3600));
     }
 
     private PlatformConfig.Provider provider(String id, String name, String kind, boolean enabled) {

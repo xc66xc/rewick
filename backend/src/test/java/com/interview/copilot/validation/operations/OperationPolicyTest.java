@@ -49,6 +49,17 @@ public class OperationPolicyTest {
                 .isInstanceOf(com.interview.copilot.exception.ApiException.class);
         assertThatThrownBy(() -> OperationPolicy.uuid("1-1-1-1-1")).isInstanceOf(com.interview.copilot.exception.ApiException.class);
     }
+    @Test
+    void validate_removedProvider_rejectsRemoteTelemetry() {
+        var value = event(UUID.randomUUID().toString(), Map.of());
+        var removed = new OperationEvent(value.eventId(), value.operationId(), value.spanId(),
+                null, null, null, "retrieval.rag", "desktop", value.startedAt(), null, 1,
+                "success", null, "platform", "bailian", null, null, Map.of());
+
+        assertThatThrownBy(() -> OperationPolicy.event(removed))
+                .isInstanceOf(com.interview.copilot.exception.ApiException.class);
+    }
+
     @Test void settings_disabledAllAndGray_semanticsAreExplicit() {
         assertThat(OperationsSettings.disabled().allows(1)).isFalse();
         assertThat(new OperationsSettings(0,true,java.util.List.of(),null).allows(1)).isTrue();

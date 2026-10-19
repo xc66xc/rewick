@@ -1,7 +1,7 @@
 import type { ServiceKind, ServiceSelection, Settings } from '../../../shared/types'
 import { platformModels } from '../../../shared/platform-models'
 
-export const serviceLabels: Record<ServiceKind, string> = { llm: '回答模型', asr: '实时语音转写', knowledge: '远程知识库' }
+export const serviceLabels: Record<ServiceKind, string> = { llm: '回答模型', asr: '实时语音转写' }
 export function platformChoices(settings: Settings, kind: ServiceKind): { id: string; name: string }[] {
   const platform = settings.platform
   if (!platform?.authenticated) return []
@@ -30,7 +30,7 @@ export function explicitServiceReady(settings: Settings, kind: ServiceKind): boo
   if (!selection) return settings.preferencesVersion !== undefined ? false : undefined
   if (selection.source === 'platform') return platformChoices(settings, kind).some(service => service.id === selection.id)
   const profile = selectedCustom(settings, kind)
-  return Boolean(profile && (profile.hasApiKey || (kind !== 'knowledge' && localService(profile.url))))
+  return Boolean(profile && (profile.hasApiKey || localService(profile.url)))
 }
 export function answerModelLabel(settings: Settings): string {
   const selection = selectionFor(settings, 'llm')

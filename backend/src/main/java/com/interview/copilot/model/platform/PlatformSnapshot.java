@@ -52,7 +52,6 @@ public final class PlatformSnapshot {
                         input.models(),
                         input.defaultModelId(),
                         input.asr(),
-                        input.knowledge(),
                         input.embedding(), input.webSearch() == null ? PlatformConfig.WebSearch.disabled() : input.webSearch().withDefaultAnswer("none"));
         Map<String, PlatformConfig.Provider> indexed = new LinkedHashMap<>();
         redacted.forEach(provider -> indexed.put(provider.id(), provider));
@@ -147,10 +146,6 @@ public final class PlatformSnapshot {
         return serviceCatalog("asr", config.asr().providerId(), asr());
     }
 
-    public List<AvailableService> availableKnowledgeServices() {
-        return serviceCatalog("knowledge", config.knowledge().providerId(), knowledge());
-    }
-
     private List<AvailableService> serviceCatalog(
             String kind, String providerId, ProviderProperties.Endpoint endpoint) {
         PlatformConfig.Provider provider = providers.get(providerId);
@@ -211,22 +206,6 @@ public final class PlatformSnapshot {
     public ProviderProperties.Asr asr(String serviceId) {
         requireSelection(serviceId, availableAsrServices(), "转写");
         return asr();
-    }
-
-    public ProviderProperties.Knowledge knowledge() {
-        ProviderProperties.Knowledge endpoint = new ProviderProperties.Knowledge();
-        PlatformConfig.Knowledge service = config.knowledge();
-        if (service.enabled()) {
-            endpoint(providers.get(service.providerId()), endpoint);
-        }
-        endpoint.setAgentId(service.agentId());
-        endpoint.setTimeoutSeconds(policy.knowledgeSeconds());
-        return endpoint;
-    }
-
-    public ProviderProperties.Knowledge knowledge(String serviceId) {
-        requireSelection(serviceId, availableKnowledgeServices(), "知识库");
-        return knowledge();
     }
 
     private void requireSelection(

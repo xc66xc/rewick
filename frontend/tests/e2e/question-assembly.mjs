@@ -1,11 +1,10 @@
 import assert from 'node:assert/strict'
-import { startRemoteKnowledgeMock } from '../../scripts/mock-remote-knowledge.mjs'
 
 /** Real Electron/IPC with synthetic audio, manually controlled ASR and loopback-only model/RAG services. */
 export async function checkQuestionAssembly({ app, page, mock, checked, checkpoint, settingsPatch, screenshot, report }) {
+  function counts() { return { model: mock.requests.length, embedding: mock.embeddingRequests.length } }
   const saved = await page.evaluate(() => window.copilot.getSettings())
   const originalBounds = await app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).getBounds())
-  const remote = await startRemoteKnowledgeMock()
   const composer = page.getByRole('textbox', { name: '当前问题', exact: true })
   const assembling = page.getByRole('status').filter({ hasText: /^正在合并问题$/ })
   const paused = page.getByRole('status').filter({ hasText: /^正在合并问题，自动回答暂缓；提交或清空后恢复$/ })
@@ -14,7 +13,6 @@ export async function checkQuestionAssembly({ app, page, mock, checked, checkpoi
   const observations = { providerMode: 'synthetic audio and loopback HTTP/SSE/WebSocket', quietWindows: [], layouts: [] }
   report.questionAssembly = observations
 
-  function counts() { return { model: mock.requests.length, remote: remote.requests.length, embedding: mock.embeddingRequests.length } }
   function payload(request = mock.requests.at(-1)) { return JSON.parse(request.body.messages.find(value => value.role === 'user').content) }
   function editor(index) { return page.getByRole('textbox', { name: `转写文字 ${index + 1}`, exact: true }) }
   function row(index) { return page.getByRole('listitem').filter({ has: editor(index) }) }
@@ -66,18 +64,15 @@ export async function checkQuestionAssembly({ app, page, mock, checked, checkpoi
     const cards = await page.getByRole('article').count()
     // A complete silence window is necessary to prove that a cancelled debounce/queue never submits.
     await new Promise(resolve => setTimeout(resolve, silenceMs + 350))
-    assert.deepEqual(counts(), before, `${label}: joining/paused transcription must not call a model, remote search or embeddings`)
+    assert.deepEqual(counts(), before, `${label}: joining/paused transcription must not call a model or embeddings`)
     await checked(page.getByRole('article')).toHaveCount(cards)
     observations.quietWindows.push({ label, durationMs: silenceMs + 350, counts: { ...before } })
   }
   async function oneRequest(before, question, { held = false } = {}) {
     await checked.poll(() => mock.requests.length).toBe(before.model + 1)
-    await checked.poll(() => remote.requests.length).toBe(before.remote + 1)
-    assert.equal(mock.embeddingRequests.length, before.embedding, 'remote-only retrieval must not invoke query embeddings')
+    assert.equal(mock.embeddingRequests.length, before.embedding, 'disabled reference retrieval must not invoke query embeddings')
     const request = mock.requests[before.model]
     assert.equal(payload(request).question, question)
-    assert.equal(remote.requests[before.remote].body.query, question)
-    assert.deepEqual(remote.requests[before.remote].body, { agent_id: 'synthetic-question-assembly-agent', query: question, images: [] })
     const card = page.getByRole('article').filter({ has: page.getByRole('heading', { name: question.replace(/\s+/g, ' ').trim(), exact: true }) })
     await checked(card).toHaveCount(1)
     if (held) await checked.poll(() => mock.isStreamHeld(before.model)).toBe(true)
@@ -121,8 +116,7 @@ export async function checkQuestionAssembly({ app, page, mock, checked, checkpoi
     })
     await settingsPatch({ llm: { baseUrl: mock.llmBaseUrl, model: 'mock-ui' },
       asr: { url: `${mock.asrUrl}?mode=manual` }, autoAnswer: { enabled: true, pauseMs: silenceMs },
-      retrieval: { ...saved.retrieval, enabled: false },
-      remoteKnowledge: { enabled: true, url: remote.url, agentId: 'synthetic-question-assembly-agent', apiKey: 'sk-question-assembly-synthetic-only' } })
+      retrieval: { ...saved.retrieval, enabled: false }, })
     await page.reload()
     await page.waitForFunction(() => Boolean(window.copilot))
     await app.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().find(window => window.isVisible()).setSize(1100, 760))
@@ -295,18 +289,16 @@ export async function checkQuestionAssembly({ app, page, mock, checked, checkpoi
       await screenshot('question-assembly-compact-submitted.png')
       report.questionAssemblyBoundedInputTested = true
     })
-    assert.deepEqual(remote.unexpectedRequests, [])
   } catch (error) {
     if (!page.isClosed()) await screenshot('question-assembly-failure.png').catch(() => undefined)
     throw error
   } finally {
-    try {
+    {
       await reset()
       await settingsPatch({ llm: saved.llm, asr: saved.asr, autoAnswer: saved.autoAnswer,
-        retrieval: saved.retrieval, remoteKnowledge: saved.remoteKnowledge })
-      // The synthetic remote credential stays only in the runner's disposable profile and is removed with it.
+        retrieval: saved.retrieval, })
       await page.getByRole('button', { name: '麦克风', exact: true }).click()
       await app.evaluate(({ BaseWindow }, bounds) => BaseWindow.getAllWindows().find(window => window.isVisible()).setBounds(bounds), originalBounds)
-    } finally { await remote.close() }
+    }
   }
 }

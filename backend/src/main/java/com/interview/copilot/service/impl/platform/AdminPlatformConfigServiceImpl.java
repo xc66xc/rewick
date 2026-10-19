@@ -30,7 +30,6 @@ public class AdminPlatformConfigServiceImpl implements AdminPlatformConfigServic
                                 input.models(),
                                 input.defaultModelId(),
                                 input.asr(),
-                                input.knowledge(),
                                 input.embedding(), input.webSearch())));
     }
 
@@ -41,7 +40,6 @@ public class AdminPlatformConfigServiceImpl implements AdminPlatformConfigServic
                 value.models(),
                 value.defaultModelId(),
                 value.asr(),
-                value.knowledge(),
                 value.embedding(), value.webSearch());
     }
 }

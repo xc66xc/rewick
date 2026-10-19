@@ -86,7 +86,6 @@ function createBridge(accountScope?: string): DesktopBridge {
   saveEnvironmentStamp: input => invoke('environments:stamp', input),
   removeEnvironment: id => invoke('environments:remove', id),
   activateEnvironment: id => invoke('environments:activate', id),
-  testRemoteKnowledge: () => invoke('remote-knowledge:test'),
   listReferences: () => invoke('references:list'),
   importReferences: () => invoke('references:import'),
   previewReference: id => invoke('references:preview', id),

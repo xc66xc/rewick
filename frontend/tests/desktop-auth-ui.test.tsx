@@ -10,8 +10,8 @@ import type { AppEvent, DesktopBridge, Settings, SettingsInput } from '../src/sh
 function account(id = 'first'): Settings & { platform: NonNullable<Settings['platform']> } {
   return { ...structuredClone(defaultSettings), platform: { enabled: true, baseUrl: 'http://127.0.0.1:8080', authenticated: true,
     user: { id, displayName: `${id}@example.test`, email: `${id}@example.test` },
-    capabilities: { llm: true, asr: true, knowledge: true }, models: { llm: 'fast', asr: 'asr' },
-    services: { asr: [{ id: 'asr', name: '平台转写' }], knowledge: [{ id: 'rag', name: '平台知识库' }] } } }
+    capabilities: { llm: true, asr: true, }, models: { llm: 'fast', asr: 'asr' },
+    services: { asr: [{ id: 'asr', name: '平台转写' }], } } }
 }
 function setup(initial = structuredClone(defaultSettings), strict = false, remembered: { identifier: string; password: string } | null = null) {
   let current = initial

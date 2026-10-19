@@ -25,7 +25,7 @@ export default function DesktopSettingsPolicy({ api, config }: Props) {
     if (!value || busy) return
     setBusy(true); setError(''); setNotice('')
     try {
-      const saved = await api.request('/admin/desktop-settings', desktopSettingsSchema, { method: 'PUT', body: { ...value, knowledgeServiceId: value.retrievalMode === 'remote' ? value.knowledgeServiceId : '' } })
+      const saved = await api.request('/admin/desktop-settings', desktopSettingsSchema, { method: 'PUT', body: value })
       setValue(saved); setNotice('默认服务已保存。')
     } catch (reason) { setError(message(reason)) }
     finally { setBusy(false) }

@@ -1,5 +1,5 @@
 import type { Config } from '../types'
-export type ConfigRecord = { kind: 'providers' | 'models'; id: string; remove?: boolean } | { kind: 'defaultModelId' | 'asr' | 'knowledge' }
+export type ConfigRecord = { kind: 'providers' | 'models'; id: string; remove?: boolean } | { kind: 'defaultModelId' | 'asr' }
 export function recordPayload(saved: Config, draft: Config, target: ConfigRecord): Config {
   const next = { ...saved }
   if (target.kind === 'providers' || target.kind === 'models') {

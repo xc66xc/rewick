@@ -121,12 +121,7 @@ public final class PlatformConfigValidator {
                 config.asr().model(),
                 "asr",
                 providers);
-        validateService(
-                config.knowledge().enabled(),
-                config.knowledge().providerId(),
-                config.knowledge().agentId(),
-                "knowledge",
-                providers);
+
     }
 
     private void validateService(
@@ -143,7 +138,7 @@ public final class PlatformConfigValidator {
             com.interview.copilot.util.asr.AsrEndpoint.resolve(provider.url(), model);
         }
         if (enabled && (!provider.enabled() || model.isBlank())) {
-            throw PlatformConfigErrors.invalid("启用服务前请填写模型或知识库标识，并启用对应提供商。");
+            throw PlatformConfigErrors.invalid("启用服务前请填写模型标识，并启用对应提供商。");
         }
     }
 

@@ -87,3 +87,6 @@ frontend/build/python-runtime/
 frontend/build/asr-model/
 frontend/build/asr-wheel-cache/
 /admin/design-preview/
+
+# Obsolete root-level Electron bundle; maintained output lives in frontend/out.
+/index.js

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { expect } from '@playwright/test'
 
 /** Runs only against the isolated SQL database and loopback providers owned by smoke-platform. */
-export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mock, knowledge, answer, begin, until, check, noSecrets }) {
+export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mock, answer, begin, until, check, noSecrets }) {
   async function request(path, method = 'GET', body, token = adminToken) {
     return fetch(`${baseUrl}/api/v1/${path}`, { method,
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -41,7 +41,6 @@ export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mo
     providers: [
       { id: 'answer-supplier', name: '本机回答供应商', kind: 'llm', url: `${mock.llmBaseUrl}/chat/completions`, enabled: true, apiKey: keys.llm },
       { id: 'asr-supplier', name: '本机转写供应商', kind: 'asr', url: `${mock.asrUrl}?mode=manual`, enabled: true, apiKey: keys.asr },
-      { id: 'knowledge-supplier', name: '本机知识供应商', kind: 'knowledge', url: knowledge.url, enabled: true, apiKey: keys.knowledge },
     ],
     models: [
       { id: 'answer-fast', name: '快速回答', providerId: 'answer-supplier', model: 'mock-fast', enabled: true, maxOutputTokens: 1024 },
@@ -50,11 +49,10 @@ export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mo
     ],
     defaultModelId: 'answer-fast',
     asr: { enabled: true, providerId: 'asr-supplier', model: 'fun-asr-realtime' },
-    knowledge: { enabled: true, providerId: 'knowledge-supplier', agentId: 'aid-server-only' },
   }
 
-  await check('all three draft connection tests reach their protocol without publishing configuration', async () => {
-    for (const capability of ['llm', 'asr', 'knowledge']) {
+  await check('both draft connection tests reach their protocol without publishing configuration', async () => {
+    for (const capability of ['llm', 'asr']) {
       const response = await request('admin/config/test', 'POST', { config: draft, capability, modelId: 'answer-fast' })
       assert.equal(response.status, 200, capability)
       const result = await response.json()
@@ -86,7 +84,6 @@ export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mo
     const info = await (await request('platform')).json()
     assert.equal(info.models.llm, 'answer-fast')
     assert.deepEqual(info.models.available.map(model => model.id), ['answer-fast', 'answer-careful', 'answer-held'])
-    assert.equal(JSON.stringify(info).includes('aid-server-only'), false)
     assert.equal(JSON.stringify(info).includes(mock.llmBaseUrl), false)
     noSecrets(info)
   })
@@ -99,8 +96,6 @@ export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mo
     await page.getByRole('option', { name: '深度回答', exact: true }).click()
     await page.getByRole('combobox', { name: /^实时语音转写/ }).click()
     await page.getByRole('option', { name: '本机转写供应商', exact: true }).click()
-    await page.getByRole('combobox', { name: /^远程知识库/ }).click()
-    await page.getByRole('option', { name: '本机知识供应商', exact: true }).click()
     await page.getByRole('button', { name: '保存设置', exact: true }).click()
     await expect(page.getByRole('status').filter({ hasText: '设置已保存' })).toBeVisible()
     await page.getByRole('button', { name: '关闭设置', exact: true }).click()
@@ -151,16 +146,6 @@ export async function runAdminPlatformChecks({ baseUrl, password, keys, page, mo
     assert.equal(mock.asrConnections.at(-1).commands.find(command => command.header.action === 'run-task').payload.model, 'fun-asr-next')
     await page.evaluate(() => window.copilot.stopAsr())
     await publish({ ...config, asr: { ...config.asr, model: initialModel } })
-  })
-
-  await check('a disabled managed knowledge service does not fall back to environment credentials or block answers', async () => {
-    await publish({ ...config, knowledge: { ...config.knowledge, enabled: false } })
-    const before = knowledge.requests.length
-    const events = await answer('平台知识库停用后仍可以正常回答。')
-    assert.equal(knowledge.requests.length, before)
-    assert.equal(events.find(event => event.kind === 'answer-context').retrieval.status, 'degraded')
-    assert.ok(events.some(event => event.kind === 'answer-done'))
-    await publish({ ...config, knowledge: { ...config.knowledge, enabled: true } })
   })
 
   await check('removing an offered model rejects new calls and requires an explicit desktop selection', async () => {

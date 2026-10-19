@@ -59,15 +59,12 @@ public class PlatformProbeServiceTest {
     }
 
     @Test
-    void test_knowledgeDraft_usesConfiguredAgentAndValidatesResponseShape() {
-        respond("{\"success\":true,\"data\":{\"nodes\":[{\"text\":\"fixture knowledge\"}]}}");
-
-        var result =
-                probes.test(1, new PlatformProbeRequest(config("knowledge"), "knowledge", null));
-
-        assertThat(result.success()).isTrue();
-        assertThat(json.parse(body.get()).path("agent_id").asText()).isEqualTo("fixture-agent");
-        assertThat(result.message()).doesNotContain("fixture knowledge");
+    void test_removedCapability_rejectsBeforeContactingProvider() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> probes.test(1, new PlatformProbeRequest(
+                                PlatformConfigFixture.empty(0), "knowledge", null)))
+                .isInstanceOf(com.interview.copilot.exception.ApiException.class);
+        assertThat(body.get()).isNull();
         assertThat(fixture.row.get().published()).isFalse();
     }
 
@@ -83,8 +80,7 @@ public class PlatformProbeServiceTest {
                         draft.providers(),
                         draft.models(),
                         draft.defaultModelId(),
-                        draft.asr(),
-                        draft.knowledge());
+                        draft.asr());
 
         var result = probes.test(1, new PlatformProbeRequest(draft, "llm", "fast"));
 
@@ -101,7 +97,7 @@ public class PlatformProbeServiceTest {
         var provider = new PlatformConfig.Provider("search", "Search", "web-search",
                 "http://127.0.0.1:" + server.port() + "/search", true, false, "fixture-search-key");
         var draft = new PlatformConfig(0, List.of(provider), List.of(), "",
-                new PlatformConfig.Asr(false, "", ""), new PlatformConfig.Knowledge(false, "", ""),
+                new PlatformConfig.Asr(false, "", ""),
                 null, new PlatformConfig.WebSearch(true, "search", 2, "basic", 1000));
         var result = probes.test(1, new PlatformProbeRequest(draft, "web-search", null));
         assertThat(result.success()).isTrue();
@@ -129,9 +125,7 @@ public class PlatformProbeServiceTest {
                 List.of(provider),
                 llm ? PlatformConfigFixture.config(0, "").models() : List.of(),
                 llm ? "fast" : "",
-                new PlatformConfig.Asr(false, "", ""),
-                new PlatformConfig.Knowledge(
-                        !llm, llm ? "" : "primary", llm ? "" : "fixture-agent"));
+                new PlatformConfig.Asr(false, "", ""));
     }
 
     private void respond(String responseBody) {
