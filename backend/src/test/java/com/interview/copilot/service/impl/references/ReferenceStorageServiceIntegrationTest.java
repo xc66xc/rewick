@@ -188,7 +188,7 @@ public class ReferenceStorageServiceIntegrationTest {
         assertThat(persistence.hybrid.scope(1,List.of(id))).isEmpty();
     }
     @Test
-    void bm25_handCalculatedCorpus_matchesFormulaAndTopFive() {
+    void bm25_handCalculatedCorpus_matchesFormulaAndTopFour() {
         String id=UUID.randomUUID().toString();
         repository.insert(1,id,"formula.md","b".repeat(64),100);
         String text="## one\nredis redis cache\n## two\nredis queue queue queue\n## three\nqueue";
@@ -226,7 +226,7 @@ public class ReferenceStorageServiceIntegrationTest {
             assertThat(fused).hasSize(1);
             assertThat(fused.getFirst().contextId()).isEqualTo(lexical.getFirst().contextId());
         }
-        assertThat(persistence.hybrid.bm25(1,scope,List.of("缓存"),1.2,0.75)).hasSize(5);
+        assertThat(persistence.hybrid.bm25(1,scope,List.of("缓存"),1.2,0.75)).hasSize(4);
 
     }
     @Test
@@ -278,7 +278,7 @@ public class ReferenceStorageServiceIntegrationTest {
         java.util.List<Double> timings=new java.util.ArrayList<>();
         for(int i=0;i<5;i++) {
             long start=System.nanoTime();
-            assertThat(persistence.hybrid.bm25(1,scope,query,1.2,0.75)).hasSize(5);
+            assertThat(persistence.hybrid.bm25(1,scope,query,1.2,0.75)).hasSize(4);
             timings.add((System.nanoTime()-start)/1_000_000.0);
         }
         var tx=new org.springframework.transaction.support.TransactionTemplate(new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
@@ -344,6 +344,28 @@ public class ReferenceStorageServiceIntegrationTest {
         assertThat(answer.split()).isTrue();
         assertThat(answer.text()).hasSizeLessThanOrEqualTo(1600);
     }
+    @Test
+    void recall_sixMatchingQuestions_capsAllSqlRoutesAtFour() {
+        String id=UUID.randomUUID().toString();
+        repository.insert(1,id,"caps.md","h".repeat(64),100);
+        var text=new StringBuilder("# 题库\n");
+        for(int i=1;i<=6;i++) text.append("## Q").append(i).append("：如何使用缓存？\nRedis缓存保护热点请求。\n");
+        var data=parsed(text.toString());
+        assertThat(data.sections().stream().filter(section -> !section.questionText().isBlank())).hasSize(6);
+        var vector=java.util.Collections.nCopies(1024,0.1);
+        publish(persistence.jobs.claim(),data,java.util.Collections.nCopies(data.chunks().size(),vector),"a".repeat(64));
+        var scope=persistence.hybrid.scope(1,List.of(id));
+        var lexical=persistence.hybrid.bm25(1,scope,List.of("redis"),1.2,0.75);
+        var body=persistence.hybrid.vector(1,scope,vector.toString(),"a".repeat(64),0.55);
+        var questions=persistence.hybrid.questions(1,scope,vector.toString(),"a".repeat(64),0);
+        assertThat(lexical).hasSize(4);
+        assertThat(body).hasSize(4);
+        assertThat(questions).hasSize(4);
+        var semantic=com.interview.copilot.common.references.ReferenceVectorFusion.fuse(questions,body,60);
+        assertThat(semantic).hasSize(4);
+        assertThat(new com.interview.copilot.common.references.ReferenceFusion().fuse(lexical,semantic,60)).hasSize(2);
+    }
+
     private List<Double> axis(int index) {
         var vector=new java.util.ArrayList<>(java.util.Collections.nCopies(1024,0.0));
         vector.set(index,1.0);

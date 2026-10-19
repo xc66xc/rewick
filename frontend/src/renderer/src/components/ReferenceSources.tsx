@@ -37,7 +37,7 @@ export default function ReferenceSources({ retrieval }: ReferenceSourcesProps) {
   return <div className="mt-5">{webNotice}<Collapse summary={<><Books size={15} aria-hidden="true" /><span>本次检索资料</span><span className="ml-2 text-text-muted">{retrieval.excerpts.length} 个片段</span>{remote && <span className="ml-2 text-text-muted">百炼：{remoteStatus}</span>}{web && <span className="ml-2 text-text-muted">联网：{webStatus}</span>}{degraded && <span className={degradedBadgeClass}>{'部分检索降级'}</span>}</>}>
     <p className="my-3 leading-[1.8] text-text-secondary">以下片段提供给了本次回答模型，不代表逐句引用或事实核验。复制回答时不会包含这些资料。</p>
     {remoteNote}
-    {retrieval.hybrid && <p className={formNoteClass}>本地混合检索：BM25 {retrieval.hybrid.bm25.candidateCount}/5 · 向量 {retrieval.hybrid.vector.candidateCount}/5 · RRF {retrieval.hybrid.fusion.resultCount}/3</p>}
+    {retrieval.hybrid && <p className={formNoteClass}>本地混合检索：BM25 {retrieval.hybrid.bm25.candidateCount}/4 · 向量 {retrieval.hybrid.vector.candidateCount}/4 · RRF {retrieval.hybrid.fusion.resultCount}/2</p>}
     {retrieval.message && <p className="mt-4 flex items-start gap-2 leading-[1.8] [&_svg]:mt-[3px] [&_svg]:shrink-0">{retrieval.message}</p>}
     {degraded && !retrieval.message && <p className="mt-4">{remote || web ? '部分资料检索暂不可用，本次回答使用已取得的内容。' : '部分检索暂不可用，本次使用已取得的资料。'}</p>}
     <ol className="m-0 flex list-none flex-col gap-3 p-0">{retrieval.excerpts.map(excerpt => <li key={`${excerpt.source ?? 'local'}:${excerpt.documentId}:${excerpt.revision}:${excerpt.chunkId}`} className="rounded-chip border border-border bg-subtle p-3">

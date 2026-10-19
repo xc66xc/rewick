@@ -2,6 +2,7 @@ package com.interview.copilot.mapper.references;
 
 import com.interview.copilot.entity.references.ReferenceScopeEntity;
 import com.interview.copilot.entity.references.ReferenceCandidateEntity;
+import com.interview.copilot.model.references.ReferenceRecallLimits;
 import com.interview.copilot.entity.references.ReferenceContextEntity;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -28,8 +29,7 @@ public interface ReferenceHybridMapper {
  WHERE d.app_users_id=#{user} AND d.is_enabled AND d.status='ready' AND d.splitter_version=2 AND
  <foreach collection="scope" item="item" separator=" OR " open="(" close=")">(d.id=CAST(#{item.documentId} AS uuid) AND d.revision=#{item.revision})</foreach>
  AND e.fingerprint=#{fingerprint} AND c.context_id IS NOT NULL AND 1-(e.embedding &lt;=&gt; CAST(#{vector} AS vector)) &gt;= #{minimum}
-) SELECT document_id,revision,chunk_id,context_id,ordinal,text,score,qa_id FROM candidates WHERE unit_rank=1 ORDER BY score DESC,document_id,ordinal,chunk_id LIMIT 5</script>
-            """)
+) SELECT document_id,revision,chunk_id,context_id,ordinal,text,score,qa_id FROM candidates WHERE unit_rank=1 ORDER BY score DESC,document_id,ordinal,chunk_id LIMIT\s""" + ReferenceRecallLimits.BRANCH_TOP_K + "</script>")
     List<ReferenceCandidateEntity> vector(@Param("user") long user, @Param("scope") List<ReferenceScopeEntity> scope, @Param("vector") String vector, @Param("fingerprint") String fingerprint, @Param("minimum") double minimum);
     @Select("""
 <script>SELECT d.id::text AS document_id,q.revision,c.id AS chunk_id,c.context_id,c.ordinal,c.text,
@@ -39,8 +39,7 @@ public interface ReferenceHybridMapper {
  WHERE d.app_users_id=#{user} AND d.is_enabled AND d.status='ready' AND d.splitter_version=2 AND
  <foreach collection="scope" item="item" separator=" OR " open="(" close=")">(d.id=CAST(#{item.documentId} AS uuid) AND d.revision=#{item.revision})</foreach>
  AND q.fingerprint=#{fingerprint} AND 1-(q.embedding &lt;=&gt; CAST(#{vector} AS vector)) &gt;= #{minimum}
- ORDER BY q.embedding &lt;=&gt; CAST(#{vector} AS vector),d.id,c.ordinal,c.id LIMIT 5</script>
-            """)
+ ORDER BY q.embedding &lt;=&gt; CAST(#{vector} AS vector),d.id,c.ordinal,c.id LIMIT\s""" + ReferenceRecallLimits.BRANCH_TOP_K + "</script>")
     List<ReferenceCandidateEntity> questions(@Param("user") long user, @Param("scope") List<ReferenceScopeEntity> scope,
             @Param("vector") String vector, @Param("fingerprint") String fingerprint, @Param("minimum") double minimum);
     @Select("""
@@ -66,7 +65,8 @@ WITH eligible AS MATERIALIZED (
  ORDER BY scored.score DESC,c.ordinal,c.id) AS unit_rank
  FROM scored JOIN reference_chunks c ON c.id=scored.chunk_id AND c.app_users_id=#{user}
 ), best AS (
- SELECT chunk_id,score FROM units WHERE score &gt; 0 AND unit_rank=1 ORDER BY score DESC,ordinal,chunk_id LIMIT 5
+ SELECT chunk_id,score FROM units WHERE score &gt; 0 AND unit_rank=1 ORDER BY score DESC,ordinal,chunk_id LIMIT\s""" + ReferenceRecallLimits.BRANCH_TOP_K + """
+
 ) SELECT c.document_id::text,c.revision,c.id AS chunk_id,c.context_id,c.ordinal,c.text,best.score,COALESCE(c.qa_section_id,0) AS qa_id
  FROM best JOIN reference_chunks c ON c.id=best.chunk_id AND c.app_users_id=#{user}
  ORDER BY best.score DESC,c.ordinal,c.id

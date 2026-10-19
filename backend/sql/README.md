@@ -231,4 +231,4 @@ GRANT USAGE,SELECT ON SEQUENCE mock_wallet_ledger_id_seq TO copilot_backend;
 
 ## 28_reference_qa.sql — QA问题优先检索
 
-新后端启动前，在25和27之后手工执行28。新增QA关联、独立问题向量表及问题相似度阈值；不迁移历史内容、不修改旧向量。资料需用户显式重建到splitter_version=2，新召回不读取旧版本索引。同步部署后端1.4.0-SNAPSHOT/管理端1.3.0，桌面协议保持不变。详细行为、上限、兼容说明及性能估算见[QA检索说明](../../docs/reference-qa-retrieval.md)。本次未执行生产DDL或部署。
+新后端启动前，在25和27之后手工执行28。新增QA关联、独立问题向量表及问题相似度阈值；不迁移历史内容、不修改旧向量。资料需用户显式重建到splitter_version=2，新召回不读取旧版本索引。同步部署后端1.4.0-SNAPSHOT/管理端1.3.0，桌面协议保持不变。详细行为、上限、兼容说明及性能估算见[QA检索说明](../../docs/reference-qa-retrieval.md)。2026-10-19已在生产执行并发布，原3份资料待用户显式重建。

@@ -45,7 +45,7 @@ export default function ReferencePolicy({ api }: Props) {
   }
   return <section aria-label="参考资料混合检索" className={styles.editorCard}>
     <h3>参考资料混合检索</h3>
-    <p className={styles.hint}>只支持 Markdown 和 Word（MD、DOC、DOCX），单文件最大 10 MB。QA 按问题标题优先召回，问题/正文向量以 2:1 排名融合为向量 Top5，再与 BM25 Top5 做 RRF 保留 Top3；同题去重。问题阈值默认 0，仅为未校准初始值。联网搜索独立配置。切分参数修改只影响之后重建的索引。</p>
+    <p className={styles.hint}>只支持 Markdown 和 Word（MD、DOC、DOCX），单文件最大 10 MB。QA 按问题标题优先召回，问题/正文向量以 2:1 排名融合为向量 Top4，再与 BM25 Top4 做 RRF 保留 Top2；同题去重。问题阈值默认 0，仅为未校准初始值。联网搜索独立配置。切分参数修改只影响之后重建的索引。</p>
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {saved && <p role="status" className={styles.notice}>资料策略已保存。</p>}
     {!policy ? <button type="button" className={styles.secondaryButton} onClick={() => setRevision(value => value + 1)}>{error ? '重新加载策略' : '正在加载策略…'}</button> :

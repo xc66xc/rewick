@@ -219,3 +219,22 @@ API 域名只开放 `/api/` 与健康检查，`/api/v1/admin/` 和页面根路�
 发布目录 `releases/qa-export-20261017/`；回滚材料 `releases/before-qa-export-20261017/` 含两库dump、旧JAR、实际运行/源码管理静态、私有环境与配置，旧镜像标签 `before-qa-export-20261017`。仅后端容器重建，管理运行容器复制新哈希资源、原子替换index并热重载Nginx；已构建管理镜像供以后重建。
 
 后端JAR SHA256为 `5833d8f9c6e0e76f4047eea9ca5b772b32e7b088b31d8ac07a310985830335ac`。服务器侧证书验证HTTPS健康UP、问答原文读取、报告停用与不入队、匿名401/跨账号404及测试数据清理通过。管理index哈希一致、新JS HTTPS200，Prom两个目标UP。平台28/模拟3及加密语音Key指纹与部署前一致，没有更改用户余额。临时身份/令牌/会话/钱包已清理，未调用供应商。公网本机curl仍连接重置，未宣称已通过公网客户端验收。
+
+
+## 2026-10-19 QA问题优先混合检索部署
+
+后端1.4.0-SNAPSHOT、管理端1.3.0已发布，SQL28已手工执行，并授权copilot_backend访问reference_question_vectors。当前运行JAR SHA256 `6c531dbccd310f4e4f4caf38c8c79fc9153772d1f7a00d69456539a46f8107e2`；管理入口 `index-CqagxIEs.js` / `index-pN7VSlBA.css`。发布目录 `releases/reference-qa-20261019/`，含manifest、SHA256SUMS、SQL和verification.json。
+
+备份 `releases/before-reference-qa-20261019/` 含业务/运营库dump、旧JAR、运行/源码管理静态、Compose/Nginx/Dockerfile及受限私有环境，归档目录可读验证通过。旧镜像标签 `before-reference-qa-20261019`。仅后端容器重建，管理静态原子替换和Nginx热重载，数据库/监控未重启。
+
+10项服务器证书校验HTTPS/鉴权/新阈值/SQL权限/配置指纹/产物哈希/Prom检查通过，临时令牌已清理。原混合检索和缓存开关保持，原3份资料仍是索引版本1，需要用户显式重建；没有自动索引、调用供应商或性能压测。公网本机curl仍连接重置，未完成公网客户端全链路验收。
+
+回滚时恢复旧JAR及backend镜像、管理静态和admin镜像，保留新增表/列；不要恢复整库覆盖上线后的业务数据。旧程序只读取索引版本1，已重建为2的文档需用旧程序再次构建。完整说明见docs/reference-qa-retrieval.md。
+
+## 2026-10-19 混合检索 Top4/Top2 部署
+
+后端1.4.1-SNAPSHOT、管理端1.3.1已发布。BM25/问题向量/正文向量各Top4，向量内部2:1融合Top4，最终等权RRF同题去重后Top2。无需DDL或索引重建，原阈值/配置/缓存和联网并发保持。
+
+发布releases/top4-20261019/，备份releases/before-top4-20261019/，包含两库dump、旧JAR、运行/源码静态及受限私有配置；旧镜像标签before-top4-20261019。仅后端容器重建，管理静态保留旧哈希资源、原子替换入口并Nginx热重载；已构建后续重建使用的管理镜像。
+
+运行JAR SHA256 17f1f3c3edfd6a6811c485412937734cfe14840479b96e3b4b00d9b47c4cdfd3；管理JS index-XueUyW4W.js。10项服务器证书校验HTTPS/鉴权/配置指纹/新文案/运行哈希/Prom检查通过，验证临时令牌清理完成。未自动索引、未调用供应商或做性能测试。公网本机curl仍连接重置，公网客户端全链路未验收。回滚恢复本次备份的旧JAR/镜像及管理静态，不需要恢复数据库。

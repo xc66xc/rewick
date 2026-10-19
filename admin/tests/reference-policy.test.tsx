@@ -18,6 +18,7 @@ describe('reference upload policy', () => {
     render(<ReferencePolicy api={new ApiClient('test-token')} />)
     const capacity = await screen.findByLabelText('每用户资料总容量（MB）')
     expect(capacity).toHaveProperty('value', '100')
+    expect(screen.getByText(/向量 Top4，再与 BM25 Top4 做 RRF 保留 Top2/)).toBeTruthy()
     expect(screen.getByLabelText('问题向量相似度阈值')).toHaveProperty('value', '0')
     expect(screen.getByLabelText('正文向量相似度阈值')).toHaveProperty('value', '0.55')
     await actor.clear(capacity)

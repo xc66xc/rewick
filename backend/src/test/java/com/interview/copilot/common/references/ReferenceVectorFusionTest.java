@@ -14,10 +14,11 @@ class ReferenceVectorFusionTest {
         assertThat(results).containsExactly(body);
         assertThat(results.getFirst().score()).isEqualTo(0.6);
     }
-    @Test void fuse_questionRankHasMoreWeightThanUnrelatedBodyScore_andCapsFive() {
+    @Test void fuse_questionRankHasMoreWeightThanUnrelatedBodyScore_andCapsFour() {
         var questions = LongStream.rangeClosed(1,5).mapToObj(id -> hit(id,id,id,0.5)).toList();
         var body = LongStream.rangeClosed(6,10).mapToObj(id -> hit(id,id,id,0.99)).toList();
-        assertThat(ReferenceVectorFusion.fuse(questions,body,60)).containsExactlyElementsOf(questions);
+        assertThat(ReferenceVectorFusion.fuse(questions,body,60)).containsExactlyElementsOf(questions.subList(0,4));
+        assertThat(ReferenceVectorFusion.fuse(List.of(),body,60)).containsExactlyElementsOf(body.subList(0,4));
     }
     @Test void fuse_repeatedChildrenDoNotAccumulateVotes() {
         var duplicate = hit(2,20,100,0.9);

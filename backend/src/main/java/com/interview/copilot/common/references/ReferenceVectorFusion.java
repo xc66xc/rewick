@@ -1,6 +1,7 @@
 package com.interview.copilot.common.references;
 
 import com.interview.copilot.entity.references.ReferenceCandidateEntity;
+import com.interview.copilot.model.references.ReferenceRecallLimits;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,13 +19,13 @@ public final class ReferenceVectorFusion {
         return representatives.entrySet().stream().sorted(Comparator
                 .<Map.Entry<String, ReferenceCandidateEntity>>comparingDouble(entry -> scores.get(entry.getKey())).reversed()
                 .thenComparing(entry -> entry.getValue().documentId()).thenComparingInt(entry -> entry.getValue().ordinal())
-                .thenComparingLong(entry -> entry.getValue().chunkId())).limit(5).map(Map.Entry::getValue).toList();
+                .thenComparingLong(entry -> entry.getValue().chunkId())).limit(ReferenceRecallLimits.BRANCH_TOP_K).map(Map.Entry::getValue).toList();
     }
 
     private static void add(List<ReferenceCandidateEntity> values, int weight, int constant,
             Map<String, ReferenceCandidateEntity> representatives, Map<String, Double> scores) {
         var seen = new java.util.HashSet<String>();
-        for (int i = 0; i < Math.min(5, values.size()); i++) {
+        for (int i = 0; i < Math.min(ReferenceRecallLimits.BRANCH_TOP_K, values.size()); i++) {
             var value = values.get(i);
             String key = value.documentId() + ":" + value.revision() + ":" + (value.qaId() > 0 ? "q" + value.qaId() : "c" + value.contextId());
             if (!seen.add(key)) continue;

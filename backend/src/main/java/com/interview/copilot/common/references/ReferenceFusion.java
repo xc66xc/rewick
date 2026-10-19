@@ -1,6 +1,7 @@
 package com.interview.copilot.common.references;
 
 import com.interview.copilot.entity.references.ReferenceCandidateEntity;
+import com.interview.copilot.model.references.ReferenceRecallLimits;
 import com.interview.copilot.model.references.ReferenceRecall.Fused;
 import org.springframework.stereotype.Component;
 import java.util.ArrayList;
@@ -23,7 +24,7 @@ public class ReferenceFusion {
             var a = lexical.get(key);
             var b = semantic.get(key);
             var child = b != null && b.child().qaId() > 0 ? b.child() : a == null ? b.child() : a.child();
-            List<ReferenceCandidateEntity> matches = java.util.stream.Stream.concat(bm25.stream().limit(5), vector.stream().limit(5))
+            List<ReferenceCandidateEntity> matches = java.util.stream.Stream.concat(bm25.stream().limit(ReferenceRecallLimits.BRANCH_TOP_K), vector.stream().limit(ReferenceRecallLimits.BRANCH_TOP_K))
                     .filter(row -> key(row).equals(key)).distinct().toList();
             results.add(new Fused(child.documentId(), child.revision(), child.contextId(), child.ordinal(),
                     a == null ? null : a.rank(), b == null ? null : b.rank(),
@@ -33,17 +34,17 @@ public class ReferenceFusion {
         return results.stream().sorted(Comparator.comparingDouble(Fused::rrfScore).reversed()
                 .thenComparingInt(f -> Math.min(rank(f.bm25Rank()), rank(f.vectorRank())))
                 .thenComparingInt(f -> rank(f.bm25Rank()) + rank(f.vectorRank()))
-                .thenComparing(Fused::documentId).thenComparingInt(Fused::ordinal).thenComparingLong(Fused::contextId)).limit(3).toList();
+                .thenComparing(Fused::documentId).thenComparingInt(Fused::ordinal).thenComparingLong(Fused::contextId)).limit(ReferenceRecallLimits.FINAL_TOP_K).toList();
     }
     private Map<String, Ranked> best(List<ReferenceCandidateEntity> input) {
         Map<String, Ranked> ranks = new LinkedHashMap<>();
-        for (int i = 0; i < Math.min(5, input.size()); i++) {
+        for (int i = 0; i < Math.min(ReferenceRecallLimits.BRANCH_TOP_K, input.size()); i++) {
             var child = input.get(i);
             ranks.putIfAbsent(key(child), new Ranked(i + 1, child));
         }
         return ranks;
     }
     private String key(ReferenceCandidateEntity row) { return row.documentId() + ":" + row.revision() + ":" + (row.qaId() > 0 ? "q" + row.qaId() : "c" + row.contextId()); }
-    private int rank(Integer value) { return value == null ? 6 : value; }
+    private int rank(Integer value) { return value == null ? ReferenceRecallLimits.BRANCH_TOP_K + 1 : value; }
     private record Ranked(int rank, ReferenceCandidateEntity child) {}
 }
