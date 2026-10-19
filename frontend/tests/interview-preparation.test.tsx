@@ -185,6 +185,8 @@ describe('interview preparation', () => {
     expect((await screen.findByRole('button', { name: '删除环境 默认环境' }) as HTMLButtonElement).disabled).toBe(true)
     const create = await screen.findByRole('button', { name: '新建面试准备' })
     await waitFor(() => expect((create as HTMLButtonElement).disabled).toBe(false))
+    expect(within(screen.getByRole('list', { name: '已保存面试环境' })).queryByRole('button', { name: '新建面试准备' })).toBeNull()
+    expect(screen.queryByText('为下一次机会做准备')).toBeNull()
     await actor.click(create)
     const dialog = await screen.findByRole('dialog', { name: '新建面试准备' })
     expect(within(dialog).queryByRole('button', { name: /删除环境/ })).toBeNull()

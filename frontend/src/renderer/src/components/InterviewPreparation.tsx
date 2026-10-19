@@ -3,7 +3,7 @@ import useEnvironmentStampEditor from '../hooks/useEnvironmentStampEditor'
 import { environmentHotwordsError } from '../../../shared/environment-hotwords'
 import InviteFriendsButton from './invitation/InviteFriendsButton'
 import { useState } from 'react'
-import { CheckCircle, PlusCircle } from '@phosphor-icons/react'
+import { CheckCircle, Plus } from '@phosphor-icons/react'
 import type { DesktopBridge, EnvironmentInput, InterviewEnvironment, Settings } from '../../../shared/types'
 import { errorMessage } from '../hooks/useSettings'
 import useInterviewLibrary from '../hooks/useInterviewLibrary'
@@ -115,8 +115,11 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
         {onHistory && <Button variant="quiet" size="xs" className="text-accent-text" onClick={onHistory}>查看记录</Button>}
       </div>}
     </div>
-    <div className="mb-3.5 mt-6 flex flex-wrap items-baseline gap-2.5">
+    <div className="sticky top-0 z-10 mb-3.5 mt-6 flex flex-wrap items-center justify-between gap-3 bg-canvas py-3">
       <h2 className="text-base font-semibold tracking-[-0.01em] text-text-heading">我的面试准备</h2>
+      <Button variant="primary" aria-label="新建面试准备" onClick={requestNew} disabled={!data.library || busy}>
+        <Plus size={16} aria-hidden="true" />新建面试
+      </Button>
     </div>
     {editor.pending && <DraftChangeNotice onKeep={editor.keepDraft} onDiscard={editor.discardAndContinue} />}
     {editor.restored && <p className="mb-4 text-xs leading-[1.85] text-text-secondary" role="status">已恢复尚未保存的环境草稿，保留到本次关闭应用前。保存环境后才会生效。</p>}
@@ -136,13 +139,6 @@ export default function InterviewPreparation({ bridge, settings, timer, isSessio
             onStart={() => void start(environment)} onReturn={onStarted} onContext={onContext} />
         </li>
       })}
-      <li className="min-w-0">
-        <Button variant="quiet" aria-label="新建面试准备" onClick={requestNew} disabled={!data.library || busy} className="flex h-full min-h-[160px] w-full flex-col items-center justify-center gap-1.5 rounded-card border border-dashed border-border-dashed bg-card p-5 text-center text-text-muted transition-colors hover:border-accent hover:text-accent-text">
-          <PlusCircle size={22} aria-hidden="true" />
-          <span className="text-[13.5px] font-semibold text-text-secondary">为下一次机会做准备</span>
-          <span className="text-[11.5px]">选择简历、岗位与参考资料</span>
-        </Button>
-      </li>
     </ul>}
     <EnvironmentStampDialog editor={stampEditor} />
     <EnvironmentDialog onExtractHotwords={input => bridge.extractEnvironmentHotwords(input)} open={dialogOpen} onOpenChange={setDialogOpen} draft={editor.draft} dirty={editor.dirty} library={data.library}
