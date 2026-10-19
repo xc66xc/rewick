@@ -25,10 +25,10 @@ export default function AvatarStage({ state = 'ready', level, audioLevel, connec
     </div>
     <footer className="mock-interviewer__footer">
       <Icon className="mock-interviewer__signal shrink-0 text-accent" size={32} weight="regular" aria-hidden="true" />
-      <div className="min-w-0"><h2 className="text-sm font-semibold leading-5" role="status">{labels[state]}</h2><p className="mt-1 text-xs text-text-secondary">{hints[state]}</p></div>
+      <div className="min-w-0"><h2 className="text-sm font-semibold leading-5" role="status">{labels[state]}</h2><p className="mt-1 text-xs text-text-secondary">{hints[state]}</p>{mode === '3d' && <p className="mt-1 text-xs text-text-secondary">当前模型未绑定嘴型和眨眼</p>}</div>
     </footer>
     <div className="flex items-center justify-between gap-2 border-t border-border px-4 py-2">
-      <span className="text-xs text-text-secondary">{mode === '3d' ? '3D 示例角色 · pixiv' : '2D 卡通角色'}</span>
+      <span className="text-xs text-text-secondary">{mode === '3d' ? '3D 角色 · 轻微动态' : '2D 卡通角色'}</span>
       <Segmented value={mode} onValueChange={setMode} options={[{ value: '2d', label: '2D' }, { value: '3d', label: '3D' }]} aria-label="面试官显示方式" />
     </div>
   </section>

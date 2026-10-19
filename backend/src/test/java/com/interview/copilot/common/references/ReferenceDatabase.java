@@ -24,7 +24,7 @@ public final class ReferenceDatabase extends PostgreSQLContainer<ReferenceDataba
                     "09_pg_references.sql",
                     "10_time_wallet.sql",
                     "16_desktop_sessions.sql",
-                    "17_desktop_settings.sql", "27_mock_interview.sql", "25_reference_hybrid.sql");
+                    "17_desktop_settings.sql", "27_mock_interview.sql", "25_reference_hybrid.sql", "28_reference_qa.sql");
 
     public ReferenceDatabase() {
         super(

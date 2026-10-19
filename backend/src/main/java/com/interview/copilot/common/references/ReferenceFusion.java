@@ -9,7 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Equal-weight RRF over unique contexts; original child ranks remain unchanged. */
+/** Equal-weight RRF over unique QA units (ordinary documents use contexts); original child ranks remain unchanged. */
 @Component
 public class ReferenceFusion {
     public List<Fused> fuse(List<ReferenceCandidateEntity> bm25, List<ReferenceCandidateEntity> vector, int constant) {
@@ -22,7 +22,7 @@ public class ReferenceFusion {
         for (String key : union) {
             var a = lexical.get(key);
             var b = semantic.get(key);
-            var child = a == null ? b.child() : a.child();
+            var child = b != null && b.child().qaId() > 0 ? b.child() : a == null ? b.child() : a.child();
             List<ReferenceCandidateEntity> matches = java.util.stream.Stream.concat(bm25.stream().limit(5), vector.stream().limit(5))
                     .filter(row -> key(row).equals(key)).distinct().toList();
             results.add(new Fused(child.documentId(), child.revision(), child.contextId(), child.ordinal(),
@@ -43,7 +43,7 @@ public class ReferenceFusion {
         }
         return ranks;
     }
-    private String key(ReferenceCandidateEntity row) { return row.documentId() + ":" + row.revision() + ":" + row.contextId(); }
+    private String key(ReferenceCandidateEntity row) { return row.documentId() + ":" + row.revision() + ":" + (row.qaId() > 0 ? "q" + row.qaId() : "c" + row.contextId()); }
     private int rank(Integer value) { return value == null ? 6 : value; }
     private record Ranked(int rank, ReferenceCandidateEntity child) {}
 }

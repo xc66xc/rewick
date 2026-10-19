@@ -338,3 +338,6 @@ html.compact-transparent #root { background: transparent; }
   .mock-interviewer__footer { grid-column: 2; grid-row: 1; }
   .mock-interviewer > :last-child { grid-column: 2; grid-row: 2; align-self: end; }
 }
+
+/* Meshy user-provided static GLB, matching the approved local preview lighting. */
+.mock-interviewer__3d { background-color: #f2eee8; }

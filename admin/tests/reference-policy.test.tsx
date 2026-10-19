@@ -5,7 +5,7 @@ import { ApiClient } from '../src/api'
 import ReferencePolicy from '../src/components/ReferencePolicy'
 import { response } from './fixtures'
 
-const policy = { maxFiles: 20, maxTotalBytes: 104857600, maxChunks: 10000, childTarget: 600, childOverlap: 100, parentTarget: 1400, bm25K1: 1.2, bm25B: 0.75, vectorMinScore: 0.55, rrfConstant: 60, bm25TimeoutMs: 300, maxTermRows: 2000000, cacheEnabled: false, cacheWeightBytes: 8388608, hybridEnabled: true, version: 0 }
+const policy = { maxFiles: 20, maxTotalBytes: 104857600, maxChunks: 10000, childTarget: 600, childOverlap: 100, parentTarget: 1400, bm25K1: 1.2, bm25B: 0.75, vectorMinScore: 0.55, questionVectorMinScore: 0, rrfConstant: 60, bm25TimeoutMs: 300, maxTermRows: 2000000, cacheEnabled: false, cacheWeightBytes: 8388608, hybridEnabled: true, version: 0 }
 
 describe('reference upload policy', () => {
   it('loads user limits and saves capacity in bytes', async () => {
@@ -18,6 +18,8 @@ describe('reference upload policy', () => {
     render(<ReferencePolicy api={new ApiClient('test-token')} />)
     const capacity = await screen.findByLabelText('每用户资料总容量（MB）')
     expect(capacity).toHaveProperty('value', '100')
+    expect(screen.getByLabelText('问题向量相似度阈值')).toHaveProperty('value', '0')
+    expect(screen.getByLabelText('正文向量相似度阈值')).toHaveProperty('value', '0.55')
     await actor.clear(capacity)
     await actor.type(capacity, '50')
     await actor.click(screen.getByRole('button', { name: '保存资料策略' }))

@@ -20,4 +20,5 @@ public record ReferencePolicyResponse(
         @Min(1000) @Max(2000000) int maxTermRows,
         boolean cacheEnabled,
         @Min(1048576) @Max(16777216) long cacheWeightBytes,
-        @Min(0) long version, boolean hybridEnabled) {}
+        @Min(0) long version, boolean hybridEnabled,
+        @DecimalMin("0") @DecimalMax("1") double questionVectorMinScore) {}

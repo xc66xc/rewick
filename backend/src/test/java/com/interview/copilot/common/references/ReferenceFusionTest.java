@@ -27,7 +27,15 @@ class ReferenceFusionTest {
     @Test void fuse_differentContextsInSameDocument_notDeduplicatedByFile() {
         assertThat(fusion.fuse(List.of(hit(1,10),hit(2,20)),List.of(hit(3,30)),60)).hasSize(3);
     }
+    @Test void fuse_differentAnswerContextsOfOneQuestion_returnsOneQa() {
+        var lexical = new ReferenceCandidateEntity("doc",1,1,10,0,"答案开头",0.9,100);
+        var vector = new ReferenceCandidateEntity("doc",1,2,20,1,"答案后半",0.8,100);
+        var result = fusion.fuse(List.of(lexical),List.of(vector),60);
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().matches()).hasSize(2);
+        assertThat(result.getFirst().rrfScore()).isCloseTo(2.0/61,org.assertj.core.data.Offset.offset(1e-12));
+    }
     private ReferenceCandidateEntity hit(long chunk, long parent) {
-        return new ReferenceCandidateEntity("same-document",1,chunk,parent,(int)chunk,"正文",99);
+        return new ReferenceCandidateEntity("same-document",1,chunk,parent,(int)chunk,"正文",99,0);
     }
 }

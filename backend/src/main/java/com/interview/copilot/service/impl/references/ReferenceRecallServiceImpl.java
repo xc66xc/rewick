@@ -19,8 +19,10 @@ public class ReferenceRecallServiceImpl implements ReferenceRecallService {
     private final PlatformEmbeddingClient embedding;
     private final ReferenceAnalyzer analyzer;
     private final TransactionTemplate transaction;
+    private final com.interview.copilot.service.references.ReferenceVectorService vectors;
     public ReferenceRecallServiceImpl(ReferenceHybridMapper mapper, PlatformEmbeddingClient embedding,
-            ReferenceAnalyzer analyzer, PlatformTransactionManager manager) {
+            ReferenceAnalyzer analyzer, PlatformTransactionManager manager, com.interview.copilot.service.references.ReferenceVectorService vectors) {
+        this.vectors = vectors;
         this.mapper = mapper;
         this.embedding = embedding;
         this.analyzer = analyzer;
@@ -37,12 +39,10 @@ public class ReferenceRecallServiceImpl implements ReferenceRecallService {
     }
     public List<ReferenceCandidateEntity> vector(long user, List<ReferenceScopeEntity> scope, String query,
             ReferencePolicy policy, OperationContext context) {
+        if (scope.isEmpty()) return List.of();
         var selection = embedding.selection();
         var vector = embedding.embed(selection, List.of(query), context == null ? null : context.child("llm")).getFirst();
         if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
-        return transaction.execute(status -> {
-            mapper.timeout("1000");
-            return mapper.vector(user, scope, vector.toString(), selection.fingerprint(), policy.vectorMinScore());
-        });
+        return vectors.search(user, scope, vector.toString(), selection.fingerprint(), policy);
     }
 }

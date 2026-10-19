@@ -54,14 +54,14 @@ public class ReferenceContextServiceImpl implements ReferenceContextService {
         try {
             if (policy.cacheEnabled()) {
                 cache.policy().eviction().ifPresent(value -> value.setMaximum(policy.cacheWeightBytes()));
-                for (var item : fused) { var key = key(user, item); var row = cache.getIfPresent(key); if (row != null) rows.put(key, row); }
+                for (var item : fused) { var key = key(user, item, policy.version()); var row = cache.getIfPresent(key); if (row != null) rows.put(key, row); }
             }
-            var missing = fused.stream().filter(item -> !rows.containsKey(key(user, item))).map(ReferenceRecall.Fused::contextId).toList();
+            var missing = fused.stream().filter(item -> !rows.containsKey(key(user, item, policy.version()))).map(ReferenceRecall.Fused::contextId).toList();
             if (!missing.isEmpty()) for (var row : transaction.execute(status -> {
                 mapper.timeout("1000");
                 return mapper.contexts(user, scope, missing);
             })) {
-                var key = new Key(user, row.documentId(), row.revision(), row.contextId());
+                var key = new Key(user, row.documentId(), row.revision(), row.contextId(), policy.version());
                 rows.put(key, row);
                 if (policy.cacheEnabled()) cache.put(key, row);
             }
@@ -72,17 +72,17 @@ public class ReferenceContextServiceImpl implements ReferenceContextService {
             LOG.error("Parent context lookup failed user={}", user, error);
             if (span != null) span.finish("retrieval.parent_lookup", "degraded", Map.of());
         }
-        return pack(user, scope, fused, rows, observation);
+        return pack(user, scope, fused, rows, policy, observation);
     }
     private List<ReferenceExcerptResponse> pack(long user, List<ReferenceScopeEntity> scope, List<ReferenceRecall.Fused> fused,
-            Map<Key, ReferenceContextEntity> rows, OperationContext observation) {
+            Map<Key, ReferenceContextEntity> rows, ReferencePolicy policy, OperationContext observation) {
         var span = observation == null ? null : observation.child("pg");
         List<ReferenceExcerptResponse> result = new ArrayList<>();
         int remaining = 4800;
         for (var item : fused) {
             var document = scope.stream().filter(d -> d.documentId().equals(item.documentId()) && d.revision() == item.revision()).findFirst();
             if (document.isEmpty()) continue;
-            var row = rows.get(key(user, item));
+            var row = rows.get(key(user, item, policy.version()));
             String title = row == null ? "" : ReferenceText.prefix(row.sectionPath(), 158) + "\n";
             String body = row == null ? item.matches().getFirst().text() : row.text();
             String text = title + body;
@@ -111,6 +111,6 @@ public class ReferenceContextServiceImpl implements ReferenceContextService {
         for (int i = shortText.length() - 1; i >= 0; i--) if ("。！？.!?\n".indexOf(shortText.charAt(i)) >= 0) return shortText.substring(0, i + 1);
         return "";
     }
-    private Key key(long user, ReferenceRecall.Fused item) { return new Key(user, item.documentId(), item.revision(), item.contextId()); }
-    private record Key(long user, String document, int revision, long context) {}
+    private Key key(long user, ReferenceRecall.Fused item, long policyVersion) { return new Key(user, item.documentId(), item.revision(), item.contextId(), policyVersion); }
+    private record Key(long user, String document, int revision, long context, long policyVersion) {}
 }

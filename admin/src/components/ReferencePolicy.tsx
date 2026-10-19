@@ -8,13 +8,13 @@ const policySchema = z.object({
   childTarget: z.number().int().min(100).max(640), childOverlap: z.number().int().min(0).max(100), parentTarget: z.number().int().min(400).max(1600),
   bm25K1: z.number().min(0.1).max(3), bm25B: z.number().min(0).max(1), vectorMinScore: z.number().min(0).max(1), rrfConstant: z.number().int().min(1).max(1000),
   bm25TimeoutMs: z.number().int().min(30).max(1000), maxTermRows: z.number().int().min(1000).max(2000000), cacheEnabled: z.boolean(), cacheWeightBytes: z.number().int().min(1048576).max(16777216),
-  hybridEnabled: z.boolean(), version: z.number().int().nonnegative(),
+  questionVectorMinScore: z.number().min(0).max(1), hybridEnabled: z.boolean(), version: z.number().int().nonnegative(),
 }).refine(p => p.childOverlap < p.childTarget && p.parentTarget >= p.childTarget, '重叠必须小于子片段目标，父片段不能小于子片段。')
 type Policy = z.infer<typeof policySchema>
 const numericFields = [
   ['maxFiles', '每用户文件数量', 1, 100, 1], ['maxChunks', '每用户子片段数量', 1, 50000, 1],
   ['childTarget', '子片段目标字符数', 100, 640, 1], ['childOverlap', '子片段重叠字符数', 0, 100, 1], ['parentTarget', '父正文目标字符数', 400, 1600, 1],
-  ['bm25K1', 'BM25 k1', 0.1, 3, 0.1], ['bm25B', 'BM25 b', 0, 1, 0.05], ['vectorMinScore', '向量相似度阈值', 0, 1, 0.01],
+  ['bm25K1', 'BM25 k1', 0.1, 3, 0.1], ['bm25B', 'BM25 b', 0, 1, 0.05], ['questionVectorMinScore', '问题向量相似度阈值', 0, 1, 0.01], ['vectorMinScore', '正文向量相似度阈值', 0, 1, 0.01],
   ['rrfConstant', 'RRF 常数', 1, 1000, 1], ['bm25TimeoutMs', 'BM25 SQL 超时（毫秒）', 30, 1000, 1], ['maxTermRows', '每用户倒排记录上限', 1000, 2000000, 1],
 ] as const
 interface Props { api: ApiClient }
@@ -45,7 +45,7 @@ export default function ReferencePolicy({ api }: Props) {
   }
   return <section aria-label="参考资料混合检索" className={styles.editorCard}>
     <h3>参考资料混合检索</h3>
-    <p className={styles.hint}>只支持 Markdown 和 Word（MD、DOC、DOCX），单文件最大 10 MB。BM25 与向量各 Top5，RRF 融合后 Top3；联网搜索独立配置。切分参数修改只影响之后重建的索引。</p>
+    <p className={styles.hint}>只支持 Markdown 和 Word（MD、DOC、DOCX），单文件最大 10 MB。QA 按问题标题优先召回，问题/正文向量以 2:1 排名融合为向量 Top5，再与 BM25 Top5 做 RRF 保留 Top3；同题去重。问题阈值默认 0，仅为未校准初始值。联网搜索独立配置。切分参数修改只影响之后重建的索引。</p>
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {saved && <p role="status" className={styles.notice}>资料策略已保存。</p>}
     {!policy ? <button type="button" className={styles.secondaryButton} onClick={() => setRevision(value => value + 1)}>{error ? '重新加载策略' : '正在加载策略…'}</button> :

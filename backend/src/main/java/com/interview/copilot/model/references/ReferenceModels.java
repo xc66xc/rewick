@@ -6,7 +6,8 @@ public final class ReferenceModels {
     private ReferenceModels() {}
     public record Block(String text, int headingLevel, int paragraph) {}
     public record Section(int ordinal, Integer parentOrdinal, int level, String title,
-            String path, String introduction, int paragraphStart, int paragraphEnd) {}
+            String path, String introduction, int paragraphStart, int paragraphEnd,
+            Integer qaOrdinal, String questionText) {}
     public record Context(int ordinal, int sectionOrdinal, String text,
             int paragraphStart, int paragraphEnd, boolean split) {}
     public record Chunk(int ordinal, int contextOrdinal, String text,

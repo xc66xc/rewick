@@ -1,3 +1,21 @@
+# Meshy轻微动态验收（2026-10-18，桌面1.7.0）
+
+- 用户新GLB在真实Electron模拟会话中显示，绑定姿态正常，无跑步/走路拉扯；全身构图，保留手插兜姿势和原始贴图瑕疵。
+- 主动会话两次画布采样存在变化，减少动态开启后相同采样保持一致。2D切换销毁画布、WebGL异常重试、结束问答导出通过。
+- 轻微呼吸及整体摇摆，无独立头部/嘴型/眨眼。截图：`frontend/test-results/mock-interviewer-panel.png`。
+- 约9.4MiB/8.5万三角面，Windows和长期性能尚未验证。未打包部署。
+
+---
+
+# Meshy GLB 实际接入验收（2026-10-17，桌面1.6.2）
+
+- 在真实Electron模拟面试中显示用户GLB，正面头肩完整、贴图可见、无头顶或侧面裁切；背景为本地预览相同中性色，PBR环境光来自RoomEnvironment。截图 `frontend/test-results/mock-interviewer-panel.png`、`mock-interview-active.png`、`mock-interviewer-narrow.png`。
+- 2D/3D显式切换、静态说明、上下文异常重试已验证；不将无表情的GLB描述成已实现口型。
+- 760px窄窗口无横向溢出，问答输入与按钮可见。33项专项、构建和Electron替身7场景通过。
+- 限制：原始123MiB/313万三角面，未优化网格和贴图，Windows低配和长时间内存占用未测。当前非最终性能验收，未打包部署。
+
+---
+
 # 本地 3D 面试官首版验收（2026-10-17，桌面 1.6.0）
 
 - 真实 Electron / WebGL 已显示本地 VRM 角色与办公室背景；原始证据 `frontend/test-results/mock-interviewer-panel.png`、`mock-interview-active.png`、`mock-interviewer-narrow.png`。

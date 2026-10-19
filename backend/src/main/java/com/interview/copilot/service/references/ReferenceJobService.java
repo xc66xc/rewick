@@ -9,6 +9,7 @@ public interface ReferenceJobService {
     void indexing(ReferenceModels.Job job);
     boolean prepare(ReferenceModels.Job job, ReferenceModels.Parsed parsed);
     boolean stage(ReferenceModels.Job job, List<ReferenceModels.Chunk> chunks, List<List<Double>> vectors, String fingerprint);
+    boolean stageQuestions(ReferenceModels.Job job, List<ReferenceModels.Section> questions, List<List<Double>> vectors, String fingerprint);
     void publish(ReferenceModels.Job job, ReferenceModels.Parsed parsed, String fingerprint);
     void fail(ReferenceModels.Job job, String error);
     void cleanup();

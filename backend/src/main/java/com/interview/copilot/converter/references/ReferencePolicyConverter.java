@@ -7,9 +7,9 @@ import com.interview.copilot.response.references.ReferencePolicyResponse;
 public final class ReferencePolicyConverter {
     private ReferencePolicyConverter() {}
     public static ReferencePolicy fromRequest(ReferencePolicyRequest value) {
-        return new ReferencePolicy(value.maxFiles(), value.maxTotalBytes(), value.maxChunks(), value.childTarget(), value.childOverlap(), value.parentTarget(), value.bm25K1(), value.bm25B(), value.vectorMinScore(), value.rrfConstant(), value.bm25TimeoutMs(), value.maxTermRows(), value.cacheEnabled(), value.cacheWeightBytes(), value.version(), value.hybridEnabled());
+        return new ReferencePolicy(value.maxFiles(), value.maxTotalBytes(), value.maxChunks(), value.childTarget(), value.childOverlap(), value.parentTarget(), value.bm25K1(), value.bm25B(), value.vectorMinScore(), value.rrfConstant(), value.bm25TimeoutMs(), value.maxTermRows(), value.cacheEnabled(), value.cacheWeightBytes(), value.version(), value.hybridEnabled(), value.questionVectorMinScore());
     }
     public static ReferencePolicyResponse toResponse(ReferencePolicy value) {
-        return new ReferencePolicyResponse(value.maxFiles(), value.maxTotalBytes(), value.maxChunks(), value.childTarget(), value.childOverlap(), value.parentTarget(), value.bm25K1(), value.bm25B(), value.vectorMinScore(), value.rrfConstant(), value.bm25TimeoutMs(), value.maxTermRows(), value.cacheEnabled(), value.cacheWeightBytes(), value.version(), value.hybridEnabled());
+        return new ReferencePolicyResponse(value.maxFiles(), value.maxTotalBytes(), value.maxChunks(), value.childTarget(), value.childOverlap(), value.parentTarget(), value.bm25K1(), value.bm25B(), value.vectorMinScore(), value.rrfConstant(), value.bm25TimeoutMs(), value.maxTermRows(), value.cacheEnabled(), value.cacheWeightBytes(), value.version(), value.hybridEnabled(), value.questionVectorMinScore());
     }
 }

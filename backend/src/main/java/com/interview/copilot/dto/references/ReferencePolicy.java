@@ -20,6 +20,7 @@ public record ReferencePolicy(
         @Min(1000) @Max(2000000) int maxTermRows,
         boolean cacheEnabled,
         @Min(1048576) @Max(16777216) long cacheWeightBytes,
-        @Min(0) long version, boolean hybridEnabled) {
-    public static ReferencePolicy defaults() { return new ReferencePolicy(20, 104857600L, 10000, 600, 100, 1400, 1.2, 0.75, 0.55, 60, 300, 2000000, false, 8388608L, 0, true); }
+        @Min(0) long version, boolean hybridEnabled,
+        @DecimalMin("0") @DecimalMax("1") double questionVectorMinScore) {
+    public static ReferencePolicy defaults() { return new ReferencePolicy(20, 104857600L, 10000, 600, 100, 1400, 1.2, 0.75, 0.55, 60, 300, 2000000, false, 8388608L, 0, true, 0); }
 }

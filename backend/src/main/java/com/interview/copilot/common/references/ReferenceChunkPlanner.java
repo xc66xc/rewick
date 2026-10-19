@@ -31,7 +31,7 @@ public class ReferenceChunkPlanner {
         append(heading, body, stack, sections, contexts, chunks, policy);
         if (chunks.isEmpty()) throw ReferenceErrors.invalid("没有可提取的资料正文。");
         String mode = sections.stream().anyMatch(section -> section.level() > 0) ? "headings" : "paragraphs";
-        return new ReferenceModels.Parsed(List.copyOf(sections), List.copyOf(contexts), List.copyOf(chunks), format, mode);
+        return new ReferenceModels.Parsed(ReferenceQaPlanner.assign(sections), List.copyOf(contexts), List.copyOf(chunks), format, mode);
     }
     private void append(ReferenceModels.Block heading, List<ReferenceModels.Block> body,
             ArrayDeque<ReferenceModels.Section> stack, List<ReferenceModels.Section> sections,
@@ -43,7 +43,7 @@ public class ReferenceChunkPlanner {
         String text = String.join("\n\n", body.stream().map(ReferenceModels.Block::text).toList());
         int end = body.isEmpty() ? heading.paragraph() : body.getLast().paragraph();
         var section = new ReferenceModels.Section(sections.size(), stack.isEmpty() ? null : stack.peek().ordinal(),
-                heading.headingLevel(), ReferenceText.prefix(title, 512), path, text, heading.paragraph(), end);
+                heading.headingLevel(), ReferenceText.prefix(title, 512), path, text, heading.paragraph(), end, null, "");
         if (sections.size() >= 5000) throw ReferenceErrors.invalid("章节数量超过限制。");
         sections.add(section);
         if (section.level() > 0) stack.push(section);

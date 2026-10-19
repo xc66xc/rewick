@@ -52,6 +52,7 @@ public class ReferenceJobServiceImpl implements ReferenceJobService {
         long source = parsed.sections().stream().mapToLong(s -> s.introduction().getBytes(StandardCharsets.UTF_8).length).sum();
         if (bytes > source * 6 + 1048576) throw ReferenceErrors.limit();
         for (var section : parsed.sections()) index.section(job, section);
+        for (var section : parsed.sections()) if (section.qaOrdinal() != null) index.assignQa(job, section);
         for (var context : parsed.contexts()) index.context(job, context);
         return true;
     }
@@ -61,7 +62,10 @@ public class ReferenceJobServiceImpl implements ReferenceJobService {
         if (chunks.size() != vectors.size()) throw ReferenceErrors.invalid("资料向量数量不一致。");
         for (int i = 0; i < chunks.size(); i++) {
             var chunk = chunks.get(i);
-            var terms = analyzer.frequencies(chunk.text());
+            var terms = new java.util.LinkedHashMap<>(analyzer.frequencies(chunk.text()));
+            var question = index.questionText(job, chunk.contextOrdinal());
+            if (question != null) analyzer.frequencies(com.interview.copilot.common.references.ReferenceText.prefix(question, 800))
+                    .forEach((term, count) -> terms.merge(term, count * 2, Integer::sum));
             int length = terms.values().stream().mapToInt(Integer::intValue).sum();
             long id = index.chunk(job, chunk, length);
             if (!terms.isEmpty()) index.terms(job, id, terms);
@@ -72,9 +76,19 @@ public class ReferenceJobServiceImpl implements ReferenceJobService {
         return true;
     }
     @Transactional
+    public boolean stageQuestions(ReferenceModels.Job job, List<ReferenceModels.Section> questions,
+            List<List<Double>> vectors, String fingerprint) {
+        if (!current(job)) return false;
+        if (questions.size() != vectors.size()) throw ReferenceErrors.invalid("问题向量数量不一致。");
+        for (int i = 0; i < questions.size(); i++) index.question(job, questions.get(i).ordinal(), vectors.get(i).toString(), fingerprint);
+        return true;
+    }
+    @Transactional
     public void publish(ReferenceModels.Job job, ReferenceModels.Parsed parsed, String fingerprint) {
         if (!current(job)) return;
         if (index.completeCount(job, fingerprint) != parsed.chunks().size()) throw ReferenceErrors.invalid("资料索引未构建完整。");
+        long required = parsed.sections().stream().filter(s -> !s.questionText().isBlank()).count();
+        if (index.questionCount(job, fingerprint) != required) throw ReferenceErrors.invalid("问题索引未构建完整。");
         index.statistics(job);
         index.activate(job, parsed, parsed.chunks().size(), parsed.contexts().size(), parsed.sections().size());
         mapper.complete(job, parsed.chunks().size());

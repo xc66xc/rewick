@@ -205,7 +205,7 @@ public class ReferenceStorageServiceIntegrationTest {
         assertThat(result.getFirst().score()).isCloseTo(expected,org.assertj.core.data.Offset.offset(1e-10));
     }
     @Test
-    void index_sixtySyntheticCases_keepsTopCapsAndMeasuresWarmQueries() {
+    void index_sixtySyntheticCases_keepsTopCaps() {
         String id=UUID.randomUUID().toString();
         repository.insert(1,id,"cases.md","c".repeat(64),100);
         var text=new StringBuilder("# 测试场景\n");
@@ -217,11 +217,8 @@ public class ReferenceStorageServiceIntegrationTest {
         }
         publish(persistence.jobs.claim(),data,vectors,"a".repeat(64));
         var scope=persistence.hybrid.scope(1,List.of(id));
-        List<Double> elapsed=new java.util.ArrayList<>();
         for(int i=0;i<60;i++) {
-            long start=System.nanoTime();
             var lexical=persistence.hybrid.bm25(1,scope,List.of("q"+i),1.2,0.75);
-            elapsed.add((System.nanoTime()-start)/1_000_000.0);
             var semantic=persistence.hybrid.vector(1,scope,vectors.get(i).toString(),"a".repeat(64),0.55);
             assertThat(lexical).hasSize(1);
             assertThat(semantic).hasSize(1);
@@ -230,10 +227,7 @@ public class ReferenceStorageServiceIntegrationTest {
             assertThat(fused.getFirst().contextId()).isEqualTo(lexical.getFirst().contextId());
         }
         assertThat(persistence.hybrid.bm25(1,scope,List.of("缓存"),1.2,0.75)).hasSize(5);
-        elapsed.sort(Double::compare);
-        java.nio.file.Path report=java.nio.file.Path.of("target/hybrid-benchmark.txt");
-        try { java.nio.file.Files.writeString(report,"Synthetic cases=60; BM25 warm P95 ms="+elapsed.get(56)+"; P99 ms="+elapsed.get(59)+"\n"); }
-        catch(java.io.IOException error) { throw new IllegalStateException(error); }
+
     }
     @Test
     void reindex_activeGeneration_isAvailableAndFailedBuildDoesNotReplaceIt() {
@@ -265,6 +259,7 @@ public class ReferenceStorageServiceIntegrationTest {
     }
 
     @Test
+    @Tag("performance")
     void bm25_capacityBenchmark_recordsCommonTermLatencyWithoutScanningTextInJava() throws Exception {
         if (!Boolean.getBoolean("copilot.references.capacityBenchmark")) return;
         for(int i=0;i<10;i++) {
@@ -300,6 +295,61 @@ public class ReferenceStorageServiceIntegrationTest {
         java.nio.file.Files.writeString(java.nio.file.Path.of("target/hybrid-capacity-benchmark.txt"),"chunks=50000; postings=2000000; queryTerms=32; commonTermMs="+timings+"; protection="+protection+"; protectedMs="+(System.nanoTime()-start)/1_000_000.0+"\n");
     }
 
+    @Test
+    void qa_questionVectorRecallsAnswerWithoutBodySimilarity_andDeduplicatesAcrossContexts() {
+        String id=UUID.randomUUID().toString();
+        repository.insert(1,id,"qa.md","f".repeat(64),100);
+        var data=parsed("# 题库\n## 你还有什么其他问题吗？\n反问团队的工作方式。\n### 技术挑战\n了解当前技术债。\n## 如何实现缓存？\n使用Redis缓存。");
+        var job=persistence.jobs.claim();
+        assertThat(persistence.jobs.prepare(job,data)).isTrue();
+        assertThat(persistence.jobs.stage(job,data.chunks(),java.util.Collections.nCopies(data.chunks().size(),axis(1)),"qa-fingerprint")).isTrue();
+        var questions=data.sections().stream().filter(section -> !section.questionText().isBlank()).toList();
+        assertThat(persistence.jobs.stageQuestions(job,questions,List.of(axis(0),axis(2)),"qa-fingerprint")).isTrue();
+        persistence.jobs.publish(job,data,"qa-fingerprint");
+        var scope=persistence.hybrid.scope(1,List.of(id));
+        var semantic=persistence.hybrid.questions(1,scope,axis(0).toString(),"qa-fingerprint",0.9);
+        assertThat(semantic).hasSize(1);
+        assertThat(persistence.hybrid.vector(1,scope,axis(0).toString(),"qa-fingerprint",0.55)).isEmpty();
+        var lexical=persistence.hybrid.bm25(1,scope,new com.interview.copilot.common.references.ReferenceAnalyzer().query("技术债"),1.2,0.75);
+        assertThat(lexical).hasSize(1);
+        assertThat(lexical.getFirst().qaId()).isEqualTo(semantic.getFirst().qaId());
+        assertThat(lexical.getFirst().contextId()).isNotEqualTo(semantic.getFirst().contextId());
+        var fused=new com.interview.copilot.common.references.ReferenceFusion().fuse(lexical,semantic,60);
+        assertThat(fused).hasSize(1);
+        var answer=persistence.hybrid.contexts(1,scope,List.of(fused.getFirst().contextId())).getFirst();
+        assertThat(answer.text()).contains("工作方式","技术挑战","技术债").doesNotContain("Redis");
+        assertThat(answer.sectionPath()).endsWith("你还有什么其他问题吗？");
+        assertThat(persistence.hybrid.questions(2,scope,axis(0).toString(),"qa-fingerprint",0)).isEmpty();
+        assertThat(persistence.hybrid.questions(1,scope,axis(0).toString(),"other-model",0)).isEmpty();
+        repository.delete(1,id);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM reference_question_vectors",Integer.class)).isZero();
+    }
+    @Test
+    void qa_longAnswerKeepsOneCandidate_andRequiresCompleteQuestionIndex() {
+        String id=UUID.randomUUID().toString();
+        repository.insert(1,id,"long-qa.md","g".repeat(64),100);
+        var data=parsed("## 为什么使用Redis？\n"+"Redis提升读取效率，缓存需要一致性保障。".repeat(150));
+        var job=persistence.jobs.claim();
+        persistence.jobs.prepare(job,data);
+        persistence.jobs.stage(job,data.chunks(),java.util.Collections.nCopies(data.chunks().size(),axis(0)),"qa-fingerprint");
+        assertThatThrownBy(() -> persistence.jobs.publish(job,data,"qa-fingerprint")).isInstanceOf(ApiException.class);
+        assertThat(repository.require(1,id).status()).isNotEqualTo("ready");
+        persistence.jobs.stageQuestions(job,data.sections(),List.of(axis(0)),"qa-fingerprint");
+        persistence.jobs.publish(job,data,"qa-fingerprint");
+        var scope=persistence.hybrid.scope(1,List.of(id));
+        assertThat(persistence.hybrid.vector(1,scope,axis(0).toString(),"qa-fingerprint",0.55)).hasSize(1);
+        var lexical=persistence.hybrid.bm25(1,scope,List.of("redis"),1.2,0.75);
+        assertThat(lexical).hasSize(1);
+        var answer=persistence.hybrid.contexts(1,scope,List.of(lexical.getFirst().contextId())).getFirst();
+        assertThat(answer.split()).isTrue();
+        assertThat(answer.text()).hasSizeLessThanOrEqualTo(1600);
+    }
+    private List<Double> axis(int index) {
+        var vector=new java.util.ArrayList<>(java.util.Collections.nCopies(1024,0.0));
+        vector.set(index,1.0);
+        return vector;
+    }
+
     private ReferenceModels.Parsed parsed(String text) {
         return new com.interview.copilot.common.references.ReferenceChunkPlanner().plan(
                 new com.interview.copilot.common.references.MarkdownSectionParser().parse(text),"md",com.interview.copilot.dto.references.ReferencePolicy.defaults());
@@ -307,6 +357,8 @@ public class ReferenceStorageServiceIntegrationTest {
     private void publish(ReferenceModels.Job job, ReferenceModels.Parsed parsed, java.util.List<java.util.List<Double>> vectors, String fingerprint) {
         if (!persistence.jobs.prepare(job,parsed)) return;
         if (!persistence.jobs.stage(job,parsed.chunks(),vectors,fingerprint)) return;
+        var questions=parsed.sections().stream().filter(section -> !section.questionText().isBlank()).toList();
+        if (!persistence.jobs.stageQuestions(job,questions,java.util.Collections.nCopies(questions.size(),java.util.Collections.nCopies(1024,0.1)),fingerprint)) return;
         persistence.jobs.publish(job,parsed,fingerprint);
     }
 

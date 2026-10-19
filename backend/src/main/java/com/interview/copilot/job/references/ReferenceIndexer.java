@@ -58,7 +58,7 @@ public class ReferenceIndexer {
             stage.set("configuration");
             var selection = embedding.selection();
             stage.set("prepare");
-            if (!jobs.prepare(job, parsed) || !buildBatches(job, parsed, selection, stage)) return;
+            if (!jobs.prepare(job, parsed) || !buildBatches(job, parsed, selection, stage) || !buildQuestions(job, parsed, selection, stage)) return;
             stage.set("configuration");
             if (!selection.fingerprint().equals(embedding.selection().fingerprint()))
                 throw ReferenceErrors.invalid("平台向量模型已变更，请重建资料。");
@@ -79,6 +79,20 @@ public class ReferenceIndexer {
             var vectors = embedding.embed(selection, texts);
             stage.set("write");
             if (!jobs.stage(job, batch, vectors, selection.fingerprint())) return false;
+        }
+        return true;
+    }
+
+    private boolean buildQuestions(ReferenceModels.Job job, ReferenceModels.Parsed parsed,
+            PlatformEmbeddingClient.Selection selection, java.util.concurrent.atomic.AtomicReference<String> stage) {
+        var questions = parsed.sections().stream().filter(s -> !s.questionText().isBlank()).toList();
+        for (int offset = 0; offset < questions.size(); offset += 10) {
+            if (!jobs.renew(job)) return false;
+            var batch = questions.subList(offset, Math.min(offset + 10, questions.size()));
+            stage.set("embedding");
+            var vectors = embedding.embed(selection, batch.stream().map(ReferenceModels.Section::questionText).toList());
+            stage.set("write");
+            if (!jobs.stageQuestions(job, batch, vectors, selection.fingerprint())) return false;
         }
         return true;
     }

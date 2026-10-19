@@ -14,12 +14,39 @@ public interface ReferenceIndexMapper {
     @Delete("DELETE FROM reference_sections WHERE document_id=CAST(#{job.documentId} AS uuid) AND app_users_id=#{job.userId} AND revision=#{job.revision}")
     void clearStaging(@Param("job") ReferenceModels.Job job);
     @Insert("""
-        INSERT INTO reference_sections(document_id,app_users_id,revision,ordinal,parent_section_id,heading_level,title,section_path,introduction,paragraph_start,paragraph_end)
+        INSERT INTO reference_sections(document_id,app_users_id,revision,ordinal,parent_section_id,heading_level,title,section_path,introduction,paragraph_start,paragraph_end,question_text)
         VALUES(CAST(#{job.documentId} AS uuid),#{job.userId},#{job.revision},#{section.ordinal},
         (SELECT id FROM reference_sections WHERE document_id=CAST(#{job.documentId} AS uuid) AND app_users_id=#{job.userId} AND revision=#{job.revision} AND ordinal=#{section.parentOrdinal,jdbcType=INTEGER}),
-        #{section.level},#{section.title},#{section.path},#{section.introduction},#{section.paragraphStart},#{section.paragraphEnd})
+        #{section.level},#{section.title},#{section.path},#{section.introduction},#{section.paragraphStart},#{section.paragraphEnd},#{section.questionText})
         """)
     void section(@Param("job") ReferenceModels.Job job, @Param("section") ReferenceModels.Section section);
+    @Update("""
+        UPDATE reference_sections s SET qa_section_id=q.id FROM reference_sections q
+        WHERE s.document_id=CAST(#{job.documentId} AS uuid) AND s.app_users_id=#{job.userId}
+        AND s.revision=#{job.revision} AND s.ordinal=#{section.ordinal}
+        AND q.document_id=s.document_id AND q.app_users_id=s.app_users_id AND q.revision=s.revision AND q.ordinal=#{section.qaOrdinal}
+        """)
+    void assignQa(@Param("job") ReferenceModels.Job job, @Param("section") ReferenceModels.Section section);
+    @Insert("""
+        INSERT INTO reference_question_vectors(section_id,app_users_id,document_id,revision,fingerprint,embedding)
+        SELECT id,app_users_id,document_id,revision,#{fingerprint},CAST(#{vector} AS vector) FROM reference_sections
+        WHERE document_id=CAST(#{job.documentId} AS uuid) AND app_users_id=#{job.userId}
+        AND revision=#{job.revision} AND ordinal=#{ordinal} AND question_text<>''
+        """)
+    void question(@Param("job") ReferenceModels.Job job, @Param("ordinal") int ordinal,
+            @Param("vector") String vector, @Param("fingerprint") String fingerprint);
+    @Select("""
+        SELECT COALESCE(q.question_text,'') FROM reference_contexts x
+        JOIN reference_sections s ON s.id=x.section_id LEFT JOIN reference_sections q ON q.id=s.qa_section_id
+        WHERE x.document_id=CAST(#{job.documentId} AS uuid) AND x.app_users_id=#{job.userId}
+        AND x.revision=#{job.revision} AND x.ordinal=#{ordinal}
+        """)
+    String questionText(@Param("job") ReferenceModels.Job job, @Param("ordinal") int ordinal);
+    @Select("""
+        SELECT count(*) FROM reference_question_vectors WHERE document_id=CAST(#{job.documentId} AS uuid)
+        AND app_users_id=#{job.userId} AND revision=#{job.revision} AND fingerprint=#{fingerprint}
+        """)
+    int questionCount(@Param("job") ReferenceModels.Job job, @Param("fingerprint") String fingerprint);
     @Insert("""
         INSERT INTO reference_contexts(section_id,document_id,app_users_id,revision,ordinal,text,paragraph_start,paragraph_end,is_split)
         SELECT id,document_id,app_users_id,revision,#{context.ordinal},#{context.text},#{context.paragraphStart},#{context.paragraphEnd},#{context.split}
@@ -27,8 +54,8 @@ public interface ReferenceIndexMapper {
         """)
     void context(@Param("job") ReferenceModels.Job job, @Param("context") ReferenceModels.Context context);
     @Select(value="""
-        INSERT INTO reference_chunks(document_id,app_users_id,revision,ordinal,text,page_start,page_end,context_id,paragraph_start,paragraph_end,token_length,analyzer_version)
-        SELECT document_id,app_users_id,revision,#{chunk.ordinal},#{chunk.text},0,0,id,#{chunk.paragraphStart},#{chunk.paragraphEnd},#{length},1
+        INSERT INTO reference_chunks(document_id,app_users_id,revision,ordinal,text,page_start,page_end,context_id,paragraph_start,paragraph_end,token_length,analyzer_version,qa_section_id)
+        SELECT document_id,app_users_id,revision,#{chunk.ordinal},#{chunk.text},0,0,id,#{chunk.paragraphStart},#{chunk.paragraphEnd},#{length},1,(SELECT qa_section_id FROM reference_sections WHERE id=reference_contexts.section_id)
         FROM reference_contexts WHERE document_id=CAST(#{job.documentId} AS uuid) AND app_users_id=#{job.userId} AND revision=#{job.revision} AND ordinal=#{chunk.contextOrdinal}
         RETURNING id
         """, affectData=true)
@@ -59,7 +86,7 @@ public interface ReferenceIndexMapper {
         """)
     int completeCount(@Param("job") ReferenceModels.Job job, @Param("fingerprint") String fingerprint);
     @Update("""
-        UPDATE reference_documents SET revision=#{job.revision},status='ready',index_status='complete',index_error='',error='',splitter_version=1,
+        UPDATE reference_documents SET revision=#{job.revision},status='ready',index_status='complete',index_error='',error='',splitter_version=2,
         format=#{parsed.format},heading_mode=#{parsed.headingMode},page_count=0,chunk_count=#{chunks},context_count=#{contexts},section_count=#{sections},updated_at=LOCALTIMESTAMP(6)
         WHERE id=CAST(#{job.documentId} AS uuid) AND app_users_id=#{job.userId} AND desired_revision=#{job.revision}
         """)

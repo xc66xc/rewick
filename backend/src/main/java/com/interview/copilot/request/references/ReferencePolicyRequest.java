@@ -20,7 +20,8 @@ public record ReferencePolicyRequest(
         @Min(1000) @Max(2000000) int maxTermRows,
         boolean cacheEnabled,
         @Min(1048576) @Max(16777216) long cacheWeightBytes,
-        @Min(0) long version, boolean hybridEnabled) {
+        @Min(0) long version, boolean hybridEnabled,
+        @DecimalMin("0") @DecimalMax("1") double questionVectorMinScore) {
     @jakarta.validation.constraints.AssertTrue(message = "重叠必须小于子片段目标长度，父片段目标不能小于子片段。")
     public boolean isLengthsValid() { return childOverlap < childTarget && parentTarget >= childTarget; }
 }

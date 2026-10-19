@@ -77,6 +77,24 @@ class ReferenceParserTest {
         assertThatThrownBy(() -> markdown(" \n")).isInstanceOf(ApiException.class);
         assertThatThrownBy(() -> markdown("中".repeat(2_000_001))).isInstanceOf(ApiException.class);
     }
+    @Test void qa_nestedAnswerSections_shareQuestionButNextQuestionIsIndependent() throws Exception {
+        var result = markdown("# 面试题库\n## 你还有什么其他问题吗？\n可以反问团队。\n### 技术挑战\n询问技术债。\n## 为什么离职？\n说明发展目标。");
+        assertThat(result.sections().get(1).questionText()).startsWith("你还有什么其他问题吗？").contains("面试题库");
+        assertThat(result.sections().get(2).qaOrdinal()).isEqualTo(1);
+        assertThat(result.sections().get(2).questionText()).isEmpty();
+        assertThat(result.sections().get(3).qaOrdinal()).isEqualTo(3);
+    }
+    @Test void qa_broadHeadingsAndCode_doNotBecomeQuestionUnits() throws Exception {
+        var result = markdown("# 项目经验\n项目描述。\n## Redis\n```text\n# 如何实现缓存？\n```\n技术原理。");
+        assertThat(result.sections()).allSatisfy(section -> {
+            assertThat(section.qaOrdinal()).isNull();
+            assertThat(section.questionText()).isEmpty();
+        });
+    }
+    @Test void qa_numberedQuestionWithoutQuestionMark_isRecognized() throws Exception {
+        var result = markdown("## Q1：Redis持久化\n使用AOF。");
+        assertThat(result.sections().getFirst().questionText()).startsWith("Q1：Redis持久化");
+    }
     private com.interview.copilot.model.references.ReferenceModels.Parsed markdown(String value) throws Exception {
         Path file = directory.resolve("sample.md"); Files.writeString(file, value);
         return parser.parse(file, "sample.md", ReferencePolicy.defaults());

@@ -36,7 +36,7 @@ class ReferenceParallelServiceTest {
     @Test void recall_vectorFailure_keepsBm25Branch() {
         var recall = org.mockito.Mockito.mock(ReferenceRecallService.class);
         org.mockito.Mockito.when(recall.bm25(org.mockito.ArgumentMatchers.anyLong(),org.mockito.ArgumentMatchers.anyList(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.any()))
-                .thenReturn(List.of(new ReferenceCandidateEntity("doc",1,1,1,1,"命中正文",1)));
+                .thenReturn(List.of(new ReferenceCandidateEntity("doc",1,1,1,1,"命中正文",1,0)));
         org.mockito.Mockito.when(recall.vector(org.mockito.ArgumentMatchers.anyLong(),org.mockito.ArgumentMatchers.anyList(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.isNull()))
                 .thenThrow(new IllegalStateException("fake provider unavailable"));
         var service = new ReferenceParallelServiceImpl(recall);

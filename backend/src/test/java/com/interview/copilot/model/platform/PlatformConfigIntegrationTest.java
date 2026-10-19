@@ -262,7 +262,7 @@ public class PlatformConfigIntegrationTest {
                                 "/tmp/copilot-sql/08_server_local_time.sql",
                                 "-f",
                                 "/tmp/copilot-sql/09_pg_references.sql",
-                                "-f", "/tmp/copilot-sql/25_reference_hybrid.sql",
+                                "-f", "/tmp/copilot-sql/25_reference_hybrid.sql", "-f", "/tmp/copilot-sql/28_reference_qa.sql",
                                 "-f",
                                 "/tmp/copilot-sql/10_time_wallet.sql",
                                 "-f",
