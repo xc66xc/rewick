@@ -57,7 +57,7 @@ export default function ResumeEditor({ library, bridge, onLibrary, preferredId }
   /* v30 资料库布局:左列简历列表(选中灰块) + 底部虚线「新增简历」伪列表项,右侧编辑卡 + 原版右侧说明栏 */
   return <div className="grid h-full grid-cols-[270px_minmax(0,1fr)_240px] gap-5 max-[1060px]:grid-cols-[220px_minmax(0,1fr)_210px] max-[820px]:grid-cols-[minmax(0,1fr)]">
     <aside className="flex min-w-0 flex-col gap-1" aria-label="简历列表">
-      {library?.resumes.map(record => {
+      {library?.resumes.slice().sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).map(record => {
         const active = context.id === record.id
         return <button key={record.id} type="button" onClick={() => select(record.id)} aria-current={active ? 'true' : undefined} title={record.name}
           className={cn('flex w-full items-center gap-2.5 rounded-control px-3 py-2.5 text-left transition-colors', active ? 'bg-border text-text-primary' : 'text-text-regular hover:bg-subtle')}>
