@@ -66,12 +66,13 @@ describe('web search settings and sources', () => {
     expect(screen.queryByRole('button', { name: /打开网页来源/ })).toBeNull()
   })
 
-  it.each([false, true])('shows search failure without hiding the answer in production (compact=%s)', compact => {
+  it.each([false, true])('hides search diagnostics while keeping the answer in production (compact=%s)', compact => {
     vi.stubEnv('DEV', false)
     render(<AnswerCard index={1} compact={compact} answer={{ id: 'one', question: '问题', text: '可用的口语回答', createdAt: '2026-10-13T02:00:00Z', status: 'complete', retrieval: {
       status: 'degraded', excerpts: [], web: { status: 'degraded', message: '联网搜索超时' }, message: '联网搜索超时',
     } }} />)
-    expect(screen.getByText('联网搜索失败，本次继续回答')).toBeTruthy()
+    expect(screen.queryByText('联网搜索失败，本次继续回答')).toBeNull()
+    expect(screen.queryByText('联网搜索超时')).toBeNull()
     expect(screen.getByText('可用的口语回答')).toBeTruthy()
     expect(screen.queryByText('本次发送内容')).toBeNull()
   })
