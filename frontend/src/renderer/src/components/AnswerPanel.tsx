@@ -1,5 +1,5 @@
 import { useCompactAnswerScroll } from '../hooks/useCompactAnswerScroll'
-import { ArrowDown, ChatTeardropText, Sparkle } from '@phosphor-icons/react'
+import { ArrowDown, ArrowUp, ChatTeardropText, Sparkle } from '@phosphor-icons/react'
 import type { Settings } from '../../../shared/types'
 import { answerModelLabel } from '../hooks/serviceChoices'
 import type { SessionController } from '../hooks/useSession'
@@ -15,7 +15,8 @@ interface AnswerPanelProps { session: QuestionComposerController & Pick<SessionC
 export default function AnswerPanel({ session, settings, compact = false }: AnswerPanelProps) {
   const segment = session.record.segments.at(-1)
   const hasTranscript = Boolean(segment?.text.trim())
-  const { viewport, handleScroll, followLatest } = useCompactAnswerScroll(compact, session.record.answers, compact ? segment?.text : undefined)
+  const { viewport, handleScroll, followLatest } = useCompactAnswerScroll(compact, session.record.answers, compact ? segment?.text : undefined, session.record.id)
+  const answers = compact ? session.record.answers.slice().reverse() : session.record.answers
   const model = answerModelLabel(settings)
   function handleLatestAnswer() {
     if (compact) { followLatest(); return }
@@ -33,14 +34,14 @@ export default function AnswerPanel({ session, settings, compact = false }: Answ
     <div className="min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]" ref={viewport} onScroll={handleScroll} role="region" aria-label="回答与面试信息" tabIndex={0}>
       <div className="flow-root min-h-full">
       {!compact && <SessionContextDetails record={session.record} current={settings} />}
-      {session.record.answers.length ? session.record.answers.map((answer, index) => <AnswerCard key={answer.id} answer={answer} index={index + 1} compact={compact} />)
+      {compact && <CompactTranscript recordId={session.record.id} segment={segment} answer={session.record.answers.at(-1)} />}
+      {answers.length ? answers.map((answer, index) => <AnswerCard key={answer.id} answer={answer} index={compact ? answers.length - index : index + 1} compact={compact} />)
         : compact ? !hasTranscript && <div className="flex min-h-full flex-col justify-center gap-3 px-6 py-8 text-text-secondary"><h2 id="answer-title" className="text-lg font-semibold text-text-primary">准备好，听下一个问题。</h2><p className="text-sm leading-relaxed">开始转写，或在下方输入问题。<br />生成后，回答会显示在这里。</p></div> : <div className="flex min-h-full flex-col"><EmptyState className="m-auto" tone="success" icon={<ChatTeardropText weight="duotone" />}
           title="下一句，用你的话回答。" description="结合当前问题与你的真实经历，生成可以直接说出口的口语回答。" />
         </div>}
-      {compact && <CompactTranscript recordId={session.record.id} segment={segment} answer={session.record.answers.at(-1)} />}
       </div>
     </div>
-    {compact && (session.record.answers.length > 0 || hasTranscript) && <div className="compact-chat__latest flex shrink-0 justify-end"><Button variant="quiet" size="sm" className="text-xs" onClick={handleLatestAnswer} aria-label="查看最新回答"><ArrowDown aria-hidden="true" />最新回答</Button></div>}
+    {compact && (session.record.answers.length > 0 || hasTranscript) && <div className="compact-chat__latest flex shrink-0 justify-end"><Button variant="quiet" size="sm" className="text-xs" onClick={handleLatestAnswer} aria-label="查看最新回答"><ArrowUp aria-hidden="true" />最新回答</Button></div>}
     <QuestionComposer session={session} compact={compact} />
   </section>
 }

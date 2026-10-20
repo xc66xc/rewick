@@ -47,13 +47,40 @@ describe('answer scrolling', () => {
     expect(screen.getByRole('heading', { name: final.text })).toBeTruthy()
     expect(screen.getByRole('heading', { name: '怎么处理穿透' })).toBeTruthy()
   })
-  it('follows live transcript growth only while the compact reader is at the bottom', () => {
+  it('puts newest compact turns and pending speech first without changing chronological records', () => {
+    const first = answer('one', '旧回答', 'complete')
+    const second = answer('two', '新回答')
+    const original = [first, second]
+    const { viewport, update } = setup(original)
+    update(original, true, [{ id: 'live', text: '最新转写', startMs: 0, isFinal: false }])
+    const turns = viewport.querySelectorAll('[data-answer-id], [data-transcript-id]')
+    expect(Array.from(turns).map(turn => turn.getAttribute('aria-label'))).toEqual(['当前转写问题', '回答 2', '回答 1'])
+    expect(original.map(value => value.id)).toEqual(['one', 'two'])
+    update(original, false)
+    expect(Array.from(viewport.querySelectorAll('article')).map(turn => turn.getAttribute('aria-label'))).toEqual(['回答 1', '回答 2'])
+  })
+
+  it('anchors the old turn when a new turn is prepended above the reader', () => {
+    const first = answer('one', '旧回答', 'complete')
+    const { viewport, update } = setup([first])
+    update([first], true)
+    const old = screen.getByRole('article', { name: '回答 1' })
+    vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 600, 400))
+    const bounds = vi.spyOn(old, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, -100, 600, 900))
+    viewport.scrollTop = 100
+    fireEvent.scroll(viewport)
+    bounds.mockReturnValue(new DOMRect(0, 200, 600, 900))
+    update([first, answer('two', '最新回答')], true)
+    expect(viewport.scrollTop).toBe(400)
+  })
+
+  it('follows live transcript growth only while the compact reader is at the top', () => {
     const { viewport, update } = setup([])
     Object.defineProperty(viewport, 'clientHeight', { configurable: true, value: 400 })
     Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 900 })
     const segment: TranscriptSegment = { id: 'live', text: '请介绍', startMs: 0, isFinal: false }
     update([], true, [segment])
-    expect(viewport.scrollTop).toBe(500)
+    expect(viewport.scrollTop).toBe(0)
     viewport.scrollTop = 100; fireEvent.scroll(viewport)
     Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 1200 })
     update([], true, [{ ...segment, text: '请介绍你的项目' }])
@@ -86,22 +113,22 @@ describe('answer scrolling', () => {
     Object.defineProperty(viewport, 'clientHeight', { configurable: true, value: 400 })
     Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 1000 })
     update([first], true)
-    expect(viewport.scrollTop).toBe(600)
+    expect(viewport.scrollTop).toBe(0)
     Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 1400 })
     update([{ ...first, text: '正在生成。新内容。' }], true)
-    expect(viewport.scrollTop).toBe(1000)
+    expect(viewport.scrollTop).toBe(0)
     viewport.scrollTop = 200
     fireEvent.scroll(viewport)
     update([{ ...first, text: '继续生成。' }], true)
     expect(viewport.scrollTop).toBe(200)
     await user.click(screen.getByRole('button', { name: '查看最新回答' }))
-    expect(viewport.scrollTop).toBe(1000)
+    expect(viewport.scrollTop).toBe(0)
     Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 1800 })
     update([{ ...first, text: '最后一段。', status: 'complete' }], true)
-    expect(viewport.scrollTop).toBe(1400)
+    expect(viewport.scrollTop).toBe(0)
   })
 
-  it('keeps the reading position as a streaming answer grows, even when initially at the bottom', () => {
+  it('keeps normal reading position as a streaming answer grows, even when initially at the bottom', () => {
     const { viewport, update } = setup([answer('one', '第一段回答。')])
     Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 1000 })
     Object.defineProperty(viewport, 'clientHeight', { configurable: true, value: 400 })
@@ -126,7 +153,7 @@ describe('answer scrolling', () => {
     update(next)
     expect(viewport.scrollTop).toBe(180)
     update(next, true)
-    expect(viewport.scrollTop).toBe(2000)
+    expect(viewport.scrollTop).toBe(0)
   })
 
   it('moves to the latest answer start only when requested and keeps that position during later output', async () => {

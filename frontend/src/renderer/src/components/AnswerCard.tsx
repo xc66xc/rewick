@@ -20,11 +20,12 @@ export default function AnswerCard({ answer, index, compact = false }: AnswerCar
     try { await navigator.clipboard.writeText(answer.text); setCopied(true); setCopyError(false) }
     catch { setCopyError(true) }
   }
-  return <article className={cn(compact ? 'compact-answer' : 'border-b border-border p-5 animate-fade-in wide:px-8 wide:py-6')} aria-label={`回答 ${index}`}>
-    <header className={cn(compact ? 'compact-answer__question' : 'mb-5 flex items-start gap-3')}>
+  const question = <header className={cn(compact ? 'compact-answer__question mt-4' : 'mb-5 flex items-start gap-3')}>
       {compact ? <p className="text-xs font-medium text-text-secondary">当前问题</p> : <Badge className="border-transparent bg-success-subtle font-mono text-[10px] text-success">Q{String(index).padStart(2, '0')}</Badge>}
       <h3 className={cn('font-semibold whitespace-pre-wrap [overflow-wrap:anywhere]', compact ? 'compact-answer__question-bubble' : 'text-sm leading-[1.75]')}>{answer.question}</h3>
     </header>
+  return <article data-answer-id={answer.id} className={cn(compact ? 'compact-answer' : 'border-b border-border p-5 animate-fade-in wide:px-8 wide:py-6')} aria-label={`回答 ${index}`}>
+    {!compact && question}
     {import.meta.env.DEV && !compact && <ModelInputDetails modelInput={answer.modelInput} pending={answer.status === 'streaming'} />}
     {compact && <p className="compact-answer__label">口语回答</p>}
     <div className={compact ? 'compact-answer__reply' : undefined}>
@@ -36,6 +37,7 @@ export default function AnswerCard({ answer, index, compact = false }: AnswerCar
     {answer.error && <p className={inlineErrorClass} role="alert">{answer.error}</p>}
     {copyError && <p className={inlineErrorClass}>无法访问剪贴板，请选择文字复制。</p>}
     </div>
+    {compact && question}
     {import.meta.env.DEV && compact && <Collapse summary="本次发送内容" className="compact-answer__details mt-2 border-0 px-0 py-1"><ModelInputDetails modelInput={answer.modelInput} pending={answer.status === 'streaming'} /></Collapse>}
     {(import.meta.env.DEV || answer.retrieval?.web) && answer.retrieval && <ReferenceSources retrieval={answer.retrieval} />}
   </article>

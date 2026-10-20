@@ -8,6 +8,8 @@ const normalized = (text: string) => text.trim().replace(/\s+/g, ' ')
 export default function CompactTranscript({ segment, answer, recordId }: CompactTranscriptProps) {
   const observed = useRef<{ recordId: string; answerId?: string }>({ recordId })
   const [submitted, setSubmitted] = useState<{ recordId: string; segmentId: string } | null>(null)
+  const newSubmission = answer && observed.current.answerId !== answer.id && segment?.text.trim()
+    && normalized(answer.question).endsWith(normalized(segment.text))
   useLayoutEffect(() => {
     if (observed.current.recordId !== recordId) {
       observed.current = { recordId }
@@ -20,8 +22,8 @@ export default function CompactTranscript({ segment, answer, recordId }: Compact
       setSubmitted({ recordId, segmentId: segment.id })
     }
   }, [answer, segment, recordId])
-  if (!segment?.text.trim() || submitted?.recordId === recordId && submitted.segmentId === segment.id) return null
-  return <section aria-label="当前转写问题" className="compact-answer">
+  if (!segment?.text.trim() || newSubmission || submitted?.recordId === recordId && submitted.segmentId === segment.id) return null
+  return <section data-transcript-id={segment.id} aria-label="当前转写问题" className="compact-answer">
     <header className="compact-answer__question">
       <p className="text-xs font-medium text-text-secondary">当前问题</p>
       <h3 aria-live="polite" aria-atomic="true" className="compact-answer__question-bubble whitespace-pre-wrap [overflow-wrap:anywhere]">{segment.text}</h3>
