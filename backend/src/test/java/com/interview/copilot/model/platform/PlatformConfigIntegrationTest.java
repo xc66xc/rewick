@@ -109,6 +109,20 @@ public class PlatformConfigIntegrationTest {
     }
 
     @Test
+    void publish_thinkingModes_roundTripsThroughJsonbAndIndependentModels() {
+        var source = PlatformConfigFixture.config(0, "database-thinking-fixture-secret");
+        var models = source.models().stream().map(model -> new PlatformConfig.Model(model.id(), model.name(),
+                model.providerId(), model.model(), model.enabled(), model.maxOutputTokens(),
+                model.id().equals("fast") ? "disabled" : "enabled", "bailian")).toList();
+        service.publish(1, new PlatformConfig(0, source.providers(), models, source.defaultModelId(), source.asr()));
+        var reloaded = new PlatformConfigServiceImpl(mapper, codec, validator, properties, audit);
+        assertThat(reloaded.snapshot().llm("fast").config().getThinkingMode()).isEqualTo("disabled");
+        assertThat(reloaded.snapshot().llm("careful").config().getThinkingMode()).isEqualTo("enabled");
+        assertThat(jdbc.queryForObject("SELECT payload::text FROM platform_config WHERE id=1", String.class))
+                .contains("thinkingMode", "thinkingProtocol").doesNotContain("database-thinking-fixture-secret");
+    }
+
+    @Test
     void publish_sameVersionConcurrently_commitsExactlyOneVersionAndAudit() throws Exception {
         CountDownLatch start = new CountDownLatch(1);
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {

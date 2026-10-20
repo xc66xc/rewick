@@ -19,6 +19,57 @@ function setup() {
   return { bodies, view, actor: userEvent.setup() }
 }
 describe('unified model service forms', () => {
+  it('saves thinking mode and protocol per model and restores them when reopening', async () => {
+    const { actor, bodies } = setup()
+    await actor.click(await screen.findByRole('button', { name: '编辑配置' }))
+    expect(screen.getByLabelText('思考模式')).toHaveProperty('value', 'default')
+    await actor.selectOptions(screen.getByLabelText('思考模式'), 'enabled')
+    await actor.selectOptions(screen.getByLabelText('思考参数协议'), 'bailian')
+    await actor.click(screen.getByRole('button', { name: /^保存$/ }))
+    await waitFor(() => expect(bodies).toHaveLength(1))
+    expect(bodies[0].models[0]).toMatchObject({ thinkingMode: 'enabled', thinkingProtocol: 'bailian' })
+    await actor.click(screen.getByRole('button', { name: '取消编辑' }))
+    expect(screen.getByText('开启 · 阿里云百炼')).toBeTruthy()
+    await actor.click(screen.getByRole('button', { name: '编辑配置' }))
+    expect(screen.getByLabelText('思考模式')).toHaveProperty('value', 'enabled')
+    expect(screen.getByLabelText('思考参数协议')).toHaveProperty('value', 'bailian')
+    await actor.selectOptions(screen.getByLabelText('思考模式'), 'default')
+    expect(screen.queryByLabelText('思考参数协议')).toBeNull()
+    await actor.click(screen.getByRole('button', { name: /^保存$/ }))
+    await waitFor(() => expect(bodies).toHaveLength(2))
+    expect(bodies[1].models[0].thinkingMode).toBe('default')
+  })
+  it('requires an explicit protocol for a gateway when thinking is enabled', async () => {
+    const { actor, bodies } = setup()
+    await actor.click(await screen.findByRole('button', { name: '编辑配置' }))
+    await actor.selectOptions(screen.getByLabelText('思考模式'), 'enabled')
+    await actor.click(screen.getByRole('button', { name: /^保存$/ }))
+    expect(bodies).toHaveLength(0)
+    expect((screen.getByLabelText('思考参数协议') as HTMLSelectElement).checkValidity()).toBe(false)
+  })
+  it('tests unsaved thinking settings without publishing configuration', async () => {
+    const tests: { config: typeof config; capability: string }[] = []
+    const writes: unknown[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, options: RequestInit) => {
+      if (url.endsWith('/admin/config/test')) {
+        tests.push(JSON.parse(String(options.body)))
+        return response({ success: true, message: '测试通过', latencyMs: 10 })
+      }
+      if (options.method === 'PUT') writes.push(options.body)
+      return response(config)
+    }))
+    const actor = userEvent.setup()
+    render(<ConfigPage api={new ApiClient('token')} />)
+    await actor.click(await screen.findByRole('button', { name: '编辑配置' }))
+    await actor.selectOptions(screen.getByLabelText('思考模式'), 'disabled')
+    await actor.selectOptions(screen.getByLabelText('思考参数协议'), 'bailian')
+    await actor.click(screen.getByRole('button', { name: /^测试连接$/ }))
+    await waitFor(() => expect(tests).toHaveLength(1))
+    expect(tests[0].config.models[0]).toMatchObject({ thinkingMode: 'disabled', thinkingProtocol: 'bailian' })
+    expect(tests[0].capability).toBe('llm')
+    expect(writes).toHaveLength(0)
+    await screen.findByText('测试通过，未保存配置。')
+  })
   it('filters summaries and cancels editing without saving', async () => {
     const { actor, bodies } = setup()
     await screen.findByRole('article', { name: '服务 快速模型' })

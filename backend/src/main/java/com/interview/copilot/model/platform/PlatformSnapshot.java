@@ -186,6 +186,8 @@ public final class PlatformSnapshot {
         endpoint(providers.get(model.providerId()), endpoint);
         endpoint.setModel(model.model());
         endpoint.setMaxOutputTokens(model.maxOutputTokens());
+        endpoint.setThinkingMode(model.thinkingMode());
+        endpoint.setThinkingProtocol(model.thinkingProtocol());
         endpoint.setMaxConcurrent(policy.concurrentLlm());
         endpoint.setIdleTimeoutSeconds(policy.llmIdleSeconds());
         endpoint.setTotalTimeoutSeconds(policy.llmTotalSeconds());

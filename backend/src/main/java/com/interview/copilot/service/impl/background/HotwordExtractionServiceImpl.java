@@ -41,7 +41,7 @@ public class HotwordExtractionServiceImpl implements HotwordExtractionService {
         try (var permit = concurrency.acquire(user, config.getMaxConcurrent())) {
             String source = sources.read(user, resumeId, targetId, referenceIds);
             try {
-                var body = LlmRequestPolicy.request(json.valueToTree(Map.of(
+                var body = LlmRequestPolicy.auxiliary(json.valueToTree(Map.of(
                         "model", config.getModel(), "stream", false, "temperature", 0,
                         "max_tokens", Math.min(2048, config.getMaxOutputTokens()),
                         "messages", List.of(

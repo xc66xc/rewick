@@ -1,5 +1,13 @@
 # 单机部署（复用现有 PostgreSQL）
 
+## 2026-10-20 回答模型思考模式发布
+
+后端2.1.0-SNAPSHOT和管理端2.1.0已发布，无DDL；只重建后端容器，管理端热更新并同步重建镜像，两库/管理/监控容器未重启。JAR及运行容器SHA256 `94248d6a4c9b3c7a13275948c515feb29d59d6f68a9806b6216452583e8da1b3`，管理JS `index-DPXFSWPb.js`。服务器TLS9项验收和公网8080入口内容校验通过，健康/Prom均UP。原平台/模拟/参考策略指纹未变；临时5分钟维护凭证已撤销，无真实AI供应商调用。
+
+发布文件和验收结果：`releases/thinking-20261020/`。回滚材料`releases/before-thinking-20261020/`（目录700/敏感文件600）含两库dump、旧JAR、私有配置、Compose、Nginx和静态站点；旧镜像标签`interview-copilot-backend:before-thinking-20261020`及`interview-copilot-admin:before-thinking-20261020`。静态权限首次验收403后修正为公开目录755/文件644，并重建管理镜像，当前200；后续发布脚本已明确umask022，备份继续umask077。
+
+回滚旧后端前先备份最新配置并移除models新增thinkingMode/thinkingProtocol字段，防止旧解析器拒绝。保留其他管理员变更，不要恢复整库。恢复旧JAR/镜像后只重建backend，管理静态恢复旧版本；无数据库结构回滚。桌面无需更新。
+
 ## 2026-10-17 2D AI 模拟面试发布
 
 已发布后端1.2.0-SNAPSHOT及管理端1.1.0，手工执行SQL27并授予copilot_backend新增10表/账本序列权限。仅重建backend容器；管理静态先上传哈希资源再原子替换index，Nginx三个入口新增 `/ws/v1/mock-interviews/` Upgrade代理并热重载，管理端镜像同步重建供后续启动。两库、Prometheus和管理容器未重启。

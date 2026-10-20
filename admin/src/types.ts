@@ -16,7 +16,7 @@ export interface Page<T> { items: T[]; total: number; page: number; size: number
 export type Capability = 'llm' | 'asr' | 'embedding' | 'web-search'
 const providerSchema = z.object({ id: z.string(), name: z.string(), kind: z.enum(['llm', 'asr', 'embedding', 'web-search']), url: z.string(), enabled: z.boolean(), hasApiKey: z.boolean().optional() })
 export interface Provider extends z.infer<typeof providerSchema> { apiKey?: string }
-const modelSchema = z.object({ id: z.string(), name: z.string(), providerId: z.string(), model: z.string(), enabled: z.boolean(), maxOutputTokens: z.number() })
+const modelSchema = z.object({ id: z.string(), name: z.string(), providerId: z.string(), model: z.string(), enabled: z.boolean(), maxOutputTokens: z.number(), thinkingMode: z.enum(['default', 'disabled', 'enabled']).optional(), thinkingProtocol: z.enum(['none', 'bailian', 'deepseek']).optional() })
 export type Model = z.infer<typeof modelSchema>
 export const searchDepthSchema = z.enum(['advanced', 'basic', 'fast', 'ultra-fast'])
 export const searchDepthNames: Record<z.infer<typeof searchDepthSchema>, string> = { advanced: '高级搜索', basic: '基础搜索', fast: '快速搜索', 'ultra-fast': '极速搜索' }

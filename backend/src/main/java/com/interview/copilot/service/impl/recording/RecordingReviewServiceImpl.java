@@ -36,7 +36,7 @@ public class RecordingReviewServiceImpl implements RecordingReviewService {
         var config = runtime.snapshot().llm(null).config();
         try (var permit = concurrency.acquire(userId, Math.min(4, config.getMaxConcurrent()))) {
             try {
-                var body = LlmRequestPolicy.request(json.valueToTree(Map.of(
+                var body = LlmRequestPolicy.auxiliary(json.valueToTree(Map.of(
                         "model", config.getModel(), "stream", false, "temperature", 0.3,
                         "max_tokens", Math.min(8192, config.getMaxOutputTokens()), "messages", List.of(
                                 Map.of("role", "system", "content", instruction()),

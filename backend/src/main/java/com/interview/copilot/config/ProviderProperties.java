@@ -87,6 +87,18 @@ public class ProviderProperties {
     public static class Llm extends Endpoint {
         private String model = "";
         private List<String> allowedModels = List.of();
+        private String thinkingMode;
+        private String thinkingProtocol;
+
+        public String getThinkingMode() {
+            return thinkingMode == null ? ("deepseek".equals(getThinkingProtocol()) ? "disabled" : "default") : thinkingMode;
+        }
+        public void setThinkingMode(String value) { thinkingMode = value; }
+        public String getThinkingProtocol() {
+            return thinkingProtocol == null ? com.interview.copilot.validation.ai.LlmThinkingPolicy.suggestProtocol(getUrl()) : thinkingProtocol;
+        }
+        public void setThinkingProtocol(String value) { thinkingProtocol = value; }
+
         private int maxOutputTokens = 2048;
         private int maxConcurrent = 8;
         private int idleTimeoutSeconds = 30;

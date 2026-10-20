@@ -63,7 +63,9 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
             success = true;
             return new PlatformProbeResponse(true, "服务测试通过。", elapsed(started));
         } catch (RuntimeException error) {
-            return new PlatformProbeResponse(false, "服务测试失败，请检查地址、密钥及服务参数。", elapsed(started));
+            var failure = com.interview.copilot.util.ai.ProviderFailureClassifier.classify(error);
+            String message = failure.getMessage();
+            return new PlatformProbeResponse(false, message, elapsed(started));
         } finally {
             capacity.release();
             audit.record(
@@ -98,14 +100,14 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
                         "stream",
                         false,
                         "max_tokens",
-                        Math.min(16, endpoint.getMaxOutputTokens()),
+                        Math.min(512, endpoint.getMaxOutputTokens()),
                         "messages",
                         List.of(Map.of("role", "user", "content", "Reply OK.")));
         JsonNode response =
-                http.json(
+                com.interview.copilot.util.ai.ProviderCompletions.probe(http, json,
                                 endpoint,
                                 LlmRequestPolicy.request(json.parse(json.encode(body)), endpoint),
-                                Duration.ofSeconds(Math.min(8, endpoint.getTotalTimeoutSeconds())))
+                                Duration.ofSeconds(Math.min(30, endpoint.getTotalTimeoutSeconds())))
                         .block();
         json.completion(response, "message");
     }

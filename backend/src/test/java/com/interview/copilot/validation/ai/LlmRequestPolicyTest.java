@@ -18,7 +18,7 @@ public class LlmRequestPolicyTest {
     private final ObjectMapper mapper = new ObjectMapper();
 
     @ParameterizedTest
-    @ValueSource(strings = {"url", "api_key", "requestId", "thinking", "tools"})
+    @ValueSource(strings = {"url", "api_key", "requestId", "thinking", "enable_thinking", "reasoning_effort", "tools"})
     void request_unapprovedField_rejects(String field) {
         var request =
                 mapper.valueToTree(

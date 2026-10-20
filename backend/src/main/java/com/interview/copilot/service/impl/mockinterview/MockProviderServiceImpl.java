@@ -30,10 +30,11 @@ public class MockProviderServiceImpl implements MockProviderService {
         int tokens=Math.min(endpoint.getMaxOutputTokens(),Math.clamp(maxTokens,64,8192));
         if(context.toString().length()>160000 || systemPrompt.length()>20000)throw invalid();
         try(var permit=concurrency.acquire(userId,endpoint.getMaxConcurrent())) {
-            JsonNode response=http.json(endpoint,Map.of("model",endpoint.getModel(),"stream",false,"temperature",0.4,
+            var body = com.interview.copilot.validation.ai.LlmRequestPolicy.request(json.parse(json.encode(Map.of("model",endpoint.getModel(),"stream",false,"temperature",0.4,
                     "max_tokens",tokens,"messages",List.of(Map.of("role","system","content",systemPrompt),
-                    Map.of("role","user","content",context.toString()))),Duration.ofSeconds(Math.min(60,endpoint.getTotalTimeoutSeconds())))
-                    .block(Duration.ofSeconds(65));
+                    Map.of("role","user","content",context.toString()))))), endpoint);
+            JsonNode response=com.interview.copilot.util.ai.ProviderCompletions.complete(http,json,endpoint,body,
+                    Duration.ofSeconds(Math.min(60,endpoint.getTotalTimeoutSeconds()))).block(Duration.ofSeconds(65));
             if(response==null)throw invalid();
             recordUsage(response.path("usage"));
             String content=response.path("choices").path(0).path("message").path("content").asText();

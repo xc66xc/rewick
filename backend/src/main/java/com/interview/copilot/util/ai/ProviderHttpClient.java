@@ -62,8 +62,11 @@ public class ProviderHttpClient {
         return request(streamingClient, endpoint, body)
                 .exchangeToFlux(
                         response -> {
-                            if (!response.statusCode().is2xxSuccessful()
-                                    || !response.headers()
+                            if (!response.statusCode().is2xxSuccessful()) {
+                                return response.releaseBody().thenMany(Flux.error(
+                                        com.interview.copilot.exception.ai.ProviderFailure.http(response.statusCode().value())));
+                            }
+                            if (!response.headers()
                                             .contentType()
                                             .orElse(MediaType.APPLICATION_OCTET_STREAM)
                                             .isCompatibleWith(MediaType.TEXT_EVENT_STREAM)) {

@@ -40,7 +40,10 @@ public record PlatformConfig(
             providers = Collections.unmodifiableList(new ArrayList<>(providers));
         }
         if (models != null) {
-            models = Collections.unmodifiableList(new ArrayList<>(models));
+            List<Provider> sources = providers == null ? List.of() : providers;
+            models = models.stream().map(model -> model == null ? null : model.withThinkingDefaults(
+                    sources.stream().filter(provider -> provider != null && java.util.Objects.equals(provider.id(), model.providerId()))
+                            .map(provider -> provider.url() == null ? "" : provider.url()).findFirst().orElse(""))).toList();
         }
     }
 
@@ -65,7 +68,21 @@ public record PlatformConfig(
             @NotBlank @Pattern(regexp = "[A-Za-z0-9_.-]{1,64}") String providerId,
             @NotBlank @Size(max = 200) String model,
             boolean enabled,
-            @Min(1) @Max(32768) int maxOutputTokens) {}
+            @Min(1) @Max(32768) int maxOutputTokens,
+            @Pattern(regexp = "default|disabled|enabled") String thinkingMode,
+            @Pattern(regexp = "none|bailian|deepseek") String thinkingProtocol) {
+        public Model(String id, String name, String providerId, String model, boolean enabled, int maxOutputTokens) {
+            this(id, name, providerId, model, enabled, maxOutputTokens, null, null);
+        }
+
+        public Model withThinkingDefaults(String url) {
+            String protocol = thinkingProtocol == null
+                    ? com.interview.copilot.validation.ai.LlmThinkingPolicy.suggestProtocol(url) : thinkingProtocol;
+            String mode = thinkingMode == null
+                    ? ("deepseek".equals(protocol) ? "disabled" : "default") : thinkingMode;
+            return new Model(id, name, providerId, model, enabled, maxOutputTokens, mode, protocol);
+        }
+    }
 
     public record Embedding(
             boolean enabled,

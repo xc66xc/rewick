@@ -61,7 +61,7 @@ public final class PlatformRuntimeFixture implements PlatformRuntimeService {
                                         "environment-llm",
                                         model,
                                         true,
-                                        properties.getLlm().getMaxOutputTokens()))
+                                        properties.getLlm().getMaxOutputTokens(), properties.getLlm().getThinkingMode(), properties.getLlm().getThinkingProtocol()))
                 .toList();
     }
 

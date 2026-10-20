@@ -34,12 +34,13 @@ class MockProviderServiceTest {
     private final AtomicInteger status = new AtomicInteger(200);
     private final LlmConcurrency concurrency = new LlmConcurrency();
     private HttpServer server;
+    private ProviderProperties properties;
     private MockProviderServiceImpl service;
 
     @BeforeEach
     void setUp() throws Exception {
         startSupplier();
-        var properties = new ProviderProperties();
+        properties = new ProviderProperties();
         properties.getLlm().setUrl("http://127.0.0.1:" + server.getAddress().getPort() + "/chat/completions");
         properties.getLlm().setApiKey("test-only-platform-secret");
         properties.getLlm().setModel("mock-host");
@@ -51,6 +52,21 @@ class MockProviderServiceTest {
     @AfterEach
     void cleanUp() {
         if (server != null) server.stop(0);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"bailian,enabled,true", "bailian,default,true", "bailian,disabled,false", "deepseek,enabled,true"})
+    void completion_configuredThinking_usesMatchingParametersAndReturnsFinalQuestion(String protocol, String mode, boolean streaming) {
+        properties.getLlm().setThinkingProtocol(protocol);
+        properties.getLlm().setThinkingMode(mode);
+        var result = service.completion(7, "mock-host", "主持", json.createObjectNode(), 512);
+        assertThat(result.path("speechText").asText()).isEqualTo("请介绍一个项目");
+        assertThat(request.get().path("stream").asBoolean()).isEqualTo(streaming);
+        if ("default".equals(mode)) assertThat(request.get().has("enable_thinking")).isFalse();
+        else if ("bailian".equals(protocol)) assertThat(request.get().path("enable_thinking").asBoolean()).isEqualTo("enabled".equals(mode));
+        else assertThat(request.get().path("thinking").path("type").asText()).isEqualTo(mode);
+        assertThat(result.toString()).doesNotContain("private-thinking");
+        assertThat(calls.get()).isEqualTo(1);
     }
 
     @Test
@@ -160,9 +176,17 @@ class MockProviderServiceTest {
             calls.incrementAndGet();
             authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
             request.set(json.readTree(exchange.getRequestBody().readAllBytes()));
-            byte[] body = json.writeValueAsString(Map.of("choices", List.of(Map.of("message", Map.of("content", content.get())))))
-                    .getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            String response;
+            if (request.get().path("stream").asBoolean()) {
+                response = "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"private-thinking\"}}]}\n\n"
+                        + "data: " + json.writeValueAsString(Map.of("choices", List.of(Map.of("delta", Map.of("content", content.get()), "finish_reason", "stop"))))
+                        + "\n\ndata: [DONE]\n\n";
+                exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+            } else {
+                response = json.writeValueAsString(Map.of("choices", List.of(Map.of("message", Map.of("content", content.get())))));
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+            }
+            byte[] body = response.getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(status.get(), body.length);
             try (var output = exchange.getResponseBody()) { output.write(body); }
         });

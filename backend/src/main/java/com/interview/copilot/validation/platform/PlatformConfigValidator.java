@@ -88,6 +88,9 @@ public final class PlatformConfigValidator {
                 throw PlatformConfigErrors.invalid("模型 ID 不能重复。");
             }
             PlatformConfig.Provider provider = reference(providers, model.providerId(), "llm");
+            if (!"default".equals(model.thinkingMode()) && "none".equals(model.thinkingProtocol())) {
+                throw PlatformConfigErrors.invalid("开启或关闭思考模式前，请选择模型支持的思考参数协议。");
+            }
             if (model.enabled() && provider.enabled()) {
                 available.add(model.id());
             }

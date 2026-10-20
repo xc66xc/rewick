@@ -1,8 +1,9 @@
+import { suggestThinkingProtocol } from '../thinking'
 import { defaultWebSearch, type Capability, type Config } from '../types'
 export interface ServiceForm {
   id: string; providerId: string; kind: Capability; name: string; url: string; model: string
   topK: number; searchDepth: Config['webSearch']['searchDepth']; timeoutMs: number; includeAnswer: 'none' | 'basic' | 'advanced'
-  enabled: boolean; hasApiKey?: boolean; apiKey?: string; maxOutputTokens: number; dimensions: number
+  enabled: boolean; hasApiKey?: boolean; apiKey?: string; maxOutputTokens: number; dimensions: number; thinkingMode?: 'default' | 'disabled' | 'enabled'; thinkingProtocol?: 'none' | 'bailian' | 'deepseek'
 }
 export function allowsBlankServiceKey(form: Pick<ServiceForm, 'kind' | 'url'>): boolean {
   if (form.kind !== 'embedding') return false
@@ -18,7 +19,7 @@ export function serviceForms(config: Config): ServiceForm[] {
     const base = { id: provider.id, providerId: provider.id, kind: provider.kind, name: provider.name, url: provider.url, enabled: provider.enabled, hasApiKey: provider.hasApiKey, maxOutputTokens: 2048, dimensions: 1024, model: '', topK: 5, searchDepth: 'advanced' as const, timeoutMs: 8000, includeAnswer: 'none' as const }
     if (provider.kind === 'llm') {
       const models = config.models.filter(model => model.providerId === provider.id)
-      return models.length ? models.map(model => ({ ...base, id: model.id, name: model.name, model: model.model, maxOutputTokens: model.maxOutputTokens, enabled: provider.enabled && model.enabled })) : [{ ...base, enabled: false }]
+      return models.length ? models.map(model => ({ ...base, id: model.id, name: model.name, model: model.model, maxOutputTokens: model.maxOutputTokens, thinkingMode: model.thinkingMode ?? (suggestThinkingProtocol(provider.url) === 'deepseek' ? 'disabled' : 'default'), thinkingProtocol: model.thinkingProtocol ?? suggestThinkingProtocol(provider.url), enabled: provider.enabled && model.enabled })) : [{ ...base, enabled: false }]
     }
     if (provider.kind === 'web-search') {
       const binding = config.webSearch ?? defaultWebSearch
@@ -46,7 +47,7 @@ export function applyService(config: Config, form: ServiceForm, remove = false):
     if (form.kind === 'llm') {
       if (previous && !previous.enabled) next.models = next.models.map(model => model.providerId === form.providerId ? { ...model, enabled: false } : model)
       const id = config.models.some(model => model.id === form.id) ? form.id : `model-${form.providerId}`
-      next.models = [...next.models.filter(item => item.id !== id), { id, name: form.name.trim(), providerId: form.providerId, model: form.model.trim(), enabled: form.enabled, maxOutputTokens: form.maxOutputTokens }]
+      next.models = [...next.models.filter(item => item.id !== id), { id, name: form.name.trim(), providerId: form.providerId, model: form.model.trim(), enabled: form.enabled, maxOutputTokens: form.maxOutputTokens, thinkingMode: form.thinkingMode ?? 'default', thinkingProtocol: !form.thinkingProtocol || form.thinkingProtocol === 'none' ? suggestThinkingProtocol(url) : form.thinkingProtocol }]
     } else if (form.kind === 'web-search') {
       if (!form.enabled && next.webSearch.providerId && next.webSearch.providerId !== form.providerId) throw new Error('当前联网搜索使用其他服务，请启用此项以切换服务及搜索参数。')
       next.webSearch = { enabled: form.enabled, providerId: form.providerId, topK: form.topK, searchDepth: form.searchDepth, timeoutMs: form.timeoutMs, includeAnswer: form.includeAnswer }

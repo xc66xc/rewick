@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.interview.copilot.config.ProviderProperties;
 import com.interview.copilot.exception.ai.ProviderErrors;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -31,13 +30,20 @@ public final class LlmRequestPolicy {
         result.put("stream", bool(input, "stream", false));
         result.put("max_tokens", tokens(input, config.getMaxOutputTokens()));
         result.put("temperature", temperature(input));
-        if ("api.deepseek.com".equals(URI.create(config.getUrl()).getHost())) {
-            result.put("thinking", Map.of("type", "disabled"));
-        }
+        LlmThinkingPolicy.apply(result, config, config.getThinkingMode());
         if (Boolean.TRUE.equals(result.get("stream"))) {
             result.put("stream_options", Map.of("include_usage", true));
         }
         return result;
+    }
+
+    /** Auxiliary extraction/review tasks explicitly disable switchable thinking. */
+    public static Map<String, Object> auxiliary(JsonNode input, ProviderProperties.Llm config) {
+        Map<String, Object> body = request(input, config);
+        if (!"none".equals(config.getThinkingProtocol())) {
+            LlmThinkingPolicy.apply(body, config, "disabled");
+        }
+        return body;
     }
 
     public static void requireFields(JsonNode input, Set<String> allowed) {

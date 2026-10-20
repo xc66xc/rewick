@@ -53,7 +53,7 @@ public class PlatformProbeServiceTest {
         assertThat(result.success()).isTrue();
         assertThat(authorization).hasValue("Bearer fixture-secret");
         assertThat(json.parse(body.get()).path("model").asText()).isEqualTo("upstream-fast");
-        assertThat(json.parse(body.get()).path("max_tokens").asInt()).isEqualTo(16);
+        assertThat(json.parse(body.get()).path("max_tokens").asInt()).isEqualTo(512);
         assertThat(fixture.row.get().published()).isFalse();
         verify(fixture.audit).record(1, "platform.config.test.success", "llm");
     }
@@ -107,6 +107,28 @@ public class PlatformProbeServiceTest {
         assertThat(fixture.row.get().published()).isFalse();
         assertThat(result.message()).doesNotContain("fixture-search-key", "Evidence");
         verify(fixture.audit).record(1, "platform.config.test.success", "web-search");
+    }
+
+    @Test
+    void test_enabledBailian_usesStreamingAndAcceptsFinalContentWithoutUsage() {
+        server = HttpServer.create().port(0).handle((request, response) ->
+                response.header("Content-Type", "text/event-stream").sendString(
+                        request.receive().aggregate().asString().flatMap(value -> {
+                            body.set(value);
+                            return Mono.just("data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"not an answer\"}}]}\n\n"
+                                    + "data: {\"choices\":[{\"delta\":{\"content\":\"OK\"}}]}\n\n"
+                                    + "data: [DONE]\n\n");
+                        }))).bindNow();
+        var original = config("llm");
+        var model = new PlatformConfig.Model("fast", "测试", "primary", "upstream-fast", true, 2048, "enabled", "bailian");
+        var draft = new PlatformConfig(0, original.providers(), List.of(model), "fast", original.asr());
+
+        var result = probes.test(1, new PlatformProbeRequest(draft, "llm", "fast"));
+
+        assertThat(result.success()).isTrue();
+        assertThat(json.parse(body.get()).path("enable_thinking").asBoolean()).isTrue();
+        assertThat(json.parse(body.get()).path("stream").asBoolean()).isTrue();
+        assertThat(fixture.row.get().published()).isFalse();
     }
 
     private PlatformConfig config(String kind) {

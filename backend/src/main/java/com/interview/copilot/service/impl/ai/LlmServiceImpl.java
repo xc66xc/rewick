@@ -108,7 +108,7 @@ public class LlmServiceImpl implements LlmService {
                 lease) {
             try {
                 JsonNode response =
-                        http.json(config, body, Duration.ofSeconds(config.getTotalTimeoutSeconds()))
+                        com.interview.copilot.util.ai.ProviderCompletions.complete(http, json, config, body, Duration.ofSeconds(config.getTotalTimeoutSeconds()))
                                 .block();
                 Map<String, Object> result = json.completion(response, "message");
                 lease.complete();

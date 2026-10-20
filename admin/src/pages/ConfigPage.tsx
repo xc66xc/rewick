@@ -34,7 +34,7 @@ export default function ConfigPage({ api, active = true }: Props) {
   function add(kind: Capability) {
     setCategory('all'); setShowAdd(false)
     const id = createServiceId()
-    setItems(current => [...current, { id, providerId: id, kind, name: '', model: '', url: kind === 'web-search' ? 'https://api.tavily.com/search' : '', topK: 5, searchDepth: 'advanced', timeoutMs: 8000, includeAnswer: 'none', maxOutputTokens: 2048, dimensions: 1024, enabled: true }])
+    setItems(current => [...current, { id, providerId: id, kind, name: '', model: '', url: kind === 'web-search' ? 'https://api.tavily.com/search' : '', topK: 5, searchDepth: 'advanced', timeoutMs: 8000, includeAnswer: 'none', maxOutputTokens: 2048, thinkingMode: 'default', thinkingProtocol: 'none', dimensions: 1024, enabled: true }])
   }
   async function save(item: ServiceForm, test = false, remove = false): Promise<boolean> {
     if (!config || busy) return false
