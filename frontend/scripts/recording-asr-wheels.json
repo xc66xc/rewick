@@ -37,10 +37,10 @@
     },
     {
       "name": "ctranslate2",
-      "version": "4.7.0",
-      "file": "ctranslate2-4.7.0-cp312-cp312-macosx_11_0_arm64.whl",
-      "url": "https://files.pythonhosted.org/packages/a3/49/9b6c36a56448b32604939051f42e18b992837ddeb32fff6ea34d6f36d9a2/ctranslate2-4.7.0-cp312-cp312-macosx_11_0_arm64.whl",
-      "sha256": "e30be3c85fcbaf07989bf23519c49bfec901db005ee1579715ef53ed0bd25eb1"
+      "version": "4.7.1",
+      "file": "ctranslate2-4.7.1-cp312-cp312-macosx_11_0_arm64.whl",
+      "url": "https://files.pythonhosted.org/packages/fc/0f/581de94b64c5f2327a736270bc7e7a5f8fe5cf1ed56a2203b52de4d8986a/ctranslate2-4.7.1-cp312-cp312-macosx_11_0_arm64.whl",
+      "sha256": "4c0cbd46a23b8dc37ccdbd9b447cb5f7fadc361c90e9df17d82ca84b1f019986"
     },
     {
       "name": "faster-whisper",
@@ -214,10 +214,10 @@
     },
     {
       "name": "ctranslate2",
-      "version": "4.7.0",
-      "file": "ctranslate2-4.7.0-cp312-cp312-win_amd64.whl",
-      "url": "https://files.pythonhosted.org/packages/57/55/37ce9240a11c85fe976690b74965ec1abff631084aa75bf5f71ce70fa21e/ctranslate2-4.7.0-cp312-cp312-win_amd64.whl",
-      "sha256": "e19b81d2306f307206b874068825c7305586c6d14eaefe73f0d9799ba994a703"
+      "version": "4.7.1",
+      "file": "ctranslate2-4.7.1-cp312-cp312-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/4a/f4/d23dbfb9c62cb642c114a30f05d753ba61d6ffbfd8a3a4012fe85a073bcb/ctranslate2-4.7.1-cp312-cp312-win_amd64.whl",
+      "sha256": "d0f734dc3757118094663bdaaf713f5090c55c1927fb330a76bb8b84173940e8"
     },
     {
       "name": "faster-whisper",

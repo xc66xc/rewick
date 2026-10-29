@@ -61,6 +61,16 @@ jobs:
       - run: npm --prefix frontend ci
       - run: npm --prefix frontend test
       - run: npm --prefix frontend run build
+      - name: Verify bundled Windows speech runtime
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:SystemRoot\System32;$env:PATH"
+          npm --prefix frontend run prepare:recording -- win x64
+          if ($LASTEXITCODE -ne 0) { throw 'Speech runtime preparation failed' }
+          $lock = Get-Content frontend/scripts/recording-asr-wheels.json -Raw | ConvertFrom-Json
+          $env:EXPECTED_CT2 = ($lock.'win-x64' | Where-Object name -eq 'ctranslate2').version
+          & ./frontend/build/python-runtime/python/python.exe -c 'import os, faster_whisper, ctranslate2; assert ctranslate2.__version__ == os.environ["EXPECTED_CT2"]'
+          if ($LASTEXITCODE -ne 0) { throw 'Bundled Windows speech runtime failed' }
   backend:
     name: Backend tests and build
     runs-on: ubuntu-24.04
