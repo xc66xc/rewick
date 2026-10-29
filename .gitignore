@@ -90,3 +90,12 @@ frontend/build/asr-wheel-cache/
 
 # Obsolete root-level Electron bundle; maintained output lives in frontend/out.
 /index.js
+
+# Local agent instructions, Python caches and private project records
+AGENTS.md
+agent.md
+__pycache__/
+*.py[cod]
+/design-qa.md
+/deploy/server/README.md
+/deploy/server/.env.operations-database.example

@@ -239,6 +239,6 @@ GRANT USAGE,SELECT ON SEQUENCE mock_wallet_ledger_id_seq TO copilot_backend;
 
 业务脚本删除platform_config的远程供应商/绑定和加密Key、用户远程偏好与默认值，以及desktop_settings.retrieval_mode/knowledge_service_id列；相应版本只在实际变化时递增。清除会话/模拟快照中的远程配置和百炼来源摘录，保留问题/回答正文、模型输入原文、其他来源摘录、钱包、其他供应商密钥和reference_*索引。不支持旧客户端远程功能或旧来源schema。
 
-运营脚本删除provider_type=bailian的事件/去重ID和直方图，以及包含退役标签的派生快照。保留PG/Tavily/LLM/ASR和答案总量；`knowledge`通用检索计费不删除。无需重建参考资料索引，脚本已在隔离测试和2026-10-19服务器部署执行；迁移前后32组保留数据指纹一致，备份和验收见deploy/server/README.md。
+运营脚本删除provider_type=bailian的事件/去重ID和直方图，以及包含退役标签的派生快照。保留PG/Tavily/LLM/ASR和答案总量；`knowledge`通用检索计费不删除。无需重建参考资料索引，脚本已在隔离测试和2026-10-19服务器部署执行；迁移前后32组保留数据指纹一致，备份与验收记录由部署维护者单独保管，不包含在源码仓库中。
 
 回滚不能只换JAR：需要旧列、旧配置/密钥以及配套应用版本。应使用定向备份恢复受影响配置，避免整库恢复覆盖新增业务数据。历史SQL15/17保留用于有序初始化，29将其升级到最终结构，不应逐个删除旧脚本中的远程字样。
