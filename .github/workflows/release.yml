@@ -21,6 +21,22 @@ env:
   RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
+  validate:
+    name: Validate tagged source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm --prefix frontend ci
+      - run: npm --prefix frontend test
   build:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -51,7 +67,6 @@ jobs:
           test "$(git rev-parse HEAD)" = "$(git rev-parse "$RELEASE_TAG^{commit}")"
           echo "ASSET=Rewick-${RELEASE_TAG#v}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.suffix }}.${{ matrix.extension }}" >> "$GITHUB_ENV"
       - run: npm --prefix frontend ci
-      - run: npm --prefix frontend test
       - run: ${{ matrix.command }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -119,7 +134,7 @@ jobs:
 
   publish:
     name: Publish verified installers
-    needs: build
+    needs: [validate, build]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

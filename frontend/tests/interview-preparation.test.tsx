@@ -3,10 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import InterviewPreparation from '../src/renderer/src/components/InterviewPreparation'
+import { clearLibraryDrafts } from '../src/renderer/src/hooks/useLibraryDraft'
 import { defaultSettings } from '../src/shared/defaults'
 import type { DesktopBridge, EnvironmentInput, InterviewLibrary, ReferenceDocument } from '../src/shared/types'
 
-afterEach(cleanup)
+afterEach(() => { cleanup(); clearLibraryDrafts() })
 function setup(resumeId: string | null = 'resume', availableSeconds = 600, secondEnvironment = false, summaries = false, active = false, referenceIds: string[] = [], references: ReferenceDocument[] = [], referenceResult?: Promise<ReferenceDocument[]>) {
   const library: InterviewLibrary = { resumes: [{ id: 'resume', name: '开发简历', text: '开发工程师经历', createdAt: '', updatedAt: '' }], targets: [], environments: [{ id: 'env', name: '默认环境', interviewType: 'technical', resumeId, targetId: null, referenceIds: [], createdAt: '', updatedAt: '' }], activeEnvironmentId: 'env' }
   library.environments[0].referenceIds = referenceIds
@@ -130,9 +131,9 @@ describe('interview preparation', () => {
   })
   it('saves HR selection, shows HR experience descriptions and preserves the label on reopen', async () => {
     const { actor, onSave } = setup()
-    await screen.findByRole('button', { name: '新建面试准备' })
+    await screen.findByRole('button', { name: '编辑环境 默认环境' })
     await actor.click(screen.getByRole('button', { name: '新建面试准备' }))
-    const dialog = screen.getByRole('dialog')
+    const dialog = await screen.findByRole('dialog', { name: '新建面试准备' })
     await actor.type(within(dialog).getByLabelText(/环境名称/), 'HR 准备')
     await actor.click(within(dialog).getByRole('radio', { name: /HR 面试/ }))
     expect(within(dialog).getByText('决策影响、复杂协作与长期匹配')).toBeTruthy()

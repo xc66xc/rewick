@@ -75,8 +75,8 @@ describe('local interview recordings', () => {
   })
   it('never falls back to a system Python in packaged apps', () => {
     const result = recordingReviewRuntime({ isPackaged: true, resourcesPath: '/resources', appPath: '/app' })
-    expect(result.pythonPath).toContain('/resources/python/')
-    expect(result.scriptPath).toBe('/resources/recording-review.py')
+    expect(result.pythonPath).toBe(join('/resources', 'python', ...(process.platform === 'win32' ? ['python.exe'] : ['bin', 'python3'])))
+    expect(result.scriptPath).toBe(join('/resources', 'recording-review.py'))
   })
 })
 
