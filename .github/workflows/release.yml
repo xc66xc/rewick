@@ -43,7 +43,7 @@ jobs:
     timeout-minutes: 45
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(github.event_name == 'workflow_dispatch' && '{"include":[{"name":"Windows x64 NSIS","os":"windows-2025","platform":"win","arch":"x64","command":"npm --prefix frontend run dist:win","extension":"exe","suffix":"-setup"}]}' || '{"include":[{"name":"macOS arm64 DMG","os":"macos-15","platform":"mac","arch":"arm64","command":"npm run dist","extension":"dmg","suffix":""},{"name":"Windows x64 NSIS","os":"windows-2025","platform":"win","arch":"x64","command":"npm --prefix frontend run dist:win","extension":"exe","suffix":"-setup"}]}') }}
+      matrix: ${{ fromJSON(github.event_name == 'workflow_dispatch' && '{"include":[{"name":"Windows x64 NSIS","os":"windows-2025","platform":"win","arch":"x64","extension":"exe","suffix":"-setup"}]}' || '{"include":[{"name":"macOS arm64 DMG","os":"macos-15","platform":"mac","arch":"arm64","extension":"dmg","suffix":""},{"name":"Windows x64 NSIS","os":"windows-2025","platform":"win","arch":"x64","extension":"exe","suffix":"-setup"}]}') }}
     defaults:
       run:
         shell: bash
@@ -67,7 +67,20 @@ jobs:
           test "$(git rev-parse HEAD)" = "$(git rev-parse "$RELEASE_TAG^{commit}")"
           echo "ASSET=Rewick-${RELEASE_TAG#v}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.suffix }}.${{ matrix.extension }}" >> "$GITHUB_ENV"
       - run: npm --prefix frontend ci
-      - run: ${{ matrix.command }}
+      - name: Build macOS installer
+        if: runner.os == 'macOS'
+        run: npm run dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          GH_TOKEN: ''
+      - name: Build Windows installer with native archive tools
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Git Bash prepends GNU tar, which cannot extract wheel ZIP archives.
+          $env:PATH = "$env:SystemRoot\System32;$env:PATH"
+          & "$env:SystemRoot\System32\tar.exe" --version
+          npm --prefix frontend run dist:win
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           GH_TOKEN: ''
