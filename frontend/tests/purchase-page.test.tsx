@@ -143,7 +143,7 @@ it('shows the ZPAY API QR code without opening a browser and preserves it when r
   expect(api.openPaymentCheckout).not.toHaveBeenCalled()
   expect(QRCode.toDataURL).toHaveBeenCalledWith('https://qr.alipay.com/test-payment', expect.any(Object))
   expect(screen.queryByRole('button', { name: '打开ZPAY收银台' })).toBeNull()
-  expect(screen.getByText(/取消或超时仅关闭本地订单/)).toBeTruthy()
+  expect(screen.getByText(/请使用对应的支付宝或微信扫码付款/)).toBeTruthy()
   expect(screen.getByText(/本次付款入口剩余/)).toBeTruthy()
   await user.click(screen.getAllByRole('button', { name: '关闭' })[0])
   await user.click(screen.getByRole('button', { name: '查看订单' }))

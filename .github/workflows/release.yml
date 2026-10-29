@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    name: macOS arm64 DMG
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Verify immutable release source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(uname -m)" = arm64
+          test "$(git cat-file -t "$GITHUB_REF_NAME")" = tag
+          test "$GITHUB_REF_NAME" = "v$(node -p "require('./frontend/package.json').version")"
+          git merge-base --is-ancestor HEAD origin/main
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Release already exists; refusing to overwrite it.' >&2
+            exit 1
+          fi
+      - run: npm --prefix frontend ci
+      - run: npm --prefix frontend test
+      - run: npm run dist
+      - name: Verify package and create checksum
+        run: |
+          VERSION=$(node -p "require('./frontend/package.json').version")
+          test -s "dist/Rewick-${VERSION}-mac-arm64.dmg"
+          codesign --verify --deep --strict "dist/mac-arm64/掌灯 Rewick.app"
+          hdiutil verify "dist/Rewick-${VERSION}-mac-arm64.dmg"
+          cd dist
+          shasum -a 256 "Rewick-${VERSION}-mac-arm64.dmg" > SHA256SUMS.txt
+      - name: Publish formal release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "require('./frontend/package.json').version")
+          cat > "$RUNNER_TEMP/release-notes.md" <<'NOTES'
+          macOS arm64 桌面安装包，需要 macOS 14.2 或以上。
+
+          本包未完成 Apple Developer 正式签名与公证；SHA256SUMS.txt 用于核对下载完整性。Windows 安装包尚未验证，不在本次发布范围内。
+
+          桌面应用需连接匹配的后端，并配置账号、数据库与模型服务；不附带服务密钥或模型额度。源码采用 MIT，第三方模型及素材保留各自许可。
+          NOTES
+          gh release create "$GITHUB_REF_NAME" "dist/Rewick-${VERSION}-mac-arm64.dmg" dist/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --verify-tag --title "Rewick ${VERSION}" --notes-file "$RUNNER_TEMP/release-notes.md" --generate-notes
