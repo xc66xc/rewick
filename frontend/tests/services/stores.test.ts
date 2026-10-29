@@ -65,8 +65,12 @@ describe('SettingsStore', () => {
     expect(await new SettingsStore(directory, crypto).getSecrets()).toEqual({ platformAccessToken: '', asrApiKey: 'test-asr-secret', llmApiKey: 'test-llm-secret', })
     expect((await new SettingsStore(directory, crypto).getSettings()).interviewTarget).toEqual(defaultSettings.interviewTarget)
     expect((await new SettingsStore(directory, crypto).getSettings()).autoAnswer).toEqual({ enabled: false, pauseMs: 2500 })
-    expect((await stat(join(directory, 'settings.json'))).mode & 0o777).toBe(0o600)
     expect(await readdir(directory)).toEqual(['settings.json'])
+  })
+
+  it.runIf(process.platform !== 'win32')('restricts settings to owner access on POSIX filesystems', async () => {
+    await new SettingsStore(directory, crypto).saveSettings(input())
+    expect((await stat(join(directory, 'settings.json'))).mode & 0o777).toBe(0o600)
   })
 
   it('retains omitted keys and clears explicitly empty keys', async () => {
