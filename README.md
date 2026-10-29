@@ -78,7 +78,9 @@ npm run dist                         # macOS arm64 DMG
 npm --prefix frontend run dist:win   # Windows x64 NSIS，需在受支持环境中构建与验证
 ```
 
-安装包发布在 [GitHub Releases](https://github.com/xc66xc/rewick/releases)，不进入源码历史。仅宣称实际验证过的平台；macOS 首次发布未完成 Apple Developer 正式签名与公证。
+安装包发布在 [GitHub Releases](https://github.com/xc66xc/rewick/releases)，不进入源码历史。版本 Tag 会分别在 macOS arm64 和 Windows x64 环境构建，全部通过后统一发布；已发布版本可通过 Release 工作流手动指定 Tag 补充 Windows 包，不移动 Tag 或覆盖现有附件。每个包附带 `.sha256` 校验文件。
+
+Windows 发布流程检查 NSIS 安装、安装后版本、x64 架构、内置语音运行时及应用窗口启动；真实音频设备仍需在目标电脑验收。macOS 包未完成 Apple Developer 正式签名与公证，Windows 包未使用代码签名证书。
 
 ## 配置与数据
 
