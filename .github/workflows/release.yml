@@ -103,7 +103,8 @@ jobs:
           $binary = Join-Path $installDir '掌灯 Rewick.exe'
           if (!(Test-Path $binary)) { throw 'Installed executable is missing' }
           $version = (Get-Item $binary).VersionInfo.ProductVersion
-          if ($version -ne $env:RELEASE_TAG.Substring(1)) { throw "Installed version mismatch: $version" }
+          $expectedVersion = [version]($env:RELEASE_TAG.Substring(1) + '.0')
+          if ([version]$version -ne $expectedVersion) { throw "Installed version mismatch: $version" }
           $bytes = [IO.File]::ReadAllBytes($binary)
           $pe = [BitConverter]::ToInt32($bytes, 0x3c)
           if ([BitConverter]::ToUInt16($bytes, $pe + 4) -ne 0x8664) { throw 'Installed app is not x64' }
