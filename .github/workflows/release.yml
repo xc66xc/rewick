@@ -90,6 +90,9 @@ jobs:
           test "$(uname -m)" = arm64
           codesign --verify --deep --strict "dist/mac-arm64/掌灯 Rewick.app"
           hdiutil verify "dist/$ASSET"
+          EXPECTED_CT2=$(node -p "require('./frontend/scripts/recording-asr-wheels.json')['mac-arm64'].find(w => w.name === 'ctranslate2').version")
+          export EXPECTED_CT2
+          "dist/mac-arm64/掌灯 Rewick.app/Contents/Resources/python/bin/python3" -c 'import os, faster_whisper, ctranslate2; assert ctranslate2.__version__ == os.environ["EXPECTED_CT2"]'
       - name: Install and launch Windows package
         if: runner.os == 'Windows'
         shell: pwsh

@@ -19,6 +19,9 @@ let prepared = false
 try { prepared = await readFile(marker, 'utf8') === `${target}:${fingerprint}` } catch {}
 if (!prepared) {
   console.log(`Preparing local speech recognition dependencies (${target})…`)
+  // The bundled environment is generated from this lock; remove obsolete modules
+  // and dist-info before installing a different dependency fingerprint.
+  await rm(sitePackages, { recursive: true, force: true })
   await mkdir(sitePackages, { recursive: true })
   for (const wheel of wheels) {
     const archive = join(root, 'build/asr-wheel-cache', wheel.file)
