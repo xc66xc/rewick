@@ -1,3 +1,4 @@
+import { captureError } from './capture-error'
 import workletUrl from './pcm-worklet.ts?worker&url'
 
 /** Both sources feed one silent PCM worklet; microphone audio is never monitored. */
@@ -8,13 +9,16 @@ export class MixedRecordingCapture {
   private generation = 0
   private flushed: (() => void) | null = null
 
+  constructor(private readonly readCaptureFailure?: () => Promise<string | null>) {}
+
   async start(onChunk: (buffer: ArrayBuffer) => void, onEnded: () => void): Promise<void> {
     const generation = ++this.generation
     try {
       for (const source of ['system', 'microphone'] as const) {
-        const stream = source === 'system'
-          ? await navigator.mediaDevices.getDisplayMedia({ audio: true, video: { frameRate: 1 } })
-          : await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false })
+        const stream = await (source === 'system'
+          ? navigator.mediaDevices.getDisplayMedia({ audio: true, video: { frameRate: 1 } })
+          : navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false }))
+          .catch(async error => { throw await captureError(error, source, this.readCaptureFailure) })
         if (generation !== this.generation) { stream.getTracks().forEach(track => track.stop()); return }
         this.streams.push(stream)
         const tracks = stream.getAudioTracks()

@@ -43,7 +43,7 @@ export function useInterviewRecording(bridge: DesktopBridge, sessionId: string, 
   async function start() {
     const api = bridge.recordings
     if (!api || operation.current || !latest.current.active) return
-    const current: Operation = { id: latest.current.sessionId, capture: new MixedRecordingCapture(), writer: null, cancelled: false }
+    const current: Operation = { id: latest.current.sessionId, capture: new MixedRecordingCapture(() => bridge.getCaptureError()), writer: null, cancelled: false }
     operation.current = current
     setError(''); setState('starting'); setSeconds(0)
     try {
