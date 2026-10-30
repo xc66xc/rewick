@@ -29,7 +29,7 @@
 | `deploy/` | PostgreSQL/pgvector 镜像、Compose 与通用部署文件 |
 | `scripts/backend.mjs` | Maven Wrapper 统一入口 |
 
-三个应用模块独立版本化。桌面当前版本由 `frontend/package.json` 统一维护，为 **2.0.8**；管理端及后端目前为 **2.2.0**。macOS 与 Windows 使用相同的三段应用版本号。
+三个应用模块独立版本化。桌面当前版本由 `frontend/package.json` 统一维护，为 **2.0.9**；管理端及后端目前为 **2.2.0**。macOS 与 Windows 使用相同的三段应用版本号。
 
 ## 本地开发
 

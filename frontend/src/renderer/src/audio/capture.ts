@@ -1,3 +1,4 @@
+import { captureError } from './capture-error'
 import workletUrl from './pcm-worklet.ts?worker&url'
 
 interface WorkletMessage { type: 'audio' | 'flushed'; buffer?: ArrayBuffer; level?: number }
@@ -62,20 +63,7 @@ export class AudioCapture {
     } catch (error) {
       if (generation !== this.generation) return
       await this.stop().catch(() => undefined)
-      if (source === 'system' && this.readCaptureFailure) {
-        const failure = await this.readCaptureFailure().catch(() => null)
-        if (failure?.trim()) throw new Error(failure)
-      }
-      const name = error instanceof Error ? error.name : ''
-      const message = error instanceof Error ? error.message : String(error)
-      if (name === 'NotAllowedError') throw new Error(source === 'system'
-        ? '系统音频采集被取消或拒绝。请重试；若仍失败，请检查 macOS 的屏幕与系统音频录制授权。'
-        : '麦克风采集被取消或拒绝。请重试，并检查 macOS 的麦克风授权。')
-      if (/invalid capture constraints/i.test(message)) throw new Error(`${source === 'system' ? '系统音频' : '麦克风'}采集无法启动：${message}`)
-      if (name === 'NotFoundError') throw new Error(source === 'system'
-        ? '找不到可用的系统音频采集源，请重新开始采集。'
-        : '找不到可用的麦克风，请检查设备连接后重试。')
-      throw error
+      throw await captureError(error, source, this.readCaptureFailure)
     }
   }
 

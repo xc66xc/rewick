@@ -118,7 +118,7 @@ describe('AudioCapture startup failures', () => {
     mediaDevices.getDisplayMedia.mockRejectedValue(new TypeError('Invalid capture constraints'))
     const readFailure = vi.fn(async (): Promise<string | null> => { throw new Error('diagnostics unavailable') })
 
-    await expect(new AudioCapture(readFailure).start('system', ...callbacks())).rejects.toThrow('系统音频采集无法启动：Invalid capture constraints')
+    await expect(new AudioCapture(readFailure).start('system', ...callbacks())).rejects.toThrow('系统音频采集无法启动。请重试')
   })
 })
 

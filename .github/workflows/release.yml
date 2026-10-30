@@ -2,11 +2,11 @@ name: Release
 
 on:
   push:
-    tags: ['v*']
+    tags: ['desktop-v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing version tag to supplement with a Windows installer'
+        description: 'Existing desktop tag (desktop-vX.Y.Z or legacy vX.Y.Z) to supplement with a Windows installer'
         required: true
         type: string
 
@@ -60,12 +60,15 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Verify release source
         run: |
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$RELEASE_TAG" =~ ^(desktop-v|v)[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          VERSION="${RELEASE_TAG#desktop-v}"
+          VERSION="${VERSION#v}"
+          echo "RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
           test "$(git cat-file -t "$RELEASE_TAG")" = tag
-          test "$RELEASE_TAG" = "v$(node -p "require('./frontend/package.json').version")"
+          test "$VERSION" = "$(node -p "require('./frontend/package.json').version")"
           git merge-base --is-ancestor HEAD origin/main
           test "$(git rev-parse HEAD)" = "$(git rev-parse "$RELEASE_TAG^{commit}")"
-          echo "ASSET=Rewick-${RELEASE_TAG#v}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.suffix }}.${{ matrix.extension }}" >> "$GITHUB_ENV"
+          echo "ASSET=Rewick-${VERSION}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.suffix }}.${{ matrix.extension }}" >> "$GITHUB_ENV"
       - run: npm --prefix frontend ci
       - name: Build macOS installer
         if: runner.os == 'macOS'
@@ -106,7 +109,7 @@ jobs:
           $binary = Join-Path $installDir '掌灯 Rewick.exe'
           if (!(Test-Path $binary)) { throw 'Installed executable is missing' }
           $version = (Get-Item $binary).VersionInfo.ProductVersion
-          $expectedVersion = [version]($env:RELEASE_TAG.Substring(1) + '.0')
+          $expectedVersion = [version]($env:RELEASE_VERSION + '.0')
           if ([version]$version -ne $expectedVersion) { throw "Installed version mismatch: $version" }
           $bytes = [IO.File]::ReadAllBytes($binary)
           $pe = [BitConverter]::ToInt32($bytes, 0x3c)
@@ -194,5 +197,5 @@ jobs:
 
           桌面应用需连接匹配的后端，并配置账号、数据库与模型服务；不附带服务密钥或模型额度。源码采用 MIT，第三方模型及素材保留各自许可。
           NOTES
-            gh release create "$RELEASE_TAG" ./* --repo "$GITHUB_REPOSITORY" --verify-tag --title "Rewick ${RELEASE_TAG#v}" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes
+            gh release create "$RELEASE_TAG" ./* --repo "$GITHUB_REPOSITORY" --verify-tag --title "Rewick 桌面版 ${RELEASE_TAG#desktop-v}" --notes-file "$RUNNER_TEMP/notes.md" --generate-notes
           fi
