@@ -1,4 +1,4 @@
-export const productionPlatformUrl = 'https://api.junshi.icu'
+export const productionPlatformUrl = 'http://101.33.245.166:8080'
 
 // Enforce at build and network boundaries; reading old settings must still allow
 // startup to replace the platform URL and clear credentials for the old origin.
