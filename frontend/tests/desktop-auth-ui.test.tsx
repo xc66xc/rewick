@@ -77,7 +77,7 @@ describe('desktop account gate', () => {
     await login(user)
     expect(await screen.findByRole('heading', { name: '准备面试' })).toBeTruthy()
     expect(platformLogin).toHaveBeenCalledWith({ identifier: 'first@example.test', password: 'valid-test-password', rememberMe: false })
-    expect(saveSettings.mock.calls[0][0].platform).toEqual({ enabled: true, baseUrl: 'https://api.junshi.icu' })
+    expect(saveSettings.mock.calls[0][0].platform).toEqual({ enabled: true, baseUrl: 'http://101.33.245.166:8080' })
     expect(JSON.stringify(saveSettings.mock.calls)).not.toContain('valid-test-password')
     expect(getHistory).toHaveBeenCalled()
   })

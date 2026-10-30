@@ -21,10 +21,10 @@ describe('platform transport boundary', () => {
   it('routes HTTPS ASR over WSS and explicit HTTP IP ASR over WS', () => {
     const settings = structuredClone(defaultSettings)
     settings.platform = { ...settings.platform!, enabled: true, authenticated: true, advancedSettingsEnabled: true,
-      baseUrl: productionPlatformUrl, expiresAt: new Date(Date.now() + 60000).toISOString(),
+      baseUrl: 'https://example.com', expiresAt: new Date(Date.now() + 60000).toISOString(),
       capabilities: { asr: true, llm: true, } }
     const secrets = { platformAccessToken: 'test-token', asrApiKey: '', llmApiKey: '', }
-    expect(routeService(settings, secrets, 'asr').settings.asr.url).toBe('wss://api.junshi.icu/api/v1/asr')
+    expect(routeService(settings, secrets, 'asr').settings.asr.url).toBe('wss://example.com/api/v1/asr')
     settings.platform.baseUrl = 'http://203.0.113.10:8080'
     expect(routeService(settings, secrets, 'asr').settings.asr.url).toBe('ws://203.0.113.10:8080/api/v1/asr')
   })
