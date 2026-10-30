@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import java.util.Map;
 
 @Component
-public class TavilySearchClient {
+public class TavilySearchClient implements WebSearchClient {
     private final WebClient client;
 
     public TavilySearchClient() {

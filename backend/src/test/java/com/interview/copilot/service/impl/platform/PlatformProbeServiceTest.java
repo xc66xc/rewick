@@ -110,6 +110,31 @@ public class PlatformProbeServiceTest {
     }
 
     @Test
+    void test_deepSeekSearchDraft_usesSelectedProtocolWithoutPublishing() {
+        respond("{\"results\":[{\"url\":\"https://example.com\",\"summary\":\"Search summary\",\"rerank_score\":2.4}]}");
+        var provider = new PlatformConfig.Provider("search", "DeepSeek", "web-search",
+                "http://127.0.0.1:" + server.port() + "/v1/tools/search", true, false, "fixture-search-key", "deepseek");
+        var draft = new PlatformConfig(0, List.of(provider), List.of(), "",
+                new PlatformConfig.Asr(false, "", ""), null,
+                new PlatformConfig.WebSearch(true, "search", 4, "advanced", 1000, "advanced"));
+        var unified = new com.interview.copilot.util.search.PlatformWebSearchClient(
+                new com.interview.copilot.util.search.TavilySearchClient(),
+                new com.interview.copilot.util.search.DeepSeekSearchClient());
+        var selectedProbes = new PlatformProbeServiceImpl(fixture.service, new ProviderHttpClient(),
+                json, asr, fixture.audit, unified);
+
+        var result = selectedProbes.test(1, new PlatformProbeRequest(draft, "web-search", null));
+
+        assertThat(result.success()).isTrue();
+        assertThat(authorization).hasValue("Bearer fixture-search-key");
+        assertThat(json.parse(body.get()).path("count").asInt()).isEqualTo(4);
+        assertThat(json.parse(body.get()).path("need_content").asBoolean()).isFalse();
+        assertThat(json.parse(body.get()).has("include_answer")).isFalse();
+        assertThat(fixture.row.get().published()).isFalse();
+        assertThat(result.message()).doesNotContain("fixture-search-key", "Search summary");
+    }
+
+    @Test
     void test_enabledBailian_usesStreamingAndAcceptsFinalContentWithoutUsage() {
         server = HttpServer.create().port(0).handle((request, response) ->
                 response.header("Content-Type", "text/event-stream").sendString(

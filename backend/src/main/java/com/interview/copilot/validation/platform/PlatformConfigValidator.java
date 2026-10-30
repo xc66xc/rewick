@@ -44,7 +44,7 @@ public final class PlatformConfigValidator {
                 throw PlatformConfigErrors.invalid("提供商 ID 不能重复。");
             }
             validateUrl(provider);
-            if ("web-search".equals(provider.kind())) validateSearchUrl(provider.url());
+            if ("web-search".equals(provider.kind())) validateSearchUrl(provider);
             if (provider.apiKey() != null && provider.apiKey().matches("(?s).*[\\r\\n].*")) {
                 throw PlatformConfigErrors.invalid("API Key 格式无效。");
             }
@@ -72,10 +72,13 @@ public final class PlatformConfigValidator {
         }
     }
 
-    private void validateSearchUrl(String url) {
-        URI uri = URI.create(url);
-        if (!"/search".equals(uri.getRawPath()) || uri.getRawQuery() != null) {
-            throw PlatformConfigErrors.invalid("Tavily 服务地址必须包含 /search 路径，且不能包含查询参数。");
+    private void validateSearchUrl(PlatformConfig.Provider provider) {
+        URI uri = URI.create(provider.url());
+        boolean deepseek = "deepseek".equals(provider.searchProtocol());
+        String path = deepseek ? "/v1/tools/search" : "/search";
+        if (!path.equals(uri.getRawPath()) || uri.getRawQuery() != null) {
+            throw PlatformConfigErrors.invalid((deepseek ? "DeepSeek" : "Tavily")
+                    + " 服务地址必须包含 " + path + " 路径，且不能包含查询参数。");
         }
     }
 
@@ -166,8 +169,9 @@ public final class PlatformConfigValidator {
             if (old == null) {
                 continue;
             }
-            if (!old.url().equals(provider.url()) || !old.kind().equals(provider.kind())) {
-                throw PlatformConfigErrors.invalid("服务地址或类型变更后，请重新填写 API Key。");
+            if (!old.url().equals(provider.url()) || !old.kind().equals(provider.kind())
+                    || !old.searchProtocol().equals(provider.searchProtocol())) {
+                throw PlatformConfigErrors.invalid("服务地址、类型或搜索协议变更后，请重新填写 API Key。");
             }
         }
     }

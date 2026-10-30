@@ -23,6 +23,58 @@ function setup(initial = config) {
   render(<ConfigPage api={new ApiClient('test-token')} />)
   return { actor: userEvent.setup(), publications, tests }
 }
+describe('DeepSeek search configuration', () => {
+  it('selects DeepSeek, tests the draft and saves its protocol without Tavily-only controls', async () => {
+    const { actor, publications, tests } = setup()
+    await screen.findByRole('article', { name: '服务 快速模型' })
+    await actor.click(screen.getByRole('button', { name: '添加服务' }))
+    await actor.click(screen.getByRole('button', { name: '添加联网搜索' }))
+    const draft = within(screen.getByRole('form', { name: '模型服务 新服务' }))
+    await actor.selectOptions(draft.getByLabelText('搜索供应商'), 'deepseek')
+    expect(draft.getByLabelText('接口地址')).toHaveProperty('value', 'https://api.deepseek.com/v1/tools/search')
+    expect(draft.queryByLabelText('搜索深度')).toBeNull()
+    expect(draft.queryByLabelText('包含摘要答案')).toBeNull()
+    await actor.type(draft.getByLabelText('显示名称'), 'DeepSeek 联网')
+    await actor.type(draft.getByLabelText('API Key'), 'fake-deepseek-search-key')
+    await actor.click(draft.getByRole('button', { name: '测试连接' }))
+    await waitFor(() => expect(tests).toHaveLength(1))
+    expect(tests[0].config.providers.find(provider => provider.kind === 'web-search')).toMatchObject({ searchProtocol: 'deepseek', url: 'https://api.deepseek.com/v1/tools/search' })
+    expect(publications).toHaveLength(0)
+    await actor.click(draft.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(publications).toHaveLength(1))
+    expect(publications[0].providers.find(provider => provider.kind === 'web-search')).toMatchObject({ searchProtocol: 'deepseek' })
+    const saved = within(screen.getByRole('form', { name: '模型服务 DeepSeek 联网' }))
+    await actor.click(saved.getByRole('button', { name: '取消编辑' }))
+    const overview = within(screen.getByRole('article', { name: '服务 DeepSeek 联网' }))
+    expect(overview.getByText('DeepSeek 搜索')).toBeTruthy()
+    expect(overview.queryByText('高级搜索')).toBeNull()
+  })
+  it('preserves custom URLs and requires a new key when changing the search protocol', async () => {
+    const custom: Config = { ...searchConfig, providers: searchConfig.providers.map(provider => provider.kind === 'web-search' ? { ...provider, url: 'https://search.example/custom' } : provider) }
+    const { actor, publications } = setup(custom)
+    await actor.click(within(await screen.findByRole('article', { name: '服务 Tavily' })).getByRole('button', { name: '编辑配置' }))
+    const draft = within(screen.getByRole('form', { name: '模型服务 Tavily' }))
+    await actor.selectOptions(draft.getByLabelText('搜索供应商'), 'deepseek')
+    expect(draft.getByLabelText('接口地址')).toHaveProperty('value', 'https://search.example/custom')
+    expect(draft.getByLabelText('API Key')).toHaveProperty('required', true)
+    await actor.click(draft.getByRole('button', { name: '保存' }))
+    expect(publications).toHaveLength(0)
+    await actor.selectOptions(draft.getByLabelText('搜索供应商'), 'tavily')
+    expect(draft.getByLabelText('搜索深度')).toHaveProperty('value', 'basic')
+    expect(draft.getByLabelText('包含摘要答案')).toHaveProperty('value', 'advanced')
+  })
+  it('preserves DeepSeek protocol during other service edits and rejects unsupported protocols', () => {
+    const deepseek: Config = { ...searchConfig, providers: searchConfig.providers.map(provider => provider.kind === 'web-search' ? { ...provider, searchProtocol: 'deepseek' } : provider) }
+    const parsed = configSchema.parse(deepseek)
+    expect(serviceForms(parsed).find(service => service.kind === 'web-search')?.searchProtocol).toBe('deepseek')
+    const changed = applyService(parsed, { ...serviceForms(parsed)[0], name: '模型更新' })
+    expect(configPayload(changed).providers.find(provider => provider.kind === 'web-search')?.searchProtocol).toBe('deepseek')
+    const search = serviceForms(searchConfig).find(service => service.kind === 'web-search')
+    if (!search) throw new Error('Missing search fixture')
+    expect(() => applyService(searchConfig, { ...search, searchProtocol: 'deepseek' })).toThrow('重新填写')
+    expect(configSchema.safeParse({ ...deepseek, providers: [{ ...deepseek.providers[0], searchProtocol: 'other' }] }).success).toBe(false)
+  })
+})
 describe('Tavily management configuration', () => {
   it('defaults legacy API responses to disabled search and validates parameter bounds', () => {
     const { webSearch: _missing, ...legacy } = config

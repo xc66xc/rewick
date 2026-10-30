@@ -8,7 +8,9 @@ import com.interview.copilot.service.platform.DesktopSettingsService;
 import com.interview.copilot.service.preferences.PreferencesService;
 import com.interview.copilot.service.search.WebSearchService;
 import com.interview.copilot.service.usage.UsageService;
-import com.interview.copilot.util.search.TavilySearchClient;
+import com.interview.copilot.util.search.WebSearchClient;
+import com.interview.copilot.model.search.WebSearchEndpoint;
+import com.interview.copilot.model.operations.OperationContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -21,12 +23,12 @@ public class WebSearchServiceImpl implements WebSearchService {
     private final DesktopSettingsService desktop;
     private final PreferencesService preferences;
     private final UsageService usage;
-    private final TavilySearchClient client;
+    private final WebSearchClient client;
     private final PlatformConfigService configs;
     private final Semaphore capacity = new Semaphore(16);
 
     public WebSearchServiceImpl(DesktopSettingsService desktop, PreferencesService preferences,
-            UsageService usage, TavilySearchClient client, PlatformConfigService configs) {
+            UsageService usage, WebSearchClient client, PlatformConfigService configs) {
         this.desktop = desktop;
         this.preferences = preferences;
         this.usage = usage;
@@ -40,21 +42,45 @@ public class WebSearchServiceImpl implements WebSearchService {
             com.interview.copilot.model.operations.OperationContext context) {
         return Mono.defer(() -> {
             authorize(user);
-            if (!capacity.tryAcquire()) return Mono.just(WebSearchResponse.degraded());
-            return Mono.using(() -> reserve(user, token, requestId),
-                    lease -> execute(user, query, requestId, lease), UsageLease::close)
-                    .doFinally(signal -> capacity.release());
-        }).subscribeOn(Schedulers.boundedElastic()).doOnNext(result -> {
-            if(context!=null) context.finish("retrieval.web",switch(result.status()) {case "ready" -> "success";case "empty" -> "empty";default -> "degraded";},
-                    java.util.Map.of("fragmentCount",result.excerpts().size(),"summaryEnabled",result.excerpts().stream().anyMatch(e -> Boolean.TRUE.equals(e.generatedSummary()))));
-        }).doOnError(error -> {if(context!=null) context.finish("retrieval.web","error",java.util.Map.of());})
-          .doFinally(signal -> {if(context!=null && signal==reactor.core.publisher.SignalType.CANCEL) context.finish("retrieval.web","cancelled",java.util.Map.of());});
+            WebSearchEndpoint config = configs.snapshot().webSearch();
+            OperationContext selected = context == null ? null : context.provider(config.searchProtocol(), config.model());
+            return observe(performSearch(user, token, query, requestId, config), selected);
+        }).subscribeOn(Schedulers.boundedElastic())
+                .doOnError(error -> {
+                    if (context != null) context.finish("retrieval.web", "error", java.util.Map.of());
+                }).doFinally(signal -> {
+                    if (context != null && signal == reactor.core.publisher.SignalType.CANCEL)
+                        context.finish("retrieval.web", "cancelled", java.util.Map.of());
+                });
     }
 
-    private UsageLease reserve(long user, long token, String requestId) {
+    private Mono<WebSearchResponse> performSearch(long user, long token, String query, String requestId,
+            WebSearchEndpoint config) {
+        if (!capacity.tryAcquire()) return Mono.just(WebSearchResponse.degraded());
+        return Mono.using(() -> reserve(user, token, requestId, config),
+                lease -> execute(user, query, requestId, lease, config), UsageLease::close)
+                .doFinally(signal -> capacity.release());
+    }
+
+    private Mono<WebSearchResponse> observe(Mono<WebSearchResponse> result, OperationContext context) {
+        if (context == null) return result;
+        return result.doOnNext(value -> context.finish("retrieval.web", switch (value.status()) {
+                    case "ready" -> "success";
+                    case "empty" -> "empty";
+                    default -> "degraded";
+                }, java.util.Map.of("fragmentCount", value.excerpts().size(), "summaryEnabled",
+                        value.excerpts().stream().anyMatch(item -> Boolean.TRUE.equals(item.generatedSummary())))))
+                .doOnError(error -> context.finish("retrieval.web", "error", java.util.Map.of()))
+                .doFinally(signal -> {
+                    if (signal == reactor.core.publisher.SignalType.CANCEL)
+                        context.finish("retrieval.web", "cancelled", java.util.Map.of());
+                });
+    }
+
+    private UsageLease reserve(long user, long token, String requestId, WebSearchEndpoint config) {
         UsageLease lease = usage.startForSession(user, requestId, "knowledge", token);
         try {
-            usage.describeModel(user, requestId, "knowledge", "tavily-search");
+            usage.describeModel(user, requestId, "knowledge", config.model());
             return lease;
         } catch (RuntimeException error) {
             lease.fail();
@@ -62,8 +88,8 @@ public class WebSearchServiceImpl implements WebSearchService {
         }
     }
 
-    private Mono<WebSearchResponse> execute(long user, String query, String requestId, UsageLease lease) {
-        var config = configs.snapshot().webSearch();
+    private Mono<WebSearchResponse> execute(long user, String query, String requestId, UsageLease lease,
+            WebSearchEndpoint config) {
         if (!config.enabled()) {
             lease.fail();
             return Mono.just(WebSearchResponse.degraded());

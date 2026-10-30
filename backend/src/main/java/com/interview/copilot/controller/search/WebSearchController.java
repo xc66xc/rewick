@@ -27,6 +27,6 @@ public class WebSearchController {
             @Valid @RequestBody WebSearchRequest body,
             @org.springframework.web.bind.annotation.RequestHeader(value="X-Operation-Id",required=false) String operation,
             @org.springframework.web.bind.annotation.RequestHeader(value="X-Parent-Span-Id",required=false) String parent) {
-        return search.search(user.id(), user.tokenId(), body.query(), body.requestId(),operations.start(user.id(),operation,parent,body.requestId(),null,"tavily","tavily-search"));
+        return search.search(user.id(), user.tokenId(), body.query(), body.requestId(),operations.start(user.id(),operation,parent,body.requestId(),null,"system",null));
     }
 }

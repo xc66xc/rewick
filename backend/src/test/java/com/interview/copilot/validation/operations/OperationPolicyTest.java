@@ -60,6 +60,16 @@ public class OperationPolicyTest {
                 .isInstanceOf(com.interview.copilot.exception.ApiException.class);
     }
 
+    @Test
+    void validate_deepSeekSearchTelemetry_acceptsRealSearchProvider() {
+        var value = event(UUID.randomUUID().toString(), Map.of());
+        var search = new OperationEvent(value.eventId(), value.operationId(), value.spanId(),
+                null, null, null, "retrieval.web", "backend", value.startedAt(), null, 1,
+                "success", null, "platform", "deepseek", "deepseek-search", null, Map.of("fragmentCount", 2));
+
+        assertThatCode(() -> OperationPolicy.event(search)).doesNotThrowAnyException();
+    }
+
     @Test void settings_disabledAllAndGray_semanticsAreExplicit() {
         assertThat(OperationsSettings.disabled().allows(1)).isFalse();
         assertThat(new OperationsSettings(0,true,java.util.List.of(),null).allows(1)).isTrue();

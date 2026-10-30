@@ -109,6 +109,35 @@ public class PlatformConfigIntegrationTest {
     }
 
     @Test
+    void publish_deepSeekSearch_roundTripsProtocolThroughJsonbWithEncryptedKey() {
+        var provider = new PlatformConfig.Provider("deepseek-search", "DeepSeek Search", "web-search",
+                "https://api.deepseek.com/v1/tools/search", true, false, "jsonb-search-fixture-secret", "deepseek");
+        var config = new PlatformConfig(0, java.util.List.of(provider), java.util.List.of(), "",
+                new PlatformConfig.Asr(false, "", ""), null,
+                new PlatformConfig.WebSearch(true, "deepseek-search", 4, "advanced", 8000, "none"));
+
+        service.publish(1, config);
+        var reloaded = new PlatformConfigServiceImpl(mapper, codec, validator, properties, audit);
+        var endpoint = reloaded.snapshot().webSearch();
+
+        assertThat(endpoint.searchProtocol()).isEqualTo("deepseek");
+        assertThat(endpoint.apiKey()).isEqualTo("jsonb-search-fixture-secret");
+        assertThat(endpoint.topK()).isEqualTo(4);
+        assertThat(reloaded.get().providers().getFirst().apiKey()).isNull();
+        assertThat(jdbc.queryForObject("SELECT payload::text FROM platform_config WHERE id=1", String.class))
+                .contains("searchProtocol", "deepseek", "encryptedKey").doesNotContain("jsonb-search-fixture-secret");
+
+        var retainedProvider = new PlatformConfig.Provider(provider.id(), provider.name(), provider.kind(),
+                provider.url(), true, true, null, "deepseek");
+        service.publish(1, new PlatformConfig(1, java.util.List.of(retainedProvider), config.models(),
+                config.defaultModelId(), config.asr(), config.embedding(), config.webSearch()));
+        var retained = new PlatformConfigServiceImpl(mapper, codec, validator, properties, audit);
+        assertThat(retained.snapshot().webSearch().apiKey()).isEqualTo("jsonb-search-fixture-secret");
+        assertThat(retained.get().version()).isEqualTo(2);
+        assertThat(retained.get().providers().getFirst().searchProtocol()).isEqualTo("deepseek");
+    }
+
+    @Test
     void publish_thinkingModes_roundTripsThroughJsonbAndIndependentModels() {
         var source = PlatformConfigFixture.config(0, "database-thinking-fixture-secret");
         var models = source.models().stream().map(model -> new PlatformConfig.Model(model.id(), model.name(),

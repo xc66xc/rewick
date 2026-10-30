@@ -17,7 +17,14 @@ public record StoredPlatformConfig(
     }
 
     public record Provider(
-            String id, String name, String kind, String url, boolean enabled, String encryptedKey) {
+            String id, String name, String kind, String url, boolean enabled, String encryptedKey, String searchProtocol) {
+        public Provider(String id, String name, String kind, String url, boolean enabled, String encryptedKey) {
+            this(id, name, kind, url, enabled, encryptedKey, "tavily");
+        }
+
+        public Provider {
+            if (searchProtocol == null) searchProtocol = "tavily";
+        }
         @Override
         public String toString() {
             return "StoredProvider[id=" + id + ", encryptedKey=redacted]";
