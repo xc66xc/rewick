@@ -1,9 +1,9 @@
 import { suggestThinkingProtocol } from '../thinking'
-import { defaultWebSearch, type Capability, type Config } from '../types'
+import { defaultWebSearch, type Capability, type Config, type SearchProtocol } from '../types'
 export interface ServiceForm {
   id: string; providerId: string; kind: Capability; name: string; url: string; model: string
   topK: number; searchDepth: Config['webSearch']['searchDepth']; timeoutMs: number; includeAnswer: 'none' | 'basic' | 'advanced'
-  enabled: boolean; hasApiKey?: boolean; apiKey?: string; maxOutputTokens: number; dimensions: number; thinkingMode?: 'default' | 'disabled' | 'enabled'; thinkingProtocol?: 'none' | 'bailian' | 'deepseek'
+  searchProtocol?: SearchProtocol; enabled: boolean; hasApiKey?: boolean; apiKey?: string; maxOutputTokens: number; dimensions: number; thinkingMode?: 'default' | 'disabled' | 'enabled'; thinkingProtocol?: 'none' | 'bailian' | 'deepseek'
 }
 export function allowsBlankServiceKey(form: Pick<ServiceForm, 'kind' | 'url'>): boolean {
   if (form.kind !== 'embedding') return false
@@ -16,7 +16,7 @@ export function allowsBlankServiceKey(form: Pick<ServiceForm, 'kind' | 'url'>): 
 }
 export function serviceForms(config: Config): ServiceForm[] {
   return config.providers.flatMap(provider => {
-    const base = { id: provider.id, providerId: provider.id, kind: provider.kind, name: provider.name, url: provider.url, enabled: provider.enabled, hasApiKey: provider.hasApiKey, maxOutputTokens: 2048, dimensions: 1024, model: '', topK: 5, searchDepth: 'advanced' as const, timeoutMs: 8000, includeAnswer: 'none' as const }
+    const base = { id: provider.id, providerId: provider.id, kind: provider.kind, name: provider.name, url: provider.url, searchProtocol: provider.searchProtocol ?? 'tavily', enabled: provider.enabled, hasApiKey: provider.hasApiKey, maxOutputTokens: 2048, dimensions: 1024, model: '', topK: 5, searchDepth: 'advanced' as const, timeoutMs: 8000, includeAnswer: 'none' as const }
     if (provider.kind === 'llm') {
       const models = config.models.filter(model => model.providerId === provider.id)
       return models.length ? models.map(model => ({ ...base, id: model.id, name: model.name, model: model.model, maxOutputTokens: model.maxOutputTokens, thinkingMode: model.thinkingMode ?? (suggestThinkingProtocol(provider.url) === 'deepseek' ? 'disabled' : 'default'), thinkingProtocol: model.thinkingProtocol ?? suggestThinkingProtocol(provider.url), enabled: provider.enabled && model.enabled })) : [{ ...base, enabled: false }]
@@ -34,7 +34,7 @@ export function applyService(config: Config, form: ServiceForm, remove = false):
   next.webSearch ??= { ...defaultWebSearch }
   const previous = next.providers.find(item => item.id === form.providerId)
   const url = form.url.trim()
-  if (previous && (previous.url !== url || previous.kind !== form.kind) && !form.apiKey?.trim() && !remove) throw new Error('更换接口地址后请重新填写 API Key。')
+  if (previous && (previous.url !== url || previous.kind !== form.kind || (form.kind === 'web-search' && (previous.searchProtocol ?? 'tavily') !== (form.searchProtocol ?? 'tavily'))) && !form.apiKey?.trim() && !remove) throw new Error('更换接口地址或搜索供应商后请重新填写 API Key。')
   if (remove) {
     next.models = next.models.filter(model => model.id !== form.id)
     if (!next.models.some(model => model.providerId === form.providerId)) next.providers = next.providers.filter(provider => provider.id !== form.providerId)
@@ -42,7 +42,7 @@ export function applyService(config: Config, form: ServiceForm, remove = false):
     if (next.embedding.providerId === form.providerId) next.embedding = { enabled: false, providerId: '', model: '', dimensions: 1024 }
     if (next.webSearch.providerId === form.providerId) next.webSearch = { ...next.webSearch, enabled: false, providerId: '' }
   } else {
-    const provider = { id: form.providerId, kind: form.kind, name: form.name.trim(), url, enabled: form.kind === 'llm' ? true : form.enabled, ...(form.apiKey?.trim() ? { apiKey: form.apiKey.trim() } : {}) }
+    const provider = { id: form.providerId, kind: form.kind, name: form.name.trim(), url, ...(form.kind === 'web-search' ? { searchProtocol: form.searchProtocol ?? 'tavily' } : {}), enabled: form.kind === 'llm' ? true : form.enabled, ...(form.apiKey?.trim() ? { apiKey: form.apiKey.trim() } : {}) }
     next.providers = [...next.providers.filter(item => item.id !== form.providerId), provider]
     if (form.kind === 'llm') {
       if (previous && !previous.enabled) next.models = next.models.map(model => model.providerId === form.providerId ? { ...model, enabled: false } : model)

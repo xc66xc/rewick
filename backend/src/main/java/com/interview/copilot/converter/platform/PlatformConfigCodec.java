@@ -41,7 +41,7 @@ public final class PlatformConfigCodec {
                                             provider.enabled(),
                                             key.isEmpty()
                                                     ? ""
-                                                    : secrets.encrypt(provider.id(), key));
+                                                    : secrets.encrypt(provider.id(), key), provider.searchProtocol());
                                 })
                         .toList();
         try {
@@ -70,7 +70,7 @@ public final class PlatformConfigCodec {
                                                 provider.url(),
                                                 provider.enabled(),
                                                 !provider.encryptedKey().isEmpty(),
-                                                null))
+                                                null, provider.searchProtocol()))
                         .toList();
         return new PlatformConfig(
                 row.version(),

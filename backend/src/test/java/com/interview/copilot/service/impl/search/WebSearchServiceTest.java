@@ -61,6 +61,25 @@ class WebSearchServiceTest {
     }
 
     @Test
+    void search_deepSeek_recordsActualProviderWithoutChangingUsageLifecycle() {
+        authorized();
+        var deepseek = new WebSearchEndpoint(true, "https://api.deepseek.com/v1/tools/search", "fixture", 4,
+                "advanced", 8000, "none", "deepseek");
+        when(snapshot.webSearch()).thenReturn(deepseek);
+        when(client.search("query", deepseek)).thenReturn(Mono.just(new WebSearchResponse("empty", null, List.of())));
+        var observed = new java.util.concurrent.atomic.AtomicReference<com.interview.copilot.model.operations.OperationEvent>();
+        var context = com.interview.copilot.model.operations.OperationContext.start(1, null, null, "request", null,
+                "system", null, observed::set);
+
+        assertThat(service.search(1, 9, "query", "request", context).block().status()).isEqualTo("empty");
+
+        verify(usage).describeModel(1, "request", "knowledge", "deepseek-search");
+        verify(usage).finish(1, "request", "knowledge", "complete");
+        assertThat(observed.get().providerType()).isEqualTo("deepseek");
+        assertThat(observed.get().model()).isEqualTo("deepseek-search");
+    }
+
+    @Test
     void search_providerFailure_degradesButRecordsFailure() {
         authorized();
         when(client.search("query", endpoint)).thenReturn(Mono.error(new IllegalStateException("provider")));

@@ -13,8 +13,12 @@ export const usersSchema = pageSchema(userSchema)
 export const usagePageSchema = pageSchema(usageSchema)
 export const auditPageSchema = pageSchema(auditSchema)
 export interface Page<T> { items: T[]; total: number; page: number; size: number }
+export const searchProtocolSchema = z.enum(['tavily', 'deepseek'])
+export type SearchProtocol = z.infer<typeof searchProtocolSchema>
+export const searchProtocolNames: Record<SearchProtocol, string> = { tavily: 'Tavily 搜索', deepseek: 'DeepSeek 搜索' }
+export const searchProtocolUrls: Record<SearchProtocol, string> = { tavily: 'https://api.tavily.com/search', deepseek: 'https://api.deepseek.com/v1/tools/search' }
 export type Capability = 'llm' | 'asr' | 'embedding' | 'web-search'
-const providerSchema = z.object({ id: z.string(), name: z.string(), kind: z.enum(['llm', 'asr', 'embedding', 'web-search']), url: z.string(), enabled: z.boolean(), hasApiKey: z.boolean().optional() })
+const providerSchema = z.object({ id: z.string(), name: z.string(), kind: z.enum(['llm', 'asr', 'embedding', 'web-search']), url: z.string(), enabled: z.boolean(), searchProtocol: searchProtocolSchema.optional(), hasApiKey: z.boolean().optional() })
 export interface Provider extends z.infer<typeof providerSchema> { apiKey?: string }
 const modelSchema = z.object({ id: z.string(), name: z.string(), providerId: z.string(), model: z.string(), enabled: z.boolean(), maxOutputTokens: z.number(), thinkingMode: z.enum(['default', 'disabled', 'enabled']).optional(), thinkingProtocol: z.enum(['none', 'bailian', 'deepseek']).optional() })
 export type Model = z.infer<typeof modelSchema>

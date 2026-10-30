@@ -43,7 +43,7 @@ public final class PlatformSnapshot {
                                                 provider.url(),
                                                 provider.enabled(),
                                                 !key(provider.id()).isEmpty(),
-                                                null))
+                                                null, provider.searchProtocol()))
                         .toList();
         config =
                 new PlatformConfig(
@@ -73,7 +73,8 @@ public final class PlatformSnapshot {
                 && "web-search".equals(provider.kind()) && !key(provider.id()).isBlank();
         return new com.interview.copilot.model.search.WebSearchEndpoint(enabled,
                 provider == null ? "" : provider.url(), key(search.providerId()), search.topK(),
-                search.searchDepth(), search.timeoutMs(), search.includeAnswer());
+                search.searchDepth(), search.timeoutMs(), search.includeAnswer(),
+                provider == null ? "tavily" : provider.searchProtocol());
     }
 
     public String defaultModelId() {

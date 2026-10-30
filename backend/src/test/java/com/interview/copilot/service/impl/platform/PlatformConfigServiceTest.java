@@ -36,6 +36,68 @@ public class PlatformConfigServiceTest {
     }
 
     @Test
+    void publish_deepSeekSearch_roundTripsProtocolAndRedactsSecrets() throws Exception {
+        var provider = new PlatformConfig.Provider("search", "DeepSeek", "web-search",
+                "https://api.deepseek.com/v1/tools/search", true, false, "deepseek-fixture-secret", "deepseek");
+        var draft = new PlatformConfig(0, List.of(provider), List.of(), "",
+                new PlatformConfig.Asr(false, "", ""), null,
+                new PlatformConfig.WebSearch(true, "search", 4, "advanced", 8000, "none"));
+
+        var saved = fixture.service.publish(1, draft);
+        var reloaded = fixture.service(PlatformConfigFixture.MASTER_KEY).snapshot();
+
+        assertThat(saved.providers().getFirst().searchProtocol()).isEqualTo("deepseek");
+        assertThat(reloaded.webSearch().searchProtocol()).isEqualTo("deepseek");
+        assertThat(reloaded.webSearch().apiKey()).isEqualTo("deepseek-fixture-secret");
+        assertThat(fixture.row.get().payload()).contains("deepseek", "encryptedKey")
+                .doesNotContain("deepseek-fixture-secret");
+        assertThat(fixture.json.writeValueAsString(saved)).doesNotContain("deepseek-fixture-secret", "encryptedKey", "\"apiKey\"");
+    }
+
+    @Test
+    void publish_legacySearchWithoutProtocol_remainsTavily() {
+        var provider = new PlatformConfig.Provider("search", "Search", "web-search",
+                "https://api.tavily.com/search", true, false, "tavily-fixture-secret");
+        var draft = new PlatformConfig(0, List.of(provider), List.of(), "",
+                new PlatformConfig.Asr(false, "", ""), null,
+                new PlatformConfig.WebSearch(true, "search", 5, "advanced", 8000));
+
+        fixture.service.publish(1, draft);
+
+        assertThat(fixture.service(PlatformConfigFixture.MASTER_KEY).snapshot().webSearch().searchProtocol())
+                .isEqualTo("tavily");
+    }
+
+    @Test
+    void publish_changingSearchProtocolWithoutKey_rejectsCredentialReuse() {
+        var initial = new PlatformConfig.Provider("search", "Tavily", "web-search",
+                "https://search.example/search", true, false, "original-search-key", "tavily");
+        var search = new PlatformConfig.WebSearch(true, "search", 4, "advanced", 8000);
+        fixture.service.publish(1, new PlatformConfig(0, List.of(initial), List.of(), "",
+                new PlatformConfig.Asr(false, "", ""), null, search));
+        var changed = new PlatformConfig.Provider("search", "DeepSeek", "web-search",
+                "https://search.example/v1/tools/search", true, true, null, "deepseek");
+
+        assertThatThrownBy(() -> fixture.service.publish(1, new PlatformConfig(1, List.of(changed), List.of(), "",
+                new PlatformConfig.Asr(false, "", ""), null, search)))
+                .isInstanceOf(ApiException.class).hasMessage("服务地址、类型或搜索协议变更后，请重新填写 API Key。");
+        assertThat(fixture.service.snapshot().webSearch().searchProtocol()).isEqualTo("tavily");
+        assertThat(fixture.service.snapshot().webSearch().apiKey()).isEqualTo("original-search-key");
+    }
+
+    @Test
+    void publish_searchProtocolAndPathDisagree_rejectsWithoutPersisting() {
+        var provider = new PlatformConfig.Provider("search", "DeepSeek", "web-search",
+                "https://api.deepseek.com/search", true, false, "fixture-key", "deepseek");
+        var draft = new PlatformConfig(0, List.of(provider), List.of(), "",
+                new PlatformConfig.Asr(false, "", ""), null,
+                new PlatformConfig.WebSearch(true, "search", 4, "advanced", 8000));
+
+        assertThatThrownBy(() -> fixture.service.publish(1, draft)).isInstanceOf(ApiException.class);
+        assertThat(fixture.row.get().published()).isFalse();
+    }
+
+    @Test
     void publish_removedProviderKind_rejectsBeforePersisting() {
         var provider = new PlatformConfig.Provider("removed", "旧服务", "knowledge",
                 "https://example.invalid/search", true, false, "test-secret");
@@ -116,7 +178,7 @@ public class PlatformConfigServiceTest {
                                                 draft.defaultModelId(),
                                                 draft.asr())))
                 .isInstanceOf(ApiException.class)
-                .hasMessage("服务地址或类型变更后，请重新填写 API Key。");
+                .hasMessage("服务地址、类型或搜索协议变更后，请重新填写 API Key。");
     }
 
     @Test

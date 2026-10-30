@@ -29,7 +29,7 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
     private final ProviderJson json;
     private final AsrProviderProbe asr;
     private final AuditService audit;
-    private final com.interview.copilot.util.search.TavilySearchClient search;
+    private final com.interview.copilot.util.search.WebSearchClient search;
     private final Semaphore capacity = new Semaphore(4);
 
     public PlatformProbeServiceImpl(
@@ -37,7 +37,7 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
             ProviderHttpClient http,
             ProviderJson json,
             AsrProviderProbe asr,
-            AuditService audit, com.interview.copilot.util.search.TavilySearchClient search) {
+            AuditService audit, com.interview.copilot.util.search.WebSearchClient search) {
         this.configs = configs;
         this.http = http;
         this.json = json;
@@ -88,7 +88,7 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
     private void webSearch(PlatformSnapshot snapshot) {
         var endpoint = snapshot.webSearch();
         if (!endpoint.enabled()) throw ProviderErrors.unavailable();
-        search.search("Tavily search connection test", endpoint).block();
+        search.search("Web search connection test", endpoint).block();
     }
 
     private void llm(PlatformSnapshot snapshot, String modelId) {

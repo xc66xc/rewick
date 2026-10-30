@@ -26,6 +26,10 @@ public record OperationContext(long userId, String operationId, String spanId, S
         return new OperationContext(userId,operationId,spanId,parentSpanId,requestId,sessionId,
                 startedNanos,startedAt,serverOnly,providerType,value,ended,sink);
     }
+    public OperationContext provider(String provider, String selectedModel) {
+        return new OperationContext(userId,operationId,spanId,parentSpanId,requestId,sessionId,
+                startedNanos,startedAt,serverOnly,provider,selectedModel,ended,sink);
+    }
     public double elapsedMs() {return Math.max(0,(System.nanoTime()-startedNanos)/1_000_000.0);}
     public void finish(String stage,String outcome,Map<String,Object> metadata) {
         if(ended.compareAndSet(false,true)) emit(stage,outcome,metadata);

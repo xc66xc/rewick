@@ -141,6 +141,11 @@ describe('operations monitoring', () => {
     view.rerender(<OperationsPage api={api} active />)
     await waitFor(() => expect(calls.length).toBe(initial + 1))
   })
+  it('labels DeepSeek web retrieval separately from answer-model events', () => {
+    const web = eventSchema.parse({ ...event, stage: 'retrieval.web', providerType: 'deepseek', model: 'deepseek-search' })
+    render(<OperationTimeline data={{ ...trace, events: [web] }} />)
+    expect(screen.getByText('服务：DeepSeek 搜索 · deepseek-search')).toBeTruthy()
+  })
   it('orders parent spans within one lane and tolerates cycles and absent offsets', () => {
     const child = { ...event, eventId: '44444444-4444-4444-8444-444444444444', spanId: '55555555-5555-4555-8555-555555555555', parentSpanId: spanId }
     expect(orderedLane([child, event]).map(row => row.depth)).toEqual([0, 1])
@@ -150,6 +155,7 @@ describe('operations monitoring', () => {
     expect(screen.getByText(/未采集该来源/)).toBeTruthy()
     expect(eventSchema.safeParse({ ...event, source: 'external' }).success).toBe(false)
     expect(eventSchema.safeParse({ ...event, providerType: 'bailian' }).success).toBe(false)
+    expect(eventSchema.parse({ ...event, providerType: 'deepseek', stage: 'retrieval.web' }).providerType).toBe('deepseek')
   })
   it('accepts nullable backend measurements as unknown and nullable event fields as absent', () => {
     const parsed = overviewSchema.parse({ ...overview, performance: Object.fromEntries(Object.keys(overview.performance).map(key => [key, null])) })

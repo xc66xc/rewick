@@ -55,7 +55,15 @@ public record PlatformConfig(
             boolean enabled,
             @JsonProperty(access = JsonProperty.Access.READ_ONLY) boolean hasApiKey,
             @Size(max = 4096) @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
-                    String apiKey) {
+                    String apiKey,
+            @Pattern(regexp = "tavily|deepseek") String searchProtocol) {
+        public Provider(String id, String name, String kind, String url, boolean enabled, boolean hasApiKey, String apiKey) {
+            this(id, name, kind, url, enabled, hasApiKey, apiKey, "tavily");
+        }
+
+        public Provider {
+            if (searchProtocol == null) searchProtocol = "tavily";
+        }
         @Override
         public String toString() {
             return "Provider[id=" + id + ", apiKey=redacted]";
