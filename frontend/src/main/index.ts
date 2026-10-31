@@ -672,7 +672,7 @@ function registerHandlers(): void {
       telemetry.record(observation, 'answer.prepare', preparing, 'success')
       const retrieval = await telemetry.measure(observation, 'retrieval.join', () => retrieveAnswerContext(
         signal => telemetry.measure(observation, 'retrieval.rag', () => references.retrieve(request.question, request.transcript, resolved, signal), 'pg', 'platform'),
-        resolved.webSearch?.enabled ? signal => telemetry.measure(observation, 'retrieval.web', () => new WebSearchClient(resolved, secrets.platformAccessToken).retrieve(request.question, signal), 'tavily', 'platform') : undefined,
+        resolved.webSearch?.enabled ? signal => telemetry.measure(observation, 'retrieval.web', () => new WebSearchClient(resolved, secrets.platformAccessToken).retrieve(request.question, signal), 'system', 'platform') : undefined,
         controller.signal), 'system')
       if (epoch !== answerEpoch || controller.signal.aborted) return
       emit({ kind: 'answer-context', requestId: request.requestId, interviewTarget: config.interviewTarget, retrieval, interviewEnvironment: config.interviewEnvironment })

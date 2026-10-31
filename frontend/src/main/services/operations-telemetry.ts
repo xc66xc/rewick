@@ -84,6 +84,8 @@ export class OperationsTelemetry {
   }
   async measure<T>(operation: OperationContext | undefined, stage: TelemetryStage, action: () => Promise<T>, providerType?: OperationContext['providerType'], serviceSource?: OperationContext['serviceSource']): Promise<T> {
     const child = operation && { ...operation, parentSpanId: operation.spanId, spanId: randomUUID(), providerType: providerType ?? operation.providerType, serviceSource: serviceSource ?? operation.serviceSource }
+    // The desktop measures the platform request; only the backend knows the selected search supplier.
+    if (child && stage === 'retrieval.web') { child.providerType = 'system'; delete child.model }
     const started = performance.now()
     try {
       const value = await this.run(child, action)
