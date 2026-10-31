@@ -191,29 +191,54 @@ public interface OperationsMapper {
         FROM operations_events WHERE started_at>=LOCALTIMESTAMP-INTERVAL '24 hours'
         """)
     String asrHealth();
+    // Apply optional dimensions to operations, retaining every stage in the bounded time window.
+    String TRACE_GROUPS = """
+        FROM operations_events
+        WHERE started_at >= LOCALTIMESTAMP - make_interval(hours => #{hours})
+        <if test="userId != null">AND user_id=#{userId}</if>
+        GROUP BY operation_id,user_id HAVING TRUE
+        <if test="sessionId != null">AND bool_or(session_id=#{sessionId})</if>
+        <if test="model != null">AND bool_or(model=#{model})</if>
+        <if test="appVersion != null">AND bool_or(app_version=#{appVersion})</if>
+        """;
     @Select("""
         <script>
         SELECT json_build_object('operationId',operation_id::text,'userId',user_id::text,'sessionId',max(session_id),
-        'model',max(model),'appVersion',max(app_version),'startedAt',to_char(min(started_at),'YYYY-MM-DD"T"HH24:MI:SS.US')||'+08:00',
-        'outcome',COALESCE(max(outcome) FILTER(WHERE stage='answer.complete'),max(outcome) FILTER(WHERE stage='llm.complete'),max(outcome)),
-        'eventCount',count(*),'clientReported',bool_or(source='desktop'))::text FROM operations_events
-        WHERE started_at >= LOCALTIMESTAMP - make_interval(hours => #{hours})
-        <if test="userId != null">AND user_id=#{userId}</if>
-        <if test="sessionId != null">AND session_id=#{sessionId}</if>
-        <if test="model != null">AND model=#{model}</if>
-        <if test="appVersion != null">AND app_version=#{appVersion}</if>
-        GROUP BY operation_id,user_id ORDER BY min(started_at) DESC LIMIT #{size} OFFSET #{offset}
+        'operationType',CASE WHEN bool_or(stage LIKE 'answer.%' OR stage LIKE 'llm.%') THEN 'answer'
+            WHEN bool_or(stage LIKE 'asr.%') THEN 'asr'
+            WHEN bool_or(stage IN ('session.sync','session.save')) THEN 'session-sync' ELSE 'other' END,
+        'model',CASE WHEN bool_or(stage LIKE 'answer.%' OR stage LIKE 'llm.%') THEN (array_agg(model ORDER BY
+            CASE WHEN source='backend' AND stage='llm.complete' THEN 0
+                WHEN source='backend' AND stage='llm.first_content' THEN 1
+                WHEN stage='llm.complete' THEN 2 WHEN stage='llm.first_content' THEN 3
+                WHEN stage='answer.complete' THEN 4 WHEN stage LIKE 'answer.%' THEN 5 ELSE 6 END,
+            started_at DESC,event_id DESC)
+            FILTER(WHERE NULLIF(model,'') IS NOT NULL AND
+                (stage LIKE 'llm.%' OR stage LIKE 'answer.%')))[1]
+            WHEN bool_or(stage LIKE 'asr.%') THEN
+                (array_agg(model ORDER BY CASE WHEN stage='asr.complete' THEN 0 ELSE 1 END,
+                    started_at DESC,event_id DESC) FILTER(WHERE NULLIF(model,'') IS NOT NULL AND stage LIKE 'asr.%'))[1]
+            ELSE NULL END,
+        'appVersion',(array_agg(app_version ORDER BY CASE WHEN source='desktop' THEN 0 ELSE 1 END,
+            started_at DESC,event_id DESC) FILTER(WHERE NULLIF(app_version,'') IS NOT NULL))[1],'startedAt',to_char(min(started_at),'YYYY-MM-DD"T"HH24:MI:SS.US')||'+08:00',
+        'outcome',COALESCE(
+            (array_agg(outcome ORDER BY started_at DESC,event_id DESC) FILTER(WHERE stage='answer.complete'))[1],
+            (array_agg(outcome ORDER BY CASE WHEN source='backend' THEN 0 ELSE 1 END,
+                started_at DESC,event_id DESC) FILTER(WHERE stage='llm.complete'))[1],
+            CASE WHEN NOT bool_or(stage LIKE 'answer.%' OR stage LIKE 'llm.%') THEN
+                COALESCE((array_agg(outcome ORDER BY started_at DESC,event_id DESC) FILTER(WHERE stage='asr.complete'))[1],
+                    (array_agg(outcome ORDER BY started_at DESC,event_id DESC) FILTER(WHERE stage='session.sync'))[1]) END,
+            (array_agg(outcome ORDER BY CASE WHEN outcome IN ('error','timeout','rejected') THEN 0
+                WHEN outcome IN ('cancelled','degraded','empty') THEN 1 ELSE 2 END,
+                started_at DESC,event_id DESC))[1]),
+        'eventCount',count(*),'clientReported',bool_or(source='desktop'))::text
+        """ + TRACE_GROUPS + """
+        ORDER BY min(started_at) DESC,operation_id LIMIT #{size} OFFSET #{offset}
         </script>
         """)
     List<String> traces(@Param("hours") int hours, @Param("userId") Long userId, @Param("sessionId") String sessionId,
             @Param("model") String model, @Param("appVersion") String appVersion, @Param("size") int size, @Param("offset") int offset);
-    @Select("""
-        <script>SELECT count(*) FROM (SELECT operation_id,user_id FROM operations_events
-        WHERE started_at >= LOCALTIMESTAMP - make_interval(hours => #{hours})
-        <if test="userId != null">AND user_id=#{userId}</if><if test="sessionId != null">AND session_id=#{sessionId}</if>
-        <if test="model != null">AND model=#{model}</if><if test="appVersion != null">AND app_version=#{appVersion}</if>
-        GROUP BY operation_id,user_id) selected</script>
-        """)
+    @Select("<script>SELECT count(*) FROM (SELECT operation_id,user_id " + TRACE_GROUPS + ") selected</script>")
     long traceCount(@Param("hours") int hours, @Param("userId") Long userId, @Param("sessionId") String sessionId,
             @Param("model") String model, @Param("appVersion") String appVersion);
     @Select("SELECT payload::text FROM operations_events WHERE operation_id=CAST(#{operationId} AS uuid) AND user_id=#{userId} ORDER BY started_at,event_id LIMIT 1000")

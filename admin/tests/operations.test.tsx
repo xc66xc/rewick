@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import OperationsTraces from '../src/components/operations/OperationsTraces'
 import OperationsPage from '../src/pages/OperationsPage'
 import OperationTimeline, { orderedLane } from '../src/components/operations/OperationTimeline'
 import { ApiClient } from '../src/api'
@@ -31,6 +32,40 @@ function setup({ unavailable = false, conflict = false } = {}) {
   return { actor: userEvent.setup(), calls, publications, api, view }
 }
 describe('operations monitoring', () => {
+  it('distinguishes sync failures from answers and labels client versions explicitly', async () => {
+    const items = [
+      { ...traces.items[0], operationType: 'session-sync', model: null, outcome: 'error', appVersion: '2.0.8' },
+      { ...traces.items[0], operationId: '11111111-1111-4111-8111-111111111112', operationType: 'answer', model: null },
+      { ...traces.items[0], operationId: '11111111-1111-4111-8111-111111111113', operationType: 'asr', model: 'speech-model' },
+      { ...traces.items[0], operationId: '11111111-1111-4111-8111-111111111114', operationType: undefined }
+    ]
+    vi.stubGlobal('fetch', vi.fn(async () => response({ ...traces, items, total: 4 })))
+    render(<OperationsTraces api={new ApiClient('token')} hours={24} active />)
+    const table = await screen.findByRole('table', { name: '最近操作 · 最多 7 天' })
+    expect(within(table).getByRole('columnheader', { name: '模型 / 客户端版本' })).toBeTruthy()
+    const rows = within(table).getAllByRole('row').slice(1)
+    expect(rows).toHaveLength(4)
+    expect(within(rows[0]).getByText('会话同步')).toBeTruthy()
+    expect(within(rows[0]).getByText('不涉及模型')).toBeTruthy()
+    expect(within(rows[0]).getByText('失败')).toBeTruthy()
+    expect(within(rows[0]).getByText('客户端 2.0.8')).toBeTruthy()
+    expect(within(rows[1]).getByText('未上报')).toBeTruthy()
+    expect(within(rows[2]).getByText('语音转写')).toBeTruthy()
+    expect(within(rows[2]).getByText('speech-model')).toBeTruthy()
+    expect(within(rows[3]).getByText('其他操作')).toBeTruthy()
+    expect(within(table).queryByText('未知')).toBeNull()
+  })
+  it('accepts legacy operation types and explains safe sync conflict reasons', () => {
+    const parsed = tracesSchema.parse({ ...traces, items: [{ ...traces.items[0], operationType: null }] })
+    expect(parsed.items[0].operationType).toBe('other')
+    expect(tracesSchema.safeParse({ ...traces, items: [{ ...traces.items[0], operationType: 'invented' }] }).success).toBe(false)
+    render(<OperationTimeline data={{ ...trace, events: [
+      { ...event, stage: 'session.sync', outcome: 'rejected', reason: 'record_changed' },
+      { ...event, eventId: '33333333-3333-4333-8333-333333333334', stage: 'session.sync', outcome: 'rejected', reason: 'record_deleted' }
+    ] }} />)
+    expect(screen.getByText('分类：云端记录版本已变化')).toBeTruthy()
+    expect(screen.getByText('分类：云端记录已删除')).toBeTruthy()
+  })
   it('starts at 24 hours, presents real business data and explicit unknown values', async () => {
     const { actor, calls } = setup()
     await screen.findByRole('region', { name: '业务概览' })

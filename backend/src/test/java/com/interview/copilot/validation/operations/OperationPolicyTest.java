@@ -70,6 +70,17 @@ public class OperationPolicyTest {
         assertThatCode(() -> OperationPolicy.event(search)).doesNotThrowAnyException();
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"record_changed", "record_deleted"})
+    void validate_sessionConflictReason_acceptsOnlySafeCodes(String reason) {
+        var value = event(UUID.randomUUID().toString(), Map.of());
+        var sync = new OperationEvent(value.eventId(), value.operationId(), value.spanId(),
+                null, null, null, "session.sync", "desktop", value.startedAt(), null, 1,
+                "error", reason, "platform", "system", null, "2.0.8", Map.of());
+
+        assertThatCode(() -> OperationPolicy.event(sync)).doesNotThrowAnyException();
+    }
+
     @Test void settings_disabledAllAndGray_semanticsAreExplicit() {
         assertThat(OperationsSettings.disabled().allows(1)).isFalse();
         assertThat(new OperationsSettings(0,true,java.util.List.of(),null).allows(1)).isTrue();

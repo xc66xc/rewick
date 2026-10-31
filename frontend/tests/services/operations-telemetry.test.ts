@@ -157,6 +157,18 @@ describe('bounded isolated operations telemetry', () => {
     await service.flush()
     expect(batches[0].events).toHaveLength(1)
   })
+  it.each(['record_changed', 'record_deleted', 'secret raw failure'])('only records safe sync failure reasons (%s)', async reason => {
+    const service = await enable()
+    const operation = service.operation({ operationId: randomUUID() })
+    const error = Object.assign(new Error('sensitive response body'), { reason })
+    await expect(service.measure(operation, 'session.sync', async () => { throw error })).rejects.toBe(error)
+    await service.flush()
+    const event = batches[0].events[0]
+    expect(event).toMatchObject({ outcome: 'error', stage: 'session.sync' })
+    expect((event as { reason?: string }).reason).toBe(reason.startsWith('record_') ? reason : undefined)
+    expect(JSON.stringify(event)).not.toContain('sensitive')
+    expect(JSON.stringify(event)).not.toContain('secret raw')
+  })
   it('propagates matching asynchronous stage span headers without leaking outside context', async () => {
     const service = await enable()
     const operation = service.operation({ operationId: randomUUID() })

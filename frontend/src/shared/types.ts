@@ -291,6 +291,10 @@ export interface DesktopBridge {
   getHistoryPage(cursor?: number): Promise<{ records: SessionRecord[]; nextCursor: number | null }>
   getHistoryDetail(id: string): Promise<SessionRecord>
   getHistorySyncStatus(): Promise<string>
+  getHistoryDrafts?(): Promise<{ id: string; title: string; createdAt: string; reason: 'record_changed' | 'record_deleted' | 'retry_limit' }[]>
+  getHistoryDraft?(id: string): Promise<SessionRecord>
+  recoverHistoryDraft?(id: string): Promise<string>
+  retryHistoryDraft?(id: string): Promise<void>
   getHistory(): Promise<SessionRecord[]>
   saveSession(record: SessionRecord, accountScope?: string): Promise<void>
   removeSession(id: string): Promise<void>
