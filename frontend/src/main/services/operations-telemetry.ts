@@ -74,12 +74,12 @@ export class OperationsTelemetry {
     setImmediate(() => { this.flushScheduled = false; void this.flush() })
   }
   run<T>(operation: OperationContext | undefined, action: () => T): T { return operation ? context.run(operation, action) : action() }
-  record(operation: OperationContext | undefined, stage: TelemetryStage, started: number, outcome: TelemetryEvent['outcome'], metadata?: TelemetryMetadata, spanId?: string): void {
+  record(operation: OperationContext | undefined, stage: TelemetryStage, started: number, outcome: TelemetryEvent['outcome'], metadata?: TelemetryMetadata, spanId?: string, reason?: TelemetryEvent['reason']): void {
     if (!operation || !this.enabled || operation.generation !== this.generation || this.identity?.accountId !== operation.accountId) return
     const now = performance.now()
     this.enqueueTrusted({ eventId: randomUUID(), operationId: operation.operationId, spanId: spanId ?? randomUUID(), parentSpanId: spanId ? operation.parentSpanId : operation.spanId,
       requestId: operation.requestId, sessionId: operation.sessionId, stage, source: 'desktop', startedAt: new Date(Date.parse(operation.startedAt) + (started - operation.started)).toISOString(),
-      offsetMs: Math.max(0, started - operation.started), durationMs: Math.min(86400000, Math.max(0, now - started)), outcome,
+      offsetMs: Math.max(0, started - operation.started), durationMs: Math.min(86400000, Math.max(0, now - started)), outcome, reason,
       providerType: operation.providerType, model: operation.model, serviceSource: operation.serviceSource, appVersion: this.appVersion, metadata })
   }
   async measure<T>(operation: OperationContext | undefined, stage: TelemetryStage, action: () => Promise<T>, providerType?: OperationContext['providerType'], serviceSource?: OperationContext['serviceSource']): Promise<T> {
@@ -91,7 +91,11 @@ export class OperationsTelemetry {
       const outcome = retrieval?.status === 'degraded' ? 'degraded' : retrieval?.status === 'empty' ? 'empty' : retrieval?.status === 'disabled' ? 'skipped' : 'success'
       this.record(child, stage, started, outcome, retrieval?.excerpts ? { fragmentCount: retrieval.excerpts.length, summaryEnabled: retrieval.excerpts.some(item => item.generatedSummary) } : undefined, child?.spanId)
       return value
-    } catch (error) { this.record(child, stage, started, error instanceof Error && error.name === 'AbortError' ? 'cancelled' : 'error', undefined, child?.spanId); throw error }
+    } catch (error) {
+      const reason = error instanceof Error && 'reason' in error && (error.reason === 'record_changed' || error.reason === 'record_deleted') ? error.reason : undefined
+      this.record(child, stage, started, error instanceof Error && error.name === 'AbortError' ? 'cancelled' : 'error', undefined, child?.spanId, reason)
+      throw error
+    }
   }
   enqueue(event: unknown): void {
     if (!this.enabled || !this.identity) return

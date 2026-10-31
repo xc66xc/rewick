@@ -710,6 +710,10 @@ function registerHandlers(): void {
   handle('history:page', cursor => history.page(parseInput(z.number().int().positive().optional(), cursor)))
   handle('history:detail', id => history.detail(String(id)))
   handle('history:status', () => history.status())
+  handle('history:drafts', () => history.drafts())
+  handle('history:draft', id => history.localDraft(parseInput(z.string().min(1).max(200), id)))
+  handle('history:recover-draft', id => history.recoverDraft(parseInput(z.string().min(1).max(200), id)))
+  handle('history:retry-draft', id => history.retryDraft(parseInput(z.string().min(1).max(200), id)))
   handle('history:list', () => history.list())
   handle('history:save', input => {
     const value = input as { record: SessionRecord; accountScope?: string }

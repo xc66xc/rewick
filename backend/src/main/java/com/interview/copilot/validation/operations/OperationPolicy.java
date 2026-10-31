@@ -23,7 +23,7 @@ public final class OperationPolicy {
             "totalTokens", "bufferedBytes", "maxGapMs", "summaryEnabled", "audioBytes", "filteredCount", "triggerCount");
     private static final Set<String> REASONS = Set.of("provider_error", "network_error", "timeout", "cancelled",
             "unauthorized", "unavailable", "rate_limit", "session_inactive", "invalid_input", "storage_error",
-            "queue_full", "empty", "feedback", "server_only", "unknown");
+            "queue_full", "empty", "feedback", "server_only", "record_changed", "record_deleted", "unknown");
     private OperationPolicy() {}
     public static String uuid(String value) {
         if (value == null) return null;

@@ -23,6 +23,10 @@ const calls = []
 const chunks = []
 let saved = structuredClone(settings)
 let outage = false
+const traceRows = { ...traces, total: 2, items: [traces.items[0], {
+  ...traces.items[0], operationId: '11111111-1111-4111-8111-111111111112',
+  operationType: 'session-sync', model: null, appVersion: '2.0.8', outcome: 'error'
+}] }
 page.on('pageerror', error => errors.push(error.message))
 page.on('request', request => { if (request.url().includes('OperationsTrend-')) chunks.push(request.url()) })
 try {
@@ -40,7 +44,7 @@ try {
     else if (path.endsWith('/settings')) {
       if (route.request().method() === 'PUT') saved = { ...route.request().postDataJSON(), version: saved.version + 1 }
       body = saved
-    } else if (path.endsWith('/traces')) body = traces
+    } else if (path.endsWith('/traces')) body = traceRows
     else if (path.endsWith(`/traces/${trace.operationId}`)) body = trace
     else throw new Error(`Unexpected mock API ${path}`)
     await route.fulfill({ status: outage && path.includes('/operations/') ? 503 : 200, contentType: 'application/json', body: JSON.stringify(outage ? { message: '监控存储不可用' } : body) })
@@ -72,7 +76,12 @@ try {
   await expect(page.getByText('样本不足 100', { exact: true })).toBeVisible()
   await page.screenshot({ path: 'test-results/operations/performance.png', fullPage: true })
   await page.getByRole('button', { name: '操作链路', exact: true }).click()
-  await page.getByRole('button', { name: '查看链路', exact: true }).click()
+  await expect(page.getByRole('columnheader', { name: '模型 / 客户端版本', exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: '会话同步', exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: '不涉及模型 客户端 2.0.8', exact: true })).toBeVisible()
+  await expect(page.getByText('客户端 2.0.8', { exact: true })).toBeVisible()
+  await page.screenshot({ path: 'test-results/operations/trace-list.png', fullPage: true })
+  await page.getByRole('button', { name: '查看链路', exact: true }).first().click()
   await expect(page.getByRole('region', { name: '客户端泳道' })).toBeVisible()
   await expect(page.getByRole('region', { name: '后端泳道' })).toBeVisible()
   await page.screenshot({ path: 'test-results/operations/traces.png', fullPage: true })
