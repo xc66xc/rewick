@@ -28,7 +28,7 @@ export class WebSearchClient {
     if (!platform?.authenticated || !this.token) throw new Error('请先登录平台账号。')
     try {
       if (!platform.advancedSettingsEnabled) throw new Error('当前账号没有联网搜索权限，请刷新设置。')
-      if (!platform.webSearchAvailable) throw new Error('平台尚未开放联网搜索，请联系管理员配置 Tavily。')
+      if (!platform.webSearchAvailable) throw new Error('平台尚未开放联网搜索，请联系管理员配置联网搜索服务。')
       const timeoutMs = (platform.webSearchTimeoutMs ?? 8000) + 1500
       const response = responseSchema.parse(await new PlatformClient(platform.baseUrl, timeoutMs)
         .webSearch(this.token, query, randomUUID(), signal))

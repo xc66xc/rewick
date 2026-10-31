@@ -21,6 +21,36 @@ async function enable(connection = async () => identity) {
   return telemetry
 }
 describe('bounded isolated operations telemetry', () => {
+  it.each([
+    ['ready', 'success'], ['empty', 'empty'], ['degraded', 'degraded'], ['disabled', 'skipped'],
+  ] as const)('records %s web retrieval as a platform request without inventing a supplier or inheriting the answer model', async (status, outcome) => {
+    const service = await enable()
+    const operation = service.operation({ operationId: randomUUID(), requestId: 'answer-one', providerType: 'llm', model: 'answer-model-alias', serviceSource: 'custom' })
+    const result = { status, excerpts: status === 'ready' ? [{ generatedSummary: false }] : [] }
+    const retrieve = vi.fn(async () => {
+      expect(operationHeaders()['X-Operation-Id']).toBe(operation?.operationId)
+      expect(operationHeaders()['X-Parent-Span-Id']).not.toBe(operation?.spanId)
+      return result
+    })
+    await expect(service.measure(operation, 'retrieval.web', retrieve, 'system', 'platform')).resolves.toBe(result)
+    service.record(operation, 'llm.complete', performance.now(), 'success')
+    await service.flush()
+    const [web, answer] = batches.flatMap(batch => batch.events).map(event => telemetryEventSchema.parse(event))
+    expect(web).toMatchObject({ stage: 'retrieval.web', providerType: 'system', serviceSource: 'platform', outcome, requestId: 'answer-one', parentSpanId: operation?.spanId, metadata: { fragmentCount: result.excerpts.length, summaryEnabled: false } })
+    expect(web.model).toBeUndefined()
+    expect(answer).toMatchObject({ providerType: 'llm', model: 'answer-model-alias', serviceSource: 'custom' })
+    expect(retrieve).toHaveBeenCalledTimes(1)
+  })
+  it.each(['error', 'cancelled'] as const)('keeps web retrieval %s and correlation without a false supplier or answer model', async outcome => {
+    const service = await enable()
+    const operation = service.operation({ operationId: randomUUID(), providerType: 'llm', model: 'answer-model-alias' })
+    const error = outcome === 'cancelled' ? new DOMException('cancelled', 'AbortError') : new Error('offline')
+    await expect(service.measure(operation, 'retrieval.web', async () => { throw error }, 'system', 'platform')).rejects.toBe(error)
+    await service.flush()
+    const [web] = batches.flatMap(batch => batch.events).map(event => telemetryEventSchema.parse(event))
+    expect(web).toMatchObject({ operationId: operation?.operationId, providerType: 'system', serviceSource: 'platform', outcome })
+    expect(web.model).toBeUndefined()
+  })
   it('defaults disabled and closes collection when settings are unreachable', async () => {
     telemetry = new OperationsTelemetry(async () => identity, '0.4.0')
     expect(telemetry.operation({ operationId: randomUUID() })).toBeUndefined()
