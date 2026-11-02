@@ -1,6 +1,6 @@
 {
   "name": "interview-copilot-admin",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,8 @@
     "test:smoke": "node scripts/smoke.mjs",
     "test:static": "node scripts/smoke-static.mjs",
     "test:web-search": "node scripts/smoke-web-search.mjs",
-    "test:operations": "node scripts/smoke-operations.mjs"
+    "test:operations": "node scripts/smoke-operations.mjs",
+    "test:appearance": "node scripts/smoke-appearance.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "2.1.10",
