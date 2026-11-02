@@ -1,6 +1,137 @@
 {
   "schemaVersion": 1,
   "releaseTag": "desktop-v2.1.0",
-  "runtimes": {},
-  "model": null
+  "runtimes": {
+    "mac-arm64": {
+      "resourceId": "runtime-mac-arm64-23268ae170f746ab",
+      "kind": "runtime",
+      "fileName": "Rewick-speech-runtime-mac-arm64-23268ae170f746ab.tar.gz",
+      "url": "https://github.com/xc66xc/rewick/releases/download/desktop-v2.1.0/Rewick-speech-runtime-mac-arm64-23268ae170f746ab.tar.gz",
+      "sha256": "23268ae170f746ab6834d72cf1e618d0d9a5a80594be0f510bf8024f66d91dac",
+      "archiveBytes": 82361802,
+      "unpackedBytes": 242203813,
+      "maxEntries": 4188,
+      "criticalFiles": [
+        {
+          "path": "bin/python3.12",
+          "size": 18646840,
+          "sha256": "efa4aeb5a88a656d28f5da5317d5b990f56ef0acd5cdbfe300f8fc435f31c49b"
+        },
+        {
+          "path": ".rewick-runtime",
+          "size": 74,
+          "sha256": "ff7a98904816d8df27561be0494b6d536b8b530879c3eb42b98c71ff728f1d78"
+        },
+        {
+          "path": ".rewick-asr",
+          "size": 74,
+          "sha256": "ee578303513e821a35b8aa86788c6c49911218128169e42ca62b257f5c762ac0"
+        },
+        {
+          "path": "cacert.pem",
+          "size": 178380,
+          "sha256": "15783a17671365196e5e4ba6ddea3132df72538fef70be91bbd91f45c85c170f"
+        },
+        {
+          "path": "lib/python3.12/site-packages/faster_whisper/__init__.py",
+          "size": 430,
+          "sha256": "5396c3a025a7b0cf81246fcd680c0bb7e384e2e587cc2e18f9518cef4c26d56c"
+        },
+        {
+          "path": "lib/python3.12/site-packages/ctranslate2/__init__.py",
+          "size": 1559,
+          "sha256": "1d6a5da7215bcfe3c705eca6b08e04acd2c0f9c7080d3c9fde072ca851847152"
+        },
+        {
+          "path": "lib/python3.12/site-packages/onnxruntime/__init__.py",
+          "size": 21447,
+          "sha256": "c238c7f2c3660ad216cfe3f794f65adf81a08c99be0f7c8d854f1e4cab076d07"
+        }
+      ]
+    },
+    "win-x64": {
+      "resourceId": "runtime-win-x64-f2c896d3333c06e5",
+      "kind": "runtime",
+      "fileName": "Rewick-speech-runtime-win-x64-f2c896d3333c06e5.tar.gz",
+      "url": "https://github.com/xc66xc/rewick/releases/download/desktop-v2.1.0/Rewick-speech-runtime-win-x64-f2c896d3333c06e5.tar.gz",
+      "sha256": "f2c896d3333c06e5050d35dc1b2d71967c37eabd6d801cb0253e8a87cfca0cc3",
+      "archiveBytes": 125928467,
+      "unpackedBytes": 382735040,
+      "maxEntries": 5410,
+      "criticalFiles": [
+        {
+          "path": "python.exe",
+          "size": 91648,
+          "sha256": "85931ceb610c70197f3a1c63057f3f45d5b39dcceedc55327e225ee368b00832"
+        },
+        {
+          "path": ".rewick-runtime",
+          "size": 72,
+          "sha256": "4bbda3e7823ed5718f1f91a64995e424497aeb08ff909e1466f566a86f0413fe"
+        },
+        {
+          "path": ".rewick-asr",
+          "size": 72,
+          "sha256": "d51f9fb458967a0519abac5c7856e846de70c9ea0c7006e43c626229b34753c0"
+        },
+        {
+          "path": "cacert.pem",
+          "size": 178380,
+          "sha256": "15783a17671365196e5e4ba6ddea3132df72538fef70be91bbd91f45c85c170f"
+        },
+        {
+          "path": "Lib/site-packages/faster_whisper/__init__.py",
+          "size": 430,
+          "sha256": "5396c3a025a7b0cf81246fcd680c0bb7e384e2e587cc2e18f9518cef4c26d56c"
+        },
+        {
+          "path": "Lib/site-packages/ctranslate2/__init__.py",
+          "size": 1618,
+          "sha256": "c8537afefbb7d78f1d0f4865627cba1c88962d91be9d6179fa36e0c1f463b157"
+        },
+        {
+          "path": "Lib/site-packages/onnxruntime/__init__.py",
+          "size": 21947,
+          "sha256": "aa5d395f33d6c3417f7e296cfda89270cb12b36a9f06c884966fafb99d0e04c4"
+        }
+      ]
+    }
+  },
+  "model": {
+    "resourceId": "model-e7786f50f9699bd3",
+    "kind": "model",
+    "fileName": "Rewick-speech-model-e7786f50f9699bd3.tar.gz",
+    "url": "https://github.com/xc66xc/rewick/releases/download/desktop-v2.1.0/Rewick-speech-model-e7786f50f9699bd3.tar.gz",
+    "sha256": "e7786f50f9699bd32aeca89d33e642625f01bd2d7f4022f18786c8ba90c62b08",
+    "archiveBytes": 445921682,
+    "unpackedBytes": 486215433,
+    "maxEntries": 38,
+    "criticalFiles": [
+      {
+        "path": "model.bin",
+        "size": 483546902,
+        "sha256": "3e305921506d8872816023e4c273e75d2419fb89b24da97b4fe7bce14170d671"
+      },
+      {
+        "path": "config.json",
+        "size": 2370,
+        "sha256": "b55496ac7940a7ae47d2c01eab40edfd8701feec1229d9cce3b40014383fb828"
+      },
+      {
+        "path": "tokenizer.json",
+        "size": 2203239,
+        "sha256": "fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab"
+      },
+      {
+        "path": "vocabulary.txt",
+        "size": 459861,
+        "sha256": "34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913"
+      },
+      {
+        "path": "LICENSE.txt",
+        "size": 1063,
+        "sha256": "b5d65a59060e68c4ff940e1eddfa6f94b2d68fdf58ed7f4dd57721c997e35e9d"
+      }
+    ]
+  }
 }
