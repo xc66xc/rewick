@@ -1,0 +1,4 @@
+@keyframes pearl-enter { from { opacity: .2; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes pearl-select { from { opacity: .4; transform: translateX(-5px); } to { opacity: 1; transform: translateX(0); } }
+:root[data-motion='full']:not([data-page-hidden='true']) dialog[open] { animation: pearl-enter var(--duration-enter) var(--ease-out); }
+:root[data-motion='full']:not([data-page-hidden='true']) nav button[aria-current='page'] { animation: pearl-select 320ms var(--ease-out); }

@@ -27,6 +27,18 @@
 - **会话与录音**：账号内历史读取、会话导出、本机录音下载与录音复盘。录音仅在本机保存，开发版和安装版数据目录隔离。
 - **管理后台**：用户、时长、套餐、支付、模型、邮件、客户端下载和运营观测。支付能力需要另行配置合法有效的商户与回调。
 
+## 管理后台外观
+
+管理后台参考 [scaffold-master](https://github.com/wbr664393425-lgtm/scaffold-master) 的珍珠玻璃视觉语言，保留 React 和现有业务流程。顶栏调色盘可切换浅色、深色、跟随系统，设置三档信息密度与界面动效；偏好仅保存在当前浏览器，系统减少动态效果优先。外观浏览器回归使用隔离演示 API：先启动管理端，再运行 `npm --prefix admin run test:appearance`；可通过 `ADMIN_PREVIEW_URL` 指向本机生产构建预览。
+
+<details>
+<summary>查看新版管理后台（隔离演示数据）</summary>
+
+![管理后台浅色用户列表](assets/readme/admin-pearl-light.png)
+![管理后台深色外观设置](assets/readme/admin-pearl-dark.png)
+
+</details>
+
 ## 项目结构
 
 | 目录 | 内容 |
@@ -38,7 +50,7 @@
 | `deploy/` | PostgreSQL/pgvector 镜像、Compose 与通用部署文件 |
 | `scripts/backend.mjs` | Maven Wrapper 统一入口 |
 
-三个应用模块独立版本化。桌面当前版本由 `frontend/package.json` 统一维护，为 **2.1.0**；管理端及后端目前为 **2.2.1**。macOS 与 Windows 使用相同的三段应用版本号。
+三个应用模块独立版本化。桌面当前版本由 `frontend/package.json` 统一维护，为 **2.1.0**；管理端目前为 **2.3.0**，后端为 **2.2.1**。macOS 与 Windows 使用相同的三段应用版本号。
 
 ## 本地开发
 

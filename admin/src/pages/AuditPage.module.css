@@ -9,7 +9,7 @@
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--space-5); align-items: start; }
 .list { min-width: 0; }
 .table { min-width: 590px; }
-.table th, .table td { padding: var(--space-3) var(--space-2); font-size: var(--text-sm); }
+.table th, .table td { padding: var(--cell-py) var(--cell-px); font-size: var(--text-sm); }
 .group th { background: var(--color-surface-muted); font-weight: 500; color: var(--color-muted); }
 .group span { margin-left: var(--space-3); font-size: var(--text-xs); }
 .selected > * { background: var(--color-primary-bg); }
