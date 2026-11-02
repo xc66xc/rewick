@@ -37,7 +37,98 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm --prefix frontend ci
       - run: npm --prefix frontend test
+  resources:
+    name: Speech resources ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: mac-arm64
+            os: macos-15
+          - target: win-x64
+            os: windows-2025
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm --prefix frontend ci
+      - name: Build immutable resources or reuse pinned metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BACKFILL: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          mkdir -p "dist/speech-resources/${{ matrix.target }}"
+          if [ -f frontend/scripts/recording-resources.mjs ]; then
+            if [ "$BACKFILL" = true ]; then
+              # An existing on-demand release carries the exact manifest compiled into its installers.
+              gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern recording-resources.json --dir "$RUNNER_TEMP/resource-manifest"
+              cp "$RUNNER_TEMP/resource-manifest/recording-resources.json" frontend/src/shared/recording-resources.json
+              node frontend/scripts/recording-resources.mjs validate "${{ matrix.target }}"
+              cp frontend/src/shared/recording-resources.json "dist/speech-resources/${{ matrix.target }}/${{ matrix.target }}.json"
+            elif [ "$RUNNER_OS" = Windows ]; then
+              # Wheel ZIP extraction requires Windows' native bsdtar, not Git Bash GNU tar.
+              export PATH="/c/Windows/System32:$PATH"
+              node frontend/scripts/recording-resources.mjs stage "${{ matrix.target }}" "dist/speech-resources/${{ matrix.target }}" "$RELEASE_TAG"
+            else
+              node frontend/scripts/recording-resources.mjs stage "${{ matrix.target }}" "dist/speech-resources/${{ matrix.target }}" "$RELEASE_TAG"
+            fi
+          else
+            printf legacy > "dist/speech-resources/${{ matrix.target }}/legacy.txt"
+          fi
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: speech-resources-${{ matrix.target }}
+          path: dist/speech-resources/${{ matrix.target }}/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+
+  resource-manifest:
+    name: Resolve verified resource manifest
+    needs: resources
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+      - run: npm --prefix frontend ci
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          pattern: speech-resources-*
+          merge-multiple: true
+          path: resource-parts
+      - name: Merge verified native resource metadata
+        run: |
+          mkdir -p resolved-resources
+          if [ -f frontend/scripts/recording-resources.mjs ]; then
+            node frontend/scripts/recording-resources.mjs merge resolved-resources/recording-resources.json resource-parts/mac-arm64.json resource-parts/win-x64.json
+          else
+            printf legacy > resolved-resources/legacy.txt
+          fi
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: recording-resource-manifest
+          path: resolved-resources/*
+          if-no-files-found: error
+          retention-days: 3
+
   build:
+    needs: resource-manifest
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
@@ -70,6 +161,20 @@ jobs:
           test "$(git rev-parse HEAD)" = "$(git rev-parse "$RELEASE_TAG^{commit}")"
           echo "ASSET=Rewick-${VERSION}-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.suffix }}.${{ matrix.extension }}" >> "$GITHUB_ENV"
       - run: npm --prefix frontend ci
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: recording-resource-manifest
+          path: frontend/src/shared
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          pattern: speech-resources-*
+          merge-multiple: true
+          path: dist/speech-resources
+      - name: Verify on-demand resources on the native platform
+        run: |
+          if [ -f frontend/scripts/recording-resources.mjs ]; then
+            node frontend/scripts/recording-resources.mjs verify "${{ matrix.platform }}-${{ matrix.arch }}" frontend/src/shared/recording-resources.json dist/speech-resources "$RUNNER_TEMP/verified-speech"
+          fi
       - name: Build macOS installer
         if: runner.os == 'macOS'
         run: npm run dist
@@ -93,9 +198,12 @@ jobs:
           test "$(uname -m)" = arm64
           codesign --verify --deep --strict "dist/mac-arm64/掌灯 Rewick.app"
           hdiutil verify "dist/$ASSET"
-          EXPECTED_CT2=$(node -p "require('./frontend/scripts/recording-asr-wheels.json')['mac-arm64'].find(w => w.name === 'ctranslate2').version")
-          export EXPECTED_CT2
-          "dist/mac-arm64/掌灯 Rewick.app/Contents/Resources/python/bin/python3" -c 'import os, faster_whisper, ctranslate2; assert ctranslate2.__version__ == os.environ["EXPECTED_CT2"]'
+          if [ -f frontend/scripts/recording-resources.mjs ]; then
+            test ! -e "dist/mac-arm64/掌灯 Rewick.app/Contents/Resources/python"
+            test ! -e "dist/mac-arm64/掌灯 Rewick.app/Contents/Resources/asr-model"
+          else
+            "dist/mac-arm64/掌灯 Rewick.app/Contents/Resources/python/bin/python3" -c 'import faster_whisper, ctranslate2'
+          fi
       - name: Install and launch Windows package
         if: runner.os == 'Windows'
         shell: pwsh
@@ -114,8 +222,12 @@ jobs:
           $bytes = [IO.File]::ReadAllBytes($binary)
           $pe = [BitConverter]::ToInt32($bytes, 0x3c)
           if ([BitConverter]::ToUInt16($bytes, $pe + 4) -ne 0x8664) { throw 'Installed app is not x64' }
-          & (Join-Path $installDir 'resources/python/python.exe') -c 'import faster_whisper, ctranslate2; print("Bundled speech runtime imports passed")'
-          if ($LASTEXITCODE -ne 0) { throw 'Bundled speech runtime failed' }
+          if (Test-Path frontend/scripts/recording-resources.mjs) {
+            if ((Test-Path (Join-Path $installDir 'resources/python')) -or (Test-Path (Join-Path $installDir 'resources/asr-model'))) { throw 'Thin installer unexpectedly bundles speech resources' }
+          } else {
+            & (Join-Path $installDir 'resources/python/python.exe') -c 'import faster_whisper, ctranslate2'
+            if ($LASTEXITCODE -ne 0) { throw 'Legacy speech runtime failed' }
+          }
           Get-Process | Where-Object { $_.Path -eq $binary } | Stop-Process -Force
           $app = Start-Process -FilePath $binary -PassThru
           try {
@@ -127,7 +239,7 @@ jobs:
               if ($app.MainWindowHandle -ne 0) { $visible = $true; break }
             }
             if (!$visible) { throw 'Installed app did not show a window' }
-            Write-Output 'PASS: Windows x64 installer, installed version, speech runtime and app window'
+            Write-Output 'PASS: Windows x64 installer, installed version, speech resources and app window'
           } finally {
             Get-Process | Where-Object { $_.Path -eq $binary } | Stop-Process -Force
           }
@@ -154,7 +266,7 @@ jobs:
 
   publish:
     name: Publish verified installers
-    needs: [validate, build]
+    needs: [validate, build, resources, resource-manifest]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -164,9 +276,19 @@ jobs:
           pattern: installer-*
           merge-multiple: true
           path: installers
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          pattern: speech-resources-*
+          merge-multiple: true
+          path: installers
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: recording-resource-manifest
+          path: installers
       - name: Verify downloaded build artifacts
         working-directory: installers
         run: |
+          rm -f mac-arm64.json win-x64.json legacy.txt
           for checksum in *.sha256; do sha256sum --check "$checksum"; done
       - name: Publish or supplement release without overwriting assets
         working-directory: installers
@@ -176,7 +298,8 @@ jobs:
         run: |
           if [ "$BACKFILL" = true ]; then
             gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft == false' | grep -qx true
-            gh release upload "$RELEASE_TAG" ./* --repo "$GITHUB_REPOSITORY"
+            # Existing immutable resource/manifest assets are reused, never overwritten by a backfill.
+            gh release upload "$RELEASE_TAG" ./*.exe ./*.exe.sha256 --repo "$GITHUB_REPOSITORY"
             gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$RUNNER_TEMP/notes.md"
             node --input-type=module <<'JS'
           import { readFile, writeFile } from 'node:fs/promises'
@@ -193,7 +316,9 @@ jobs:
             cat > "$RUNNER_TEMP/notes.md" <<'NOTES'
           包含 macOS arm64 DMG（macOS 14.2+）和 Windows x64 NSIS 安装包。各包附带 .sha256 校验文件。
 
-          macOS 未完成 Apple Developer 正式签名与公证；Windows 未使用代码签名证书。Windows 包通过自动安装、版本、内置语音运行时及窗口启动检查，真实音频设备仍需在目标电脑验收。
+          macOS 未完成 Apple Developer 正式签名与公证；Windows 未使用代码签名证书。Windows 包通过自动安装、版本、语音资源及窗口启动检查，真实音频设备仍需在目标电脑验收。
+
+          主程序不包含本地语音模型和 Python 环境。首次生成录音复盘时，经确认下载对应平台环境包与公共模型，之后缓存复用；录音、实时转写及普通问答不触发该下载。完整下载后磁盘占用接近旧版。
 
           桌面应用需连接匹配的后端，并配置账号、数据库与模型服务；不附带服务密钥或模型额度。源码采用 MIT，第三方模型及素材保留各自许可。
           NOTES

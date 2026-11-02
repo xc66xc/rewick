@@ -2,10 +2,14 @@ import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import type { RecordingProgress } from '../../shared/recording-types'
 
-export function recordingReviewRuntime(options: { isPackaged: boolean; resourcesPath: string; appPath: string }): { pythonPath: string; scriptPath: string; modelPath: string } {
-  return options.isPackaged
-    ? { pythonPath: join(options.resourcesPath, 'python', process.platform === 'win32' ? 'python.exe' : 'bin/python3'), scriptPath: join(options.resourcesPath, 'recording-review.py'), modelPath: join(options.resourcesPath, 'asr-model') }
-    : { pythonPath: process.env.REWICK_PYTHON ?? join(options.appPath, 'build/python-runtime/python', process.platform === 'win32' ? 'python.exe' : 'bin/python3'), scriptPath: join(options.appPath, 'scripts/recording-review.py'), modelPath: join(options.appPath, 'build/asr-model') }
+export class RecordingEnvironmentError extends Error {}
+
+export function recordingReviewRuntime(options: { isPackaged: boolean; resourcesPath: string; appPath: string; resourcePaths?: { pythonPath: string; modelPath: string } }): { pythonPath: string; scriptPath: string; modelPath: string } {
+  if (options.isPackaged) {
+    if (!options.resourcePaths) throw new Error('本地语音资源尚未准备完成，请返回录音页面重试下载。')
+    return { ...options.resourcePaths, scriptPath: join(options.resourcesPath, 'recording-review.py') }
+  }
+  return { pythonPath: process.env.REWICK_PYTHON ?? join(options.appPath, 'build/python-runtime/python', process.platform === 'win32' ? 'python.exe' : 'bin/python3'), scriptPath: join(options.appPath, 'scripts/recording-review.py'), modelPath: join(options.appPath, 'build/asr-model') }
 }
 
 export function runRecordingReview(options: {
@@ -15,13 +19,14 @@ export function runRecordingReview(options: {
 }): Promise<{ path: string }> {
   if (options.signal.aborted) return Promise.reject(new Error('已取消复盘导出。'))
   return new Promise((resolve, reject) => {
-    const child = spawn(options.pythonPath, ['-I', options.scriptPath], {
+    const child = spawn(options.pythonPath, ['-I', '-B', options.scriptPath], {
       stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true,
       env: { ...process.env, ORT_DISABLE_TELEMETRY: '1' }
     })
     let pending = ''
     let result = false
     let failure = ''
+    let resourceFailure = false
     const cancel = () => child.kill()
     options.signal.addEventListener('abort', cancel, { once: true })
     const timeout = setTimeout(() => { failure = '复盘处理超时。'; child.kill() }, 6 * 60 * 60 * 1000)
@@ -35,7 +40,10 @@ export function runRecordingReview(options: {
         try {
           const event = JSON.parse(line) as Record<string, unknown>
           if (event.type === 'result') result = true
-          if (event.type === 'error' && typeof event.message === 'string') failure = event.message
+          if (event.type === 'error' && typeof event.message === 'string') {
+            failure = event.message
+            resourceFailure = event.code === 'SPEECH_RESOURCES_UNAVAILABLE'
+          }
           if (event.type === 'progress' && ['transcribing', 'summarizing', 'exporting'].includes(String(event.stage)) && typeof event.completed === 'number' && typeof event.total === 'number') {
             options.onProgress({ sessionId: options.sessionId, stage: event.stage as RecordingProgress['stage'], completed: event.completed, total: event.total })
           }
@@ -45,12 +53,13 @@ export function runRecordingReview(options: {
     // Never forward stderr: upstream errors can contain bearer tokens or transcript text.
     child.stderr.resume()
     child.stdin.on('error', () => {})
-    child.once('error', () => { failure = '无法启动复盘运行环境，请重新安装客户端。' })
+    child.once('error', () => { resourceFailure = true; failure = '无法启动本地语音环境，请返回录音页面检查资源后重试。' })
     child.once('close', (code, signal) => {
       clearTimeout(timeout)
       options.signal.removeEventListener('abort', cancel)
       if (options.signal.aborted) reject(new Error('已取消复盘导出。'))
       else if (code === 0 && result && !failure) resolve({ path: options.outputPath })
+      else if (resourceFailure) reject(new RecordingEnvironmentError(failure))
       else reject(new Error(failure || (signal
         ? `本地复盘进程异常退出（${signal}），请重试；若仍失败，请更新客户端。`
         : `本地复盘进程未完成（退出码 ${code ?? '未知'}），请检查本地运行环境后重试。`)))

@@ -220,7 +220,8 @@ export interface DesktopBridge {
     stop(sessionId: string): Promise<import('./recording-types').RecordingInfo>
     info(sessionId: string): Promise<import('./recording-types').RecordingInfo | null>
     remove(sessionId: string): Promise<void>
-    exportReview(sessionId: string): Promise<{ path: string } | null>
+    resourceStatus(): Promise<import('./recording-types').RecordingResourceStatus>
+    exportReview(sessionId: string, options?: { allowResourceDownload?: boolean }): Promise<{ path: string } | null>
     download(sessionId: string): Promise<{ path: string } | null>
     cancelExport(sessionId: string): Promise<void>
   }

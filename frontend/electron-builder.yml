@@ -39,9 +39,5 @@ nsis:
 extraResources:
   - from: src/renderer/src/assets/interviewer-3d/README.md
     to: licenses/interviewer-3d.md
-  - from: build/python-runtime/python
-    to: python
   - from: scripts/recording-review.py
     to: recording-review.py
-  - from: build/asr-model
-    to: asr-model

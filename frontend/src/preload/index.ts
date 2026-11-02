@@ -39,7 +39,8 @@ function createBridge(accountScope?: string): DesktopBridge {
     stop: sessionId => invoke('recordings:stop', sessionId),
     info: sessionId => invoke('recordings:info', sessionId),
     remove: sessionId => invoke('recordings:remove', sessionId),
-    exportReview: sessionId => invoke('recordings:export', sessionId),
+    resourceStatus: () => invoke('recordings:resource-status'),
+    exportReview: (sessionId, options) => invoke('recordings:export', { sessionId, allowResourceDownload: options?.allowResourceDownload === true }),
     download: sessionId => invoke('recordings:download', sessionId),
     cancelExport: sessionId => invoke('recordings:cancel-export', sessionId)
   },

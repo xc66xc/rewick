@@ -15,7 +15,7 @@ const platform = process.argv[2] ?? (process.platform === 'darwin' ? 'mac' : pro
 const arch = process.argv[3] ?? process.arch
 const target = `${platform}-${arch}`
 const prepareAsr = () => {
-  const result = spawnSync(process.execPath, [join(root, 'scripts/prepare-recording-asr.mjs'), platform, arch], { stdio: 'inherit' })
+  const result = spawnSync(process.execPath, [join(root, 'scripts/prepare-recording-asr.mjs'), platform, arch, ...process.argv.slice(4)], { stdio: 'inherit' })
   if (result.status !== 0) throw new Error('Local speech recognition preparation failed')
 }
 const spec = specs[target]
