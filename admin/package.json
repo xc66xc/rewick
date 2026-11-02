@@ -1,11 +1,11 @@
 {
   "name": "interview-copilot-admin",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5174",
-    "build": "tsc --noEmit && vite build",
+    "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4174",
     "test": "vitest run",
     "test:smoke": "node scripts/smoke.mjs",
@@ -15,23 +15,21 @@
     "test:appearance": "node scripts/smoke-appearance.mjs"
   },
   "dependencies": {
-    "@phosphor-icons/react": "2.1.10",
-    "echarts": "6.1.0",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "zod": "4.5.4"
+    "gsap": "3.15.0",
+    "vue": "3.5.44",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
-    "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.7",
+    "@testing-library/vue": "8.1.0",
     "@types/node": "24.13.3",
-    "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.7",
-    "@vitejs/plugin-react": "5.2.0",
+    "@vitejs/plugin-vue": "5.2.4",
+    "@vue/test-utils": "2.4.6",
     "jsdom": "28.1.0",
     "typescript": "5.9.3",
-    "vite": "7.3.6",
-    "vitest": "4.1.11"
+    "vite": "6.4.5",
+    "vitest": "4.1.12",
+    "vue-tsc": "3.3.14"
   }
 }

@@ -1,3 +1,4 @@
 import { defineConfig } from 'vitest/config'
-import react from '@vitejs/plugin-react'
-export default defineConfig({ plugins: [react()], test: { environment: 'jsdom', setupFiles: ['tests/setup.ts'], include: ['tests/**/*.test.{ts,tsx}'], restoreMocks: true } })
+import vue from '@vitejs/plugin-vue'
+import { fileURLToPath, URL } from 'node:url'
+export default defineConfig({ plugins: [vue()], resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } }, test: { environment: 'jsdom', setupFiles: ['tests/setup.ts'], include: ['tests/vue-*.test.ts','tests/landing-downloads.test.ts'], restoreMocks: true } })

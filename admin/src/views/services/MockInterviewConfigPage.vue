@@ -1,0 +1,33 @@
+<script setup lang="ts">
+import { computed,onBeforeUnmount,ref } from 'vue'
+import { ApiError,type ApiClient,message } from '../../api'
+import { configSchema,type Config } from '../../types'
+import { mockSettingsPayload,mockSettingsSchema,mockTestSchema,parseAllowedUsers,type MockSettings } from '../../mock-interviews'
+import PageHeader from '../../components/ui/PageHeader.vue'
+import Panel from '../../components/services-rewick/ServicesPanel.vue'
+import Button from '../../components/ui/Button.vue'
+import Switch from '../../components/ui/Switch.vue'
+import Select from '../../components/ui/Select.vue'
+import Field from '../../components/ui/Field.vue'
+import FormField from '../../components/services-rewick/FormField.vue'
+import ServiceFeedback from '../../components/services-rewick/ServiceFeedback.vue'
+import { confirm } from '../../composables/confirm'
+const props=defineProps<{api:ApiClient}>(),draft=ref<MockSettings|null>(null),catalog=ref<Config|null>(null),busy=ref(false),loading=ref(true),error=ref(''),notice=ref(''),conflict=ref(false),allowed=ref('')
+const form=ref<HTMLFormElement|null>(null)
+let loadController:AbortController|undefined,operation:AbortController|undefined
+async function load(){loadController?.abort();const c=new AbortController();loadController=c;loading.value=true;error.value='';notice.value='';try{const [settings,services]=await Promise.all([props.api.request('/admin/mock-interviews/settings',mockSettingsSchema,{signal:c.signal}),props.api.request('/admin/config',configSchema,{signal:c.signal})]);if(!c.signal.aborted){draft.value=settings;allowed.value=settings.allowedUserIds.join(', ');catalog.value=services;conflict.value=false}}catch(reason){if(!c.signal.aborted)error.value=message(reason)}finally{if(!c.signal.aborted)loading.value=false}}
+async function reload(){if(await confirm({title:'重新加载模拟配置',message:'将丢弃未保存修改和 Key，以服务器配置替换。',confirmText:'丢弃草稿并重新加载'}))await load()}
+async function submit(test=false){if(!draft.value||busy.value||conflict.value)return;if(form.value&&!form.value.reportValidity())return;if(draft.value.enabled&&(!models.value.some(item=>item.value===draft.value?.llmModelId)||!services.value.some(item=>item.value===draft.value?.asrServiceId))){error.value='请选择主持模型和语音识别服务。';return}const ids=parseAllowedUsers(allowed.value);if(!ids){error.value='请输入最多 1000 个有效正整数用户 ID';return}draft.value.allowedUserIds=ids;const c=new AbortController();operation=c;busy.value=true;error.value='';notice.value='';try{const body=mockSettingsPayload(draft.value);if(test){const result=await props.api.request('/admin/mock-interviews/settings/test',mockTestSchema,{method:'POST',body,signal:c.signal});if(!c.signal.aborted){if(result.success)notice.value=`${result.message}。测试会合成一段固定语音，不保存草稿。`;else error.value=result.message}}else{const result=await props.api.request('/admin/mock-interviews/settings',mockSettingsSchema,{method:'PUT',body,signal:c.signal});if(!c.signal.aborted){draft.value=result;notice.value=`模拟面试配置版本 ${result.version} 已保存。`}}}catch(reason){if(!c.signal.aborted){error.value=message(reason);if(reason instanceof ApiError&&reason.status===409)conflict.value=true}}finally{if(!c.signal.aborted)busy.value=false}}
+const models=computed(()=>catalog.value?.models.filter(m=>m.enabled&&catalog.value?.providers.some(p=>p.id===m.providerId&&p.enabled&&p.kind==='llm')).map(m=>({value:m.id,label:m.name}))||[])
+const services=computed(()=>catalog.value?.providers.filter(p=>p.enabled&&p.kind==='asr').map(p=>({value:p.id,label:p.name}))||[])
+const modelOptions=computed(()=>draft.value?.llmModelId&&!models.value.some(item=>item.value===draft.value?.llmModelId)?[...models.value,{value:draft.value.llmModelId,label:'当前模型已停用或移除',disabled:true}]:models.value)
+const serviceOptions=computed(()=>draft.value?.asrServiceId&&!services.value.some(item=>item.value===draft.value?.asrServiceId)?[...services.value,{value:draft.value.asrServiceId,label:'当前服务已停用或移除',disabled:true}]:services.value)
+const budgets=[['maxConcurrent','最大并发面试数',1,10],['maxFollowUps','每题追问上限',0,2],['pauseMs','回答结束停顿（毫秒）',1000,5000],['maxTtsCharacters','每场 TTS 字符预算',1000,50000],['maxOutputTokens','每轮模型最大输出 Token',128,4096],['dailySessionLimit','每用户每日场次上限',1,100]] as const
+onBeforeUnmount(()=>{loadController?.abort();operation?.abort();if(draft.value)draft.value.tts.apiKey=undefined})
+void load()
+</script>
+<template><div class="page stack"><PageHeader title="模拟面试" desc="平台统一服务与独立模拟余额"><Button :disabled="busy" @click="reload">重新加载模拟配置</Button></PageHeader><ServiceFeedback :error="error" :notice="notice" :conflict="conflict"/><p v-if="loading" role="status">正在加载…</p><Button v-else-if="!draft||!catalog" @click="load">重新加载</Button><form v-else ref="form" class="stack" @submit.prevent="submit()"><fieldset class="stack" :disabled="busy||conflict"><Panel title="开放范围" class="reveal"><div class="stack"><Switch v-model="draft.enabled" label="启用模拟面试"/><p class="field-hint">关闭后阻止新会话并暂停活动会话。灰度权限与高级设置授权独立。</p><FormField v-model="allowed" label="灰度用户 ID" multiline maxlength="16000" hint="逗号或换行分隔。留空表示所有普通用户开放，仍需独立模拟余额。"/></div></Panel><Panel title="平台模型与语音识别" class="reveal"><div class="form-grid"><Field label="主持模型"><Select v-model="draft.llmModelId" :options="modelOptions" placeholder="请选择平台模型"/></Field><Field label="ASR 服务"><Select v-model="draft.asrServiceId" :options="serviceOptions" placeholder="请选择语音识别服务"/></Field></div></Panel><Panel title="语音合成 TTS" class="reveal"><div class="form-grid"><FormField v-model="draft.tts.endpoint" label="TTS 完整接口地址" type="url" :required="draft.enabled" maxlength="2000"/><FormField v-model="draft.tts.model" label="TTS 模型" :required="draft.enabled" maxlength="120"/><FormField v-model="draft.tts.apiKey" label="TTS API Key" maxlength="4096" type="password" autocomplete="new-password" :required="draft.enabled&&!draft.tts.hasApiKey" :placeholder="draft.tts.hasApiKey?'已保存，留空保留':'填写 API Key'"/><FormField v-model="draft.tts.voiceId" label="音色 ID" :required="draft.enabled" maxlength="120"/><FormField label="输出采样率" model-value="24000 Hz · 单声道 PCM16" readonly/></div><p class="field-hint">测试会调用供应商合成固定短句，可能产生按量费用，不播放用户资料。</p></Panel><Panel title="资源与追问预算" class="reveal"><div class="form-grid"><FormField v-for="[key,label,min,max] in budgets" :key="key" v-model="draft[key]" :label="label" type="number" :min="min" :max="max" step="1" required/></div></Panel></fieldset><div class="page-actions"><Button :disabled="busy||conflict" @click="submit(true)">测试 TTS 连接</Button><Button variant="primary" type="submit" :disabled="conflict" :loading="busy">保存模拟配置</Button></div></form></div></template>
+
+<style scoped>
+fieldset { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
+</style>
