@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, sep } from 'node:path'
 import { create } from 'tar'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { RecordingResourceManager, type RecordingResourceManagerOptions, type RecordingResourceSpec } from '../../src/main/services/recording-resource-manager'
@@ -36,8 +36,8 @@ it('downloads once, validates, activates atomically and reuses the ready cache a
   const updates: string[] = []
   expect((await manager.status()).ready).toBe(false)
   const paths = await manager.ensure(new AbortController().signal, value => updates.push(value.stage))
-  expect(paths.pythonPath).toContain('/runtime/')
-  expect(paths.modelPath).toContain('/model/')
+  expect(paths.pythonPath).toContain(`${sep}runtime${sep}`)
+  expect(paths.modelPath).toContain(`${sep}model${sep}`)
   expect(fetcher).toHaveBeenCalledTimes(2)
   expect(check).toHaveBeenCalledTimes(1)
   expect(updates).toEqual(expect.arrayContaining(['downloading', 'verifying', 'extracting', 'checking']))
