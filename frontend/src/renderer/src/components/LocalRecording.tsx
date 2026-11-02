@@ -12,8 +12,10 @@ const labels = { transcribing: '正在本机识别录音', summarizing: '正在�
 function progressLabel(progress: RecordingProgress): string {
   const label = labels[progress.stage]
   if (progress.stage === 'downloading') {
+    const resource = progress.resourceId?.startsWith('runtime') ? '语音环境' : progress.resourceId?.startsWith('model') ? '识别模型' : '语音资源'
+    const downloading = `正在下载${resource}`
     const downloaded = resourceSize(progress.downloadedBytes ?? 0)
-    return progress.totalBytes && progress.totalBytes > 0 ? `${label} ${downloaded} / ${resourceSize(progress.totalBytes)}` : `${label} ${downloaded}`
+    return progress.totalBytes && progress.totalBytes > 0 ? `${downloading} ${downloaded} / ${resourceSize(progress.totalBytes)}` : `${downloading} ${downloaded}`
   }
   return ['verifying', 'extracting', 'checking'].includes(progress.stage) ? label : `${label} ${progress.completed} / ${progress.total}`
 }
