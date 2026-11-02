@@ -25,13 +25,14 @@ try {
   page.on('pageerror', error => errors.push(error.message))
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()) })
   await page.goto(url)
+  await page.getByRole('heading', { name: '登录管理后台', exact: true }).waitFor()
   await page.getByRole('button', { name: '登录管理后台', exact: true }).waitFor()
   if (errors.length) throw new Error(errors.join('\n'))
   await mkdir('test-results', { recursive: true })
   await page.screenshot({ path: 'test-results/login-production.png' })
   await writeFile('test-results/nginx-report.json', JSON.stringify({ image,
     headers: Object.fromEntries([...response.headers].filter(([key]) => headers.includes(key))), pageErrors: errors }, null, 2))
-  process.stdout.write('PASS built Nginx image, security headers, React login and CSP without browser errors\n')
+  process.stdout.write('PASS built Nginx image, security headers, Vue login and CSP without browser errors\n')
 } finally {
   await browser?.close()
   await execute('docker', ['rm', '-f', name]).catch(() => undefined)
