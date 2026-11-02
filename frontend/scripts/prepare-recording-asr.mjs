@@ -42,6 +42,7 @@ if (!prepared) {
   }
   await writeFile(marker, `${target}:${fingerprint}`)
 }
+if (process.argv.includes('--runtime-only')) process.exit(0)
 console.log('Checking bundled local speech model…')
 for (const file of modelLock.files) {
   await downloadVerified(file.url, join(root, 'build/asr-model', file.file), file.sha256)

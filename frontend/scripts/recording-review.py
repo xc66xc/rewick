@@ -88,11 +88,15 @@ def summarize(config: dict, text: str) -> str:
     return markdown
 
 
+class SpeechResourcesUnavailable(ValueError):
+    pass
+
+
 def load_local_model(config: dict):
     model_path = Path(config.get("modelPath", ""))
     required = ["model.bin", "config.json", "tokenizer.json", "vocabulary.txt"]
     if not all((model_path / name).is_file() for name in required):
-        raise ValueError("缺少本地语音模型，请安装包含离线识别模型的新版客户端。")
+        raise SpeechResourcesUnavailable("本地语音模型不完整，请返回录音页面检查资源后重试下载。")
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
     # Must precede importing faster-whisper/ONNX: the native telemetry worker
@@ -106,7 +110,7 @@ def load_local_model(config: dict):
             local_files_only=True,
         )
     except (ImportError, OSError, RuntimeError, ValueError):
-        raise ValueError("本地语音识别环境加载失败，请重新安装完整客户端。") from None
+        raise SpeechResourcesUnavailable("本地语音识别环境加载失败，请返回录音页面检查资源后重试。") from None
 
 
 def recognize_chunk(model, pcm: bytes) -> str:
@@ -187,6 +191,9 @@ def run(config: dict) -> None:
 if __name__ == "__main__":
     try:
         run(json.load(sys.stdin))
+    except SpeechResourcesUnavailable as error:
+        emit("error", code="SPEECH_RESOURCES_UNAVAILABLE", message=str(error))
+        sys.exit(1)
     except ValueError as error:
         emit("error", message=str(error))
         sys.exit(1)

@@ -73,9 +73,12 @@ describe('local interview recordings', () => {
     await expect(write).resolves.toBeUndefined()
     expect(await store.stop('a', 's')).toMatchObject({ bytes: 640 })
   })
-  it('never falls back to a system Python in packaged apps', () => {
-    const result = recordingReviewRuntime({ isPackaged: true, resourcesPath: '/resources', appPath: '/app' })
-    expect(result.pythonPath).toBe(join('/resources', 'python', ...(process.platform === 'win32' ? ['python.exe'] : ['bin', 'python3'])))
+  it('uses only prepared cache resources in packaged apps without falling back to system Python', () => {
+    expect(() => recordingReviewRuntime({ isPackaged: true, resourcesPath: '/resources', appPath: '/app' })).toThrow('尚未准备完成')
+    const resourcePaths = { pythonPath: join('/cache', 'runtime', 'python3'), modelPath: join('/cache', 'model') }
+    const result = recordingReviewRuntime({ isPackaged: true, resourcesPath: '/resources', appPath: '/app', resourcePaths })
+    expect(result.pythonPath).toBe(resourcePaths.pythonPath)
+    expect(result.modelPath).toBe(resourcePaths.modelPath)
     expect(result.scriptPath).toBe(join('/resources', 'recording-review.py'))
   })
 })

@@ -8,6 +8,15 @@
 
 <img src="assets/readme/compact.png" alt="Rewick 紧凑回答窗口" width="360" />
 
+<details>
+<summary>首次使用本地录音复盘：下载语音资源</summary>
+
+实际组件的隔离演示，体积使用测试数据；客户端会显示当前版本实际所需下载量与空间。
+
+<img src="assets/readme/speech-resources.png" alt="首次生成面试复盘的语音资源下载确认" width="720" />
+
+</details>
+
 ## 功能
 
 - **面试准备**：多份简历、目标岗位和参考资料，可组合为独立环境；支持技术面、综合面与 HR 面，以及岗位经验要求。
@@ -29,7 +38,7 @@
 | `deploy/` | PostgreSQL/pgvector 镜像、Compose 与通用部署文件 |
 | `scripts/backend.mjs` | Maven Wrapper 统一入口 |
 
-三个应用模块独立版本化。桌面当前版本由 `frontend/package.json` 统一维护，为 **2.0.11**；管理端及后端目前为 **2.2.1**。macOS 与 Windows 使用相同的三段应用版本号。
+三个应用模块独立版本化。桌面当前版本由 `frontend/package.json` 统一维护，为 **2.1.0**；管理端及后端目前为 **2.2.1**。macOS 与 Windows 使用相同的三段应用版本号。
 
 ## 本地开发
 
@@ -51,7 +60,7 @@ npm run admin:dev
 npm run dev
 ```
 
-桌面开发命令会准备固定版本的本地 Python 与语音识别资源，首次执行需要网络和额外磁盘空间。当前录音运行时准备脚本支持 macOS arm64、Windows x64。
+普通桌面开发启动不下载本地语音资源。只有开发“生成面试复盘”功能时，才需在 `frontend/` 中显式运行 `npm run prepare:recording`，准备固定版本的 Python 与语音模型；支持 macOS arm64、Windows x64。
 
 本机联调可通过 `COPILOT_PLATFORM_URL` 指向开发后端；HTTP 仅允许回环地址，远程服务使用 HTTPS。桌面与管理端需要匹配的后端、数据库及服务配置；下载桌面应用不会自动提供模型额度或可用账号。
 
@@ -80,7 +89,9 @@ npm --prefix frontend run dist:win   # Windows x64 NSIS，需在受支持环境�
 
 安装包发布在 [GitHub Releases](https://github.com/xc66xc/rewick/releases)，不进入源码历史。版本 Tag 会分别在 macOS arm64 和 Windows x64 环境构建，全部通过后统一发布；已发布版本可通过 Release 工作流手动指定 Tag 补充 Windows 包，不移动 Tag 或覆盖现有附件。每个包附带 `.sha256` 校验文件。
 
-Windows 发布流程检查 NSIS 安装、安装后版本、x64 架构、内置语音运行时及应用窗口启动；真实音频设备仍需在目标电脑验收。macOS 包未完成 Apple Developer 正式签名与公证，Windows 包未使用代码签名证书。
+安装包不再内置本地语音环境和模型。首次点击录音的“生成面试复盘”时，经确认从固定 GitHub Release 下载匹配平台的环境包和公共模型，校验并安装到用户数据缓存；后续直接复用。录音、下载录音、实时转写与模拟面试不触发此下载。首次准备需要网络和额外解压空间；完整使用后的总磁盘占用不会因拆包而减少。
+
+Release 流程先生成带 SHA-256 的资源清单，再构建薄安装包；Mac/Windows 原生环境分别验证解包后的语音环境和模型，Windows 另检查 NSIS 安装、安装后版本、x64 架构与应用窗口启动。实际音频设备仍需在目标电脑验收。macOS 包未完成 Apple Developer 正式签名与公证，Windows 包未使用代码签名证书。
 
 ## 配置与数据
 

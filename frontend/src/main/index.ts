@@ -8,7 +8,8 @@ import { randomUUID as telemetryUUID } from 'node:crypto'
 import { OperationsTelemetry } from './services/operations-telemetry'
 import { MenuBar } from './services/menu-bar'
 import { InterviewRecordingStore } from './services/interview-recording-store'
-import { recordingReviewRuntime, runRecordingReview } from './services/interview-recording-review'
+import { RecordingEnvironmentError, runRecordingReview } from './services/interview-recording-review'
+import { RecordingReviewSetup } from './services/recording-review-setup'
 import { DesktopWindows, type DesktopHost } from './services/desktop-windows'
 import { defaultWindowPreferences, windowPreferencesSchema } from '../shared/window-preferences'
 import { randomUUID } from 'node:crypto'
@@ -19,7 +20,7 @@ import { PaymentClient } from './services/payment-client'
 import { InterviewTimer } from './services/interview-timer'
 import { AccountWorkspaces } from './services/account-workspace'
 import { platformBaseUrl } from '../shared/defaults'
-import { app, shell, Menu, dialog, globalShortcut, ipcMain, safeStorage, session, powerMonitor, systemPreferences, desktopCapturer } from 'electron'
+import { app, net, shell, Menu, dialog, globalShortcut, ipcMain, safeStorage, session, powerMonitor, systemPreferences, desktopCapturer } from 'electron'
 import type { IpcMainInvokeEvent } from 'electron'
 import { basename, join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
@@ -101,6 +102,7 @@ const sourceShortcuts = new SourceShortcutManager(join(app.getPath('userData'), 
 const windowPreferencesPath = join(app.getPath('userData'), 'window-preferences.json')
 const windowPreferencesQueue = new SerialQueue()
 const recordings = new InterviewRecordingStore(join(app.getPath('userData'), 'interview-recordings'))
+const recordingReviewSetup = new RecordingReviewSetup({ isPackaged: app.isPackaged, resourcesPath: process.resourcesPath, appPath: app.getAppPath(), userData: app.getPath('userData'), fetch: (input, init) => net.fetch(input instanceof URL ? input.href : input, init) })
 const reviewJobs = new Map<string, AbortController>()
 let recordingCleanup: Promise<void> = Promise.resolve()
 let asr: AsrClient | null = null
@@ -748,6 +750,7 @@ function registerHandlers(): void {
   })
   handle('recordings:stop', input => recordings.stop(accounts.current().id, recordingId(input)))
   handle('recordings:info', input => recordings.info(accounts.current().id, recordingId(input)))
+  handle('recordings:resource-status', () => recordingReviewSetup.status())
   handle('recordings:remove', input => {
     const sessionId = recordingId(input)
     if (reviewJobs.has(`${accounts.current().id}:${sessionId}`)) throw new Error('请先取消复盘导出。')
@@ -770,8 +773,9 @@ function registerHandlers(): void {
   })
   handle('recordings:export', async input => {
     if (!window) return null
+    const request = parseInput(z.union([z.string().transform(sessionId => ({ sessionId, allowResourceDownload: false })), z.object({ sessionId: z.string(), allowResourceDownload: z.boolean().default(false) })]), input)
     const owner = accounts.current()
-    const sessionId = recordingId(input)
+    const sessionId = recordingId(request.sessionId)
     const key = `${owner.id}:${sessionId}`
     if (reviewJobs.size) throw new Error('已有复盘正在生成，请完成或取消后重试。')
     const controller = new AbortController()
@@ -781,13 +785,25 @@ function registerHandlers(): void {
       const result = await dialog.showSaveDialog(window, { title: '导出面试复盘', defaultPath: `面试复盘-${new Date().toISOString().slice(0, 10)}.md`, filters: [{ name: 'Markdown', extensions: ['md'] }] })
       if (result.canceled || !result.filePath) return null
       if (accounts.active !== owner || controller.signal.aborted) throw new Error('账户已切换，导出已取消。')
+      await walletConnection() // Authorize before downloading; refresh the connection again after preparation.
+      if (accounts.active !== owner || controller.signal.aborted) throw new Error('账户已切换，导出已取消。')
+      const runtime = await recordingReviewSetup.ensure(request.allowResourceDownload, controller.signal, progress => {
+        if (accounts.active === owner && !controller.signal.aborted) emit({ kind: 'recording-progress', sessionId, completed: 0, total: 0, ...progress })
+      })
+      if (accounts.active !== owner || controller.signal.aborted) throw new Error('账户已切换，导出已取消。')
       const connection = await walletConnection()
       if (accounts.active !== owner || controller.signal.aborted) throw new Error('账户已切换，导出已取消。')
       return await runRecordingReview({
-        ...recordingReviewRuntime({ isPackaged: app.isPackaged, resourcesPath: process.resourcesPath, appPath: app.getAppPath() }),
+        ...runtime,
         ...connection, audioPath, outputPath: result.filePath, sessionId, signal: controller.signal,
         onProgress: progress => emit({ kind: 'recording-progress', ...progress })
       })
+    } catch (error) {
+      if (error instanceof RecordingEnvironmentError) {
+        try { await recordingReviewSetup.invalidate() }
+        catch { console.error('[error][speech-resources] repair-mark-failed') }
+      }
+      throw error
     } finally { reviewJobs.delete(key) }
   })
   if (import.meta.env.DEV && !app.isPackaged) handle('history:export-answers-excel', async input => {
