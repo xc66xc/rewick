@@ -16,7 +16,7 @@ onMounted(() => { void move(true); observer = new ResizeObserver(() => move(true
 onBeforeUnmount(() => observer?.disconnect())
 </script>
 <template>
-  <aside class="rail m-rail"><div class="rail-brand"><span class="brand-mark"><span class="brand-dot" /></span><div class="brand-text"><div class="brand-name">掌灯 Rewick</div><div class="brand-sub">平台管理工作区</div></div></div>
+  <aside class="rail m-rail"><div class="rail-brand"><img class="brand-mark" src="/rewick-icon.png" alt="掌灯 Rewick" width="34" height="34" /><div class="brand-text"><div class="brand-name">掌灯 Rewick</div><div class="brand-sub">平台管理工作区</div></div></div>
     <nav ref="nav" class="rail-nav" aria-label="管理导航"><div ref="thumb" class="nav-thumb m-pill" aria-hidden="true" />
       <div v-for="group in groups" :key="group.title" class="nav-group"><div class="nav-group-title">{{ group.title }}</div><div class="nav-list"><button v-for="item in group.items" :key="item.key" type="button" class="nav-item" :class="{ 'is-active': page === item.key }" :aria-label="item.label" :aria-current="page === item.key ? 'page' : undefined" :title="appearance.railCollapsed ? item.label : undefined" @click="emit('navigate', item.key)"><Icon class="nav-ico" :name="item.icon" /><span class="nav-label">{{ item.label }}</span></button></div></div>
     </nav><div class="rail-foot"><span class="nav-label faint">管理端 {{ APP.version }}</span></div>

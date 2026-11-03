@@ -51,23 +51,11 @@
   flex: none;
 }
 .brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   width: 34px;
   height: 34px;
-  border-radius: var(--r-sm);
   flex: none;
-  color: #fff;
-  background: var(--dark-surface);
-  box-shadow: 0 1px 3px rgba(14, 18, 20, .16), 0 6px 16px rgba(14, 18, 20, .16), inset 0 1px 0 rgba(255, 255, 255, .12);
-}
-.brand-mark .brand-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-  background: var(--lime);
-  box-shadow: 0 0 0 4px rgba(130, 221, 45, .2), 0 0 12px rgba(130, 221, 45, .6);
+  object-fit: contain;
 }
 .brand-text { min-width: 0; }
 .brand-name { font-size: 15px; font-weight: 720; letter-spacing: -.02em; white-space: nowrap; }
