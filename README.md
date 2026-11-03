@@ -4,7 +4,7 @@
 
 ## 项目预览
 
-下图来自实际桌面应用的隔离演示，使用合成问题与回答，不包含真实用户会话。紧凑窗口将最新回答置顶，口语回答显示在对应问题上方。
+下图来自实际桌面应用的隔离演示，使用合成问题与回答，不包含真实用户会话。紧凑窗口将最新回答置顶，口语回答显示在对应问题上方；列表底部可继续滚动，直到末条问题到达内容区顶部，输入框保持固定。
 
 <img src="assets/readme/compact.png" alt="Rewick 紧凑回答窗口" width="360" />
 
@@ -52,7 +52,7 @@
 | `deploy/` | PostgreSQL/pgvector 镜像、Compose 与通用部署文件 |
 | `scripts/backend.mjs` | Maven Wrapper 统一入口 |
 
-三个应用模块独立版本化。桌面当前版本由 `frontend/package.json` 统一维护，为 **2.1.0**；管理端目前为 **2.4.3**，后端为 **2.2.1**。macOS 与 Windows 使用相同的三段应用版本号。
+三个应用模块独立版本化。桌面当前版本由 `frontend/package.json` 统一维护，为 **2.1.1**；管理端目前为 **2.4.3**，后端为 **2.2.1**。macOS 与 Windows 使用相同的三段应用版本号。
 
 ## 本地开发
 
@@ -82,6 +82,7 @@ npm run dev
 
 ```bash
 npm test
+npm --prefix frontend run test:compact-scroll # 隔离组件与真实样式的滚动几何回归
 npm run admin:test
 npm run backend:test
 npm run build

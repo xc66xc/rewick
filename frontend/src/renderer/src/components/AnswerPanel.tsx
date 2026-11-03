@@ -15,7 +15,7 @@ interface AnswerPanelProps { session: QuestionComposerController & Pick<SessionC
 export default function AnswerPanel({ session, settings, compact = false }: AnswerPanelProps) {
   const segment = session.record.segments.at(-1)
   const hasTranscript = Boolean(segment?.text.trim())
-  const { viewport, handleScroll, followLatest } = useCompactAnswerScroll(compact, session.record.answers, compact ? segment?.text : undefined, session.record.id)
+  const { viewport, content, tailSpace, handleScroll, followLatest } = useCompactAnswerScroll(compact, session.record.answers, compact ? segment?.text : undefined, session.record.id)
   const answers = compact ? session.record.answers.slice().reverse() : session.record.answers
   const model = answerModelLabel(settings)
   function handleLatestAnswer() {
@@ -32,7 +32,7 @@ export default function AnswerPanel({ session, settings, compact = false }: Answ
         <span className="flex shrink-0 items-center gap-1.5 text-[11.5px] font-medium text-text-secondary"><Sparkle size={13} aria-hidden="true" className="shrink-0" /><span className="whitespace-nowrap font-mono text-[10.5px]">{model || '待配置模型'}</span></span>
       </div></header>}
     <div className="min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]" ref={viewport} onScroll={handleScroll} role="region" aria-label="回答与面试信息" tabIndex={0}>
-      <div className="flow-root min-h-full">
+      <div ref={content} className={cn('flow-root', (!compact || !session.record.answers.length && !hasTranscript) && 'min-h-full')}>
       {!compact && <SessionContextDetails record={session.record} current={settings} />}
       {compact && <CompactTranscript recordId={session.record.id} segment={segment} answer={session.record.answers.at(-1)} />}
       {answers.length ? answers.map((answer, index) => <AnswerCard key={answer.id} answer={answer} index={compact ? answers.length - index : index + 1} compact={compact} />)
@@ -40,6 +40,7 @@ export default function AnswerPanel({ session, settings, compact = false }: Answ
           title="下一句，用你的话回答。" description="结合当前问题与你的真实经历，生成可以直接说出口的口语回答。" />
         </div>}
       </div>
+      {compact && <div ref={tailSpace} aria-hidden="true" />}
     </div>
     {compact && (session.record.answers.length > 0 || hasTranscript) && <div className="compact-chat__latest flex shrink-0 justify-end"><Button variant="quiet" size="sm" className="text-xs" onClick={handleLatestAnswer} aria-label="查看最新回答"><ArrowUp aria-hidden="true" />最新回答</Button></div>}
     <QuestionComposer session={session} compact={compact} />

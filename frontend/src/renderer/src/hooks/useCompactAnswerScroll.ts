@@ -4,8 +4,20 @@ import type { Answer } from '../../../shared/types'
 /** Compact chat is newest-first. Keep the reader's visible turn anchored while older text is read. */
 export function useCompactAnswerScroll(compact: boolean, answers: Answer[], transcript?: string, recordId?: string) {
   const viewport = useRef<HTMLDivElement>(null)
+  const content = useRef<HTMLDivElement>(null)
+  const tailSpace = useRef<HTMLDivElement>(null)
   const following = useRef(true)
   const anchor = useRef<{ element: HTMLElement; offset: number } | null>(null)
+
+  function updateTailSpace() {
+    const area = viewport.current, body = content.current, spacer = tailSpace.current
+    if (!compact || !area || !body || !spacer) return
+    const lastQuestion = body.lastElementChild?.querySelector<HTMLElement>(':scope > .compact-answer__question')
+    const afterQuestion = lastQuestion ? body.getBoundingClientRect().bottom - lastQuestion.getBoundingClientRect().top : 0
+    const height = lastQuestion ? Math.ceil(Math.max(0, area.clientHeight - afterQuestion)) : 0
+    const next = `${height}px`
+    if (spacer.style.height !== next) spacer.style.height = next
+  }
 
   function rememberAnchor() {
     const element = viewport.current
@@ -21,6 +33,7 @@ export function useCompactAnswerScroll(compact: boolean, answers: Answer[], tran
   useLayoutEffect(() => {
     const element = viewport.current
     if (!compact || !element) return
+    updateTailSpace()
     if (following.current) element.scrollTop = 0
     else if (anchor.current && element.contains(anchor.current.element)) {
       const nextOffset = anchor.current.element.getBoundingClientRect().top - element.getBoundingClientRect().top
@@ -28,6 +41,14 @@ export function useCompactAnswerScroll(compact: boolean, answers: Answer[], tran
     }
     rememberAnchor()
   }, [compact, answers, transcript, recordId])
+
+  useLayoutEffect(() => {
+    if (!compact || !viewport.current || !content.current || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(updateTailSpace)
+    observer.observe(viewport.current)
+    observer.observe(content.current)
+    return () => observer.disconnect()
+  }, [compact, recordId])
 
   function handleScroll() {
     const element = viewport.current
@@ -44,5 +65,5 @@ export function useCompactAnswerScroll(compact: boolean, answers: Answer[], tran
     rememberAnchor()
   }
 
-  return { viewport, handleScroll, followLatest }
+  return { viewport, content, tailSpace, handleScroll, followLatest }
 }
