@@ -1,6 +1,6 @@
 {
   "name": "interview-copilot-admin",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,7 +12,8 @@
     "test:static": "node scripts/smoke-static.mjs",
     "test:web-search": "node scripts/smoke-web-search.mjs",
     "test:operations": "node scripts/smoke-operations.mjs",
-    "test:appearance": "node scripts/smoke-appearance.mjs"
+    "test:appearance": "node scripts/smoke-appearance.mjs",
+    "test:login": "node scripts/smoke-login.mjs"
   },
   "dependencies": {
     "gsap": "3.15.0",
