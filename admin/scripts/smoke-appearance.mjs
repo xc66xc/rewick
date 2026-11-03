@@ -58,7 +58,7 @@ function moving(samples, property='transform') { return new Set(samples.filter(B
 async function navigate(name) { await page.getByRole('navigation',{name:'管理导航',exact:true}).getByRole('button',{name,exact:true}).click();await page.getByRole('heading',{name,level:1,exact:true}).waitFor();await page.waitForTimeout(750);visited.push(name);if(await page.getByText('服务响应格式不兼容，请联系管理员。',{exact:true}).count())throw Error(`Schema failure on ${name}`) }
 try {
  await page.goto(process.env.ADMIN_PREVIEW_URL || 'http://127.0.0.1:5189')
- await page.getByRole('heading',{name:'登录管理后台',exact:true}).waitFor();await screenshot('login.png')
+ await page.getByRole('heading',{name:'登录管理后台',exact:true}).waitFor();await page.waitForTimeout(2600);if(Number(await page.locator('.login-card').evaluate(el=>getComputedStyle(el).opacity))<.99)throw Error('Login form became transparent after entrance');await screenshot('login.png')
  await page.getByRole('textbox',{name:'管理员账号',exact:true}).fill('preview-admin');await page.getByLabel(/^登录密码/).fill('synthetic-only');await page.getByRole('button',{name:'登录管理后台',exact:true}).click()
  await page.getByRole('heading',{name:'用户管理',level:1,exact:true}).waitFor();await page.getByText('沈书言',{exact:true}).waitFor();await page.waitForTimeout(1000);await screenshot('users-light.png')
  // Reference nav-thumb is a moving shared element, not a CSS-only active row.
