@@ -29,7 +29,7 @@
 
 ## 管理后台外观
 
-管理后台使用 Vue 3、TypeScript、Vite 和 GSAP，直接复用 [scaffold-master](https://github.com/wbr664393425-lgtm/scaffold-master) 的珍珠玻璃样式、公共组件和核心动效，保留 Rewick 现有接口与业务功能。包含导航滑块、分段切换、页面与表格入场、点击反馈、弹窗原点展开和数字滚动；支持浅色/深色/跟随系统、三档密度及减少动态效果，偏好仅保存在当前浏览器。原项目 MIT 许可与 GSAP 独立许可说明见 [第三方说明](admin/third-party/NOTICE.md)。
+管理后台使用 Vue 3、TypeScript、Vite 和 GSAP，直接复用 [scaffold-master](https://github.com/wbr664393425-lgtm/scaffold-master) 的珍珠玻璃样式、公共组件和核心动效，保留 Rewick 现有接口与业务功能。管理页铺满浏览器，不保留深色外框，内部玻璃材质保持。包含导航滑块、分段切换、页面与表格入场、点击反馈、弹窗原点展开和数字滚动；支持浅色/深色/跟随系统、三档密度及减少动态效果，偏好仅保存在当前浏览器。原项目 MIT 许可与 GSAP 独立许可说明见 [第三方说明](admin/third-party/NOTICE.md)。
 
 隔离浏览器回归：先启动管理端，再运行 `npm --prefix admin run test:appearance`，可通过 `ADMIN_PREVIEW_URL` 指向本机生产构建。`test:web-search` 与 `test:operations` 自动启动本地静态预览并使用合成 API；需先构建。`test:smoke` 是需要专用测试账号的真实隔离后端集成验收，不能用于生产数据。 `test:login` 检查登录动画结束后的实际透明度；默认 Chromium，设置 `BROWSER_ENGINES=chromium,webkit` 可双引擎验证（先安装对应 Playwright 浏览器）。
 
@@ -52,7 +52,7 @@
 | `deploy/` | PostgreSQL/pgvector 镜像、Compose 与通用部署文件 |
 | `scripts/backend.mjs` | Maven Wrapper 统一入口 |
 
-三个应用模块独立版本化。桌面当前版本由 `frontend/package.json` 统一维护，为 **2.1.0**；管理端目前为 **2.4.1**，后端为 **2.2.1**。macOS 与 Windows 使用相同的三段应用版本号。
+三个应用模块独立版本化。桌面当前版本由 `frontend/package.json` 统一维护，为 **2.1.0**；管理端目前为 **2.4.2**，后端为 **2.2.1**。macOS 与 Windows 使用相同的三段应用版本号。
 
 ## 本地开发
 

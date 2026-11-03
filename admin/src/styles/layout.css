@@ -1,30 +1,30 @@
 /* ============================================================
-   外壳：舞台 → 深色外框 → 导航轨 + 工作区
+   外壳：全幅玻璃画布 → 导航轨 + 工作区
    ============================================================ */
 
 .stage {
   position: relative;
   min-height: 100dvh;
-  padding: 8px;
+  padding: 0;
   overflow: clip;
   background: var(--stage);
 }
 
 .app-frame {
   position: relative;
-  height: calc(100dvh - 16px);
+  height: 100dvh;
   min-height: 560px;
   display: grid;
   grid-template-columns: var(--rail-w) minmax(0, 1fr);
   overflow: clip;
-  border: 10px solid var(--frame);
-  border-radius: 38px;
+  border: 0;
+  border-radius: 0;
   /* 画布：两团静态漫射光，不参与动画 */
   background:
     radial-gradient(55% 45% at 92% 0%, var(--ambient-a), transparent 70%),
     radial-gradient(45% 40% at 20% 100%, var(--ambient-b), transparent 70%),
     var(--canvas);
-  box-shadow: 0 24px 70px rgba(17, 23, 27, .24), 0 3px 12px rgba(17, 23, 27, .16);
+  box-shadow: none;
 }
 .app-frame.is-collapsed { --rail-w: 76px; }
 
