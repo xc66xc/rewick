@@ -58,11 +58,11 @@ function moving(samples, property='transform') { return new Set(samples.filter(B
 async function navigate(name) { await page.getByRole('navigation',{name:'管理导航',exact:true}).getByRole('button',{name,exact:true}).click();await page.getByRole('heading',{name,level:1,exact:true}).waitFor();await page.waitForTimeout(750);visited.push(name);if(await page.getByText('服务响应格式不兼容，请联系管理员。',{exact:true}).count())throw Error(`Schema failure on ${name}`) }
 try {
  await page.goto(process.env.ADMIN_PREVIEW_URL || 'http://127.0.0.1:5189')
- await page.getByRole('heading',{name:'登录管理后台',exact:true}).waitFor();await page.waitForTimeout(2600);if(Number(await page.locator('.login-card').evaluate(el=>getComputedStyle(el).opacity))<.99)throw Error('Login form became transparent after entrance');await screenshot('login.png')
+ await page.getByRole('heading',{name:'登录管理后台',exact:true}).waitFor();await page.waitForTimeout(2600);if(Number(await page.locator('.login-card').evaluate(el=>getComputedStyle(el).opacity))<.99)throw Error('Login form became transparent after entrance');await expect(page.locator('.login-brand img.brand-mark')).toHaveAttribute('src','/rewick-icon.png');if(!await page.locator('.login-brand img.brand-mark').evaluate(el=>el.complete&&el.naturalWidth>0))throw Error('Login brand image failed to load');await screenshot('login.png')
  await page.getByRole('textbox',{name:'管理员账号',exact:true}).fill('preview-admin');await page.getByLabel(/^登录密码/).fill('synthetic-only');await page.getByRole('button',{name:'登录管理后台',exact:true}).click()
  await page.getByRole('heading',{name:'用户管理',level:1,exact:true}).waitFor();await page.getByText('沈书言',{exact:true}).waitFor();await page.waitForTimeout(1000)
  await expect.poll(()=>page.locator('.app-frame').evaluate(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return Math.abs(r.x)<1&&Math.abs(r.y)<1&&Math.abs(r.width-innerWidth)<1&&Math.abs(r.height-innerHeight)<1&&s.borderTopWidth==='0px'&&s.borderRightWidth==='0px'&&s.boxShadow==='none'})).toBe(true)
- await screenshot('users-light.png')
+ await expect(page.locator('.rail-brand img.brand-mark')).toHaveAttribute('src','/rewick-icon.png');if(!await page.locator('.rail-brand img.brand-mark').evaluate(el=>el.complete&&el.naturalWidth>0))throw Error('Sidebar brand image failed to load');await screenshot('users-light.png')
  // Reference nav-thumb is a moving shared element, not a CSS-only active row.
  await page.getByRole('navigation',{name:'管理导航'}).getByRole('button',{name:'套餐管理',exact:true}).click();frames.navigation=await sample('.nav-thumb');if(!moving(frames.navigation))throw Error('Navigation thumb has no intermediate frames')
  await navigate('用户管理')
