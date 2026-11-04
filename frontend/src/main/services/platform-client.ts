@@ -49,6 +49,9 @@ export class PlatformClient {
   async logout(token: string): Promise<void> { await this.request('/api/v1/auth/logout', token, {}) }
   async walletRequest(path: string, token: string, body?: unknown): Promise<unknown> { return this.request(path, token, body) }
   async paymentRequest(path: string, token: string, body?: unknown, signal?: AbortSignal): Promise<unknown> { return this.request(path, token, body, signal) }
+  async recognizeScreenshot(token: string, image: string, signal: AbortSignal): Promise<{ question: string }> {
+    return z.object({ question: z.string().trim().min(1).max(20_000) }).parse(await this.request('/api/v1/screenshots/recognize', token, { image }, signal))
+  }
   async webSearch(token: string, query: string, requestId: string, signal: AbortSignal): Promise<unknown> {
     return this.request('/api/v1/web-search', token, { query, requestId }, signal)
   }
@@ -88,7 +91,13 @@ export class PlatformClient {
           throw new PlatformRequestError('面试背景校验失败，请刷新简历、岗位和资料选择后重试。', response.status)
         }
         await response.body?.cancel().catch(() => undefined)
-        const message = path === '/api/v1/user-preferences' && response.status === 409 ? '设置已被其他设备修改，当前草稿已保留。请重新读取服务器设置后再修改。'
+        const message = path === '/api/v1/screenshots/recognize' && response.status === 503 ? '截图识别模型未配置或不可用，请联系管理员在模型与服务中配置截图识别模型。'
+          : path === '/api/v1/screenshots/recognize' && response.status === 404 ? '服务器尚未支持截图识别，请更新服务平台后重试。'
+          : path === '/api/v1/screenshots/recognize' && response.status === 422 ? '没有识别到完整算法题，请完整显示题目、示例与约束后重新截图。'
+          : path === '/api/v1/screenshots/recognize' && response.status === 413 ? '截图超过平台容量限制，请降低屏幕分辨率后重试。'
+          : path === '/api/v1/screenshots/recognize' && response.status === 409 ? '面试已结束或暂停，请开始面试后再使用截图解题。'
+          : path === '/api/v1/screenshots/recognize' && response.status === 502 ? '题目识别失败，请检查截图是否清晰，以及平台视觉模型是否支持图片输入。'
+          : path === '/api/v1/user-preferences' && response.status === 409 ? '设置已被其他设备修改，当前草稿已保留。请重新读取服务器设置后再修改。'
           : path === '/api/v1/user-preferences' && response.status === 400 ? '设置参数无效，或所选平台服务已下架，请刷新后重新选择。'
           : response.status === 409 && path.startsWith('/api/v1/payment-orders') ? '套餐已变更或停用，请刷新套餐后重新确认购买。'
           : response.status === 503 && path.startsWith('/api/v1/payment-orders') ? '支付暂未开放，请稍后再试。'

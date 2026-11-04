@@ -57,6 +57,7 @@ export function applyService(config: Config, form: ServiceForm, remove = false):
     } else throw new Error('当前该能力已有其他服务配置，请启用此项以切换服务。')
   }
   const available = next.models.filter(model => model.enabled && next.providers.some(provider => provider.id === model.providerId && provider.enabled))
+  if (next.screenshotModelId && !available.some(model => model.id === next.screenshotModelId)) next.screenshotModelId = ''
   if (!available.some(model => model.id === next.defaultModelId)) next.defaultModelId = available[0]?.id ?? ''
   return next
 }

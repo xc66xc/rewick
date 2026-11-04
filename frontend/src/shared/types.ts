@@ -1,3 +1,4 @@
+import type { ScreenshotShortcutSettings, ScreenshotLanguage } from './screenshot-shortcut'
 import type { MockBridge } from './mock-interview'
 import type { SourceShortcutSettings } from './source-shortcut'
 import type { JobExperienceLevel } from './job-experience-level'
@@ -159,6 +160,9 @@ export interface ModelInputSnapshot {
   messages: { role: 'system' | 'user'; content: string }[]
 }
 export interface Answer {
+  algorithmRootId?: string
+  mode?: 'algorithm'
+  language?: ScreenshotLanguage
   id: string
   question: string
   text: string
@@ -182,7 +186,7 @@ export interface SessionRecord {
   answers: Answer[]
   interviewEnvironment?: InterviewEnvironmentSnapshot
 }
-export interface AnswerRequest { requestId: string; question: string; transcript: string; environmentId?: string; operationId?: string; autoWaitMs?: number }
+export interface AnswerRequest { mode?: 'algorithm'; language?: ScreenshotLanguage; algorithmContext?: string; requestId: string; question: string; transcript: string; environmentId?: string; operationId?: string; autoWaitMs?: number }
 export type AsrStatus = 'connecting' | 'listening' | 'stopping' | 'idle' | 'error'
 export interface WalletState {
   background?: Pick<Settings, 'context' | 'interviewTarget' | 'interviewEnvironment'> | null
@@ -210,7 +214,7 @@ export type AppEvent =
   | { kind: 'answer-delta'; requestId: string; delta: string }
   | { kind: 'answer-done'; requestId: string; cancelled: boolean }
   | { kind: 'answer-error'; requestId: string; message: string }
-  | { kind: 'shortcut'; action: 'answer' | 'toggle-source' }
+  | { kind: 'shortcut'; action: 'answer' | 'toggle-source' | 'screenshot' }
 export interface DesktopBridge {
   mock: MockBridge
   openWebSource?(url: string): Promise<void>
@@ -252,6 +256,9 @@ export interface DesktopBridge {
   removeCustomService(id: string): Promise<Settings>
   platformLogout(): Promise<Settings>
   refreshPlatform(): Promise<Settings>
+  getScreenshotShortcut?(): Promise<ScreenshotShortcutSettings>
+  saveScreenshotShortcut?(input: { accelerator: string; language: ScreenshotLanguage }): Promise<ScreenshotShortcutSettings>
+  recognizeScreenshot?(requestId: string): Promise<{ question: string; language: ScreenshotLanguage }>
   getSourceShortcut(): Promise<SourceShortcutSettings>
   saveSourceShortcut(input: { accelerator: string }): Promise<SourceShortcutSettings>
   saveSettings(input: SettingsInput): Promise<Settings>

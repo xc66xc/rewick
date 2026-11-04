@@ -149,7 +149,7 @@ public final class OperationsCollector {
     private java.util.List<String> providers(String stage) {
         if("retrieval.rag".equals(stage)) return java.util.List.of("pg");
         if("retrieval.web".equals(stage)) return java.util.List.of("tavily", "deepseek");
-        if("retrieval.embedding".equals(stage)||stage.startsWith("llm.")) return java.util.List.of("llm");
+        if("screenshot.recognize".equals(stage)||"retrieval.embedding".equals(stage)||stage.startsWith("llm.")) return java.util.List.of("llm");
         if("retrieval.database".equals(stage)) return java.util.List.of("pg");
         if(stage.startsWith("asr.")) return java.util.List.of("asr");
         return java.util.List.of("system");

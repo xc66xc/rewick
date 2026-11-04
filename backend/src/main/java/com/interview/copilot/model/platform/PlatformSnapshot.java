@@ -52,7 +52,7 @@ public final class PlatformSnapshot {
                         input.models(),
                         input.defaultModelId(),
                         input.asr(),
-                        input.embedding(), input.webSearch() == null ? PlatformConfig.WebSearch.disabled() : input.webSearch().withDefaultAnswer("none"));
+                        input.embedding(), input.webSearch() == null ? PlatformConfig.WebSearch.disabled() : input.webSearch().withDefaultAnswer("none"), input.screenshotModelId());
         Map<String, PlatformConfig.Provider> indexed = new LinkedHashMap<>();
         redacted.forEach(provider -> indexed.put(provider.id(), provider));
         providers = Map.copyOf(indexed);

@@ -20,7 +20,8 @@ public record PlatformConfigResponse(
         @NotNull @Size(max = 64) String defaultModelId,
         @NotNull @Valid Asr asr,
         @Valid Embedding embedding,
-        @Valid WebSearch webSearch) {
+        @Valid WebSearch webSearch,
+        @Size(max = 64) String screenshotModelId) {
     @Override
     public String toString() {
         return "PlatformConfigResponse[redacted]";

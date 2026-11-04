@@ -21,7 +21,13 @@ public record PlatformConfig(
         @NotNull @Size(max = 64) String defaultModelId,
         @NotNull @Valid Asr asr,
         @Valid Embedding embedding,
-        @Valid WebSearch webSearch) {
+        @Valid WebSearch webSearch,
+        @Size(max = 64) String screenshotModelId) {
+    public PlatformConfig(long version, List<Provider> providers, List<Model> models,
+            String defaultModelId, Asr asr, Embedding embedding, WebSearch webSearch) {
+        this(version, providers, models, defaultModelId, asr, embedding, webSearch, "");
+    }
+
     public PlatformConfig(long version, List<Provider> providers, List<Model> models,
             String defaultModelId, Asr asr, Embedding embedding) {
         this(version, providers, models, defaultModelId, asr, embedding, WebSearch.disabled());
@@ -33,6 +39,7 @@ public record PlatformConfig(
     }
 
     public PlatformConfig {
+        if (screenshotModelId == null) screenshotModelId = "";
         if (embedding == null) {
             embedding = new Embedding(false, "", "", 1024);
         }

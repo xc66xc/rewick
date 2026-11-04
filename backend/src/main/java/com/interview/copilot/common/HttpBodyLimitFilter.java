@@ -54,10 +54,7 @@ public class HttpBodyLimitFilter extends OncePerRequestFilter {
             chain.doFilter(request, response);
             return;
         }
-        int limit =
-                request.getRequestURI().startsWith("/api/v1/session-records/")
-                        ? 5 * MAX_BODY_BYTES
-                        : MAX_BODY_BYTES;
+        int limit = maximum(request);
         if (request.getContentLengthLong() > limit) {
             reject(response);
             return;
@@ -68,6 +65,14 @@ public class HttpBodyLimitFilter extends OncePerRequestFilter {
             return;
         }
         chain.doFilter(new BoundedRequest(request, bytes), response);
+    }
+
+    private int maximum(HttpServletRequest request) {
+        if ("POST".equals(request.getMethod()) && "/api/v1/screenshots/recognize".equals(request.getRequestURI())) {
+            return 8 * MAX_BODY_BYTES + 1024;
+        }
+        return request.getRequestURI().startsWith("/api/v1/session-records/")
+                ? 5 * MAX_BODY_BYTES : MAX_BODY_BYTES;
     }
 
     private void reject(HttpServletResponse response) throws IOException {

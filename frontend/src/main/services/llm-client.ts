@@ -1,3 +1,4 @@
+import { algorithmMessages } from '../../shared/algorithm-answer'
 import { interviewAnswerStrategy } from '../../shared/interview-answer-strategy'
 import { jobExperienceStrategy } from '../../shared/job-experience-level'
 import { operationHeaders, type OperationsTelemetry, type OperationContext } from './operations-telemetry'
@@ -105,6 +106,7 @@ async function consumeResponse(response: Response, onContent: (content: string) 
 }
 
 function buildMessages(settings: Settings, request: AnswerRequest, retrieval?: RetrievalContext): ModelInputSnapshot['messages'] {
+  if (request.mode === 'algorithm') return algorithmMessages(request)
   const referenceContext = (retrieval?.excerpts ?? []).map(excerpt => ({ source: excerpt.source, name: excerpt.name, kind: excerpt.kind, text: excerpt.text, sectionPath: excerpt.sectionPath, url: excerpt.url, title: excerpt.title, generatedSummary: excerpt.generatedSummary }))
   const interviewType = settings.interviewEnvironment?.interviewType
   const jobExperienceLevel = settings.interviewEnvironment?.jobExperienceLevel

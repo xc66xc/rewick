@@ -51,7 +51,7 @@ public final class PlatformConfigCodec {
                             config.models(),
                             config.defaultModelId(),
                             config.asr(),
-                            config.embedding(), config.webSearch()));
+                            config.embedding(), config.webSearch(), config.screenshotModelId()));
         } catch (JsonProcessingException error) {
             throw PlatformConfigErrors.storageUnavailable();
         }
@@ -78,7 +78,7 @@ public final class PlatformConfigCodec {
                 config.models(),
                 config.defaultModelId(),
                 config.asr(),
-                config.embedding(), config.webSearch() == null ? PlatformConfig.WebSearch.disabled() : config.webSearch().withDefaultAnswer("none"));
+                config.embedding(), config.webSearch() == null ? PlatformConfig.WebSearch.disabled() : config.webSearch().withDefaultAnswer("none"), config.screenshotModelId());
     }
 
     public PlatformSnapshot snapshot(PlatformConfigRow row, PlatformPolicy policy) {
