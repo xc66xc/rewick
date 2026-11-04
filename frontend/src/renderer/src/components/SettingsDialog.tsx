@@ -1,3 +1,4 @@
+import LocalStoragePreferences from './LocalStoragePreferences'
 import SourceShortcutPreferences from './SourceShortcutPreferences'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CheckCircle } from '@phosphor-icons/react'
@@ -83,6 +84,7 @@ export default function SettingsDialog({ settings, bridge, onSave, onApply, onLo
       </>}>
       {windowControls && <section aria-label="窗口与隐私" className={groupClass}><h3 className="mb-4 text-sm font-semibold">窗口与隐私</h3>{windowControls}</section>}
       <SourceShortcutPreferences bridge={bridge} />
+      <LocalStoragePreferences bridge={bridge} disabled={busy} />
       <form ref={form} onSubmit={event => { event.preventDefault(); void perform('save') }}>
         <fieldset className="m-0 min-w-0 border-0 p-0" disabled={busy || !bridge}>
           <section aria-label="当前账号" className={groupClass}><h3 className="mb-2 text-sm font-semibold">当前账号</h3><p className={formNoteClass}>{catalog.platform?.user?.displayName || '尚未登录'}</p>

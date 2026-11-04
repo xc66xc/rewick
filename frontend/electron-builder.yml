@@ -2,6 +2,7 @@ appId: local.interview.copilot
 productName: 掌灯 Rewick
 artifactName: Rewick-${version}-${os}-${arch}.${ext}
 electronFuses:
+  enableCookieEncryption: false
   enableNodeCliInspectArguments: false
   enableNodeOptionsEnvironmentVariable: false
 directories:

@@ -215,7 +215,10 @@ export type AppEvent =
   | { kind: 'answer-done'; requestId: string; cancelled: boolean }
   | { kind: 'answer-error'; requestId: string; message: string }
   | { kind: 'shortcut'; action: 'answer' | 'toggle-source' | 'screenshot' }
+export interface LocalStorageStatus { available: boolean; canImport: boolean; reason?: string }
 export interface DesktopBridge {
+  getLocalStorageStatus?(): Promise<LocalStorageStatus>
+  migrateLocalStorage?(): Promise<{ settings: number; drafts: number }>
   mock: MockBridge
   openWebSource?(url: string): Promise<void>
   recordings?: {

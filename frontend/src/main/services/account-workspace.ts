@@ -17,7 +17,7 @@ export class AccountWorkspaces {
   private readonly stores = new Map<string, { settings: SettingsStore; preferences: UserPreferencesClient; history: ServerHistory; interviews: InterviewStore }>()
   constructor(private readonly root: string, private readonly crypto: ConstructorParameters<typeof SettingsStore>[1], private readonly changed: (workspaceId: string) => void,
     private readonly authentication?: () => ReturnType<SettingsStore['getConnectionSnapshot']>,
-    private readonly expired?: (token: string) => Promise<void>) {}
+    private readonly expired?: (token: string) => Promise<void>, private readonly storageRoot = root) {}
   identity(settings: Settings): string | undefined {
     const platform = settings.platform
     return platform?.authenticated && platform.user ? accountDirectory(this.root, platform.user.id) : undefined
@@ -32,13 +32,15 @@ export class AccountWorkspaces {
     if (!id) return undefined
     let stores = this.stores.get(id)
     if (!stores) {
-      const privateSettings = new SettingsStore(id, this.crypto, true)
+      // Keep workspace/recording ownership stable while credentials move to a new vault.
+      const dataDirectory = accountDirectory(this.storageRoot, settings.platform!.user!.id)
+      const privateSettings = new SettingsStore(dataDirectory, this.crypto, true)
       stores = { settings: privateSettings, preferences: new UserPreferencesClient(async () => {
         if (!this.authentication) throw new Error('请先登录账户。')
         const auth = await this.authentication()
         if (this.identity(auth.settings) !== id) throw new Error('账户已切换，请重试。')
         return auth
-      }), history: new ServerHistory(id, this.crypto, async () => {
+      }), history: new ServerHistory(dataDirectory, this.crypto, async () => {
         if (!this.authentication) throw new Error('请先登录。')
         const auth = await this.authentication()
         if (this.identity(auth.settings) !== id) throw new Error('账户已切换，请重新登录原账号同步。')
