@@ -235,7 +235,7 @@ export class ServerHistory {
     return journalSchema.parse(JSON.parse(this.crypto.decryptString(Buffer.from(encoded, 'base64'))))
   }
   private async write(journal: Journal) {
-    if (!this.crypto.isEncryptionAvailable()) throw new Error('系统加密不可用，无法保存待上传会话。')
+    if (!this.crypto.isEncryptionAvailable()) throw new Error('本机加密不可用，无法保存待上传会话。')
     await writeJsonAtomic(this.path, this.crypto.encryptString(JSON.stringify(journal)).toString('base64'))
   }
 }
