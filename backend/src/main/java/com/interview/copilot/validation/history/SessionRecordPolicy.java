@@ -68,6 +68,10 @@ public final class SessionRecordPolicy {
     }
 
     private static void answer(JsonNode node) {
+        if (node.has("algorithmRootId") && (!node.path("algorithmRootId").isTextual() || node.path("algorithmRootId").asText().isBlank() || node.path("algorithmRootId").asText().length() > 128)) throw invalid();
+        if (node.has("mode") && (!node.path("mode").isTextual() || !"algorithm".equals(node.path("mode").asText()))) throw invalid();
+        if (node.has("language") && (!node.path("language").isTextual()
+                || !Set.of("Java", "Python", "C++", "TypeScript").contains(node.path("language").asText()))) throw invalid();
         text(node, "id", 128);
         if (!node.path("question").isTextual()
                 || node.path("question").asText().length() > 20000

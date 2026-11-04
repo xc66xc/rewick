@@ -10,7 +10,8 @@ public record StoredPlatformConfig(
         String defaultModelId,
         PlatformConfig.Asr asr,
         PlatformConfig.Embedding embedding,
-        PlatformConfig.WebSearch webSearch) {
+        PlatformConfig.WebSearch webSearch,
+        String screenshotModelId) {
     public StoredPlatformConfig {
         providers = List.copyOf(providers);
         models = List.copyOf(models);

@@ -35,6 +35,23 @@ afterEach(async () => {
 })
 
 describe('LlmClient', () => {
+  it('sends algorithm instructions and follow-ups without interview biography or retrieval', async () => {
+    const fetcher = vi.fn(async (_url: string | URL | Request, _options?: RequestInit) => Response.json({ choices: [{ message: { content: '思路\n```java\nclass Solution {}\n```' } }] }))
+    vi.stubGlobal('fetch', fetcher)
+    const settings = structuredClone(defaultSettings)
+    settings.context.text = 'private biography must not be sent'
+    const events: AppEvent[] = []
+    client = new LlmClient(settings, 'test-key', event => events.push(event))
+    await client.generate({ ...request, mode: 'algorithm', language: 'Java', algorithmContext: '之前的题目与解答', transcript: 'private transcript' })
+    const sent = JSON.parse(String(fetcher.mock.calls[0][1]?.body))
+    expect(sent.messages[0].content).toContain('完整可用的代码')
+    expect(sent.messages[0].content).toContain('Java')
+    expect(sent.messages[1].content).toContain('之前的题目与解答')
+    expect(JSON.stringify(sent)).not.toContain('private biography')
+    expect(JSON.stringify(sent)).not.toContain('private transcript')
+    expect(events.some(event => event.kind === 'answer-delta' && event.delta.includes('```java'))).toBe(true)
+  })
+
   it.each(jobExperienceLevels.flatMap(level => (['technical', 'general', 'hr'] as const).flatMap(interviewType => (['concise', 'detailed'] as const).flatMap(style => [false, true].map(platform => [level, interviewType, style, platform] as const)))))('uses %s with %s/%s in actual and recorded messages (platform=%s)', async (level, interviewType, style, platform) => {
     const fetcher = vi.fn(async (_url: string | URL | Request, _options?: RequestInit) => Response.json({ choices: [{ message: { content: '方案说明。' } }] }))
     vi.stubGlobal('fetch', fetcher)

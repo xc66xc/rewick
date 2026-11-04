@@ -54,6 +54,7 @@ function setup(fakeTimers = false) {
     refreshPlatform: vi.fn(async () => settings),
     getCaptureError: vi.fn(async () => null),
     getSettings: vi.fn(async () => settings),
+    recognizeScreenshot: vi.fn(async (_requestId: string) => ({ question: '给定整数数组，返回两数之和的下标。', language: 'Python' as const })),
     getSourceShortcut: vi.fn(async () => ({ accelerator: '' })),
     saveSourceShortcut: vi.fn(async (value: { accelerator: string }) => value),
     saveSettings: vi.fn(async (input: SettingsInput) => {
@@ -918,4 +919,46 @@ it('does not reopen ASR if the interview ends during a source switch', async () 
   await act(async () => { finish(); await changing })
   expect(bridge.startAsr).toHaveBeenCalledTimes(1)
   expect(result.current.status).toBe('idle')
+})
+
+
+describe('screenshot algorithm conversations', () => {
+  it('recognizes a full-screen question and directly generates a language-specific algorithm answer', async () => {
+    const { result, bridge, emit, run } = setup()
+    await emit({ kind: 'shortcut', action: 'screenshot' })
+    await waitFor(() => expect(bridge.generateAnswer).toHaveBeenCalledTimes(1))
+    const first = bridge.generateAnswer.mock.calls[0][0]
+    expect(first).toMatchObject({ question: '给定整数数组，返回两数之和的下标。', mode: 'algorithm', language: 'Python', transcript: '' })
+    expect(result.current.record.answers[0]).toMatchObject({ mode: 'algorithm', language: 'Python', algorithmRootId: first.requestId })
+    await emit({ kind: 'answer-delta', requestId: first.requestId, delta: '使用哈希表。' })
+    await emit({ kind: 'answer-done', requestId: first.requestId, cancelled: false })
+    await run(() => result.current.setQuestion('换成 Java'))
+    await run(() => result.current.generate())
+    expect(bridge.generateAnswer.mock.calls[1][0]).toMatchObject({ mode: 'algorithm', transcript: '', question: '换成 Java' })
+    expect(bridge.generateAnswer.mock.calls[1][0].algorithmContext).toContain('使用哈希表')
+    expect(bridge.recognizeScreenshot).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores late recognition after cancellation and coalesces repeated shortcuts', async () => {
+    const { result, bridge, emit, run } = setup()
+    let complete: (value: { question: string; language: 'Python' }) => void = () => undefined
+    bridge.recognizeScreenshot.mockImplementation(() => new Promise(resolve => { complete = resolve }))
+    await emit({ kind: 'shortcut', action: 'screenshot' })
+    await emit({ kind: 'shortcut', action: 'screenshot' })
+    expect(bridge.recognizeScreenshot).toHaveBeenCalledTimes(1)
+    expect(result.current.record.answers[0].question).toContain('正在识别')
+    await run(() => result.current.cancel())
+    await run(async () => { complete({ question: '晚到题目', language: 'Python' }); await Promise.resolve() })
+    expect(bridge.generateAnswer).not.toHaveBeenCalled()
+    expect(result.current.record.answers[0].status).toBe('cancelled')
+  })
+
+  it('shows recognition errors without sending an invented problem to the answer model', async () => {
+    const { result, bridge, emit } = setup()
+    bridge.recognizeScreenshot.mockRejectedValue(new Error('请配置截图识别模型'))
+    await emit({ kind: 'shortcut', action: 'screenshot' })
+    await waitFor(() => expect(result.current.record.answers[0].status).toBe('error'))
+    expect(result.current.record.answers[0].error).toContain('请配置截图识别模型')
+    expect(bridge.generateAnswer).not.toHaveBeenCalled()
+  })
 })

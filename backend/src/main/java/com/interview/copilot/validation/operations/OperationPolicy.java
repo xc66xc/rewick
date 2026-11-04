@@ -10,7 +10,7 @@ import java.util.Set;
 import java.util.UUID;
 
 public final class OperationPolicy {
-    public static final Set<String> STAGES = Set.of("answer.auto_wait", "answer.complete", "answer.prepare", "retrieval.rag",
+    public static final Set<String> STAGES = Set.of("screenshot.recognize", "answer.auto_wait", "answer.complete", "answer.prepare", "retrieval.rag",
             "retrieval.bm25", "retrieval.vector", "retrieval.fusion", "retrieval.parent_lookup", "retrieval.context_pack", "retrieval.web", "retrieval.join", "retrieval.embedding", "retrieval.database", "llm.first_content",
             "llm.complete", "answer.first_render", "session.save", "session.sync", "asr.connect",
             "asr.first_transcript", "asr.complete", "asr.backlog", "auto.feedback");

@@ -1,3 +1,4 @@
+import { algorithmConversation, type AlgorithmLanguage } from '../../../shared/algorithm-answer'
 import { useOperationsTelemetry } from './useOperationsTelemetry'
 import type { SessionExportOptions } from '../../../shared/types'
 import { useEffect, useRef, useState } from 'react'
@@ -9,6 +10,7 @@ import { newRecord, recentQuestion, recordHasContent } from './sessionHelpers'
 import { useTranscriptEditing } from './useTranscriptEditing'
 import { isAnswerModelReady, isAsrReady, useAutoAnswer } from './useAutoAnswer'
 
+const screenshotQuestion = '正在识别屏幕中的算法题…'
 const questionLimitMessage = '当前问题最多 12,000 个字符，请先删减内容后再加入。'
 
 export function useSession(bridge: DesktopBridge | undefined, settings: Settings, saveSettings?: (input: SettingsInput) => Promise<Settings>, applySettings?: (settings: Settings) => void) {
@@ -39,6 +41,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
   const asrId = useRef<string | null>(null)
   const pendingAsrEvents = useRef<AppEvent[]>([])
   const requestId = useRef<string | null>(null)
+  const recognizing = useRef(false)
   const capture = useRef<AudioCapture | null>(null)
   const permittedCapture = useRef<AudioCapture | null>(null)
   const lastSaved = useRef<SessionRecord | null>(null)
@@ -189,30 +192,49 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
       if (currentOperation === operation.current) { asrId.current = null; updateStatus('error'); setError(errorMessage(reason)) }
     }
   }
-  async function generate(selected?: { question: string; transcript: string; autoWaitMs?: number }, isAutomatic = false) {
-    if (changingTarget.current) return
+  async function generate(selected?: { question: string; transcript: string; autoWaitMs?: number }, isAutomatic = false, screenshot = false) {
+    if (changingTarget.current || screenshot && recognizing.current) return
     if (!isAutomatic) automatic.coordinator.current?.acknowledge()
     if (!bridge) { setError('请在 掌灯 Rewick 桌面应用中连接模型。'); return }
+    if (screenshot && !bridge.recognizeScreenshot) { setError('当前客户端不支持截图识别，请更新桌面应用。'); return }
     if (!isAnswerModelReady(settingsRef.current)) {
       setError('请在设置中登录已开通回答的平台账号，或填写回答模型 API Key。'); return
     }
-    const prompt = selected ? selected.question.trim() : questionRef.current.trim() || recentQuestion(recordRef.current.segments)
+    let prompt = screenshot ? screenshotQuestion : selected ? selected.question.trim() : questionRef.current.trim() || recentQuestion(recordRef.current.segments)
     if (!prompt) { setError('输入一个面试问题，或先开始转写。'); return }
-    const id = crypto.randomUUID()
-    const operationId = crypto.randomUUID()
+    const previous = recordRef.current.answers.at(-1)
+    const algorithm = screenshot || !selected && !isAutomatic && Boolean(questionRef.current.trim()) && previous?.mode === 'algorithm'
+    let language: AlgorithmLanguage = previous?.language ?? 'Java'
+    const algorithmContext = !screenshot && algorithm ? algorithmConversation(recordRef.current.answers) : ''
+    const id = crypto.randomUUID(), operationId = crypto.randomUUID(), recordId = recordRef.current.id
     observation.begin(operationId, id)
     attachEnvironment()
     requestId.current = id
+    if (screenshot) recognizing.current = true
     automatic.coordinator.current?.refresh()
     setError('')
-    updateRecord(current => ({ ...current, title: current.title === '未命名会话' ? prompt.slice(0, 32) : current.title,
+    updateRecord(current => ({ ...current, title: current.title === '未命名会话' && !screenshot ? prompt.slice(0, 32) : current.title,
       answers: [...current.answers.map(answer => answer.status === 'streaming' ? { ...answer, status: 'cancelled' as const } : answer),
-        { id, question: prompt, text: '', createdAt: new Date().toISOString(), status: 'streaming' }] }))
-    if (!selected && !isAutomatic) setQuestion('')
-    const transcript = selected?.transcript ?? recordRef.current.segments.map(segment => segment.text).join('\n')
-    try { await bridge.generateAnswer({ requestId: id, operationId, ...(isAutomatic && selected?.autoWaitMs !== undefined ? { autoWaitMs: selected.autoWaitMs } : {}), question: prompt, transcript: transcript.slice(-18000),
-      ...(settingsRef.current.interviewEnvironment ? { environmentId: settingsRef.current.interviewEnvironment.id } : {}) }) }
-    catch (reason) { handleEvent({ kind: 'answer-error', requestId: id, message: errorMessage(reason) }) }
+        { id, question: prompt, text: '', createdAt: new Date().toISOString(), status: 'streaming', ...(algorithm ? { mode: 'algorithm' as const, language, algorithmRootId: screenshot ? id : previous?.algorithmRootId ?? id } : {}) }] }))
+    if (!selected && !isAutomatic && !screenshot) setQuestion('')
+    try {
+      if (screenshot && bridge.recognizeScreenshot) {
+        const recognized = await bridge.recognizeScreenshot(id)
+        if (requestId.current !== id || recordRef.current.id !== recordId || changingTarget.current) return
+        prompt = recognized.question.trim()
+        if (!prompt || prompt.length > 20_000) throw new Error('未能识别出完整题目，请调整屏幕显示后重新截图。')
+        language = recognized.language
+        updateRecord(current => ({ ...current, title: current.title === '未命名会话' ? prompt.slice(0, 32) : current.title,
+          answers: current.answers.map(answer => answer.id === id ? { ...answer, question: prompt, language } : answer) }))
+      }
+      if (requestId.current !== id) return
+      const transcript = algorithm ? '' : selected?.transcript ?? recordRef.current.segments.map(segment => segment.text).join('\n')
+      await bridge.generateAnswer({ requestId: id, operationId,
+        ...(algorithm ? { mode: 'algorithm', language, algorithmContext } : {}),
+        ...(isAutomatic && selected?.autoWaitMs !== undefined ? { autoWaitMs: selected.autoWaitMs } : {}), question: prompt, transcript: transcript.slice(-18000),
+        ...(settingsRef.current.interviewEnvironment ? { environmentId: settingsRef.current.interviewEnvironment.id } : {}) })
+    } catch (reason) { handleEvent({ kind: 'answer-error', requestId: id, message: errorMessage(reason) }) }
+    finally { if (screenshot) recognizing.current = false }
   }
   async function answerSegment(segmentId: string) {
     const segments = recordRef.current.segments
@@ -250,7 +272,8 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
     if (event.kind === 'shortcut') {
       if (document.body.dataset.mockMode === 'true') return
       if (document.activeElement?.getAttribute('data-shortcut-recorder') === 'true') return
-      if (event.action === 'toggle-source') void setSource(sourceRef.current === 'system' ? 'microphone' : 'system')
+      if (event.action === 'screenshot') void generate(undefined, false, true)
+      else if (event.action === 'toggle-source') void setSource(sourceRef.current === 'system' ? 'microphone' : 'system')
       else void generate()
       return
     }

@@ -12,6 +12,58 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class HttpBodyLimitFilterTest {
     @Test
+    void filter_screenshotWithinEnvelope_acceptsImageBodyLargerThanOrdinaryLimit() throws Exception {
+        var request = new MockHttpServletRequest("POST", "/api/v1/screenshots/recognize");
+        request.setContent(new byte[2 * 1048576]);
+        var response = new MockHttpServletResponse();
+        var called = new AtomicBoolean();
+        new HttpBodyLimitFilter(new ApiErrorWriter(new ObjectMapper())).doFilter(request, response,
+                (incoming, outgoing) -> {
+                    assertThat(incoming.getInputStream().readAllBytes()).hasSize(2 * 1048576);
+                    called.set(true);
+                });
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(called).isTrue();
+    }
+
+    @Test
+    void filter_screenshotContentLengthOverLimit_rejectsBeforeReading() throws Exception {
+        var request = new MockHttpServletRequest("POST", "/api/v1/screenshots/recognize") {
+            @Override public long getContentLengthLong() { return 8L * 1048576 + 1025; }
+            @Override public jakarta.servlet.ServletInputStream getInputStream() {
+                throw new AssertionError("Must reject before reading");
+            }
+        };
+        var response = new MockHttpServletResponse();
+        new HttpBodyLimitFilter(new ApiErrorWriter(new ObjectMapper())).doFilter(request, response,
+                (incoming, outgoing) -> { throw new AssertionError("Must not reach controller"); });
+        assertThat(response.getStatus()).isEqualTo(413);
+    }
+
+    @Test
+    void filter_chunkedScreenshotOverLimit_returns413WithoutCallingController() throws Exception {
+        var request = new MockHttpServletRequest("POST", "/api/v1/screenshots/recognize") {
+            @Override public long getContentLengthLong() { return -1; }
+        };
+        request.setContent(new byte[8 * 1048576 + 1025]);
+        var response = new MockHttpServletResponse();
+        new HttpBodyLimitFilter(new ApiErrorWriter(new ObjectMapper())).doFilter(request, response,
+                (incoming, outgoing) -> { throw new AssertionError("Must not reach controller"); });
+        assertThat(response.getStatus()).isEqualTo(413);
+        assertThat(response.getContentAsString()).contains("request_too_large");
+    }
+
+    @Test
+    void filter_screenshotSiblingPath_doesNotInheritLargerLimit() throws Exception {
+        var request = new MockHttpServletRequest("POST", "/api/v1/screenshots/other");
+        request.setContent(new byte[1048577]);
+        var response = new MockHttpServletResponse();
+        new HttpBodyLimitFilter(new ApiErrorWriter(new ObjectMapper())).doFilter(request, response,
+                (incoming, outgoing) -> { throw new AssertionError("Must not reach controller"); });
+        assertThat(response.getStatus()).isEqualTo(413);
+    }
+
+    @Test
     void filter_installerUsesSeparateLimitWithoutBufferingTheFile() throws Exception {
         MockHttpServletRequest request =
                 new MockHttpServletRequest(

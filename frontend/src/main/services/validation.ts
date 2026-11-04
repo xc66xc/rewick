@@ -1,3 +1,4 @@
+import { algorithmLanguages } from '../../shared/algorithm-answer'
 import { productionPlatformUrl } from '../../shared/platform-transport'
 import { z } from 'zod'
 import { webSourceUrlSchema } from '../../shared/web-search'
@@ -75,6 +76,8 @@ export const settingsInputSchema = z.object({
     .default({ enabled: true, pauseMs: 1500 }),
 })
 export const answerRequestSchema = z.object({
+  mode: z.literal('algorithm').optional(), language: z.enum(algorithmLanguages).optional(),
+  algorithmContext: z.string().max(50_000).optional(),
   operationId: z.string().uuid().optional(), autoWaitMs: z.number().finite().nonnegative().max(86400000).optional(),
   requestId: z.string().min(1).max(128),
   question: z.string().trim().min(1, '请先输入问题或等待字幕。').max(20_000),
@@ -100,6 +103,8 @@ export const sessionRecordSchema = z.object({
   answers: z.array(z.object({
     id: z.string().min(1).max(128), question: z.string().max(20_000), text: z.string().max(100_000),
     createdAt: timestamp, status: z.enum(['streaming', 'complete', 'cancelled', 'error']),
+    mode: z.literal('algorithm').optional(), language: z.enum(algorithmLanguages).optional(),
+    algorithmRootId: z.string().min(1).max(128).optional(),
     error: z.string().max(2000).optional(),
     interviewTarget: interviewTargetSchema.optional(), retrieval: retrievalContextSchema.optional(),
     modelInput: modelInputSnapshotSchema.optional(),

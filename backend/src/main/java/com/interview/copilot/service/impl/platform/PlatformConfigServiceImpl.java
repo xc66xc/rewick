@@ -85,7 +85,7 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
                 view.models(),
                 view.defaultModelId(),
                 view.asr(),
-                view.embedding(), view.webSearch());
+                view.embedding(), view.webSearch(), view.screenshotModelId());
     }
 
     private DesktopSettingsEntity replacedAsrDefault(
@@ -131,7 +131,7 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
         var search = input.webSearch() == null ? previous.webSearch()
                 : input.webSearch().withDefaultAnswer(previous.webSearch().includeAnswer());
         return new PlatformConfig(input.version(), input.providers(), input.models(), input.defaultModelId(),
-                input.asr(), input.embedding(), search);
+                input.asr(), input.embedding(), search, input.screenshotModelId() == null ? previous.screenshotModelId() : input.screenshotModelId());
     }
 
     private boolean localEmbedding(PlatformConfig.Provider provider) {

@@ -2,6 +2,8 @@ import { MockInterviewClient } from './services/mock-interview-client'
 import { mockQaToMarkdown } from './services/mock-qa-export'
 import { mockSessionSchema } from '../shared/mock-interview'
 import { SourceShortcutManager } from './services/source-shortcut-manager'
+import { ScreenshotShortcutManager } from './services/screenshot-shortcut-manager'
+import { captureFullscreen } from './services/screenshot-capture'
 import { canSaveOtherEnvironment } from './services/environment-edit-policy'
 import { environmentStampInputSchema } from '../shared/environment-stamp'
 import { randomUUID as telemetryUUID } from 'node:crypto'
@@ -20,7 +22,7 @@ import { PaymentClient } from './services/payment-client'
 import { InterviewTimer } from './services/interview-timer'
 import { AccountWorkspaces } from './services/account-workspace'
 import { platformBaseUrl } from '../shared/defaults'
-import { app, net, shell, Menu, dialog, globalShortcut, ipcMain, safeStorage, session, powerMonitor, systemPreferences, desktopCapturer } from 'electron'
+import { app, net, shell, Menu, dialog, globalShortcut, ipcMain, safeStorage, session, powerMonitor, systemPreferences, desktopCapturer, screen } from 'electron'
 import type { IpcMainInvokeEvent } from 'electron'
 import { basename, join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
@@ -99,6 +101,7 @@ function notifyHidden(): void {
 }
 let windowPreferences = { ...defaultWindowPreferences }
 const sourceShortcuts = new SourceShortcutManager(join(app.getPath('userData'), 'source-shortcut.json'), globalShortcut, () => emit({ kind: 'shortcut', action: 'toggle-source' }))
+const screenshotShortcuts = new ScreenshotShortcutManager(join(app.getPath('userData'), 'screenshot-shortcut.json'), globalShortcut, () => emit({ kind: 'shortcut', action: 'screenshot' }), accelerator => sourceShortcuts.get().accelerator === accelerator)
 const windowPreferencesPath = join(app.getPath('userData'), 'window-preferences.json')
 const windowPreferencesQueue = new SerialQueue()
 const recordings = new InterviewRecordingStore(join(app.getPath('userData'), 'interview-recordings'))
@@ -349,13 +352,13 @@ function assertSender(event: IpcMainInvokeEvent): void {
 }
 
 function registerHandlers(): void {
-  const publicChannels = new Set(['shortcut:source:get', 'shortcut:source:save', 'invitation:settings', 'settings:get', 'settings:save', 'platform:remembered-login', 'platform:login', 'platform:register', 'platform:email-code', 'platform:password-reset-code', 'platform:password-reset', 'platform:logout', 'platform:refresh', 'asr:stop', 'answer:cancel', 'window:compact', 'window:pin', 'window:scrim'])
+  const publicChannels = new Set(['shortcut:source:get', 'shortcut:source:save', 'shortcut:screenshot:get', 'shortcut:screenshot:save', 'invitation:settings', 'settings:get', 'settings:save', 'platform:remembered-login', 'platform:login', 'platform:register', 'platform:email-code', 'platform:password-reset-code', 'platform:password-reset', 'platform:logout', 'platform:refresh', 'asr:stop', 'answer:cancel', 'window:compact', 'window:pin', 'window:scrim'])
   const handle = (channel: string, callback: (arg: unknown) => unknown): void => {
     ipcMain.handle(channel, async (event, envelope: unknown) => {
       assertSender(event)
-      if (quitPending && ['interview:start', 'asr:start', 'answer:generate', 'recordings:start', 'recordings:export', 'platform:login', 'platform:register'].includes(channel)) throw new Error('应用正在退出，请重新打开后操作。')
+      if (quitPending && ['interview:start', 'asr:start', 'answer:generate', 'screenshot:recognize', 'recordings:start', 'recordings:export', 'platform:login', 'platform:register'].includes(channel)) throw new Error('应用正在退出，请重新打开后操作。')
       const { payload: arg, accountScope } = parseInput(z.object({ payload: z.unknown().optional(), accountScope: z.string().optional() }), envelope)
-      const dispatch = channel === 'answer:generate' || channel === 'answer:cancel' ? ++answerDispatchEpoch : answerDispatchEpoch
+      const dispatch = channel === 'answer:generate' || channel === 'answer:cancel' || channel === 'screenshot:recognize' ? ++answerDispatchEpoch : answerDispatchEpoch
       const asrDispatch = asrEpoch
       if (channel === 'session:stage') {
         const input = parseInput(z.object({ nonce: z.string().uuid(), record: sessionRecordSchema.nullable() }), arg)
@@ -375,8 +378,8 @@ function registerHandlers(): void {
         throw new Error('请先使用邮箱注册或登录。')
       }
       if (!publicChannels.has(channel) && !['history:save', 'recordings:append', 'recordings:stop', 'recordings:info', 'recordings:cancel-export'].includes(channel)) sessionMonitor.assertVerified((await authSettings.getSecrets()).platformAccessToken)
-      if (channel === 'answer:generate' && dispatch !== answerDispatchEpoch) {
-        const request = parseInput(answerRequestSchema, arg)
+      if ((channel === 'answer:generate' || channel === 'screenshot:recognize') && dispatch !== answerDispatchEpoch) {
+        const request = parseInput(z.object({ requestId: z.string().min(1).max(128) }), arg)
         emit({ kind: 'answer-done', requestId: request.requestId, cancelled: true })
         return
       }
@@ -459,7 +462,45 @@ function registerHandlers(): void {
   }))
   handle('interview:end', () => interviewTimer.end())
   handle('shortcut:source:get', () => sourceShortcuts.get())
-  handle('shortcut:source:save', input => sourceShortcuts.save(input))
+  handle('shortcut:source:save', input => {
+    const candidate = parseInput(z.object({ accelerator: z.string().max(80) }), input)
+    if (candidate.accelerator && candidate.accelerator === screenshotShortcuts.get().accelerator) throw new Error('该快捷键已用于截图解题，请换一个组合。')
+    return sourceShortcuts.save(input)
+  })
+  handle('shortcut:screenshot:get', () => screenshotShortcuts.get())
+  handle('shortcut:screenshot:save', input => screenshotShortcuts.save(input))
+  handle('screenshot:recognize', async input => {
+    const { requestId } = parseInput(z.object({ requestId: z.string().uuid() }).strict(), input)
+    interviewTimer.assertActive()
+    cancelAnswerWork()
+    const epoch = answerEpoch, revision = platformWork.revision
+    const language = screenshotShortcuts.get().language
+    const controller = new AbortController()
+    retrievalController = controller
+    pendingAnswerId = requestId
+    const release = platformWork.track(revision, () => controller.abort(new Error('平台连接已更改，截图识别已取消。')))
+    const timeout = setTimeout(() => controller.abort(new Error('截图识别超时，请检查网络或平台视觉模型后重试。')), 60_000)
+    try {
+      const connection = await walletConnection()
+      controller.signal.throwIfAborted()
+      const image = await captureFullscreen({
+        platform: process.platform,
+        screenPermission: () => systemPreferences.getMediaAccessStatus('screen'),
+        displayAtCursor: () => screen.getDisplayNearestPoint(screen.getCursorScreenPoint()),
+        getSources: thumbnailSize => desktopCapturer.getSources({ types: ['screen'], thumbnailSize, fetchWindowIcons: false })
+      }, controller.signal)
+      const result = await new PlatformClient(connection.baseUrl, 45_000).recognizeScreenshot(connection.token, image, controller.signal)
+      controller.signal.throwIfAborted()
+      if (epoch !== answerEpoch) throw new Error('截图识别已取消。')
+      interviewTimer.assertActive()
+      return { question: result.question, language }
+    } finally {
+      clearTimeout(timeout)
+      release()
+      if (retrievalController === controller) retrievalController = null
+      if (epoch === answerEpoch) pendingAnswerId = null
+    }
+  })
   handle('settings:get', async () => { await accounts.active?.preferences.load(true); return effectiveSettings() })
   handle('platform:remembered-login', () => authSettings.getRememberedLogin())
   handle('platform:login', input => {
@@ -672,7 +713,7 @@ function registerHandlers(): void {
       const resolved = connection.settings
       if (observation) { observation.model = resolved.llm.model; observation.serviceSource = connection.platform ? 'platform' : 'custom'; observation.providerType = 'llm' }
       telemetry.record(observation, 'answer.prepare', preparing, 'success')
-      const retrieval = await telemetry.measure(observation, 'retrieval.join', () => retrieveAnswerContext(
+      const retrieval: RetrievalContext = request.mode === 'algorithm' ? { status: 'disabled', excerpts: [] } : await telemetry.measure(observation, 'retrieval.join', () => retrieveAnswerContext(
         signal => telemetry.measure(observation, 'retrieval.rag', () => references.retrieve(request.question, request.transcript, resolved, signal), 'pg', 'platform'),
         resolved.webSearch?.enabled ? signal => telemetry.measure(observation, 'retrieval.web', () => new WebSearchClient(resolved, secrets.platformAccessToken).retrieve(request.question, signal), 'system', 'platform') : undefined,
         controller.signal), 'system')
@@ -879,6 +920,7 @@ if (hasInstanceLock) app.whenReady().then(async () => {
   if (startupSettings.platform?.baseUrl !== platformBaseUrl) await authSettings.saveSettings({ ...startupSettings, platform: { ...startupSettings.platform, enabled: true, baseUrl: platformBaseUrl } })
   await syncAccount()
   await sourceShortcuts.initialize()
+  await screenshotShortcuts.initialize()
   registerHandlers()
   if (supportsTray) {
     menuBar = new MenuBar(() => desktopWindows?.show(), () => desktopWindows?.hide(), () => app.quit())

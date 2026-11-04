@@ -70,3 +70,21 @@ describe('single-field shortcut recorder', () => {
     await screen.findByText('已生效 · 点击录制，自动保存；仅在本机生效。')
   })
 })
+
+
+describe('screenshot shortcut recorder', () => {
+  it('records a separate shortcut and retains the selected code language', async () => {
+    const save = vi.fn(async (value: { accelerator: string; language: string }) => value)
+    const bridge = { getSourceShortcut: async () => ({ accelerator: 'Alt+Q' }), saveSourceShortcut: vi.fn(),
+      getScreenshotShortcut: async () => ({ accelerator: '', language: 'Python' }), saveScreenshotShortcut: save } as unknown as DesktopBridge
+    const user = userEvent.setup()
+    render(<SourceShortcutPreferences bridge={bridge} />)
+    const field = screen.getByRole('textbox', { name: '全屏截图解题' }) as HTMLInputElement
+    await waitFor(() => expect(field.disabled).toBe(false))
+    await user.click(field)
+    await user.keyboard('{Control>}{Shift>}[Digit3]{/Shift}{/Control}')
+    await waitFor(() => expect(save).toHaveBeenCalledExactlyOnceWith({ accelerator: 'CommandOrControl+Shift+3', language: 'Python' }))
+    expect((screen.getByRole('textbox', { name: '切换系统音频 / 麦克风' }) as HTMLInputElement).value).toBe('Alt+Q')
+    expect(screen.queryByRole('button', { name: '保存快捷键' })).toBeNull()
+  })
+})

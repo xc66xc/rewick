@@ -49,7 +49,7 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
     public PlatformProbeResponse test(long actorId, PlatformProbeRequest input) {
         if (input == null
                 || input.capability() == null
-                || !Set.of("llm", "asr", "embedding", "web-search").contains(input.capability())) {
+                || !Set.of("llm", "asr", "embedding", "web-search", "screenshot").contains(input.capability())) {
             throw PlatformConfigErrors.invalid("请选择需要测试的服务能力。");
         }
         PlatformSnapshot snapshot = configs.draft(input.config());
@@ -78,10 +78,24 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
     private void probe(PlatformSnapshot snapshot, PlatformProbeRequest input) {
         switch (input.capability()) {
             case "llm" -> llm(snapshot, input.modelId());
+            case "screenshot" -> screenshot(snapshot);
             case "asr" -> asr.test(snapshot.asr());
             case "embedding" -> embedding(snapshot);
             case "web-search" -> webSearch(snapshot);
             default -> throw PlatformConfigErrors.invalid("服务能力无效。");
+        }
+    }
+
+    private void screenshot(PlatformSnapshot snapshot) {
+        String id = snapshot.view().screenshotModelId();
+        if (id.isBlank()) throw PlatformConfigErrors.invalid("请选择支持读图的截图识别模型。");
+        var endpoint = snapshot.llm(id).config();
+        var response = com.interview.copilot.util.ai.ProviderCompletions.complete(http, json,
+                endpoint, com.interview.copilot.util.ai.ScreenshotProbe.body(endpoint),
+                Duration.ofSeconds(Math.min(30, endpoint.getTotalTimeoutSeconds()))).block();
+        json.completion(response, "message");
+        if (!response.path("choices").path(0).path("message").path("content").asText().trim().equals("42")) {
+            throw new com.interview.copilot.exception.ai.ProviderFailure("vision_unsupported", "模型未能识别测试图片，请确认所选模型支持图片输入。");
         }
     }
 

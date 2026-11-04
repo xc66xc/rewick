@@ -98,6 +98,9 @@ public final class PlatformConfigValidator {
                 available.add(model.id());
             }
         }
+        if (!config.screenshotModelId().isEmpty() && !available.contains(config.screenshotModelId())) {
+            throw PlatformConfigErrors.invalid("截图识别模型必须选择已启用的模型。");
+        }
         if (config.defaultModelId().isEmpty() && available.isEmpty()) {
             return;
         }
