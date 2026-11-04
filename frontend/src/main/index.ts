@@ -1,6 +1,4 @@
-import { LocalStorageGate } from './services/local-storage-gate'
 import { LocalSecretStorage } from './services/local-secret-storage'
-import { getLegacyStorageStatus, migrateLegacyStorage, recoverLegacyMigration } from './services/local-storage-migration'
 import { MockInterviewClient } from './services/mock-interview-client'
 import { mockQaToMarkdown } from './services/mock-qa-export'
 import { mockSessionSchema } from '../shared/mock-interview'
@@ -25,7 +23,7 @@ import { PaymentClient } from './services/payment-client'
 import { InterviewTimer } from './services/interview-timer'
 import { AccountWorkspaces } from './services/account-workspace'
 import { platformBaseUrl } from '../shared/defaults'
-import { app, net, shell, Menu, dialog, globalShortcut, ipcMain, safeStorage, session, powerMonitor, systemPreferences, desktopCapturer, screen } from 'electron'
+import { app, net, shell, Menu, dialog, globalShortcut, ipcMain, session, powerMonitor, systemPreferences, desktopCapturer, screen } from 'electron'
 import type { IpcMainInvokeEvent } from 'electron'
 import { basename, join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
@@ -78,7 +76,7 @@ else if (!app.isPackaged) {
   app.setPath('userData', developmentData)
 }
 else app.setPath('userData', join(app.getPath('appData'), 'Interview Copilot'))
-// Preserve the legacy identity only for explicit, user-requested credential migration.
+// Keep the application identity and existing user-data ownership stable.
 app.setName('Interview Copilot')
 const hasInstanceLock = app.requestSingleInstanceLock()
 if (!hasInstanceLock) app.exit(0)
@@ -146,9 +144,6 @@ const mockInterviews = new MockInterviewClient(walletConnection, message => {
   if (accounts.active && window && !window.webContents.isDestroyed()) window.webContents.send('mock:event', accounts.active.id, message)
 })
 async function syncAccount() {
-  // Background/preflight reads cannot activate imported history during the swap.
-  // A writer admitted before migration may still complete its normal account flow.
-  if (localStorageGate.migrating && !localStorageGate.inWriter) return accounts.active
   void telemetry.refresh()
   const authenticated = await authSettings.getSettings()
   if (accounts.identity(authenticated) !== accounts.active?.id) { telemetry.reset(true); interviewTimer.dispose(); disposeWork() }
@@ -186,7 +181,6 @@ const settings = new Proxy(authSettings, {
     return typeof method === 'function' ? method.bind(target) : method
   }
 })
-const localStorageGate = new LocalStorageGate()
 const platformMutations = new SerialQueue()
 const platformWork = new PlatformWork()
 let releasePlatformAsr: (() => void) | undefined
@@ -196,11 +190,10 @@ function mutatePlatform<T>(operation: () => Promise<T>): Promise<T> {
   return platformMutations.run(operation).finally(finish)
 }
 async function serviceConnection(snapshot: { settings: Settings; secrets: ServiceSecrets }, capability: PlatformCapability, signal?: AbortSignal) {
-  const storageRevision = localStorageGate.revision
   let config = snapshot.settings
   if (config.preferencesVersion !== undefined && !config.serviceSelections?.[capability]) throw new Error('请先在模型与设置中明确选择服务。')
   if (needsPlatform(config, snapshot.secrets, capability)) {
-    try { const refreshed = await localStorageGate.write(storageRevision, () => platform.refreshSnapshot(snapshot, signal)); config = { ...config, platform: refreshed.platform } }
+    try { const refreshed = await platform.refreshSnapshot(snapshot, signal); config = { ...config, platform: refreshed.platform } }
     finally {
       await syncAccount()
       emit({ kind: 'settings-changed' })
@@ -248,21 +241,17 @@ const interviews = scopedStore('interviews')
 let catalogRefreshTimer: ReturnType<typeof setInterval> | undefined
 let catalogRefreshing = false
 async function refreshCatalog() {
-  if (catalogRefreshing || localStorageGate.migrating) return
-  const storageRevision = localStorageGate.revision
+  if (catalogRefreshing) return
   catalogRefreshing = true
   try {
-    await localStorageGate.write(storageRevision, async () => {
-      const before = await authSettings.getConnectionSnapshot()
-      if (!before.settings.platform?.authenticated) return
-      await platform.refreshSnapshot(before)
-      const after = await authSettings.getConnectionSnapshot()
-      if (after.secrets.platformAccessToken === before.secrets.platformAccessToken && JSON.stringify(before.settings.platform) !== JSON.stringify(after.settings.platform)) emit({ kind: 'settings-changed' })
-    })
+    const before = await authSettings.getConnectionSnapshot()
+    if (!before.settings.platform?.authenticated) return
+    await platform.refreshSnapshot(before)
+    const after = await authSettings.getConnectionSnapshot()
+    if (after.secrets.platformAccessToken === before.secrets.platformAccessToken && JSON.stringify(before.settings.platform) !== JSON.stringify(after.settings.platform)) emit({ kind: 'settings-changed' })
   } catch { /* Session faults are handled centrally; transient catalog failures keep the last verified policy. */ }
   finally { catalogRefreshing = false }
 }
-
 async function effectiveSettings() {
   const value = { ...await settings.getSettings(), sessionNotice }
   return interviewTimer.active && interviewTimer.background ? { ...value, ...interviewTimer.background } : accounts.active ? interviews.resolve(value) : value
@@ -329,7 +318,6 @@ const unsubscribeSessionFault = onSessionFault((token, error) => {
   accounts.context.exit(() => { void finishInvalidSession(token, error.message, true).catch(() => console.error('无法完成登录会话清理')) })
 })
 async function finishInvalidSession(token: string, message: string, revoke: boolean): Promise<void> {
-  const storageRevision = localStorageGate.revision
   if (signOut) { await signOut; if (revoke) return finishInvalidSession(token, message, revoke); return }
   const snapshot = await authSettings.getConnectionSnapshot()
   if (snapshot.secrets.platformAccessToken !== token) return
@@ -350,7 +338,7 @@ async function finishInvalidSession(token: string, message: string, revoke: bool
     pendingSignOut = undefined
     if ((await authSettings.getConnectionSnapshot()).secrets.platformAccessToken !== token) return
     sessionNotice = message
-    if (revoke) await localStorageGate.write(storageRevision, async () => { await authSettings.clearPlatformSession(token); await syncAccount() })
+    if (revoke) { await authSettings.clearPlatformSession(token); await syncAccount() }
     emit({ kind: revoke ? 'session-ended' : 'session-paused', message })
     emit({ kind: 'settings-changed' })
   }
@@ -363,18 +351,12 @@ function assertSender(event: IpcMainInvokeEvent): void {
 }
 
 function registerHandlers(): void {
-  const localWriteChannels = new Set(['settings:save', 'services:save', 'services:remove', 'platform:login', 'platform:register', 'platform:logout', 'platform:refresh'])
-  const migrationSafeChannels = new Set(['window:scrim', 'storage:status'])
-  const publicChannels = new Set(['storage:status', 'storage:migrate', 'shortcut:source:get', 'shortcut:source:save', 'shortcut:screenshot:get', 'shortcut:screenshot:save', 'invitation:settings', 'settings:get', 'settings:save', 'platform:remembered-login', 'platform:login', 'platform:register', 'platform:email-code', 'platform:password-reset-code', 'platform:password-reset', 'platform:logout', 'platform:refresh', 'asr:stop', 'answer:cancel', 'window:compact', 'window:pin', 'window:scrim'])
+  const publicChannels = new Set(['shortcut:source:get', 'shortcut:source:save', 'shortcut:screenshot:get', 'shortcut:screenshot:save', 'invitation:settings', 'settings:get', 'settings:save', 'platform:remembered-login', 'platform:login', 'platform:register', 'platform:email-code', 'platform:password-reset-code', 'platform:password-reset', 'platform:logout', 'platform:refresh', 'asr:stop', 'answer:cancel', 'window:compact', 'window:pin', 'window:scrim'])
   const handle = (channel: string, callback: (arg: unknown) => unknown): void => {
     ipcMain.handle(channel, async (event, envelope: unknown) => {
       assertSender(event)
-      const storageRevision = localStorageGate.revision
-      if (localStorageGate.migrating && !migrationSafeChannels.has(channel)) throw new Error('正在迁移本机数据，请稍后再操作。')
-      if (quitPending && ['interview:start', 'asr:start', 'answer:generate', 'screenshot:recognize', 'recordings:start', 'recordings:export', 'platform:login', 'platform:register', 'storage:migrate'].includes(channel)) throw new Error('应用正在退出，请重新打开后操作。')
+      if (quitPending && ['interview:start', 'asr:start', 'answer:generate', 'screenshot:recognize', 'recordings:start', 'recordings:export', 'platform:login', 'platform:register'].includes(channel)) throw new Error('应用正在退出，请重新打开后操作。')
       const { payload: arg, accountScope } = parseInput(z.object({ payload: z.unknown().optional(), accountScope: z.string().optional() }), envelope)
-      // Pure window/metadata operations must not activate an imported account mid-swap.
-      if (migrationSafeChannels.has(channel)) return callback(arg)
       const dispatch = channel === 'answer:generate' || channel === 'answer:cancel' || channel === 'screenshot:recognize' ? ++answerDispatchEpoch : answerDispatchEpoch
       const asrDispatch = asrEpoch
       if (channel === 'session:stage') {
@@ -387,7 +369,6 @@ function registerHandlers(): void {
       }
       if (pendingSignOut && !['asr:stop','answer:cancel','settings:get','platform:remembered-login','window:scrim'].includes(channel)) throw new Error('正在结束旧登录会话，请稍后重试。')
       const owner = await syncAccount()
-      localStorageGate.assertCurrent(storageRevision)
       // window:scrim 是纯窗口外观位(弹窗遮罩着色),true/false 必须对称落地;若按账户作用域拦截,
       // 恢复白底的那次调用会在账户切换瞬间被丢弃,原生标题条将卡在灰色(2026-09-20 Windows 实测)。
       if (accountScope && owner?.id !== accountScope && !channel.startsWith('platform:') && channel !== 'settings:get' && channel !== 'window:scrim') throw new Error('账户已切换，旧操作已取消。')
@@ -402,14 +383,10 @@ function registerHandlers(): void {
         return
       }
       if (channel === 'asr:start' && asrDispatch !== asrEpoch) throw new Error('转写连接已取消。')
-      const dispatchCallback = async () => {
-        localStorageGate.assertCurrent(storageRevision)
-        if (channel.startsWith('platform:') || !owner) return callback(arg)
-        const result = await accounts.context.run(owner, () => callback(arg))
-        if (accounts.active !== owner) throw new Error('账户已切换，旧请求结果已丢弃。')
-        return result
-      }
-      return localWriteChannels.has(channel) ? localStorageGate.write(storageRevision, dispatchCallback) : dispatchCallback()
+      if (channel.startsWith('platform:') || !owner) return callback(arg)
+      const result = await accounts.context.run(owner, () => callback(arg))
+      if (accounts.active !== owner) throw new Error('账户已切换，旧请求结果已丢弃。')
+      return result
     })
   }
   async function paymentRequest<T>(operation: (client: PaymentClient) => Promise<T>): Promise<T> {
@@ -522,21 +499,6 @@ function registerHandlers(): void {
       if (retrievalController === controller) retrievalController = null
       if (epoch === answerEpoch) pendingAnswerId = null
     }
-  })
-  handle('storage:status', () => getLegacyStorageStatus(app.getPath('userData'), vaultRoot))
-  handle('storage:migrate', () => {
-    return localStorageGate.migrate(() => mutatePlatform(async () => {
-      assertInterviewIdle()
-      if ((await authSettings.getSettings()).platform?.authenticated) throw new Error('请在重新登录之前迁移旧数据；当前登录与数据不会被覆盖。')
-      telemetry.reset(true); disposeWork(); accounts.dispose()
-      const result = await migrateLegacyStorage(app.getPath('userData'), vaultRoot, {
-        encryptString: value => safeStorage.encryptString(value),
-        decryptString: value => safeStorage.decryptString(value),
-        isEncryptionAvailable: () => safeStorage.isEncryptionAvailable()
-      }, secretStorage)
-      await authSettings.initializeServices()
-      return result
-    })).finally(() => { emit({ kind: 'settings-changed' }) })
   })
   handle('settings:get', async () => { await accounts.active?.preferences.load(true); return effectiveSettings() })
   handle('platform:remembered-login', () => authSettings.getRememberedLogin())
@@ -930,10 +892,9 @@ app.on('second-instance', () => {
 })
 
 if (hasInstanceLock) app.whenReady().then(async () => {
-  await recoverLegacyMigration(vaultRoot)
   await secretStorage.initialize()
   telemetry.start()
-  // The legacy name is retained for opt-in migration; normal storage uses local AES-GCM.
+  // Expose the brand through UI and About metadata.
   app.setAboutPanelOptions({ applicationName: '掌灯 Rewick' })
   if (process.platform === 'darwin') app.dock?.hide()
   session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => {

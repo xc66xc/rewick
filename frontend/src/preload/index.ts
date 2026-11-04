@@ -55,8 +55,6 @@ function createBridge(accountScope?: string): DesktopBridge {
   endInterview: () => invoke('interview:end'),
   getCaptureError: () => invoke('audio:capture-error'),
   getSettings: () => invoke('settings:get'),
-  getLocalStorageStatus: () => invoke('storage:status'),
-  migrateLocalStorage: () => invoke('storage:migrate'),
   getScreenshotShortcut: () => invoke('shortcut:screenshot:get'),
   saveScreenshotShortcut: input => invoke('shortcut:screenshot:save', input),
   recognizeScreenshot: requestId => invoke('screenshot:recognize', { requestId }),

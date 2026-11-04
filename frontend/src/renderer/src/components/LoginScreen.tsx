@@ -1,4 +1,3 @@
-import LocalStoragePreferences from './LocalStoragePreferences'
 import brandIcon from '../assets/rewick-icon.png'
 import InvitationField from './invitation/InvitationField'
 import { CheckRow } from './ui/check-row'
@@ -62,7 +61,6 @@ export default function LoginScreen({ settings, bridge, checking, error: externa
           {(error || externalError) && <p className="rounded-chip bg-danger-subtle p-3 text-xs text-danger [overflow-wrap:anywhere]" role="alert">{error || externalError}</p>}
           {!checking && externalError && settings.platform?.authenticated && <LinkButton type="button" className="self-start" onClick={onRetry}>重新验证登录</LinkButton>}
         </div>
-        <LocalStoragePreferences bridge={bridge} disabled={busy || checking} />
       </section>
     </div>
   </main>
