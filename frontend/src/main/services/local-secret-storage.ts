@@ -54,7 +54,7 @@ export class LocalSecretStorage {
 
   decryptString(value: Buffer): string {
     const key = this.requireKey()
-    if (!Buffer.isBuffer(value) || !isLocalSecretCiphertext(value)) throw new Error('这是旧版或未知格式的加密数据，需要主动迁移；原数据未修改。')
+    if (!Buffer.isBuffer(value) || !isLocalSecretCiphertext(value)) throw new Error('这是旧版或未知格式的加密数据，当前版本无法读取；原数据未修改。')
     if (value.length < headerBytes + tagBytes || value.length > headerBytes + tagBytes + maximumPlaintextBytes) throw new Error('本机加密数据格式或长度无效，原数据未修改。')
     const header = value.subarray(0, headerBytes)
     if (!timingSafeEqual(header.subarray(magic.length, magic.length + keyIdBytes), this.keyId(key))) {
