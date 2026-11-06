@@ -46,7 +46,7 @@ public class PlatformServicesTest {
         var desktop = DesktopSettingsFixture.advanced();
         org.mockito.Mockito.when(desktop.get()).thenReturn(
                 new com.interview.copilot.response.platform.DesktopSettingsResponse(
-                        1, "answer-model", 0.7, "asr-bound"));
+                        1, "answer-model", 0.7, "asr-bound", 20));
         MockMvc mvc =
                 MockMvcBuilders.standaloneSetup(
                                 new PlatformController(
@@ -74,7 +74,8 @@ public class PlatformServicesTest {
         assertThat(response.path("capabilities").properties()).extracting(Map.Entry::getKey)
                 .containsExactlyInAnyOrder("llm", "asr");
         assertThat(response.path("desktopDefaults").properties()).extracting(Map.Entry::getKey)
-                .containsExactlyInAnyOrder("version", "llmModelId", "temperature", "asrServiceId");
+                .containsExactlyInAnyOrder("version", "llmModelId", "temperature", "asrServiceId", "sessionRecordMaxMiB");
+        assertThat(response.at("/desktopDefaults/sessionRecordMaxMiB").asInt()).isEqualTo(20);
         assertThat(response.at("/services/embedding").isMissingNode()).isTrue();
         assertThat(response.at("/models/available/0/id").asText()).isEqualTo("answer-model");
         assertThat(response.at("/models/llm").asText()).isEqualTo("answer-model");

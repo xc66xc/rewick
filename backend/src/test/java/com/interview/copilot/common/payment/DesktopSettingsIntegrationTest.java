@@ -26,7 +26,7 @@ class DesktopSettingsIntegrationTest extends PaymentHttpFixture {
     void defaults() {
         jdbc.update(
                 "UPDATE desktop_settings SET"
-                    + " version=0,llm_model_id='',temperature=0.7,asr_service_id=''"
+                    + " version=0,llm_model_id='',temperature=0.7,asr_service_id='',session_record_max_mib=20"
                     + " WHERE id=1");
         jdbc.update(
                 "UPDATE platform_config SET version=0,is_published=FALSE,payload='{}'::jsonb WHERE"
@@ -47,7 +47,30 @@ class DesktopSettingsIntegrationTest extends PaymentHttpFixture {
                 "temperature",
                 0.4,
                 "asrServiceId",
-                "");
+                "",
+                "sessionRecordMaxMiB",
+                20);
+    }
+
+    @Test
+    void sessionLimit_defaultAndUpdatedValue_arePublishedAndBounded() {
+        assertThat(call(HttpMethod.GET, "/admin/desktop-settings", adminToken, null)
+                .getBody().path("sessionRecordMaxMiB").asInt()).isEqualTo(20);
+        var policy = new java.util.HashMap<>(policy(0, ""));
+        policy.put("sessionRecordMaxMiB", 50);
+        assertThat(call(HttpMethod.PUT, "/admin/desktop-settings", aliceToken, policy)
+                .getStatusCode().value()).isEqualTo(403);
+        assertThat(call(HttpMethod.PUT, "/admin/desktop-settings", adminToken, policy)
+                .getStatusCode().value()).isEqualTo(200);
+        assertThat(call(HttpMethod.GET, "/platform", aliceToken, null)
+                .getBody().path("desktopDefaults").path("sessionRecordMaxMiB").asInt()).isEqualTo(50);
+        policy.put("version", 1);
+        for (int invalid : new int[]{0, 51}) {
+            policy.put("sessionRecordMaxMiB", invalid);
+            assertThat(call(HttpMethod.PUT, "/admin/desktop-settings", adminToken, policy)
+                    .getStatusCode().value()).isEqualTo(400);
+        }
+        assertThat(jdbc.queryForObject("SELECT session_record_max_mib FROM desktop_settings WHERE id=1", Integer.class)).isEqualTo(50);
     }
 
     private void grant(boolean enabled) {

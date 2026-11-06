@@ -13,7 +13,7 @@ function configured(advancedSettingsEnabled = false): Settings {
     platform: { enabled: true, authenticated: true, advancedSettingsEnabled, baseUrl: 'https://platform.example', expiresAt: new Date(Date.now() + 60000).toISOString(),
       capabilities: { llm: true, asr: true, }, models: { llm: 'platform-model', asr: 'asr', available: [{ id: 'platform-model', name: 'Platform' }] },
       services: { asr: [{ id: 'speech', name: 'Speech' }], },
-      desktopDefaults: { version: 1, llmModelId: 'platform-model', asrServiceId: 'speech', temperature: 0.3, } } }
+      desktopDefaults: { version: 1, llmModelId: 'platform-model', asrServiceId: 'speech', temperature: 0.3, sessionRecordMaxMiB: 20, } } }
 }
 const secrets = { platformAccessToken: 'platform-token', llmApiKey: 'own-key', asrApiKey: 'own-asr-key', }
 
@@ -62,4 +62,12 @@ describe('advanced settings authorization', () => {
     expect(platformInfoSchema.parse({ ...info, advancedSettingsEnabled: undefined }).advancedSettingsEnabled).toBe(false)
     expect(platformInfoSchema.safeParse({ ...info, desktopDefaults: { ...info.desktopDefaults, temperature: 3 } }).success).toBe(false)
   })
+})
+
+it('defaults cached server policies to 20 MiB and rejects invalid advertised limits', () => {
+  const configuredInfo = configured().platform
+  const info = { ...configuredInfo, user: { id: '1', displayName: 'User' }, limits: { maxAsrSessionSeconds: 100 } }
+  expect(platformInfoSchema.parse({ ...info, desktopDefaults: { ...info.desktopDefaults, sessionRecordMaxMiB: undefined } }).desktopDefaults?.sessionRecordMaxMiB).toBe(20)
+  for (const value of [0, 51, 1.5]) expect(platformInfoSchema.safeParse({ ...info, desktopDefaults: { ...info.desktopDefaults, sessionRecordMaxMiB: value } }).success).toBe(false)
+  for (const value of [1, 20, 50]) expect(platformInfoSchema.parse({ ...info, desktopDefaults: { ...info.desktopDefaults, sessionRecordMaxMiB: value } }).desktopDefaults?.sessionRecordMaxMiB).toBe(value)
 })

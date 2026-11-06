@@ -18,7 +18,7 @@ import java.util.List;
 @Mapper
 public interface DesktopSettingsMapper {
     @Select(
-            "SELECT version, llm_model_id, temperature, asr_service_id FROM desktop_settings WHERE id=1")
+            "SELECT version, llm_model_id, temperature, asr_service_id, session_record_max_mib FROM desktop_settings WHERE id=1")
     DesktopSettingsEntity read();
 
     @Select("SELECT advanced_settings_enabled FROM app_users WHERE id=#{id}")
@@ -42,7 +42,7 @@ public interface DesktopSettingsMapper {
 
     @Update(
             "UPDATE desktop_settings SET"
-                + " version=version+1,llm_model_id=#{llmModelId},temperature=#{temperature},asr_service_id=#{asrServiceId},updated_at=LOCALTIMESTAMP(6)"
+                + " version=version+1,llm_model_id=#{llmModelId},temperature=#{temperature},asr_service_id=#{asrServiceId},session_record_max_mib=#{sessionRecordMaxMiB},updated_at=LOCALTIMESTAMP(6)"
                 + " WHERE id=1 AND version=#{version}")
     int save(DesktopSettingsEntity input);
 }

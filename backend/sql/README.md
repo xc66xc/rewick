@@ -24,21 +24,22 @@ PostgreSQL 15.19 / pgvector 0.8.6。脚本手动按编号执行；后端不使�
 | `16_desktop_sessions.sql` | 单桌面登录、会话撤销原因与面试登录归属 |
 | `17_desktop_settings.sql` | 桌面高级设置授权与普通用户默认模型、温度和检索方式 |
 | `18_invitations.sql` | 用户邀请码、邀请奖励规则、注册关系与钱包奖励流水 |
+| `30_session_record_limit.sql` | 管理端单次会话记录容量上限，默认20 MiB，允许1–50 MiB |
 | `19_client_downloads.sql` | 三个平台的最新安装包配置及临时上传元数据 |
 
 ## 初始化空数据库
 
-从 backend 目录执行，密码通过交互提示或本机凭据提供。2.0需要顺序执行到29，不能只初始化到19：
+从 backend 目录执行，密码通过交互提示或本机凭据提供。2.0需要顺序执行到30，不能只初始化到19：
 
 ```sh
-psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 -f sql/01_schema.sql -f sql/02_pgvector.sql -f sql/03_admin_users.sql -f sql/04_platform_config.sql -f sql/05_email_auth.sql -f sql/06_display_name.sql -f sql/07_email_code_purpose.sql -f sql/08_server_local_time.sql -f sql/09_pg_references.sql -f sql/10_time_wallet.sql -f sql/11_payment_packages.sql -f sql/12_alipay_payments.sql -f sql/13_session_records.sql -f sql/14_server_background.sql -f sql/15_user_preferences.sql -f sql/16_desktop_sessions.sql -f sql/17_desktop_settings.sql -f sql/18_invitations.sql -f sql/19_client_downloads.sql -f sql/20_alipay_page_pay.sql -f sql/21_zpay_payments.sql -f sql/22_zpay_api_qr.sql -f sql/23_interview_type.sql -f sql/24_operations_statistics.sql -f sql/25_reference_hybrid.sql -f sql/26_hr_interview_type.sql -f sql/27_mock_interview.sql -f sql/28_reference_qa.sql -f sql/29_remove_remote_knowledge.sql
+psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 -f sql/01_schema.sql -f sql/02_pgvector.sql -f sql/03_admin_users.sql -f sql/04_platform_config.sql -f sql/05_email_auth.sql -f sql/06_display_name.sql -f sql/07_email_code_purpose.sql -f sql/08_server_local_time.sql -f sql/09_pg_references.sql -f sql/10_time_wallet.sql -f sql/11_payment_packages.sql -f sql/12_alipay_payments.sql -f sql/13_session_records.sql -f sql/14_server_background.sql -f sql/15_user_preferences.sql -f sql/16_desktop_sessions.sql -f sql/17_desktop_settings.sql -f sql/18_invitations.sql -f sql/19_client_downloads.sql -f sql/20_alipay_page_pay.sql -f sql/21_zpay_payments.sql -f sql/22_zpay_api_qr.sql -f sql/23_interview_type.sql -f sql/24_operations_statistics.sql -f sql/25_reference_hybrid.sql -f sql/26_hr_interview_type.sql -f sql/27_mock_interview.sql -f sql/28_reference_qa.sql -f sql/29_remove_remote_knowledge.sql -f sql/30_session_record_limit.sql
 ```
 
 使用 Compose 时，从仓库根目录执行：
 
 ```sh
 docker compose up -d --build --wait database
-docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql -f /opt/copilot/sql/06_display_name.sql -f /opt/copilot/sql/07_email_code_purpose.sql -f /opt/copilot/sql/08_server_local_time.sql -f /opt/copilot/sql/09_pg_references.sql -f /opt/copilot/sql/10_time_wallet.sql -f /opt/copilot/sql/11_payment_packages.sql -f /opt/copilot/sql/12_alipay_payments.sql -f /opt/copilot/sql/13_session_records.sql -f /opt/copilot/sql/14_server_background.sql -f /opt/copilot/sql/15_user_preferences.sql -f /opt/copilot/sql/16_desktop_sessions.sql -f /opt/copilot/sql/17_desktop_settings.sql -f /opt/copilot/sql/18_invitations.sql -f /opt/copilot/sql/19_client_downloads.sql -f /opt/copilot/sql/20_alipay_page_pay.sql -f /opt/copilot/sql/21_zpay_payments.sql -f /opt/copilot/sql/22_zpay_api_qr.sql -f /opt/copilot/sql/23_interview_type.sql -f /opt/copilot/sql/24_operations_statistics.sql -f /opt/copilot/sql/25_reference_hybrid.sql -f /opt/copilot/sql/26_hr_interview_type.sql -f /opt/copilot/sql/27_mock_interview.sql -f /opt/copilot/sql/28_reference_qa.sql -f /opt/copilot/sql/29_remove_remote_knowledge.sql
+docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql -f /opt/copilot/sql/06_display_name.sql -f /opt/copilot/sql/07_email_code_purpose.sql -f /opt/copilot/sql/08_server_local_time.sql -f /opt/copilot/sql/09_pg_references.sql -f /opt/copilot/sql/10_time_wallet.sql -f /opt/copilot/sql/11_payment_packages.sql -f /opt/copilot/sql/12_alipay_payments.sql -f /opt/copilot/sql/13_session_records.sql -f /opt/copilot/sql/14_server_background.sql -f /opt/copilot/sql/15_user_preferences.sql -f /opt/copilot/sql/16_desktop_sessions.sql -f /opt/copilot/sql/17_desktop_settings.sql -f /opt/copilot/sql/18_invitations.sql -f /opt/copilot/sql/19_client_downloads.sql -f /opt/copilot/sql/20_alipay_page_pay.sql -f /opt/copilot/sql/21_zpay_payments.sql -f /opt/copilot/sql/22_zpay_api_qr.sql -f /opt/copilot/sql/23_interview_type.sql -f /opt/copilot/sql/24_operations_statistics.sql -f /opt/copilot/sql/25_reference_hybrid.sql -f /opt/copilot/sql/26_hr_interview_type.sql -f /opt/copilot/sql/27_mock_interview.sql -f /opt/copilot/sql/28_reference_qa.sql -f /opt/copilot/sql/29_remove_remote_knowledge.sql -f /opt/copilot/sql/30_session_record_limit.sql
 docker compose up -d --build backend admin
 ```
 
@@ -242,3 +243,13 @@ GRANT USAGE,SELECT ON SEQUENCE mock_wallet_ledger_id_seq TO copilot_backend;
 运营脚本删除provider_type=bailian的事件/去重ID和直方图，以及包含退役标签的派生快照。保留PG/Tavily/LLM/ASR和答案总量；`knowledge`通用检索计费不删除。无需重建参考资料索引，脚本已在隔离测试和2026-10-19服务器部署执行；迁移前后32组保留数据指纹一致，备份与验收记录由部署维护者单独保管，不包含在源码仓库中。
 
 回滚不能只换JAR：需要旧列、旧配置/密钥以及配套应用版本。应使用定向备份恢复受影响配置，避免整库恢复覆盖新增业务数据。历史SQL15/17保留用于有序初始化，29将其升级到最终结构，不应逐个删除旧脚本中的远程字样。
+
+## 会话容量配置升级
+
+已执行01–29的业务库，在发布新版后端前手动执行`30_session_record_limit.sql`。脚本仅为`id=1`的桌面配置单例增加`session_record_max_mib`，默认20 MiB，整数范围1–50；不改写历史会话、不添加索引。脚本可重复执行，使用5秒锁等待上限；遇锁超时请待业务空闲后重试，不自动重试。
+
+```sh
+psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 -f sql/30_session_record_limit.sql
+```
+
+新增字段保留时旧后端可回滚，新后端必须依赖该脚本已完成。管理端“模型与服务 → 桌面默认设置”统一设置会话容量，平台接口随桌面默认策略下发；调低配置只限制之后的保存，不阻止读取已有较大的会话。前后端安装/部署及代理请求体边界需配套更新，旧桌面仍受自身固定4 MiB限制。

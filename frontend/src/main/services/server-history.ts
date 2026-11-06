@@ -1,3 +1,4 @@
+import { defaultSessionRecordMaxMiB, maxSessionRecordTransferBytes, sessionRecordMaxMiBSchema } from '../../shared/session-record-limits'
 import { operationsTelemetry } from './operations-telemetry'
 import { assertPlatformTransport } from '../../shared/platform-transport'
 import { sessionFault } from './session-fault'
@@ -21,6 +22,21 @@ function fingerprint(record: SessionRecord) { return createHash('sha256').update
 export class HistoryConflictError extends Error {
   constructor(readonly reason: 'record_changed' | 'record_deleted') { super(reason === 'record_changed' ? '服务器记录已变更，本地草稿已保留，请在会话记录中处理。' : '服务器记录已删除，本地草稿已保留，请在会话记录中处理。') }
 }
+async function responseText(response: Response, limit: number): Promise<string> {
+  const reader = response.body?.getReader()
+  const chunks: Uint8Array[] = []
+  let size = 0
+  if (reader) try {
+    while (true) {
+      const chunk = await reader.read()
+      if (chunk.done) break
+      size += chunk.value.byteLength
+      if (size > limit) throw new Error('会话响应超过容量限制。')
+      chunks.push(chunk.value)
+    }
+  } finally { await reader.cancel().catch(() => undefined); reader.releaseLock() }
+  return Buffer.concat(chunks).toString('utf8')
+}
 export class ServerHistory {
   private readonly queue = new SerialQueue()
   private readonly path: string
@@ -28,7 +44,7 @@ export class ServerHistory {
   private syncing = false
   private readonly recoveries = new Map<string, Promise<string>>()
   private state = '已同步'
-  constructor(root: string, private readonly crypto: Crypto, private readonly auth: Auth) { this.path = join(root, 'history-outbox.enc.json') }
+  constructor(root: string, private readonly crypto: Crypto, private readonly auth: Auth, private readonly recordLimit: () => Promise<number> = async () => defaultSessionRecordMaxMiB) { this.path = join(root, 'history-outbox.enc.json') }
   start() { if (!this.timer) this.timer = setInterval(() => { void this.flush().catch(() => undefined) }, 15000); void this.flush().catch(() => undefined) }
   dispose() { if (this.timer) clearInterval(this.timer); this.timer = undefined }
   status() { return this.state }
@@ -43,25 +59,21 @@ export class ServerHistory {
     })
     if (!response.ok) {
       if (response.status === 401) throw await sessionFault(response, snapshot.secrets.platformAccessToken)
+      if (response.status === 400) {
+        let capacityMessage: string | undefined
+        try {
+          const result = z.object({ code: z.literal('SESSION_RECORD_TOO_LARGE'), message: z.string().min(1).max(300) })
+            .safeParse(JSON.parse(await responseText(response, 4096)))
+          if (result.success) capacityMessage = result.data.message
+        } catch { /* Keep generic transport errors for unrelated/malformed failures. */ }
+        if (capacityMessage) throw new Error(capacityMessage)
+      }
       await response.body?.cancel()
       if (response.status === 409 || response.status === 410) throw new HistoryConflictError(response.status === 409 ? 'record_changed' : 'record_deleted')
       throw new Error(`会话服务请求失败（${response.status}），待上传内容保留在本机。`)
     }
-    const reader = response.body?.getReader()
-    const chunks: Uint8Array[] = []
-    let size = 0
-    if (reader) try {
-      while (true) {
-        const chunk = await reader.read()
-        if (chunk.done) break
-        size += chunk.value.byteLength
-        if (size > 5 * 1048576) throw new Error('会话响应超过容量限制。')
-        chunks.push(chunk.value)
-      }
-    } finally { await reader.cancel().catch(() => undefined); reader.releaseLock() }
+    const text = await responseText(response, maxSessionRecordTransferBytes)
     await this.auth()
-    const text = Buffer.concat(chunks).toString('utf8')
-    if (text.length > 5 * 1048576) throw new Error('会话响应超过容量限制。')
     return text ? JSON.parse(text) : undefined
   }
   async page(cursor?: number) {
@@ -85,7 +97,8 @@ export class ServerHistory {
   async saveDraft(record: SessionRecord): Promise<void> {
     await this.queue.run(async () => {
       const value = parseInput(sessionRecordSchema, record)
-      if (Buffer.byteLength(JSON.stringify(value)) > 4 * 1048576) throw new Error('单次会话超过 4 MiB，请新建会话。')
+      const limitMiB = sessionRecordMaxMiBSchema.parse(await this.recordLimit())
+      if (Buffer.byteLength(JSON.stringify(value)) > limitMiB * 1048576) throw new Error(`单次会话超过管理员设置的 ${limitMiB} MiB 上限，请先导出当前内容后新建会话。`)
       const journal = await this.read()
       if (journal.removed.includes(value.id)) return
       const previous = journal.drafts[value.id]
@@ -127,7 +140,7 @@ export class ServerHistory {
       const observation = telemetry?.forRequest(draft.record.answers.at(-1)?.id, draft.record.interviewSessionId) ?? telemetry?.operation({ operationId: draft.mutationId, sessionId: draft.record.interviewSessionId })
       const sync = () => this.request(`/${encodeURIComponent(id)}`, {
         record: draft.record, version: draft.version, mutationId: draft.mutationId
-      })
+      }, 60_000)
       let result: z.infer<typeof responseSchema>
       try { result = responseSchema.parse(telemetry ? await telemetry.measure(observation, 'session.sync', sync) : await sync()) }
       catch (error) {

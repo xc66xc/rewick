@@ -49,7 +49,8 @@ public class AdminDesktopSettingsController {
                         input.version(),
                         input.llmModelId(),
                         input.temperature(),
-                        input.asrServiceId()));
+                        input.asrServiceId(),
+                        input.sessionRecordMaxMiB()));
     }
 
     @GetMapping("/users")

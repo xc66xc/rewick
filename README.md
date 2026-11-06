@@ -62,7 +62,20 @@
 | `deploy/` | PostgreSQL/pgvector 镜像、Compose 与通用部署文件 |
 | `scripts/backend.mjs` | Maven Wrapper 统一入口 |
 
-三个应用模块独立版本化。桌面当前版本由 `frontend/package.json` 统一维护，为 **2.3.1**；管理端目前为 **2.5.0**，后端为 **2.3.1**。macOS 与 Windows 使用相同的三段应用版本号。
+三个应用模块独立版本化。桌面当前版本由 `frontend/package.json` 统一维护，为 **2.4.0**；管理端目前为 **2.5.0**，后端为 **2.4.0**。macOS 与 Windows 使用相同的三段应用版本号。
+
+## 会话容量配置
+
+管理端“模型与服务 → 桌面默认设置”可配置“单次会话大小上限（MiB）”，默认 **20 MiB**，允许 **1–50 MiB**，适用于所有账号。计入整份会话 JSON 的 UTF-8 字节数，包括问答、转写、模型输入及来源快照；不包含录音文件。配置随既有平台信息刷新下发，桌面通常在下一次配置刷新后使用，后端保存时始终按最新值校验。降低配置不会删除已有内容，已保存的大会话仍可读取。
+
+升级平台前，先按 [SQL 说明](backend/sql/README.md) 手动执行 `30_session_record_limit.sql`，再部署后端和管理端。Nginx 会话路由与后端请求体安全边界为 51 MiB，为业务最大 50 MiB 加请求外壳留余量；桌面详情读取使用相同安全上限。桌面、后端及代理需一起更新；旧版桌面仍有写死的 4 MiB 限制。
+
+<details>
+<summary>管理端会话容量设置（隔离演示）</summary>
+
+<img src="assets/readme/session-record-limit.png" alt="管理端默认20 MiB的单次会话容量设置" width="1000" />
+
+</details>
 
 ## 本机凭据存储
 

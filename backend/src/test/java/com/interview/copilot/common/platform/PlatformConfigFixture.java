@@ -40,7 +40,7 @@ public final class PlatformConfigFixture implements AutoCloseable {
         when(mapper.desktopDefaults())
                 .thenReturn(
                         new com.interview.copilot.entity.platform.DesktopSettingsEntity(
-                                0, "", 0.7, ""));
+                                0, "", 0.7, "", 20));
         when(mapper.publish(anyLong(), anyString()))
                 .thenAnswer(
                         call -> {

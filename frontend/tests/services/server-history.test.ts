@@ -195,3 +195,79 @@ it('reports a successful explicit retry even when an unrelated draft in the same
   expect((await history.localDraft('unrelated')).id).toBe('unrelated')
   expect(history.status()).not.toBe('已同步')
 })
+
+function largeRecord(count: number) {
+  return { ...record, answers: Array.from({ length: count }, (_, index) => ({
+    id: `answer-${index}`, question: '合成问题', text: '合成回答', createdAt: record.createdAt,
+    status: 'complete' as const, modelInput: { model: 'synthetic', messages: [{ role: 'user' as const, content: '中'.repeat(300_000) }] },
+  })) }
+}
+const identityCrypto = { isEncryptionAvailable: () => true, encryptString: (value: string) => Buffer.from(value), decryptString: (value: Buffer) => value.toString() }
+it('defaults to 20 MiB and retains records beyond the old 4 MiB save limit', async () => {
+  const history = new ServerHistory(directory, identityCrypto, auth)
+  const input = largeRecord(6)
+  expect(Buffer.byteLength(JSON.stringify(input))).toBeGreaterThan(5 * 1048576)
+  await history.saveDraft(input)
+  expect((await history.localDraft(record.id)).answers).toHaveLength(6)
+  await expect(history.saveDraft(largeRecord(24))).rejects.toThrow('20 MiB')
+  expect((await history.localDraft(record.id)).answers).toHaveLength(6)
+})
+it('uses the latest configured limit and preserves the last draft when policy is lowered', async () => {
+  let limit = 2
+  const history = new ServerHistory(directory, identityCrypto, auth, async () => limit)
+  const input = largeRecord(2)
+  await history.saveDraft(input)
+  limit = 1
+  await expect(history.saveDraft({ ...input, title: '新标题' })).rejects.toThrow('1 MiB')
+  expect((await history.localDraft(record.id)).title).toBe(record.title)
+  limit = 2
+  await history.saveDraft({ ...input, title: '新标题' })
+  expect((await history.localDraft(record.id)).title).toBe('新标题')
+})
+it('reads large previously saved details even after the administrator lowers the save policy', async () => {
+  const input = largeRecord(6)
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ version: 1, record: input })))
+  const history = new ServerHistory(directory, identityCrypto, auth, async () => 1)
+  expect((await history.detail(record.id)).answers).toHaveLength(6)
+})
+
+it('reports the current server capacity policy when a cached client limit is stale', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ code: 'SESSION_RECORD_TOO_LARGE', message: '单次会话超过管理员设置的 1 MiB 上限。' }, { status: 400 })))
+  const history = new ServerHistory(directory, identityCrypto, auth)
+  await history.saveDraft(record)
+  await expect(history.flush()).rejects.toThrow('1 MiB')
+  expect(await history.localDraft(record.id)).toEqual(record)
+})
+it('rejects detail responses beyond the fixed transfer safety limit', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(new ReadableStream({
+    start(controller) { controller.enqueue(new Uint8Array(51 * 1048576 + 1)); controller.close() },
+  }))))
+  const history = new ServerHistory(directory, identityCrypto, auth)
+  await expect(history.detail(record.id)).rejects.toThrow('会话响应超过容量限制')
+})
+it('allows a save taking longer than the old short upload timeout', async () => {
+  vi.useFakeTimers()
+  const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation(milliseconds => {
+    const controller = new AbortController()
+    setTimeout(() => controller.abort(new DOMException('timeout', 'TimeoutError')), milliseconds)
+    return controller.signal
+  })
+  try {
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, 20_000)
+        init.signal?.addEventListener('abort', () => { clearTimeout(timer); reject(init.signal?.reason) }, { once: true })
+      })
+      const body = JSON.parse(String(init.body))
+      return Response.json({ version: 1, record: body.record })
+    }))
+    const history = new ServerHistory(directory, identityCrypto, auth)
+    await history.saveDraft(record)
+    const pending = history.flush().then(() => undefined, error => error)
+    // Drain disk preflight before advancing the simulated network delay.
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalled())
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(await pending).toBeUndefined()
+    expect(history.status()).toBe('已同步')
+  } finally { timeout.mockRestore(); vi.useRealTimers() }
+})

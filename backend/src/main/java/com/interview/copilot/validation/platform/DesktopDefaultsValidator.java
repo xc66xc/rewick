@@ -15,6 +15,10 @@ public final class DesktopDefaultsValidator {
     private DesktopDefaultsValidator() {}
 
     public static void validate(DesktopSettingsEntity value, PlatformSnapshot snapshot) {
+        if (value.sessionRecordMaxMiB() < 1 || value.sessionRecordMaxMiB() > 50) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "SESSION_RECORD_LIMIT_INVALID",
+                    "单次会话容量必须是 1–50 MiB 的整数。");
+        }
         boolean llm =
                 value.llmModelId().isEmpty()
                         || snapshot.availableModels().stream()

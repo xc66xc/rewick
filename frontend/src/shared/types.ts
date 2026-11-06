@@ -14,7 +14,7 @@ export interface CustomServiceInput {
 }
 export interface CustomServiceProfile extends Omit<CustomServiceInput, 'id' | 'apiKey'> { id: string; hasApiKey: boolean }
 export interface PlatformServices { asr: { id: string; name: string }[] }
-export interface DesktopDefaults { version: number; llmModelId: string; temperature: number; asrServiceId: string }
+export interface DesktopDefaults { version: number; llmModelId: string; temperature: number; asrServiceId: string; sessionRecordMaxMiB: number }
 export interface PlatformInfo {
   advancedSettingsEnabled?: boolean
   webSearchAvailable?: boolean

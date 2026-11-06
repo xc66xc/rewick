@@ -104,7 +104,7 @@ class DesktopSettingsServiceTest {
 
     @Test
     void asr_missingDefault_reportsConfigurationUnavailable() {
-        when(mapper.read()).thenReturn(new DesktopSettingsEntity(0, "", 0.7, ""));
+        when(mapper.read()).thenReturn(new DesktopSettingsEntity(0, "", 0.7, "", 20));
 
         assertThatThrownBy(() -> service.asr(7, null))
                 .isInstanceOfSatisfying(
@@ -121,7 +121,7 @@ class DesktopSettingsServiceTest {
     @Test
     void save_unavailableModel_rejectsBeforeWriting() {
         when(runtime.snapshot()).thenReturn(snapshot());
-        var input = new DesktopSettingsResponse(0, "disabled", 0.7, "");
+        var input = new DesktopSettingsResponse(0, "disabled", 0.7, "", 20);
 
         assertThatThrownBy(() -> service.save(1, input))
                 .isInstanceOfSatisfying(
@@ -133,7 +133,7 @@ class DesktopSettingsServiceTest {
     @Test
     void save_staleVersion_reportsConflictAndDoesNotAudit() {
         when(runtime.snapshot()).thenReturn(snapshot());
-        var input = new DesktopSettingsResponse(0, "fast", 0.7, "");
+        var input = new DesktopSettingsResponse(0, "fast", 0.7, "", 20);
 
         assertThatThrownBy(() -> service.save(1, input))
                 .isInstanceOfSatisfying(
@@ -146,8 +146,8 @@ class DesktopSettingsServiceTest {
     void save_valid_serializesWithPlatformChangesAndReturnsNewVersion() {
         when(runtime.snapshot()).thenReturn(snapshot());
         when(mapper.save(any())).thenReturn(1);
-        when(mapper.read()).thenReturn(new DesktopSettingsEntity(1, "fast", 0.7, ""));
-        var input = new DesktopSettingsResponse(0, "fast", 0.7, "");
+        when(mapper.read()).thenReturn(new DesktopSettingsEntity(1, "fast", 0.7, "", 20));
+        var input = new DesktopSettingsResponse(0, "fast", 0.7, "", 20);
 
         assertThat(service.save(1, input).version()).isEqualTo(1);
         var order = inOrder(config, runtime, mapper);
@@ -175,8 +175,29 @@ class DesktopSettingsServiceTest {
         verify(audit).record(1, "desktop.permission.update", "user:7,enabled:" + enabled);
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {0, 51})
+    void save_invalidSessionLimit_rejectsBeforeWriting(int maxMiB) {
+        when(runtime.snapshot()).thenReturn(snapshot());
+        var input = new DesktopSettingsResponse(0, "fast", 0.7, "speech", maxMiB);
+        assertThatThrownBy(() -> service.save(1, input)).isInstanceOfSatisfying(ApiException.class,
+                error -> assertThat(error.code()).isEqualTo("SESSION_RECORD_LIMIT_INVALID"));
+        verify(mapper, never()).save(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 20, 50})
+    void save_validSessionLimit_roundTripsWithoutChangingOtherDefaults(int maxMiB) {
+        when(runtime.snapshot()).thenReturn(snapshot());
+        when(mapper.save(any())).thenReturn(1);
+        when(mapper.read()).thenReturn(new DesktopSettingsEntity(1, "fast", 0.7, "", maxMiB));
+        assertThat(service.save(1, new DesktopSettingsResponse(0, "fast", 0.7, "", maxMiB))
+                .sessionRecordMaxMiB()).isEqualTo(maxMiB);
+        verify(mapper).save(new DesktopSettingsEntity(0, "fast", 0.7, "", maxMiB));
+    }
+
     private DesktopSettingsEntity defaults() {
-        return new DesktopSettingsEntity(0, "fast", 0.7, "speech");
+        return new DesktopSettingsEntity(0, "fast", 0.7, "speech", 20);
     }
 
     private PlatformSnapshot snapshot() {
