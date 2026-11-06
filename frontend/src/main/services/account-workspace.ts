@@ -1,3 +1,4 @@
+import { defaultSessionRecordMaxMiB } from '../../shared/session-record-limits'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
@@ -45,6 +46,11 @@ export class AccountWorkspaces {
         const auth = await this.authentication()
         if (this.identity(auth.settings) !== id) throw new Error('账户已切换，请重新登录原账号同步。')
         return auth
+      }, async () => {
+        // Read the cached platform policy without requiring a live/valid login.
+        // Local drafts must still be preservable while a session is ending.
+        const snapshot = await this.authentication?.()
+        return snapshot?.settings.platform?.desktopDefaults?.sessionRecordMaxMiB ?? defaultSessionRecordMaxMiB
       }),
         interviews: new InterviewStore(async () => {
           if (!this.authentication) throw new Error('请先登录账户。')

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.interview.copilot.entity.history.SessionRecordEntity;
 import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.mapper.history.SessionRecordMapper;
+import com.interview.copilot.mapper.platform.DesktopSettingsMapper;
 import com.interview.copilot.response.history.RecordPageResponse;
 import com.interview.copilot.response.history.RecordResponse;
 import com.interview.copilot.service.auth.SessionGuardService;
@@ -24,12 +25,15 @@ public class SessionRecordServiceImpl implements SessionRecordService {
     private final SessionRecordMapper records;
     private final SessionGuardService users;
     private final ObjectMapper json;
+    private final DesktopSettingsMapper settings;
 
     public SessionRecordServiceImpl(
-            SessionRecordMapper records, SessionGuardService users, ObjectMapper json) {
+            SessionRecordMapper records, SessionGuardService users, ObjectMapper json,
+            DesktopSettingsMapper settings) {
         this.records = records;
         this.users = users;
         this.json = json;
+        this.settings = settings;
     }
 
     public RecordPageResponse page(long user, long cursor) {
@@ -48,11 +52,12 @@ public class SessionRecordServiceImpl implements SessionRecordService {
     public RecordResponse save(
             long user, String id, long version, String mutation, JsonNode content) {
         if (users.lockUser(user) == null) throw missing();
-        SessionRecordPolicy.validate(id, content);
+        SessionRecordPolicy.validateStructure(id, content);
         var previous = records.find(user, id);
         if (previous != null && previous.deleted())
             throw new ApiException(HttpStatus.GONE, "RECORD_DELETED", "会话已删除，不能重新保存。");
         if (previous != null && previous.mutationId().equals(mutation)) return response(previous);
+        SessionRecordPolicy.validateSize(content, recordLimit());
         if ((previous == null ? 0 : previous.version()) != version)
             throw new ApiException(HttpStatus.CONFLICT, "RECORD_CHANGED", "记录版本已变化，请刷新后查看。");
         if (previous == null)
@@ -68,6 +73,15 @@ public class SessionRecordServiceImpl implements SessionRecordService {
                     content.path("interviewSessionId").asText(null));
         else records.update(user, id, content.path("title").asText(), content.toString(), mutation);
         return response(records.find(user, id));
+    }
+
+    private int recordLimit() {
+        var policy = settings.read();
+        if (policy == null) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "SESSION_RECORD_LIMIT_UNAVAILABLE",
+                    "会话容量配置尚未初始化，请联系管理员。");
+        }
+        return policy.sessionRecordMaxMiB();
     }
 
     @Transactional

@@ -72,7 +72,7 @@ public class HttpBodyLimitFilter extends OncePerRequestFilter {
             return 8 * MAX_BODY_BYTES + 1024;
         }
         return request.getRequestURI().startsWith("/api/v1/session-records/")
-                ? 5 * MAX_BODY_BYTES : MAX_BODY_BYTES;
+                ? 51 * MAX_BODY_BYTES : MAX_BODY_BYTES;
     }
 
     private void reject(HttpServletResponse response) throws IOException {

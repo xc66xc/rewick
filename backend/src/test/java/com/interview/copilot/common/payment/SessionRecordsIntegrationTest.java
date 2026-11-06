@@ -30,6 +30,38 @@ class SessionRecordsIntegrationTest extends PaymentHttpFixture {
         assertThat(call(HttpMethod.GET, "/session-records/timed", bobToken, null).getStatusCode().value()).isEqualTo(404);
     }
 
+    @Test
+    void save_configuredLimitChanges_applyToWritesWithoutBlockingExistingReads() {
+        jdbc.update("UPDATE desktop_settings SET session_record_max_mib=20 WHERE id=1");
+        var content = new java.util.HashMap<String, Object>(record("large"));
+        var segments = new java.util.ArrayList<Map<String, Object>>();
+        for (int i = 0; i < 100; i++) {
+            segments.add(Map.of("id", "segment-" + i, "text", "中".repeat(20000),
+                    "startMs", i, "isFinal", true));
+        }
+        content.put("segments", segments);
+        var body = Map.of("version", 0, "mutationId", UUID.randomUUID().toString(), "record", content);
+        try {
+            assertThat(call(HttpMethod.POST, "/session-records/large", aliceToken, body)
+                    .getStatusCode().value()).isEqualTo(200);
+            jdbc.update("UPDATE desktop_settings SET session_record_max_mib=1 WHERE id=1");
+            // A response-lost replay is already committed and must survive a later lower limit.
+            var replay = call(HttpMethod.POST, "/session-records/large", aliceToken, body);
+            assertThat(replay.getStatusCode().value()).isEqualTo(200);
+            assertThat(replay.getBody().path("version").asLong()).isEqualTo(1);
+            assertThat(call(HttpMethod.GET, "/session-records/large", aliceToken, null)
+                    .getBody().path("record").path("segments").size()).isEqualTo(100);
+            var next = Map.of("version", 1, "mutationId", UUID.randomUUID().toString(), "record", content);
+            var rejected = call(HttpMethod.POST, "/session-records/large", aliceToken, next);
+            assertThat(rejected.getStatusCode().value()).isEqualTo(400);
+            assertThat(rejected.getBody().path("code").asText()).isEqualTo("SESSION_RECORD_TOO_LARGE");
+            assertThat(call(HttpMethod.GET, "/session-records/large", bobToken, null)
+                    .getStatusCode().value()).isEqualTo(404);
+        } finally {
+            jdbc.update("UPDATE desktop_settings SET session_record_max_mib=20 WHERE id=1");
+        }
+    }
+
     private Map<String, Object> record(String id) {
         return Map.of("id", id, "title", "技术面试", "createdAt", "2026-09-12T10:00:00Z",
                 "segments", List.of(Map.of("id", "segment", "text", "你好", "startMs", 0, "isFinal", true)), "answers", List.of());

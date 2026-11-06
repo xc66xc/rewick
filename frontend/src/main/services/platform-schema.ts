@@ -1,3 +1,4 @@
+import { defaultSessionRecordMaxMiB, sessionRecordMaxMiBSchema } from '../../shared/session-record-limits'
 import { z } from 'zod'
 const publicUser = z.object({ id: z.string().min(1).max(128), displayName: z.string().min(1).max(254), email: z.string().max(254).nullable().optional() })
 const serviceList = z.array(z.object({ id: z.string().min(1).max(200), name: z.string().min(1).max(200) })).max(100)
@@ -5,7 +6,7 @@ export const platformInfoSchema = z.object({
   advancedSettingsEnabled: z.boolean().default(false),
   webSearchAvailable: z.boolean().default(false),
   webSearchTimeoutMs: z.number().int().min(1000).max(30000).default(8000),
-  desktopDefaults: z.object({ version: z.number().int().nonnegative(), llmModelId: z.string().max(200), temperature: z.number().min(0).max(2), asrServiceId: z.string().max(200) }).optional(),
+  desktopDefaults: z.object({ version: z.number().int().nonnegative(), llmModelId: z.string().max(200), temperature: z.number().min(0).max(2), asrServiceId: z.string().max(200), sessionRecordMaxMiB: sessionRecordMaxMiBSchema.default(defaultSessionRecordMaxMiB) }).optional(),
   user: publicUser,
   services: z.object({ asr: serviceList }).optional(),
   capabilities: z.object({ llm: z.boolean(), asr: z.boolean() }),

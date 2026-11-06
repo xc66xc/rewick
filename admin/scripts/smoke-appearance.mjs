@@ -29,7 +29,7 @@ await page.route('**/api/v1/**', async route => {
  else if (/^\/admin\/users\/\d+\/mock-wallet$/.test(path)) payload = {availableSeconds:3600,version:1}
  else if (path === '/admin/config') payload = config
  else if (path === '/admin/reference-policy') payload = policy
- else if (path === '/admin/desktop-settings') payload = {version:1,llmModelId:'model-1',temperature:.7,asrServiceId:''}
+ else if (path === '/admin/desktop-settings') payload = {version:1,llmModelId:'model-1',temperature:.7,asrServiceId:'',sessionRecordMaxMiB:20}
  else if (path === '/admin/desktop-settings/users') payload = []
  else if (path === '/admin/packages') payload = packages
  else if (path === '/admin/payment-orders') payload = []

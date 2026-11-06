@@ -32,7 +32,7 @@ class SessionRecordInterviewTypeTest {
                 .putObject("interviewEnvironment").put("interviewType", type);
         assertThatCode(() -> BackgroundPolicy.interviewType(json.getNodeFactory().textNode(type)))
                 .doesNotThrowAnyException();
-        assertThatCode(() -> SessionRecordPolicy.validate("record", record)).doesNotThrowAnyException();
+        assertThatCode(() -> SessionRecordPolicy.validate("record", record, 20)).doesNotThrowAnyException();
     }
 
     @ParameterizedTest
@@ -42,15 +42,15 @@ class SessionRecordInterviewTypeTest {
         assertThatThrownBy(() -> BackgroundPolicy.interviewType(type)).isInstanceOf(ApiException.class);
         var record = record();
         record.putObject("interviewEnvironment").set("interviewType", type);
-        assertThatThrownBy(() -> SessionRecordPolicy.validate("record", record)).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> SessionRecordPolicy.validate("record", record, 20)).isInstanceOf(ApiException.class);
         record.remove("interviewEnvironment");
         ((ObjectNode) record.path("answers").get(0)).putObject("interviewEnvironment").set("interviewType", type);
-        assertThatThrownBy(() -> SessionRecordPolicy.validate("record", record)).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> SessionRecordPolicy.validate("record", record, 20)).isInstanceOf(ApiException.class);
     }
 
     @org.junit.jupiter.api.Test
     void validate_legacyMissingType_acceptsHistoryButNotNewPreparation() {
-        assertThatCode(() -> SessionRecordPolicy.validate("record", record())).doesNotThrowAnyException();
+        assertThatCode(() -> SessionRecordPolicy.validate("record", record(), 20)).doesNotThrowAnyException();
         assertThatThrownBy(() -> BackgroundPolicy.interviewType(json.missingNode())).isInstanceOf(ApiException.class);
     }
 }

@@ -9,4 +9,5 @@ public record DesktopSettingsResponse(
         long version,
         String llmModelId,
         double temperature,
-        String asrServiceId) {}
+        String asrServiceId,
+        int sessionRecordMaxMiB) {}

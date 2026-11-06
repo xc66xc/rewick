@@ -32,7 +32,12 @@ public final class SessionRecordPolicy {
 
     private SessionRecordPolicy() {}
 
-    public static void validate(String id, JsonNode content) {
+    public static void validate(String id, JsonNode content, int maxMiB) {
+        validateStructure(id, content);
+        validateSize(content, maxMiB);
+    }
+
+    public static void validateStructure(String id, JsonNode content) {
         if (!content.isObject()
                 || id.isBlank()
                 || id.length() > 128
@@ -49,9 +54,18 @@ public final class SessionRecordPolicy {
         content.path("segments").forEach(SessionRecordPolicy::segment);
         content.path("answers").forEach(SessionRecordPolicy::answer);
         environment(content.path("interviewEnvironment"));
-        if (content.toString().getBytes(StandardCharsets.UTF_8).length > 4 * 1048576)
-            throw invalid();
         rejectSecrets(content);
+    }
+
+    public static void validateSize(JsonNode content, int maxMiB) {
+        if (maxMiB < 1 || maxMiB > 50) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "SESSION_RECORD_LIMIT_UNAVAILABLE",
+                    "会话容量配置无效，请联系管理员。");
+        }
+        if (content.toString().getBytes(StandardCharsets.UTF_8).length > (long) maxMiB * 1048576) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "SESSION_RECORD_TOO_LARGE",
+                    "单次会话超过 " + maxMiB + " MiB，请新建会话。");
+        }
     }
 
     private static void segment(JsonNode node) {
@@ -123,6 +137,6 @@ public final class SessionRecordPolicy {
 
     private static ApiException invalid() {
         return new ApiException(
-                HttpStatus.BAD_REQUEST, "RECORD_INVALID", "会话格式无效、含敏感配置字段或超过 4 MiB。");
+                HttpStatus.BAD_REQUEST, "RECORD_INVALID", "会话格式无效或含敏感配置字段。");
     }
 }

@@ -75,7 +75,8 @@ public class DesktopSettingsServiceImpl implements DesktopSettingsService {
                         input.version(),
                         input.llmModelId(),
                         input.temperature(),
-                        input.asrServiceId());
+                        input.asrServiceId(),
+                        input.sessionRecordMaxMiB());
         DesktopDefaultsValidator.validate(value, runtime.snapshot());
         if (mapper.save(value) != 1) {
             throw new ApiException(
@@ -132,6 +133,7 @@ public class DesktopSettingsServiceImpl implements DesktopSettingsService {
                 value.version(),
                 value.llmModelId(),
                 value.temperature(),
-                value.asrServiceId());
+                value.asrServiceId(),
+                value.sessionRecordMaxMiB());
     }
 }

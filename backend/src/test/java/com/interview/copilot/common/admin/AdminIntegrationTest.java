@@ -458,7 +458,7 @@ public class AdminIntegrationTest {
                         "25_reference_hybrid.sql", "28_reference_qa.sql",
                             "10_time_wallet.sql",
                             "16_desktop_sessions.sql",
-                            "17_desktop_settings.sql", "27_mock_interview.sql", "29_remove_remote_knowledge.sql")) {
+                            "17_desktop_settings.sql", "27_mock_interview.sql", "29_remove_remote_knowledge.sql", "30_session_record_limit.sql")) {
                 withCopyFileToContainer(
                         MountableFile.forHostPath(Path.of("sql", name)), "/tmp/" + name);
             }
@@ -503,7 +503,7 @@ public class AdminIntegrationTest {
                                 "-f",
                                 "/tmp/16_desktop_sessions.sql",
                                 "-f",
-                                "/tmp/17_desktop_settings.sql", "-f", "/tmp/27_mock_interview.sql");
+                                "/tmp/17_desktop_settings.sql", "-f", "/tmp/27_mock_interview.sql", "-f", "/tmp/29_remove_remote_knowledge.sql", "-f", "/tmp/30_session_record_limit.sql");
                 if (result.getExitCode() != 0)
                     throw new IllegalStateException("Admin test SQL initialization failed");
             } catch (IOException error) {

@@ -99,7 +99,8 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
             return defaults;
         }
         return new DesktopSettingsEntity(
-                defaults.version(), defaults.llmModelId(), defaults.temperature(), newId);
+                defaults.version(), defaults.llmModelId(), defaults.temperature(), newId,
+                defaults.sessionRecordMaxMiB());
     }
 
     public PlatformSnapshot draft(PlatformConfig input) {

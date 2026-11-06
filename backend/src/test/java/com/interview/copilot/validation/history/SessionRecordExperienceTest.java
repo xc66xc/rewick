@@ -25,14 +25,14 @@ class SessionRecordExperienceTest {
     @ValueSource(strings = {"omitted", "null", "\"no_experience\"", "\"one_to_three_years\"", "\"three_to_five_years\"", "\"five_plus_years\""})
     void validate_sessionAndAnswerKnownOrLegacy_accepts(String value) throws Exception {
         var session = record(value, false); var answer = record(value, true);
-        assertThatCode(() -> SessionRecordPolicy.validate("record", session)).doesNotThrowAnyException();
-        assertThatCode(() -> SessionRecordPolicy.validate("record", answer)).doesNotThrowAnyException();
+        assertThatCode(() -> SessionRecordPolicy.validate("record", session, 20)).doesNotThrowAnyException();
+        assertThatCode(() -> SessionRecordPolicy.validate("record", answer, 20)).doesNotThrowAnyException();
     }
     @ParameterizedTest
     @ValueSource(strings = {"\"\"", "\"senior\"", "3", "true", "{}", "[]"})
     void validate_sessionAndAnswerInvalid_rejects(String value) throws Exception {
         var session = record(value, false); var answer = record(value, true);
-        assertThatThrownBy(() -> SessionRecordPolicy.validate("record", session)).isInstanceOf(ApiException.class);
-        assertThatThrownBy(() -> SessionRecordPolicy.validate("record", answer)).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> SessionRecordPolicy.validate("record", session, 20)).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> SessionRecordPolicy.validate("record", answer, 20)).isInstanceOf(ApiException.class);
     }
 }
