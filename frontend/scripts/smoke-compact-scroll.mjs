@@ -70,6 +70,60 @@ try {
   await lastQuestionAtTop('after prepend')
   await scenario({answers:[],segments:[{id:'live',text:'尚未提交的语音问题',startMs:0,isFinal:false}],id:'live-record'})
   await lastQuestionAtTop('only pending transcript')
+
+  await page.setViewportSize({width:530,height:780})
+  // Restore the explicit DOM-only font mutation exercised above before this preview.
+  await page.locator('main').evaluate(element=>element.style.setProperty('--compact-font-size','19px'))
+  const firstSpeech={id:'speech-first',text:'请结合员工助手项目，介绍一下业务背景、你负责的模块，以及为什么采用多 Agent 的架构？',startMs:0,endMs:5200,isFinal:true}
+  const nextSpeech={id:'speech-next',text:'在落地过程中，你遇到',startMs:5300,isFinal:false}
+  const speechScenario=segments=>scenario({answers:[],segments,id:'live-question-preview',fontSize:19})
+  const liveTurn=page.getByRole('region',{name:'当前转写问题',exact:true})
+  const liveBubble=liveTurn.getByRole('heading')
+  await speechScenario([firstSpeech])
+  await expect(liveBubble).toHaveText(firstSpeech.text)
+  const originalBubble=await liveBubble.elementHandle()
+  assert.ok(originalBubble,'live question bubble exists before another sentence starts')
+  try {
+    await speechScenario([firstSpeech,nextSpeech])
+    await expect(liveBubble).toHaveText(`${firstSpeech.text}\n${nextSpeech.text}`)
+    assert.equal(await liveBubble.evaluate((element,original)=>element===original,originalBubble),true,'new sentence keeps the same question bubble DOM')
+    await expect(liveTurn).toHaveAttribute('data-transcript-id',firstSpeech.id)
+    checks.push({label:'confirmed speech and next partial remain in one stable bubble',segmentId:firstSpeech.id})
+
+    const revisedSpeech={...nextSpeech,text:'在落地过程中，你遇到过哪些难点？请重点讲讲任务编排、状态管理和故障恢复。'}
+    await speechScenario([firstSpeech,revisedSpeech])
+    await expect(liveBubble).toHaveText(`${firstSpeech.text}\n${revisedSpeech.text}`)
+    assert.equal(await liveBubble.evaluate((element,original)=>element===original,originalBubble),true,'partial correction updates the existing bubble')
+    await expect(liveTurn).toHaveCount(1)
+    checks.push({label:'partial revision replaces its own sentence without duplicates'})
+    await page.screenshot({path:join(output,'live-question-preview.png')})
+
+    const longSpeech={...firstSpeech,text:firstSpeech.text+'\n'+Array.from({length:10},(_,i)=>`补充条件${i+1}：请说明项目中的请求如何分发，如何记录任务状态，以及某个工具调用失败后怎样恢复。`).join('\n')+'\n'+ 'ConcurrentRequestConsistencyConstraint'.repeat(5)}
+    await speechScenario([longSpeech,revisedSpeech])
+    await expect(liveBubble).toHaveText(`${longSpeech.text}\n${revisedSpeech.text}`)
+    const wrapping=await liveBubble.evaluate(element=>{const bounds=element.getBoundingClientRect();return{width:element.clientWidth,scrollWidth:element.scrollWidth,height:bounds.height,lineHeight:Number.parseFloat(getComputedStyle(element).lineHeight)}})
+    assert.ok(wrapping.height>wrapping.lineHeight*3,'long question wraps across multiple lines')
+    assert.ok(wrapping.scrollWidth<=wrapping.width+1,'long question has no horizontal text clipping')
+    assert.equal(await viewport.evaluate(element=>element.scrollWidth<=element.clientWidth+1),true,'live question does not introduce horizontal viewport overflow')
+    checks.push({label:'long question and unbroken technical words wrap without horizontal clipping',...wrapping})
+
+    await page.getByRole('button',{name:'查看最新回答',exact:true}).click()
+    await expect.poll(()=>viewport.evaluate(element=>element.scrollTop)).toBe(0)
+    const composerBefore=await page.getByRole('textbox',{name:'当前问题',exact:true}).boundingBox()
+    await wheel(230)
+    const readingPosition=await viewport.evaluate(element=>element.scrollTop)
+    assert.ok(readingPosition>24,'user has manually scrolled away from live question opening')
+    const continuedSpeech={...revisedSpeech,text:revisedSpeech.text+'另外，如果同一任务收到重复请求，你会如何处理幂等和资源回收？'}
+    await speechScenario([longSpeech,continuedSpeech])
+    await expect(liveBubble).toHaveText(`${longSpeech.text}\n${continuedSpeech.text}`)
+    const afterGrowth=await viewport.evaluate(element=>element.scrollTop)
+    assert.ok(Math.abs(afterGrowth-readingPosition)<=1,`live partial growth must not take over manual reading: ${readingPosition} -> ${afterGrowth}`)
+    const composerAfter=await page.getByRole('textbox',{name:'当前问题',exact:true}).boundingBox()
+    assert.ok(composerBefore&&composerAfter&&Math.abs(composerBefore.y-composerAfter.y)<1&&Math.abs(composerBefore.height-composerAfter.height)<1,'composer stays fixed while the user reads a growing long question')
+    assert.equal(await liveBubble.evaluate((element,original)=>element===original,originalBubble),true,'long question keeps its DOM identity through updates and manual reading')
+    checks.push({label:'live partial growth preserves manual reading and fixed composer',before:readingPosition,after:afterGrowth,composerY:composerAfter.y})
+  } finally { await originalBubble.dispose() }
+
   await scenario({answers:[],id:'empty'})
   await expect(page.getByText('准备好，听下一个问题。',{exact:true})).toBeVisible()
   assert.equal(await viewport.evaluate(el=>el.scrollHeight>el.clientHeight+1),false,'empty state adds no artificial scroll')

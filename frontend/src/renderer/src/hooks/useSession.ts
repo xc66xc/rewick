@@ -9,6 +9,8 @@ import { errorMessage } from './useSettings'
 import { newRecord, recentQuestion, recordHasContent } from './sessionHelpers'
 import { useTranscriptEditing } from './useTranscriptEditing'
 import { isAnswerModelReady, isAsrReady, useAutoAnswer } from './useAutoAnswer'
+import { useQuestionPreview } from './useQuestionPreview'
+import type { TranscriptQuestionSelection } from './autoAnswerCoordinator'
 
 const screenshotQuestion = '正在识别屏幕中的算法题…'
 const questionLimitMessage = '当前问题最多 12,000 个字符，请先删减内容后再加入。'
@@ -16,6 +18,8 @@ const questionLimitMessage = '当前问题最多 12,000 个字符，请先删减
 export function useSession(bridge: DesktopBridge | undefined, settings: Settings, saveSettings?: (input: SettingsInput) => Promise<Settings>, applySettings?: (settings: Settings) => void) {
   const [record, setRecord] = useState<SessionRecord>(newRecord)
   const recordRef = useRef(record)
+  const preview = useQuestionPreview()
+  const assembledSegmentIds = useRef(new Set<string>())
   const observation = useOperationsTelemetry(bridge, record, settings.platform?.user?.id)
   const [status, setStatus] = useState<AsrStatus>('idle')
   const statusRef = useRef<AsrStatus>('idle')
@@ -59,8 +63,10 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
   const busy = record.answers.some(answer => answer.status === 'streaming')
 
   function updateRecord(update: (current: SessionRecord) => SessionRecord) {
-    const next = update(recordRef.current)
+    const previous = recordRef.current
+    const next = update(previous)
     recordRef.current = next
+    if (next.segments !== previous.segments) preview.sync(next.segments)
     setRecord(next)
   }
   function updateStatus(next: AsrStatus) { statusRef.current = next; setStatus(next); automatic.coordinator.current?.refresh() }
@@ -83,13 +89,14 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
   const automatic = useAutoAnswer({ settingsRef, saveSettings,
     read: () => ({ source: sourceRef.current, status: statusRef.current, busy: requestId.current !== null,
       editing: isEditing(), assembling: questionAssemblingRef.current || switchingSource.current, segments: recordRef.current.segments }),
-    onFiltered: observation.feedback,
+    onFiltered: (count, ids) => { observation.feedback(count); preview.consume(ids) },
     onAnswer: selection => { void generate(selection, true) },
   })
   useEffect(() => { automatic.coordinator.current?.refresh() }, [settings.autoAnswer, settings.llm, settings.platform, settings.serviceSelections, settings.customServices, source, status, busy])
   function setQuestion(next: string) {
     questionRef.current = next
     updateQuestion(next)
+    if (!next.trim()) assembledSegmentIds.current.clear()
     if (!next.trim() && questionAssemblingRef.current) {
       questionAssemblingRef.current = false
       updateQuestionAssembling(false)
@@ -108,6 +115,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
     questionAssemblingRef.current = true
     updateQuestionAssembling(true)
     automatic.coordinator.current?.refresh()
+    assembledSegmentIds.current.add(id)
     setQuestion(next)
     setError(current => current === questionLimitMessage ? '' : current)
     return true
@@ -179,6 +187,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
       if (currentOperation !== operation.current) { await activeCapture.stop(); return }
       const result = await bridge.startAsr()
       if (currentOperation !== operation.current) { await activeCapture.stop(); return }
+      preview.reset()
       asrId.current = result.sessionId
       startedAt.current = Date.now()
       setElapsed(0); updateStatus('listening')
@@ -192,7 +201,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
       if (currentOperation === operation.current) { asrId.current = null; updateStatus('error'); setError(errorMessage(reason)) }
     }
   }
-  async function generate(selected?: { question: string; transcript: string; autoWaitMs?: number }, isAutomatic = false, screenshot = false) {
+  async function generate(selected?: TranscriptQuestionSelection, isAutomatic = false, screenshot = false) {
     if (changingTarget.current || screenshot && recognizing.current) return
     if (!isAutomatic) automatic.coordinator.current?.acknowledge()
     if (!bridge) { setError('请在 掌灯 Rewick 桌面应用中连接模型。'); return }
@@ -206,6 +215,12 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
     const algorithm = screenshot || !selected && !isAutomatic && Boolean(questionRef.current.trim()) && previous?.mode === 'algorithm'
     let language: AlgorithmLanguage = previous?.language ?? 'Java'
     const algorithmContext = !screenshot && algorithm ? algorithmConversation(recordRef.current.answers) : ''
+    const typedQuestion = questionRef.current.trim()
+    const previewText = preview.read()?.text.trim().replace(/\s+/g, ' ')
+    const sourceIds = algorithm ? [] : selected ? selected.segmentIds ?? []
+      : !typedQuestion ? preview.ids()
+        : questionAssemblingRef.current ? [...assembledSegmentIds.current]
+          : typedQuestion.replace(/\s+/g, ' ') === previewText ? preview.ids() : []
     const id = crypto.randomUUID(), operationId = crypto.randomUUID(), recordId = recordRef.current.id
     observation.begin(operationId, id)
     attachEnvironment()
@@ -213,6 +228,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
     if (screenshot) recognizing.current = true
     automatic.coordinator.current?.refresh()
     setError('')
+    preview.consume(sourceIds)
     updateRecord(current => ({ ...current, title: current.title === '未命名会话' && !screenshot ? prompt.slice(0, 32) : current.title,
       answers: [...current.answers.map(answer => answer.status === 'streaming' ? { ...answer, status: 'cancelled' as const } : answer),
         { id, question: prompt, text: '', createdAt: new Date().toISOString(), status: 'streaming', ...(algorithm ? { mode: 'algorithm' as const, language, algorithmRootId: screenshot ? id : previous?.algorithmRootId ?? id } : {}) }] }))
@@ -241,7 +257,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
     const index = segments.findIndex(segment => segment.id === segmentId)
     if (index < 0 || !segments[index].text.trim()) return
     // Snapshot this sentence at click time; later ASR revisions cannot change an in-flight question.
-    await generate({ question: segments[index].text, transcript: segments.slice(0, index + 1).map(segment => segment.text).join('\n') })
+    await generate({ question: segments[index].text, transcript: segments.slice(0, index + 1).map(segment => segment.text).join('\n'), segmentIds: [segmentId] })
   }
   async function cancel() {
     automatic.coordinator.current?.acknowledge()
@@ -286,6 +302,8 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
       if (event.sessionId !== asrId.current) return
       updateRecord(current => ({ ...current, segments: mergeTranscript(current.segments, event.segment),
         title: current.title === '未命名会话' ? event.segment.text.slice(0, 32) || current.title : current.title }))
+      const visible = recordRef.current.segments.find(segment => segment.id === event.segment.id)
+      if (visible) preview.receive(visible)
       automatic.coordinator.current?.receive(event.segment)
       return
     }
@@ -370,6 +388,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
   }
   function clearSession() {
     automatic.coordinator.current?.acknowledge()
+    preview.reset()
     clearTranscriptEdits(); updateRecord(newRecord); setQuestion(''); setElapsed(0); setError('')
     automatic.coordinator.current?.refresh()
   }
@@ -429,7 +448,7 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
       if (isCurrent) changingTarget.current = false
     }
   }
-  return { record, status, source, setSource, switchingSource: sourceSwitching, level, question, setQuestion, questionAssembling, appendSegmentToQuestion,
+  return { record, questionPreview: preview.transcript, status, source, setSource, switchingSource: sourceSwitching, level, question, setQuestion, questionAssembling, appendSegmentToQuestion,
     error: error || referenceError, clearError: () => { setError(''); setReferenceError('') },
     autoAnswer: settings.autoAnswer, autoAnswerState: automatic.state, autoAnswerSaving: automatic.saving,
     setAutoAnswer: automatic.setPreferences, autoAnswerModelReady: isAnswerModelReady(settings),

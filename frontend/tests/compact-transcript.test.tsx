@@ -2,38 +2,37 @@
 import { afterEach, expect, it } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import CompactTranscript from '../src/renderer/src/components/CompactTranscript'
-import type { Answer, TranscriptSegment } from '../src/shared/types'
+import type { TranscriptSegment } from '../src/shared/types'
 
 afterEach(cleanup)
 const segment: TranscriptSegment = { id: 'one', text: '请介绍', startMs: 0, isFinal: false }
-const answer: Answer = { id: 'answer-one', question: '请介绍你的项目', text: '已有答案', status: 'streaming', createdAt: '' }
 
 it('updates the existing question bubble for partial and final speech without a transcript panel', () => {
-  const { rerender } = render(<CompactTranscript recordId="session" />)
+  const { rerender } = render(<CompactTranscript />)
   expect(screen.queryByRole('region', { name: '实时转写' })).toBeNull()
   expect(screen.queryByRole('heading')).toBeNull()
-  rerender(<CompactTranscript recordId="session" segment={segment} />)
+  rerender(<CompactTranscript segment={segment} />)
   expect(screen.getByRole('heading', { name: '请介绍' }).className).toContain('compact-answer__question-bubble')
-  rerender(<CompactTranscript recordId="session" segment={{ ...segment, text: '请介绍你的项目', isFinal: true }} />)
+  rerender(<CompactTranscript segment={{ ...segment, text: '请介绍你的项目', isFinal: true }} />)
   expect(screen.getByRole('heading', { name: '请介绍你的项目' })).toBeTruthy()
 })
 
-it('removes the live duplicate after submission and shows a fresh question without changing the old answer', () => {
-  const final = { ...segment, text: answer.question, isFinal: true }
-  const { rerender } = render(<CompactTranscript recordId="session" segment={final} />)
-  rerender(<CompactTranscript recordId="session" segment={final} answer={answer} />)
+it('removes a consumed preview and permits a new question with identical wording', () => {
+  const final = { ...segment, text: '请介绍你的项目', isFinal: true }
+  const { rerender } = render(<CompactTranscript segment={final} />)
+  rerender(<CompactTranscript />)
   expect(screen.queryByRole('heading')).toBeNull()
-  rerender(<CompactTranscript recordId="session" segment={{ ...segment, text: '请介绍你的项目和技术栈' }} answer={answer} />)
-  expect(screen.queryByRole('heading')).toBeNull()
-  rerender(<CompactTranscript recordId="session" segment={{ ...final, id: 'two' }} answer={answer} />)
-  expect(screen.getByRole('heading', { name: answer.question })).toBeTruthy()
-  expect(answer.question).toBe('请介绍你的项目')
+  rerender(<CompactTranscript segment={{ ...final, id: 'two' }} />)
+  expect(screen.getByRole('heading', { name: final.text })).toBeTruthy()
 })
 
-it('keeps unrelated speech when a manually typed question is submitted and resets for another session', () => {
-  const { rerender } = render(<CompactTranscript recordId="session" segment={segment} />)
-  rerender(<CompactTranscript recordId="session" segment={segment} answer={{ ...answer, question: '手动输入的问题' }} />)
-  expect(screen.getByRole('heading', { name: '请介绍' })).toBeTruthy()
-  rerender(<CompactTranscript recordId="other" segment={segment} />)
-  expect(screen.getByRole('heading', { name: '请介绍' })).toBeTruthy()
+it('keeps the same multiline bubble while later clauses are recognized and corrected', () => {
+  const { rerender } = render(<CompactTranscript segment={segment} />)
+  const bubble = screen.getByRole('heading')
+  rerender(<CompactTranscript segment={{ ...segment, text: '请介绍你的项目。\n遇到' }} />)
+  expect(screen.getByRole('heading')).toBe(bubble)
+  expect(bubble.textContent).toBe('请介绍你的项目。\n遇到')
+  rerender(<CompactTranscript segment={{ ...segment, text: '请介绍你的项目。\n遇到过哪些难点？', isFinal: true }} />)
+  expect(screen.getByRole('heading')).toBe(bubble)
+  expect(bubble.textContent).toBe('请介绍你的项目。\n遇到过哪些难点？')
 })

@@ -962,3 +962,183 @@ describe('screenshot algorithm conversations', () => {
     expect(bridge.generateAnswer).not.toHaveBeenCalled()
   })
 })
+
+describe('live question preview', () => {
+  async function previewSession() {
+    const fixture = setup()
+    await fixture.run(() => fixture.result.current.setAutoAnswer({ enabled: false, pauseMs: 1500 }))
+    await fixture.run(() => fixture.result.current.start())
+    return fixture
+  }
+
+  it('retains finalized opening sentences while later speech grows and is corrected with automatic answers off', async () => {
+    const { result, bridge, receive } = await previewSession()
+    await receive(segment('请介绍员工助手项目。', { isFinal: true, endMs: 1000 }))
+    const openingId = result.current.questionPreview?.id
+    await receive(segment('遇到', { id: 'sentence-two', startMs: 1100 }))
+    expect(result.current.questionPreview?.text).toBe('请介绍员工助手项目。\n遇到')
+    await receive(segment('遇到哪些南点', { id: 'sentence-two', startMs: 1100 }))
+    await receive(segment('遇到哪些难点？', { id: 'sentence-two', startMs: 1100, endMs: 2200, isFinal: true }))
+    expect(result.current.questionPreview?.text).toBe('请介绍员工助手项目。\n遇到哪些难点？')
+    expect(result.current.questionPreview?.id).toBe(openingId)
+    expect(bridge.generateAnswer).not.toHaveBeenCalled()
+  })
+
+  it('consumes every submitted automatic fragment, rejects their late revisions and allows the same words with a new id', async () => {
+    const { result, bridge, run, receive } = setup(true)
+    await run(() => result.current.start())
+    await receive(segment('请介绍项目。', { isFinal: true, endMs: 1000 }))
+    await receive(segment('其中的难点', { id: 'sentence-two', startMs: 1100 }))
+    await run(() => { vi.advanceTimersByTime(3000) })
+    expect(bridge.generateAnswer).not.toHaveBeenCalled()
+    expect(result.current.questionPreview?.text).toBe('请介绍项目。\n其中的难点')
+    await receive(segment('其中的难点是什么？', { id: 'sentence-two', startMs: 1100, endMs: 2100, isFinal: true }))
+    await receive(segment('嗯。', { id: 'feedback', startMs: 2200, endMs: 2300, isFinal: true }))
+    await run(() => { vi.advanceTimersByTime(1500) })
+    expect(bridge.generateAnswer).toHaveBeenCalledTimes(1)
+    expect(bridge.generateAnswer.mock.calls[0][0].question).toBe('请介绍项目。\n其中的难点是什么？')
+    expect(result.current.questionPreview).toBeUndefined()
+    await receive(segment('请介绍这个项目。', { isFinal: true, endMs: 1000 }))
+    await receive(segment('其中难点有哪些？', { id: 'sentence-two', startMs: 1100, endMs: 2100, isFinal: true }))
+    await receive(segment('嗯，好的。', { id: 'feedback', startMs: 2200, endMs: 2300, isFinal: true }))
+    expect(result.current.questionPreview).toBeUndefined()
+    await receive(segment('请介绍项目。', { id: 'next-question', startMs: 2400 }))
+    expect(result.current.questionPreview?.text).toBe('请介绍项目。')
+  })
+
+  it('preserves unrelated speech when a typed question is submitted and when its answer is cancelled', async () => {
+    const { result, run, receive } = await previewSession()
+    await receive(segment('面试官仍在补充的问题。', { isFinal: true, endMs: 1000 }))
+    await run(() => result.current.setQuestion('另外手动输入的问题'))
+    await run(() => result.current.generate())
+    expect(result.current.questionPreview?.text).toBe('面试官仍在补充的问题。')
+    await receive(segment('还需要结合实际项目', { id: 'sentence-two', startMs: 1100 }))
+    await run(() => result.current.cancel())
+    expect(result.current.questionPreview?.text).toBe('面试官仍在补充的问题。\n还需要结合实际项目')
+  })
+
+  it('consumes only the selected sentence when answering a transcript sentence', async () => {
+    const { result, run, receive } = await previewSession()
+    await receive(segment('第一句问题。', { isFinal: true, endMs: 1000 }))
+    await receive(segment('第二句还在继续', { id: 'sentence-two', startMs: 1100 }))
+    await run(() => result.current.answerSegment('sentence-one'))
+    expect(result.current.questionPreview?.text).toBe('第二句还在继续')
+    await receive(segment('第一句修订。', { isFinal: true, endMs: 1000 }))
+    expect(result.current.questionPreview?.text).toBe('第二句还在继续')
+  })
+
+  it('finishes the whole preview round on empty-input generation while preserving the latest-four question selection', async () => {
+    const { result, bridge, run, receive } = await previewSession()
+    const texts = ['A前置背景。', 'B业务场景。', 'C设计方案。', 'D方案取舍。', 'E如何验证？']
+    for (const [index, text] of texts.entries()) {
+      await receive(segment(text, { id: `round-${index}`, startMs: index * 1000, endMs: (index + 1) * 1000, isFinal: true }))
+    }
+    expect(result.current.questionPreview?.text).toBe(texts.join('\n'))
+    expect(result.current.question).toBe('')
+    await run(() => result.current.generate())
+    expect(bridge.generateAnswer.mock.calls[0][0].question).toBe(texts.slice(-4).join('\n'))
+    expect(result.current.questionPreview).toBeUndefined()
+    await receive(segment('A前置背景的晚到修订。', { id: 'round-0', startMs: 0, endMs: 1000, isFinal: true }))
+    expect(result.current.questionPreview).toBeUndefined()
+    await receive(segment('F下一轮的新问题', { id: 'next-round', startMs: 5000 }))
+    expect(result.current.questionPreview?.text).toBe('F下一轮的新问题')
+  })
+
+  it('consumes assembled source ids after the user rewrites the draft while retaining speech not added to it', async () => {
+    const { result, bridge, run, receive } = await previewSession()
+    await receive(segment('第一段问题。', { isFinal: true, endMs: 1000 }))
+    await receive(segment('第二段问题。', { id: 'sentence-two', startMs: 1100, endMs: 2000, isFinal: true }))
+    await run(() => {
+      result.current.appendSegmentToQuestion('sentence-one')
+      result.current.appendSegmentToQuestion('sentence-two')
+    })
+    await receive(segment('第三段尚未加入', { id: 'sentence-three', startMs: 2100 }))
+    await run(() => result.current.setQuestion('用户重新整理后的完整问题'))
+    await run(() => result.current.generate())
+    expect(bridge.generateAnswer.mock.calls[0][0].question).toBe('用户重新整理后的完整问题')
+    expect(result.current.questionPreview?.text).toBe('第三段尚未加入')
+    await receive(segment('第二段晚到修订。', { id: 'sentence-two', startMs: 1100, endMs: 2000, isFinal: true }))
+    expect(result.current.questionPreview?.text).toBe('第三段尚未加入')
+  })
+
+  it('does not consume speech when generation is rejected before a request is created', async () => {
+    const { result, bridge, run, receive } = await previewSession()
+    await receive(segment('配置好模型后再回答。', { isFinal: true, endMs: 1000 }))
+    const settings = await bridge.getSettings()
+    settings.llm.hasApiKey = false
+    await run(() => result.current.generate())
+    expect(bridge.generateAnswer).not.toHaveBeenCalled()
+    expect(result.current.questionPreview?.text).toBe('配置好模型后再回答。')
+  })
+
+  it('preserves unrelated speech through screenshot recognition and algorithm follow-up', async () => {
+    const { result, bridge, run, receive, emit } = await previewSession()
+    await receive(segment('未提交的面试官口述问题', { isFinal: true, endMs: 1000 }))
+    await emit({ kind: 'shortcut', action: 'screenshot' })
+    await waitFor(() => expect(bridge.generateAnswer).toHaveBeenCalledTimes(1))
+    expect(result.current.questionPreview?.text).toBe('未提交的面试官口述问题')
+    const first = bridge.generateAnswer.mock.calls[0][0]
+    await emit({ kind: 'answer-done', requestId: first.requestId, cancelled: false })
+    await run(() => result.current.setQuestion('请改成 Java'))
+    await run(() => result.current.generate())
+    expect(bridge.generateAnswer.mock.calls[1][0].mode).toBe('algorithm')
+    expect(result.current.questionPreview?.text).toBe('未提交的面试官口述问题')
+  })
+
+  it('uses the edited transcript and does not restore superseded recognition in the preview', async () => {
+    const { result, run, receive } = await previewSession()
+    await receive(segment('如何设计换存'))
+    await receive(segment('怎样保证一致性', { id: 'sentence-two', startMs: 1100 }))
+    await run(() => result.current.beginSegmentEdit('sentence-one'))
+    await run(() => result.current.editSegment('sentence-one', '如何设计 Redis 缓存？'))
+    await receive(segment('如何设计缓存系统？', { isFinal: true, endMs: 1000 }))
+    expect(result.current.questionPreview?.text).toBe('如何设计 Redis 缓存？\n怎样保证一致性')
+    await run(() => result.current.finishSegmentEdit('sentence-one'))
+    expect(result.current.questionPreview?.text).toBe('如何设计 Redis 缓存？\n怎样保证一致性')
+  })
+
+  it.each(['restart', 'source'] as const)('starts a fresh preview on successful %s and ignores the previous ASR connection', async action => {
+    const { result, run, receive, emit, setAsrSessionId } = await previewSession()
+    await receive(segment('上次采集的未提交问题。', { isFinal: true, endMs: 1000 }))
+    if (action === 'restart') {
+      await run(() => result.current.stop())
+      expect(result.current.questionPreview?.text).toBe('上次采集的未提交问题。')
+    }
+    setAsrSessionId('asr-two')
+    if (action === 'restart') await run(() => result.current.start())
+    else await run(() => result.current.setSource('microphone'))
+    expect(result.current.questionPreview).toBeUndefined()
+    await emit({ kind: 'transcript', sessionId: 'asr-one', segment: segment('上一连接晚到的文字') })
+    expect(result.current.questionPreview).toBeUndefined()
+    await receive(segment('新的采集问题', { id: 'new-stream-question' }))
+    expect(result.current.questionPreview?.text).toBe('新的采集问题')
+    expect(result.current.record.segments[0].text).toBe('上次采集的未提交问题。')
+  })
+
+  it.each(['restart', 'source'] as const)('keeps the previous preview when a new %s fails to start', async action => {
+    const { result, bridge, run, receive } = await previewSession()
+    await receive(segment('启动失败后也应保留的问题。', { isFinal: true, endMs: 1000 }))
+    if (action === 'restart') await run(() => result.current.stop())
+    bridge.startAsr.mockRejectedValueOnce(new Error('合成语音连接失败'))
+    if (action === 'restart') await run(() => result.current.start())
+    else await run(() => result.current.setSource('microphone'))
+    expect(result.current.status).toBe('error')
+    expect(result.current.questionPreview?.text).toBe('启动失败后也应保留的问题。')
+  })
+
+  it.each(['reset', 'environment', 'delete'] as const)('clears the preview with %s and keeps reused ids isolated to the new record', async action => {
+    const { result, run, receive, emit, setAsrSessionId } = await previewSession()
+    await receive(segment('旧记录的问题。', { isFinal: true, endMs: 1000 }))
+    await run(() => result.current.stop())
+    if (action === 'reset') await run(() => result.current.reset())
+    else if (action === 'environment') await run(() => result.current.activateEnvironment('environment-two'))
+    else await run(() => result.current.removeSession(result.current.record.id))
+    expect(result.current.questionPreview).toBeUndefined()
+    await emit({ kind: 'transcript', sessionId: 'asr-one', segment: segment('旧记录晚到的问题。', { isFinal: true, endMs: 1000 }) })
+    expect(result.current.questionPreview).toBeUndefined()
+    setAsrSessionId('asr-two')
+    await run(() => result.current.start())
+    await receive(segment('只属于新记录的问题'))
+    expect(result.current.questionPreview?.text).toBe('只属于新记录的问题')
+  })
+})

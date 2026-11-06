@@ -11,9 +11,9 @@ import { Button } from './ui/button'
 import { EmptyState } from './ui/empty-state'
 import { cn } from '../lib/cn'
 
-interface AnswerPanelProps { session: QuestionComposerController & Pick<SessionController, 'record'>; settings: Settings; onSettings: () => void; onContext: () => void; compact?: boolean }
+interface AnswerPanelProps { session: QuestionComposerController & Pick<SessionController, 'record' | 'questionPreview'>; settings: Settings; onSettings: () => void; onContext: () => void; compact?: boolean }
 export default function AnswerPanel({ session, settings, compact = false }: AnswerPanelProps) {
-  const segment = session.record.segments.at(-1)
+  const segment = session.questionPreview
   const hasTranscript = Boolean(segment?.text.trim())
   const { viewport, content, tailSpace, handleScroll, followLatest } = useCompactAnswerScroll(compact, session.record.answers, compact ? segment?.text : undefined, session.record.id)
   const answers = compact ? session.record.answers.slice().reverse() : session.record.answers
@@ -34,7 +34,7 @@ export default function AnswerPanel({ session, settings, compact = false }: Answ
     <div className="min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]" ref={viewport} onScroll={handleScroll} role="region" aria-label="回答与面试信息" tabIndex={0}>
       <div ref={content} className={cn('flow-root', (!compact || !session.record.answers.length && !hasTranscript) && 'min-h-full')}>
       {!compact && <SessionContextDetails record={session.record} current={settings} />}
-      {compact && <CompactTranscript recordId={session.record.id} segment={segment} answer={session.record.answers.at(-1)} />}
+      {compact && <CompactTranscript segment={segment} />}
       {answers.length ? answers.map((answer, index) => <AnswerCard key={answer.id} answer={answer} index={compact ? answers.length - index : index + 1} compact={compact} />)
         : compact ? !hasTranscript && <div className="flex min-h-full flex-col justify-center gap-3 px-6 py-8 text-text-secondary"><h2 id="answer-title" className="text-lg font-semibold text-text-primary">准备好，听下一个问题。</h2><p className="text-sm leading-relaxed">开始转写，或在下方输入问题。<br />生成后，回答会显示在这里。</p></div> : <div className="flex min-h-full flex-col"><EmptyState className="m-auto" tone="success" icon={<ChatTeardropText weight="duotone" />}
           title="下一句，用你的话回答。" description="结合当前问题与你的真实经历，生成可以直接说出口的口语回答。" />

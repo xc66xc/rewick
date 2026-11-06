@@ -9,6 +9,15 @@
 <img src="assets/readme/compact.png" alt="Rewick 紧凑回答窗口" width="360" />
 
 <details>
+<summary>实时问题预览：长问题边说边累积</summary>
+
+紧凑模式在同一气泡保留本轮前面已经识别的小句，并持续更新正在识别的内容；同句纠错不会重复追加，提交后开始下一轮。下图为实际组件的合成语音片段预览。
+
+<img src="assets/readme/live-question-preview.png" alt="同一问题气泡同时显示前句和正在识别的后句" width="360" />
+
+</details>
+
+<details>
 <summary>首次使用本地录音复盘：下载语音资源</summary>
 
 实际组件的隔离演示，体积使用测试数据；客户端会显示当前版本实际所需下载量与空间。
@@ -62,7 +71,7 @@
 | `deploy/` | PostgreSQL/pgvector 镜像、Compose 与通用部署文件 |
 | `scripts/backend.mjs` | Maven Wrapper 统一入口 |
 
-三个应用模块独立版本化。桌面当前版本由 `frontend/package.json` 统一维护，为 **2.4.0**；管理端目前为 **2.5.0**，后端为 **2.4.0**。macOS 与 Windows 使用相同的三段应用版本号。
+三个应用模块独立版本化。桌面当前版本由 `frontend/package.json` 统一维护，为 **2.4.1**；管理端目前为 **2.6.0**，后端为 **2.4.0**。macOS 与 Windows 使用相同的三段应用版本号。
 
 ## 会话容量配置
 
