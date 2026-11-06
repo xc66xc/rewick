@@ -11,10 +11,16 @@ export interface AutoAnswerSnapshot {
 }
 export interface AutoAnswerOptions {
   read: () => AutoAnswerSnapshot
-  answer: (selection: { question: string; transcript: string; autoWaitMs?: number }) => void
+  answer: (selection: TranscriptQuestionSelection) => void
   includeTiming?: boolean
-  onFiltered?: (count: number) => void
+  onFiltered?: (count: number, segmentIds: string[]) => void
   onState: (state: AutoAnswerState) => void
+}
+export interface TranscriptQuestionSelection {
+  question: string
+  transcript: string
+  autoWaitMs?: number
+  segmentIds?: string[]
 }
 
 function fingerprint(segment: TranscriptSegment): string {
@@ -131,17 +137,17 @@ export class AutoAnswerCoordinator {
     // Filter before the busy check so feedback cannot become a queued answer after the current one ends.
     const question = candidates.filter(segment => !isPureAcknowledgement(segment.text))
       .map(segment => segment.text).join('\n').trim().slice(-12_000)
-    if (!question) { this.options.onFiltered?.(candidates.length); this.consume(); this.updateState('listening'); return }
+    if (!question) { this.options.onFiltered?.(candidates.length, candidates.map(segment => segment.id)); this.consume(); this.updateState('listening'); return }
     if (snapshot.busy) { this.updateState('queued'); return }
     const filteredCount = candidates.filter(segment => isPureAcknowledgement(segment.text)).length
-    if (filteredCount) this.options.onFiltered?.(filteredCount)
+    if (filteredCount) this.options.onFiltered?.(filteredCount, candidates.filter(segment => isPureAcknowledgement(segment.text)).map(segment => segment.id))
     const lastId = candidates[candidates.length - 1].id
     const lastIndex = snapshot.segments.findIndex(segment => segment.id === lastId)
     const transcript = snapshot.segments.slice(0, lastIndex + 1).map(segment => segment.text).join('\n').slice(-18_000)
     // Consume before calling out: answer() may synchronously change busy and refresh this coordinator.
     this.consume()
     this.updateState('listening')
-    this.options.answer({ question, transcript, ...(this.options.includeTiming ? { autoWaitMs: Math.max(0, performance.now() - this.finalChangedAt) } : {}) })
+    this.options.answer({ question, transcript, segmentIds: candidates.map(segment => segment.id), ...(this.options.includeTiming ? { autoWaitMs: Math.max(0, performance.now() - this.finalChangedAt) } : {}) })
   }
 
   private consume(): void {

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TranscriptSegment } from '../src/shared/types'
-import { AutoAnswerCoordinator, type AutoAnswerSnapshot, type AutoAnswerState } from '../src/renderer/src/hooks/autoAnswerCoordinator'
+import { AutoAnswerCoordinator, type AutoAnswerSnapshot, type AutoAnswerState, type TranscriptQuestionSelection } from '../src/renderer/src/hooks/autoAnswerCoordinator'
 
 const coordinators: AutoAnswerCoordinator[] = []
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-07T10:00:00Z')) })
@@ -11,7 +11,7 @@ function segment(id: string, text: string, isFinal = true): TranscriptSegment {
 }
 function setup(initial: Partial<AutoAnswerSnapshot> = {}) {
   const snapshot: AutoAnswerSnapshot = { active: true, busy: false, editing: false, pauseMs: 1500, segments: [], ...initial }
-  const answer = vi.fn<(selection: { question: string; transcript: string }) => void>()
+  const answer = vi.fn<(selection: TranscriptQuestionSelection) => void>()
   const onState = vi.fn<(state: AutoAnswerState) => void>()
   const coordinator = new AutoAnswerCoordinator({ read: () => snapshot, answer, onState })
   coordinators.push(coordinator)
@@ -37,14 +37,14 @@ describe('automatic answers after a finished interviewer question', () => {
     expect(answer).not.toHaveBeenCalled()
     receive(segment('next', '为什么？'))
     vi.advanceTimersByTime(1500)
-    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: '为什么？', transcript: `${text}\n为什么？` })
+    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: '为什么？', transcript: `${text}\n为什么？`, segmentIds: ['next'] })
   })
 
   it.each(['嗯，你具体怎么实现的？', '好，继续', '然后呢', '谁？', '为什么', '继续', '展开讲讲', '是吗？', '嗯？', '对比一下', '不对', '好的方案是什么'])('preserves short follow-ups and mixed utterances: %s', text => {
     const { receive, answer } = setup()
     receive(segment('question', text))
     vi.advanceTimersByTime(1500)
-    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: text, transcript: text })
+    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: text, transcript: text, segmentIds: ['question'] })
   })
 
   it('allows partial feedback to expand into a real question before finalization', () => {
@@ -72,7 +72,7 @@ describe('automatic answers after a finished interviewer question', () => {
     receive(segment('question', '如何保证一致性？'))
     receive(segment('after', '对，好的'))
     vi.advanceTimersByTime(1500)
-    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: '如何保证一致性？', transcript: '嗯\n如何保证一致性？\n对，好的' })
+    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: '如何保证一致性？', transcript: '嗯\n如何保证一致性？\n对，好的', segmentIds: ['before', 'question', 'after'] })
   })
 
   it('does not queue feedback during generation or delay a subsequent real question', () => {
@@ -96,7 +96,7 @@ describe('automatic answers after a finished interviewer question', () => {
     vi.advanceTimersByTime(1500)
     snapshot.busy = false
     coordinator.refresh()
-    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: '为什么？', transcript: '为什么？\n好的' })
+    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: '为什么？', transcript: '为什么？\n好的', segmentIds: ['question', 'feedback'] })
   })
   it('waits for final recognition and a full quiet period before answering', () => {
     const { receive, answer, onState } = setup()
@@ -109,7 +109,7 @@ describe('automatic answers after a finished interviewer question', () => {
     expect(answer).not.toHaveBeenCalled()
     expect(onState).toHaveBeenLastCalledWith('waiting')
     vi.advanceTimersByTime(1)
-    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: '如何设计缓存一致性', transcript: '如何设计缓存一致性' })
+    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: '如何设计缓存一致性', transcript: '如何设计缓存一致性', segmentIds: ['one'] })
     expect(onState).toHaveBeenLastCalledWith('listening')
   })
 
@@ -154,6 +154,7 @@ describe('automatic answers after a finished interviewer question', () => {
     expect(answer).toHaveBeenCalledExactlyOnceWith({
       question: '我们正在讨论高并发系统\n你会如何设计缓存一致性？',
       transcript: '我们正在讨论高并发系统\n你会如何设计缓存一致性？',
+      segmentIds: ['one', 'two'],
     })
   })
 
@@ -167,6 +168,7 @@ describe('automatic answers after a finished interviewer question', () => {
     expect(answer.mock.calls[0][0]).toEqual({
       question: '请解释一下 B 树和 B+ 树的区别',
       transcript: '如何设计数据库索引？\n请解释一下 B 树和 B+ 树的区别',
+      segmentIds: ['new'],
     })
   })
 
@@ -216,7 +218,7 @@ describe('automatic answers after a finished interviewer question', () => {
     vi.advanceTimersByTime(1499)
     expect(answer).not.toHaveBeenCalled()
     vi.advanceTimersByTime(1)
-    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: '如何设计 Redis 缓存？', transcript: '前面的项目背景\n如何设计 Redis 缓存？' })
+    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: '如何设计 Redis 缓存？', transcript: '前面的项目背景\n如何设计 Redis 缓存？', segmentIds: ['one'] })
   })
 
   it('dismissing a candidate just before its deadline stays manual after blur and later ASR revisions', () => {
@@ -389,7 +391,7 @@ describe('automatic answers after a finished interviewer question', () => {
     vi.advanceTimersByTime(1499)
     expect(answer).not.toHaveBeenCalled()
     vi.advanceTimersByTime(1)
-    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: text, transcript: text })
+    expect(answer).toHaveBeenCalledExactlyOnceWith({ question: text, transcript: text, segmentIds: ['one'] })
   })
 
   it('ignores an empty batch and continues with subsequent speech', () => {

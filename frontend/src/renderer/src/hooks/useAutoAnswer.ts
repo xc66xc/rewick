@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import type { AsrStatus, Settings, SettingsInput } from '../../../shared/types'
 import { selectedPlatformModel } from '../../../shared/platform-models'
-import { AutoAnswerCoordinator, type AutoAnswerSnapshot, type AutoAnswerState } from './autoAnswerCoordinator'
+import { AutoAnswerCoordinator, type AutoAnswerSnapshot, type AutoAnswerState, type TranscriptQuestionSelection } from './autoAnswerCoordinator'
 import { settingsInput } from './useSettings'
 import { explicitServiceReady } from './serviceChoices'
 
 interface AutoAnswerOptions {
   settingsRef: RefObject<Settings>
   read: () => Omit<AutoAnswerSnapshot, 'active' | 'pauseMs'> & { source: 'system' | 'microphone'; status: AsrStatus; assembling: boolean }
-  onAnswer: (selection: { question: string; transcript: string; autoWaitMs?: number }) => void
-  onFiltered?: (count: number) => void
+  onAnswer: (selection: TranscriptQuestionSelection) => void
+  onFiltered?: (count: number, segmentIds: string[]) => void
   saveSettings?: (input: SettingsInput) => Promise<Settings>
 }
 
@@ -52,7 +52,7 @@ export function useAutoAnswer(options: AutoAnswerOptions) {
             && snapshot.status === 'listening' && isAnswerModelReady(settings) }
       },
       includeTiming: true,
-      answer: selection => latest.current.onAnswer(selection), onFiltered: count => latest.current.onFiltered?.(count), onState: setState,
+      answer: selection => latest.current.onAnswer(selection), onFiltered: (count, ids) => latest.current.onFiltered?.(count, ids), onState: setState,
     })
     coordinator.current = current
     return () => { current.dispose(); if (coordinator.current === current) coordinator.current = null }

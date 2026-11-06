@@ -18,15 +18,16 @@ function setup(answers: Answer[]) {
     settings: structuredClone(defaultSettings), onSettings: vi.fn(), onContext: vi.fn(),
     session: {
       record: { id: 'reading-session', title: '阅读回答', createdAt: '2026-09-07T10:00:00.000Z', segments: [], answers },
+      questionPreview: undefined,
       question: '', questionAssembling: false, setQuestion: vi.fn(), generate: vi.fn(async () => undefined), cancel: vi.fn(async () => undefined),
       busy: answers.some(value => value.status === 'streaming'), desktop: true,
     },
   }
   const view = render(<AnswerPanel {...props} />)
   const viewport = screen.getByRole('region', { name: '回答与面试信息' })
-  function update(next: Answer[], compact = false, segments: TranscriptSegment[] = []) {
+  function update(next: Answer[], compact = false, segments: TranscriptSegment[] = [], questionPreview: TranscriptSegment | null = segments.at(-1) ?? null) {
     view.rerender(<AnswerPanel {...props} compact={compact} session={{ ...props.session,
-      record: { ...props.session.record, answers: next, segments }, busy: next.some(value => value.status === 'streaming') }} />)
+      record: { ...props.session.record, answers: next, segments }, questionPreview: questionPreview ?? undefined, busy: next.some(value => value.status === 'streaming') }} />)
   }
   return { viewport, update, user: userEvent.setup() }
 }
@@ -41,7 +42,7 @@ describe('answer scrolling', () => {
     expect(screen.queryByText('准备好，听下一个问题。')).toBeNull()
     const final = { ...segment, text: '如何设计缓存？', isFinal: true }
     update([], true, [final])
-    update([{ ...answer('one', '缓存回答'), question: final.text }], true, [final])
+    update([{ ...answer('one', '缓存回答'), question: final.text }], true, [final], null)
     expect(screen.getAllByRole('heading', { name: final.text })).toHaveLength(1)
     update([{ ...answer('one', '缓存回答'), question: final.text }], true, [final, { ...segment, id: 'live-two', text: '怎么处理穿透' }])
     expect(screen.getByRole('heading', { name: final.text })).toBeTruthy()
