@@ -80,7 +80,7 @@
 | `deploy/` | PostgreSQL/pgvector 镜像、Compose 与通用部署文件 |
 | `scripts/backend.mjs` | Maven Wrapper 统一入口 |
 
-三个应用模块独立版本化。桌面当前版本由 `frontend/package.json` 统一维护，为 **2.5.0**；管理端目前为 **2.8.0**，后端为 **2.6.0**。macOS 与 Windows 使用相同的三段应用版本号。
+三个应用模块独立版本化。桌面当前版本由 `frontend/package.json` 统一维护，为 **2.5.1**；管理端目前为 **2.8.0**，后端为 **2.6.0**。macOS 与 Windows 使用相同的三段应用版本号。
 
 ## 会话容量配置
 
