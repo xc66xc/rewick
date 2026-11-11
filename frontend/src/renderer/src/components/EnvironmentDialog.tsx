@@ -41,12 +41,12 @@ export default function EnvironmentDialog({ open, onOpenChange, draft, dirty, li
   const resumeOptions = [
     { value: '', label: '不选择简历' },
     ...(missingResume ? [{ value: draft.resumeId ?? '', label: '所选简历已失效，请重新选择' }] : []),
-    ...library.resumes.map(record => ({ value: record.id, label: record.name })),
+    ...library.resumes.slice().sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).map(record => ({ value: record.id, label: record.name })),
   ]
   const targetOptions = [
     { value: '', label: '不选择目标岗位' },
     ...(missingTarget ? [{ value: draft.targetId ?? '', label: '所选岗位已失效，请重新选择' }] : []),
-    ...library.targets.map(record => ({ value: record.id, label: record.name })),
+    ...library.targets.slice().sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).map(record => ({ value: record.id, label: record.name })),
   ]
   return <>
     <Modal open={open} onOpenChange={onOpenChange} title={draft.id ? '编辑面试准备' : '新建面试准备'}
