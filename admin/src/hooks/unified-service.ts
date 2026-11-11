@@ -1,5 +1,5 @@
 import { suggestThinkingProtocol } from '../thinking'
-import { defaultRerank, defaultRerankUrl, defaultWebSearch, rerankEndpointPath, rerankSchema, type Capability, type Config, type SearchProtocol } from '../types'
+import { defaultRerank, defaultRerankModel, defaultRerankUrl, defaultWebSearch, rerankEndpointPath, rerankSchema, type Capability, type Config, type SearchProtocol } from '../types'
 export interface ServiceForm {
   id: string; providerId: string; kind: Capability; name: string; url: string; model: string
   topK: number; searchDepth: Config['webSearch']['searchDepth']; timeoutMs: number; includeAnswer: 'none' | 'basic' | 'advanced'
@@ -27,7 +27,7 @@ export function serviceForms(config: Config): ServiceForm[] {
     }
     if (provider.kind === 'rerank') {
       const binding = config.rerank ?? defaultRerank
-      return [{ ...base, model: binding.providerId === provider.id ? binding.model : 'qwen3-rerank', timeoutMs: binding.providerId === provider.id ? binding.timeoutMs : 1500, enabled: provider.enabled && binding.enabled && binding.providerId === provider.id }]
+      return [{ ...base, model: binding.providerId === provider.id ? binding.model : defaultRerankModel, timeoutMs: binding.providerId === provider.id ? binding.timeoutMs : 1500, enabled: provider.enabled && binding.enabled && binding.providerId === provider.id }]
     }
     const binding = config[provider.kind]
     return [{ ...base, dimensions: 'dimensions' in binding && binding.providerId === provider.id ? binding.dimensions : 1024, model: binding.providerId === provider.id ? binding.model : '', enabled: provider.enabled && binding.enabled && binding.providerId === provider.id }]

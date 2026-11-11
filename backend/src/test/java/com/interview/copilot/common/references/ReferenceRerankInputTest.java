@@ -7,20 +7,22 @@ import com.interview.copilot.entity.references.ReferenceCandidateEntity;
 import com.interview.copilot.exception.ai.ProviderFailure;
 import com.interview.copilot.model.references.ReferenceRecall;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.stream.IntStream;
 
 class ReferenceRerankInputTest {
-    @Test
-    void documents_duplicateChunksAndLongBodies_keepsTwoTitlesWithinCharacterAndByteBudgets() {
+    @ParameterizedTest
+    @ValueSource(strings = {"qwen3-rerank", "qwen3.7-text-rerank"})
+    void documents_duplicateChunksAndLongBodies_keepsTwoTitlesWithinCharacterAndByteBudgets(String model) {
         var first = chunk(1, "第一节 → 标题甲\n" + "正文😀".repeat(800));
         var second = chunk(2, "第二节 → 标题乙\n" + "内容😀".repeat(800));
         var candidate = candidate(List.of(first, first, second, chunk(3, "忽略第三段")));
 
-        String document = ReferenceRerankInput.documents("问题", List.of(candidate, candidate), "qwen3-rerank").getFirst();
+        String document = ReferenceRerankInput.documents("问题", List.of(candidate, candidate), model).getFirst();
 
         assertThat(document).contains("第一节 → 标题甲\n", "第二节 → 标题乙\n").doesNotContain("忽略第三段");
         assertThat(document.length()).isLessThanOrEqualTo(1600);
@@ -29,30 +31,33 @@ class ReferenceRerankInputTest {
                 .isEqualTo(document.chars().filter(character -> Character.isLowSurrogate((char) character)).count());
     }
 
-    @Test
-    void documents_fortyCandidates_chargesRepeatedQueryAndStaysWithinGlobalBudget() {
+    @ParameterizedTest
+    @ValueSource(strings = {"qwen3-rerank", "qwen3.7-text-rerank"})
+    void documents_fortyCandidates_chargesRepeatedQueryAndStaysWithinGlobalBudget(String model) {
         var candidates = IntStream.range(0, 40).mapToObj(index -> candidate(List.of(chunk(index, "内容".repeat(2000))))).toList();
         String query = "q".repeat(1900);
 
-        var documents = ReferenceRerankInput.documents(query, candidates, "qwen3-rerank");
+        var documents = ReferenceRerankInput.documents(query, candidates, model);
 
         assertThat(documents.stream().mapToInt(text -> text.getBytes(StandardCharsets.UTF_8).length).sum() + 40 * 1900)
                 .isLessThanOrEqualTo(100000);
     }
 
-    @Test
-    void documents_queryExceedsByteLimit_skipsWithoutTruncatingQuery() {
+    @ParameterizedTest
+    @ValueSource(strings = {"qwen3-rerank", "qwen3.7-text-rerank"})
+    void documents_queryExceedsByteLimit_skipsWithoutTruncatingQuery(String model) {
         var candidates = List.of(candidate(List.of(chunk(1, "文本"))), candidate(List.of(chunk(2, "文本"))));
 
-        assertThatThrownBy(() -> ReferenceRerankInput.documents("问".repeat(1167), candidates, "qwen3-rerank"))
+        assertThatThrownBy(() -> ReferenceRerankInput.documents("问".repeat(1167), candidates, model))
                 .isInstanceOfSatisfying(ProviderFailure.class, error -> assertThat(error.reason()).isEqualTo("input_limit"));
     }
 
-    @Test
-    void documents_repeatedQueryLeavesLessThanMinimumDocumentCapacity_skips() {
+    @ParameterizedTest
+    @ValueSource(strings = {"qwen3-rerank", "qwen3.7-text-rerank"})
+    void documents_repeatedQueryLeavesLessThanMinimumDocumentCapacity_skips(String model) {
         var candidates = IntStream.range(0, 40).mapToObj(index -> candidate(List.of(chunk(index, "文本")))).toList();
 
-        assertThatThrownBy(() -> ReferenceRerankInput.documents("q".repeat(1989), candidates, "qwen3-rerank"))
+        assertThatThrownBy(() -> ReferenceRerankInput.documents("q".repeat(1989), candidates, model))
                 .isInstanceOfSatisfying(ProviderFailure.class, error -> assertThat(error.reason()).isEqualTo("input_limit"));
     }
 

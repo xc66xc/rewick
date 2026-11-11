@@ -142,7 +142,7 @@ public final class PlatformConfigValidator {
                 providers);
         var rerank = config.rerank();
         if (!rerank.model().isBlank() && !BailianRerankProtocol.supports(rerank.model())) {
-            throw PlatformConfigErrors.invalid("重排序仅支持已登记容量的 qwen3-rerank 模型。");
+            throw PlatformConfigErrors.invalid("重排序仅支持 qwen3-rerank 和 qwen3.7-text-rerank 模型。");
         }
         validateService(rerank.enabled(), rerank.providerId(), rerank.model(), "rerank", providers);
     }

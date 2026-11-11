@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed,onBeforeUnmount,ref,toRaw } from 'vue'
 import { ApiError,type ApiClient,message } from '../../api'
-import { capabilityNames,configPayload,configSchema,defaultRerankUrl,testSchema,type Capability,type Config } from '../../types'
+import { capabilityNames,configPayload,configSchema,defaultRerankModel,defaultRerankUrl,testSchema,type Capability,type Config } from '../../types'
 import { applyService,serviceForms,type ServiceForm } from '../../hooks/unified-service'
 import { createServiceId } from '../../service-id'
 import PageHeader from '../../components/ui/PageHeader.vue'
@@ -19,7 +19,7 @@ const config=ref<Config|null>(null),items=ref<ServiceForm[]>([]),category=ref('a
 let loadController:AbortController|undefined,operation:AbortController|undefined
 async function load(){loadController?.abort();const c=new AbortController();loadController=c;try{const value=await props.api.request('/admin/config',configSchema,{signal:c.signal});if(!c.signal.aborted){config.value=value;items.value=serviceForms(value);error.value=''}}catch(reason){if(!c.signal.aborted)error.value=message(reason)}}
 async function reload(){if(await confirm({title:'重新加载配置',message:'重新加载会丢弃未保存内容，是否继续？',confirmText:'重新加载'}))await load()}
-function add(kind:Capability){const id=createServiceId();category.value='all';showAdd.value=false;items.value.push({id,providerId:id,kind,searchProtocol:'tavily',name:'',model:kind==='rerank'?'qwen3-rerank':'',url:kind==='web-search'?'https://api.tavily.com/search':kind==='rerank'?defaultRerankUrl:'',topK:5,searchDepth:'advanced',timeoutMs:kind==='rerank'?1500:8000,includeAnswer:'none',maxOutputTokens:2048,thinkingMode:'default',thinkingProtocol:'none',dimensions:1024,enabled:kind!=='rerank'})}
+function add(kind:Capability){const id=createServiceId();category.value='all';showAdd.value=false;items.value.push({id,providerId:id,kind,searchProtocol:'tavily',name:'',model:kind==='rerank'?defaultRerankModel:'',url:kind==='web-search'?'https://api.tavily.com/search':kind==='rerank'?defaultRerankUrl:'',topK:5,searchDepth:'advanced',timeoutMs:kind==='rerank'?1500:8000,includeAnswer:'none',maxOutputTokens:2048,thinkingMode:'default',thinkingProtocol:'none',dimensions:1024,enabled:kind!=='rerank'})}
 async function save(item:ServiceForm,test=false,remove=false):Promise<boolean>{
  if(!config.value||busy.value)return false
  busy.value=true;error.value='';notice.value='';const c=new AbortController();operation=c

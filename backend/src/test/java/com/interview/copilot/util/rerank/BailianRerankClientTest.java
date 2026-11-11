@@ -13,6 +13,8 @@ import com.interview.copilot.model.rerank.RerankEndpoint;
 import com.interview.copilot.util.ai.ProviderHttpClient;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import reactor.core.publisher.Mono;
 
@@ -42,13 +44,15 @@ class BailianRerankClientTest {
         org.mockito.Mockito.verifyNoInteractions(http);
     }
 
-    @Test
-    void rank_remainingDeadlineShorterThanConfig_cancelsHttpAtRemainingBudget() {
+    @ParameterizedTest
+    @ValueSource(strings = {"qwen3-rerank", "qwen3.7-text-rerank"})
+    void rank_remainingDeadlineShorterThanConfig_cancelsHttpAtRemainingBudget(String model) {
+        var selected = new RerankEndpoint(true, endpoint.url(), endpoint.apiKey(), model, endpoint.timeoutMs());
         var cancelled = new CountDownLatch(1);
         when(http.json(any(), any(), any())).thenReturn(Mono.<JsonNode>never().doOnCancel(cancelled::countDown));
         long started = System.nanoTime();
 
-        assertThatThrownBy(() -> client.rank(endpoint, "question", List.of("one", "two"), started + 200_000_000))
+        assertThatThrownBy(() -> client.rank(selected, "question", List.of("one", "two"), started + 200_000_000))
                 .hasCauseInstanceOf(java.util.concurrent.TimeoutException.class);
 
         assertThat(cancelled.getCount()).isZero();
