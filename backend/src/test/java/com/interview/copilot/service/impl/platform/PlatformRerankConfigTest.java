@@ -26,21 +26,24 @@ class PlatformRerankConfigTest {
         fixture.close();
     }
 
-    @Test
-    void publish_enabledRerank_encryptsKeyAndPreservesBindingInEveryPublishedView() {
-        var saved = fixture.service.publish(1, config(0, true, "fixture-rerank-key", "qwen3-rerank", 1500));
+    @ParameterizedTest
+    @ValueSource(strings = {"qwen3-rerank", "qwen3.7-text-rerank"})
+    void publish_enabledRerank_encryptsKeyAndPreservesBindingInEveryPublishedView(String model) {
+        var saved = fixture.service.publish(1, config(0, true, "fixture-rerank-key", model, 1500));
 
         assertThat(saved.rerank()).isEqualTo(fixture.service.get().rerank());
         assertThat(saved.rerank().enabled()).isTrue();
+        assertThat(saved.rerank().model()).isEqualTo(model);
         assertThat(fixture.row.get().payload()).doesNotContain("fixture-rerank-key");
         assertThat(fixture.service.snapshot().rerank().apiKey()).isEqualTo("fixture-rerank-key");
         assertThat(fixture.service.snapshot().rerank().enabled()).isTrue();
         assertThat(saved.providers().getFirst().apiKey()).isNull();
     }
 
-    @Test
-    void publish_oldAdminOmitsRerank_preservesCurrentConfigurationAndEncryptedKey() throws Exception {
-        var saved = fixture.service.publish(1, config(0, true, "fixture-rerank-key", "qwen3-rerank", 1200));
+    @ParameterizedTest
+    @ValueSource(strings = {"qwen3-rerank", "qwen3.7-text-rerank"})
+    void publish_oldAdminOmitsRerank_preservesCurrentConfigurationAndEncryptedKey(String model) throws Exception {
+        var saved = fixture.service.publish(1, config(0, true, "fixture-rerank-key", model, 1200));
         var request = new PlatformConfigRequest(1, saved.providers(), saved.models(), saved.defaultModelId(),
                 saved.asr(), saved.embedding(), saved.webSearch(), saved.screenshotModelId());
         var admin = new AdminPlatformConfigServiceImpl(fixture.service);
@@ -51,6 +54,20 @@ class PlatformRerankConfigTest {
         assertThat(response.rerank()).isEqualTo(saved.rerank());
         assertThat(fixture.service.snapshot().rerank().apiKey()).isEqualTo("fixture-rerank-key");
         assertThat(fixture.row.get().payload()).doesNotContain("fixture-rerank-key");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"qwen3-rerank", "qwen3.7-text-rerank"})
+    void publish_blankKeyWithExistingProvider_preservesEncryptedKey(String model) {
+        fixture.service.publish(1, config(0, true, "fixture-rerank-key", model, 1500));
+
+        var saved = fixture.service.publish(1, config(1, true, "", model, 1200));
+
+        assertThat(saved.rerank().model()).isEqualTo(model);
+        assertThat(saved.rerank().timeoutMs()).isEqualTo(1200);
+        assertThat(fixture.service.snapshot().rerank().apiKey()).isEqualTo("fixture-rerank-key");
+        assertThat(fixture.row.get().payload()).doesNotContain("fixture-rerank-key");
+        assertThat(saved.providers().getFirst().apiKey()).isNull();
     }
 
     @Test

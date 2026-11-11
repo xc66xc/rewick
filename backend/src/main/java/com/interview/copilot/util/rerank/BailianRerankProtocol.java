@@ -13,20 +13,24 @@ import java.util.Set;
 /** DashScope native text-rerank protocol; upstream document text is deliberately ignored. */
 public final class BailianRerankProtocol {
     public static final String MODEL = "qwen3-rerank";
+    public static final String MODEL_37 = "qwen3.7-text-rerank";
     public static final String PATH = "/api/v1/services/rerank/text-rerank/text-rerank";
 
     private BailianRerankProtocol() {}
 
     public static boolean supports(String model) {
-        return MODEL.equals(model);
+        return MODEL.equals(model) || MODEL_37.equals(model);
     }
 
     public static Map<String, Object> request(String model, String query, List<String> documents) {
         if (!supports(model)) {
-            throw new ProviderFailure("invalid_input", "重排序仅支持已登记容量的 qwen3-rerank 模型。");
+            throw new ProviderFailure("invalid_input", "重排序仅支持 qwen3-rerank 和 qwen3.7-text-rerank 模型。");
         }
+        Map<String, Object> parameters = MODEL_37.equals(model)
+                ? Map.of("top_n", documents.size())
+                : Map.of("top_n", documents.size(), "return_documents", false);
         return Map.of("model", model, "input", Map.of("query", query, "documents", documents),
-                "parameters", Map.of("top_n", documents.size(), "return_documents", false));
+                "parameters", parameters);
     }
 
     public static List<Score> response(JsonNode response, int count) {

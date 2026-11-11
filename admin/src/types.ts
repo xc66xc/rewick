@@ -28,6 +28,7 @@ export const defaultWebSearch = { enabled: false, providerId: '', topK: 5, searc
 export const webSearchSchema = z.object({ enabled: z.boolean(), providerId: z.string(), topK: z.number().int().min(1).max(20), searchDepth: searchDepthSchema, timeoutMs: z.number().int().min(1000).max(30000), includeAnswer: z.enum(['none', 'basic', 'advanced']).default('none') })
 export const rerankEndpointPath = '/api/v1/services/rerank/text-rerank/text-rerank'
 export const defaultRerankUrl = `https://dashscope.aliyuncs.com${rerankEndpointPath}`
+export const defaultRerankModel = 'qwen3.7-text-rerank'
 export const defaultRerank = { enabled: false, providerId: '', model: '', timeoutMs: 1500 }
 export const rerankSchema = z.object({ enabled: z.boolean(), providerId: z.string(), model: z.string(), timeoutMs: z.number().int().min(300).max(5000) })
 export const configSchema = z.object({ version: z.number(), providers: z.array(providerSchema), models: z.array(modelSchema), defaultModelId: z.string(), screenshotModelId: z.string().default(''), asr: z.object({ enabled: z.boolean(), providerId: z.string(), model: z.string() }), embedding: z.object({ enabled: z.boolean(), providerId: z.string(), model: z.string(), dimensions: z.literal(1024) }), rerank: rerankSchema.default(defaultRerank), webSearch: webSearchSchema.default(defaultWebSearch) })

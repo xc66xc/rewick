@@ -8,6 +8,7 @@ import com.interview.copilot.exception.ai.ProviderFailure;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
@@ -15,14 +16,32 @@ import java.util.List;
 class BailianRerankProtocolTest {
     private final ObjectMapper json = new ObjectMapper();
 
-    @Test
-    void request_twoDocuments_usesNativeBatchAndRequestsCompleteRanking() {
-        var body = json.valueToTree(BailianRerankProtocol.request("qwen3-rerank", "query", List.of("one", "two")));
+    @ParameterizedTest
+    @ValueSource(strings = {"qwen3-rerank", "qwen3.7-text-rerank"})
+    void request_twoDocuments_usesNativeBatchAndModelSpecificParameters(String model) {
+        var body = json.valueToTree(BailianRerankProtocol.request(model, "query", List.of("one", "two")));
 
+        assertThat(body.path("model").asText()).isEqualTo(model);
+        assertThat(body.path("input").path("query").asText()).isEqualTo("query");
         assertThat(body.path("input").path("documents").size()).isEqualTo(2);
         assertThat(body.path("parameters").path("top_n").asInt()).isEqualTo(2);
-        assertThat(body.path("parameters").path("return_documents").asBoolean()).isFalse();
+        if ("qwen3-rerank".equals(model)) {
+            assertThat(body.path("parameters").has("return_documents")).isTrue();
+            assertThat(body.path("parameters").path("return_documents").asBoolean()).isFalse();
+        } else {
+            assertThat(body.path("parameters").has("return_documents")).isFalse();
+        }
         assertThat(body.has("documents")).isFalse();
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"other-rerank", "qwen3.7-text-rerank-extra", "QWEN3.7-text-rerank", " qwen3-rerank"})
+    void request_unregisteredModel_rejectsWithoutExpandingWhitelist(String model) {
+        assertThat(BailianRerankProtocol.supports(model)).isFalse();
+        assertThatThrownBy(() -> BailianRerankProtocol.request(model, "query", List.of("one", "two")))
+                .isInstanceOfSatisfying(ProviderFailure.class,
+                        error -> assertThat(error.reason()).isEqualTo("invalid_input"));
     }
 
     @Test
@@ -30,7 +49,7 @@ class BailianRerankProtocolTest {
         var response = json.readTree("""
                 {"output":{"results":[{"index":2,"relevance_score":0.2},
                 {"index":1,"relevance_score":0.9,"document":{"text":"untrusted text"}},
-                {"index":0,"relevance_score":0.9}]}}
+                {"index":0,"relevance_score":0.9}]},"usage":{"prompt_tokens":79,"total_tokens":79}}
                 """);
 
         var result = BailianRerankProtocol.response(response, 3);

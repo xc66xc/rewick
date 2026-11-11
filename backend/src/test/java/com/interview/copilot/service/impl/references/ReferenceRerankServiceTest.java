@@ -22,12 +22,15 @@ import com.interview.copilot.util.rerank.BailianRerankProtocol;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
+import java.util.stream.Stream;
 
 class ReferenceRerankServiceTest {
     private final BailianRerankClient client = mock(BailianRerankClient.class);
@@ -70,15 +73,19 @@ class ReferenceRerankServiceTest {
         verifyNoInteractions(client);
     }
 
-    @Test
-    void rank_validRanking_returnsWholePoolAndPreservesOriginalScores() {
+    @ParameterizedTest
+    @ValueSource(strings = {"qwen3-rerank", "qwen3.7-text-rerank"})
+    void rank_validRanking_returnsWholePoolAndPreservesOriginalScores(String model) {
         when(client.rank(any(), any(), any(), anyLong(), any())).thenAnswer(call -> {
             call.<Runnable>getArgument(4).run();
             return List.of(new BailianRerankProtocol.Score(2, 0.9), new BailianRerankProtocol.Score(0, 0.8),
                     new BailianRerankProtocol.Score(1, 0.7));
         });
 
-        var result = service.rank("question", candidates, snapshot(true), Long.MAX_VALUE, null);
+        List<OperationEvent> events = new ArrayList<>();
+        var observation = OperationContext.start(1, null, null, null, null, "pg", "answer-model", events::add);
+
+        var result = service.rank("question", candidates, snapshot(true, model), Long.MAX_VALUE, observation);
 
         assertThat(result.status()).isEqualTo("ready");
         assertThat(result.submittedCount()).isEqualTo(3);
@@ -87,11 +94,16 @@ class ReferenceRerankServiceTest {
         assertThat(result.candidates().getFirst().rerankScore()).isEqualTo(0.9);
         assertThat(result.candidates().getFirst().rrfScore()).isEqualTo(candidates.get(2).rrfScore());
         assertThat(result.candidates().getFirst().matches()).isSameAs(candidates.get(2).matches());
+        assertThat(events).singleElement().satisfies(event -> {
+            assertThat(event.stage()).isEqualTo("retrieval.rerank");
+            assertThat(event.outcome()).isEqualTo("success");
+            assertThat(event.model()).isEqualTo(model);
+        });
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"timeout", "queue_full", "protocol_error", "http_error", "unavailable"})
-    void rank_providerFailure_fallsBackToOriginalRPoolAndRecordsExplicitReason(String failure) {
+    @MethodSource("modelFailures")
+    void rank_providerFailure_fallsBackToOriginalRPoolAndRecordsExplicitReason(String model, String failure) {
         int submitted = List.of("queue_full", "unavailable").contains(failure) ? 0 : candidates.size();
         when(client.rank(any(), any(), any(), anyLong(), any())).thenAnswer(call -> {
             if (submitted > 0) call.<Runnable>getArgument(4).run();
@@ -100,7 +112,7 @@ class ReferenceRerankServiceTest {
         List<OperationEvent> events = new ArrayList<>();
         var observation = OperationContext.start(1, null, null, null, null, "pg", "answer-model", events::add);
 
-        var result = service.rank("private question", candidates, snapshot(true), Long.MAX_VALUE, observation);
+        var result = service.rank("private question", candidates, snapshot(true, model), Long.MAX_VALUE, observation);
 
         String reason = "http_error".equals(failure) ? "provider_error" : failure;
         assertThat(result.enabled()).isTrue();
@@ -113,7 +125,7 @@ class ReferenceRerankServiceTest {
             assertThat(event.outcome()).isEqualTo("timeout".equals(reason) ? "timeout" : "degraded");
             assertThat(event.reason()).isEqualTo(reason);
             assertThat(event.providerType()).isEqualTo("rerank");
-            assertThat(event.model()).isEqualTo("qwen3-rerank");
+            assertThat(event.model()).isEqualTo(model);
             assertThat(event.metadata()).containsEntry("platformVersion", 7L);
             assertThat(event.metadata()).containsEntry("candidateCount", submitted);
             assertThat(event.toString()).doesNotContain("private question", "candidate text", "private-key");
@@ -158,11 +170,21 @@ class ReferenceRerankServiceTest {
     }
 
     private PlatformSnapshot snapshot(boolean enabled) {
+        return snapshot(enabled, "qwen3-rerank");
+    }
+
+    private PlatformSnapshot snapshot(boolean enabled, String model) {
         var provider = new PlatformConfig.Provider("rerank", "Rerank", "rerank",
                 "https://provider.invalid" + BailianRerankProtocol.PATH, true, true, null);
         var config = new PlatformConfig(7, List.of(provider), List.of(), "", new PlatformConfig.Asr(false, "", ""),
-                null, null, "", new PlatformConfig.Rerank(enabled, "rerank", "qwen3-rerank", 1500));
+                null, null, "", new PlatformConfig.Rerank(enabled, "rerank", model, 1500));
         return new PlatformSnapshot(config, Map.of("rerank", "private-key"), PlatformPolicy.from(new ProviderProperties()));
+    }
+
+    private static Stream<Arguments> modelFailures() {
+        return Stream.of("qwen3-rerank", "qwen3.7-text-rerank").flatMap(model ->
+                Stream.of("timeout", "queue_full", "protocol_error", "http_error", "unavailable")
+                        .map(failure -> Arguments.of(model, failure)));
     }
 
     private ReferenceRecall.Fused candidate(long id) {
