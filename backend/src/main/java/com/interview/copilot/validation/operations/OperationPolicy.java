@@ -11,7 +11,7 @@ import java.util.UUID;
 
 public final class OperationPolicy {
     public static final Set<String> STAGES = Set.of("screenshot.recognize", "answer.auto_wait", "answer.complete", "answer.prepare", "retrieval.rag",
-            "retrieval.bm25", "retrieval.vector", "retrieval.fusion", "retrieval.parent_lookup", "retrieval.context_pack", "retrieval.web", "retrieval.join", "retrieval.embedding", "retrieval.database", "llm.first_content",
+            "retrieval.bm25", "retrieval.vector", "retrieval.fusion", "retrieval.rerank", "retrieval.parent_lookup", "retrieval.context_pack", "retrieval.web", "retrieval.join", "retrieval.embedding", "retrieval.database", "llm.first_content",
             "llm.complete", "answer.first_render", "session.save", "session.sync", "asr.connect",
             "asr.first_transcript", "asr.complete", "asr.backlog", "auto.feedback");
     public static final Set<String> OUTCOMES = Set.of("success", "error", "timeout", "cancelled",
@@ -20,10 +20,12 @@ public final class OperationPolicy {
             "requestId", "sessionId", "stage", "source", "startedAt", "offsetMs", "durationMs",
             "outcome", "reason", "serviceSource", "providerType", "model", "appVersion", "metadata");
     private static final Set<String> METADATA = Set.of("candidateCount", "cacheHits", "fragmentCount", "inputTokens", "outputTokens",
-            "totalTokens", "bufferedBytes", "maxGapMs", "summaryEnabled", "audioBytes", "filteredCount", "triggerCount");
+            "totalTokens", "bufferedBytes", "maxGapMs", "summaryEnabled", "audioBytes", "filteredCount", "triggerCount",
+            "topK", "topN", "selectedCount", "resultCount", "policyVersion", "platformVersion", "rrfTopN", "rerankTopN");
     private static final Set<String> REASONS = Set.of("provider_error", "network_error", "timeout", "cancelled",
             "unauthorized", "unavailable", "rate_limit", "session_inactive", "invalid_input", "storage_error",
-            "queue_full", "empty", "feedback", "server_only", "record_changed", "record_deleted", "unknown");
+            "queue_full", "empty", "feedback", "server_only", "record_changed", "record_deleted", "unknown",
+            "input_limit", "protocol_error");
     private OperationPolicy() {}
     public static String uuid(String value) {
         if (value == null) return null;
@@ -43,7 +45,7 @@ public final class OperationPolicy {
         if (event.stage()==null || event.outcome()==null || event.source()==null || event.providerType()==null
                 || !STAGES.contains(event.stage()) || !OUTCOMES.contains(event.outcome())
                 || !Set.of("desktop", "backend").contains(event.source())
-                || !Set.of("llm", "pg", "tavily", "deepseek", "asr", "system").contains(event.providerType())) throw invalid();
+                || !Set.of("llm", "pg", "tavily", "deepseek", "asr", "system", "rerank").contains(event.providerType())) throw invalid();
         if (!Double.isFinite(event.durationMs()) || event.durationMs() < 0 || event.durationMs() > 86400000) throw invalid();
         if (event.offsetMs() != null && (!Double.isFinite(event.offsetMs()) || event.offsetMs() < 0 || event.offsetMs() > 86400000)) throw invalid();
         bounded(event.requestId(), 128); bounded(event.sessionId(), 128); bounded(event.model(), 200); bounded(event.appVersion(), 32);

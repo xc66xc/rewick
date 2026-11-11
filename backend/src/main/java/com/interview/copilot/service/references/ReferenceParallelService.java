@@ -9,4 +9,6 @@ import java.util.List;
 public interface ReferenceParallelService {
     ReferenceRecall.Pair recall(long user, List<ReferenceScopeEntity> scope, String query,
             ReferencePolicy policy, OperationContext context);
+    ReferenceRecall.Pair recall(long user, List<ReferenceScopeEntity> scope, String query,
+            com.interview.copilot.model.references.ReferenceQueryPlan plan, OperationContext context);
 }

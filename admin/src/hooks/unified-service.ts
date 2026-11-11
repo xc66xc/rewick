@@ -1,5 +1,5 @@
 import { suggestThinkingProtocol } from '../thinking'
-import { defaultWebSearch, type Capability, type Config, type SearchProtocol } from '../types'
+import { defaultRerank, defaultRerankUrl, defaultWebSearch, rerankEndpointPath, rerankSchema, type Capability, type Config, type SearchProtocol } from '../types'
 export interface ServiceForm {
   id: string; providerId: string; kind: Capability; name: string; url: string; model: string
   topK: number; searchDepth: Config['webSearch']['searchDepth']; timeoutMs: number; includeAnswer: 'none' | 'basic' | 'advanced'
@@ -25,6 +25,10 @@ export function serviceForms(config: Config): ServiceForm[] {
       const binding = config.webSearch ?? defaultWebSearch
       return [{ ...base, ...(binding.providerId === provider.id ? { topK: binding.topK, searchDepth: binding.searchDepth, timeoutMs: binding.timeoutMs, includeAnswer: binding.includeAnswer ?? 'none' } : {}), enabled: provider.enabled && binding.enabled && binding.providerId === provider.id }]
     }
+    if (provider.kind === 'rerank') {
+      const binding = config.rerank ?? defaultRerank
+      return [{ ...base, model: binding.providerId === provider.id ? binding.model : 'qwen3-rerank', timeoutMs: binding.providerId === provider.id ? binding.timeoutMs : 1500, enabled: provider.enabled && binding.enabled && binding.providerId === provider.id }]
+    }
     const binding = config[provider.kind]
     return [{ ...base, dimensions: 'dimensions' in binding && binding.providerId === provider.id ? binding.dimensions : 1024, model: binding.providerId === provider.id ? binding.model : '', enabled: provider.enabled && binding.enabled && binding.providerId === provider.id }]
   })
@@ -32,14 +36,24 @@ export function serviceForms(config: Config): ServiceForm[] {
 export function applyService(config: Config, form: ServiceForm, remove = false): Config {
   const next = structuredClone(config)
   next.webSearch ??= { ...defaultWebSearch }
+  next.rerank ??= { ...defaultRerank }
   const previous = next.providers.find(item => item.id === form.providerId)
   const url = form.url.trim()
   if (previous && (previous.url !== url || previous.kind !== form.kind || (form.kind === 'web-search' && (previous.searchProtocol ?? 'tavily') !== (form.searchProtocol ?? 'tavily'))) && !form.apiKey?.trim() && !remove) throw new Error('更换接口地址或搜索供应商后请重新填写 API Key。')
+  if (form.kind === 'rerank' && !remove) {
+    rerankSchema.parse({ enabled: form.enabled, providerId: form.providerId, model: form.model.trim(), timeoutMs: form.timeoutMs })
+    try {
+      const endpoint = new URL(url)
+      if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password || endpoint.hash || endpoint.search || endpoint.pathname !== rerankEndpointPath) throw new Error('invalid')
+    } catch { throw new Error(`请填写百炼原生重排序完整 HTTPS 接口地址，例如 ${defaultRerankUrl}；不会自动补全路径。`) }
+    if (form.enabled && (!form.model.trim() || !form.providerId || (!form.apiKey?.trim() && !previous?.hasApiKey))) throw new Error('开启重排序前请配置模型、完整接口地址和 API Key。')
+  }
   if (remove) {
     next.models = next.models.filter(model => model.id !== form.id)
     if (!next.models.some(model => model.providerId === form.providerId)) next.providers = next.providers.filter(provider => provider.id !== form.providerId)
     if (next.asr.providerId === form.providerId) next.asr = { enabled: false, providerId: '', model: '' }
     if (next.embedding.providerId === form.providerId) next.embedding = { enabled: false, providerId: '', model: '', dimensions: 1024 }
+    if (next.rerank.providerId === form.providerId) next.rerank = { ...defaultRerank }
     if (next.webSearch.providerId === form.providerId) next.webSearch = { ...next.webSearch, enabled: false, providerId: '' }
   } else {
     const provider = { id: form.providerId, kind: form.kind, name: form.name.trim(), url, ...(form.kind === 'web-search' ? { searchProtocol: form.searchProtocol ?? 'tavily' } : {}), enabled: form.kind === 'llm' ? true : form.enabled, ...(form.apiKey?.trim() ? { apiKey: form.apiKey.trim() } : {}) }
@@ -54,6 +68,7 @@ export function applyService(config: Config, form: ServiceForm, remove = false):
     } else if (form.enabled || !next[form.kind].providerId || next[form.kind].providerId === form.providerId) {
       if (form.kind === 'asr') next.asr = { enabled: form.enabled, providerId: form.providerId, model: form.model.trim() }
       else if (form.kind === 'embedding') next.embedding = { enabled: form.enabled, providerId: form.providerId, model: form.model.trim(), dimensions: 1024 }
+      else if (form.kind === 'rerank') next.rerank = { enabled: form.enabled, providerId: form.providerId, model: form.model.trim(), timeoutMs: form.timeoutMs }
     } else throw new Error('当前该能力已有其他服务配置，请启用此项以切换服务。')
   }
   const available = next.models.filter(model => model.enabled && next.providers.some(provider => provider.id === model.providerId && provider.enabled))

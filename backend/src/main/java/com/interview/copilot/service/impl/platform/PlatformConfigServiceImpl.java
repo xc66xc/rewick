@@ -85,7 +85,7 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
                 view.models(),
                 view.defaultModelId(),
                 view.asr(),
-                view.embedding(), view.webSearch(), view.screenshotModelId());
+                view.embedding(), view.webSearch(), view.screenshotModelId(), view.rerank());
     }
 
     private DesktopSettingsEntity replacedAsrDefault(
@@ -115,7 +115,7 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
                 row.published()
                         ? codec.snapshot(row, PlatformPolicy.from(properties))
                         : empty(row.version());
-        input = preserveWebSearch(input, previous.view());
+        input = preserveServices(input, previous.view());
         validator.validate(input, previous.view());
         Map<String, String> keys = new HashMap<>();
         for (PlatformConfig.Provider provider : input.providers()) {
@@ -128,11 +128,12 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
         return new PlatformSnapshot(input, keys, PlatformPolicy.from(properties));
     }
 
-    private PlatformConfig preserveWebSearch(PlatformConfig input, PlatformConfig previous) {
+    private PlatformConfig preserveServices(PlatformConfig input, PlatformConfig previous) {
         var search = input.webSearch() == null ? previous.webSearch()
                 : input.webSearch().withDefaultAnswer(previous.webSearch().includeAnswer());
         return new PlatformConfig(input.version(), input.providers(), input.models(), input.defaultModelId(),
-                input.asr(), input.embedding(), search, input.screenshotModelId() == null ? previous.screenshotModelId() : input.screenshotModelId());
+                input.asr(), input.embedding(), search, input.screenshotModelId() == null ? previous.screenshotModelId() : input.screenshotModelId(),
+                input.rerank() == null ? previous.rerank() : input.rerank());
     }
 
     private boolean localEmbedding(PlatformConfig.Provider provider) {

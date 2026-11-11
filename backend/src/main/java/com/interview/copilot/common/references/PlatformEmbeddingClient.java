@@ -27,7 +27,10 @@ public class PlatformEmbeddingClient {
     }
 
     public Selection selection() {
-        var snapshot = providers.snapshot();
+        return selection(providers.snapshot());
+    }
+    public Selection selection(com.interview.copilot.model.platform.PlatformSnapshot snapshot) {
+        if (snapshot == null) throw ReferenceErrors.invalid("平台向量配置加载失败。");
         var config = snapshot.embedding();
         if (!config.isEnabled() || config.getDimensions() != 1024) {
             throw ReferenceErrors.invalid("平台尚未配置可用的 1024 维向量模型。");
@@ -38,14 +41,28 @@ public class PlatformEmbeddingClient {
 
     public List<List<Double>> embed(Selection selection,List<String> texts,
             com.interview.copilot.model.operations.OperationContext context) {
+        return embed(selection, texts, context, System.nanoTime() + Duration.ofSeconds(30).toNanos());
+    }
+    public List<List<Double>> embed(Selection selection,List<String> texts,
+            com.interview.copilot.model.operations.OperationContext context, long deadlineNanos) {
         try {
-            var result=embed(selection,texts);
+            var result=embed(selection,texts, deadlineNanos);
             if(context!=null) context.model(selection.config().getModel()).finish("retrieval.embedding","success",Map.of());
             return result;
-        } catch(RuntimeException error) {if(context!=null) context.finish("retrieval.embedding","error",Map.of());throw error;}
+        } catch (RuntimeException error) {
+            boolean cancelled = error instanceof java.util.concurrent.CancellationException || Thread.currentThread().isInterrupted();
+            if (context != null) context.finish("retrieval.embedding", cancelled ? "cancelled" : "error", Map.of());
+            if (cancelled) throw new java.util.concurrent.CancellationException();
+            throw error;
+        }
     }
     @SuppressWarnings("unchecked")
     public List<List<Double>> embed(Selection selection,List<String> texts) {
+        return embed(selection, texts, System.nanoTime() + Duration.ofSeconds(30).toNanos());
+    }
+    @SuppressWarnings("unchecked")
+    private List<List<Double>> embed(Selection selection,List<String> texts, long deadlineNanos) {
+        com.interview.copilot.model.references.ReferenceQueryPlan.checkCancellation();
         if (texts.isEmpty() || texts.size() > 10) {
             throw ReferenceErrors.invalid("向量批次无效。");
         }
@@ -53,12 +70,15 @@ public class PlatformEmbeddingClient {
             throw ReferenceErrors.invalid("向量服务繁忙，请稍后重试。");
         }
         try {
+            var timeout = Duration.ofNanos(com.interview.copilot.model.references.ReferenceQueryPlan.remainingNanos(deadlineNanos));
+            if (timeout.isZero()) throw ReferenceErrors.invalid("向量检索时间预算已用尽。");
             JsonNode body =
                     http.json(
                                     selection.config(),
                                     EmbeddingProtocol.request(texts, selection.config()),
-                                    Duration.ofSeconds(30))
-                            .block();
+                                    timeout)
+                            .block(timeout);
+            com.interview.copilot.model.references.ReferenceQueryPlan.checkCancellation();
             List<Map<String, Object>> rows =
                     (List<Map<String, Object>>)
                             EmbeddingProtocol.response(body, texts.size(), 1024).get("data");

@@ -22,13 +22,13 @@ class ReferenceVectorServiceTest {
         var scope=List.of(new ReferenceScopeEntity("doc",1,"qa","technical"));
         var barrier=new CyclicBarrier(2);
         var candidate=new ReferenceCandidateEntity("doc",1,1,10,0,"answer",0.8,100);
-        when(mapper.questions(1,scope,"shared-vector","fingerprint",0)).thenAnswer(ignored -> { barrier.await(2,TimeUnit.SECONDS); return List.of(candidate); });
-        when(mapper.vector(1,scope,"shared-vector","fingerprint",0.55)).thenAnswer(ignored -> { barrier.await(2,TimeUnit.SECONDS); return List.of(candidate); });
+        when(mapper.questions(1,scope,"shared-vector","fingerprint",0,4)).thenAnswer(ignored -> { barrier.await(2,TimeUnit.SECONDS); return List.of(candidate); });
+        when(mapper.vector(1,scope,"shared-vector","fingerprint",0.55,4)).thenAnswer(ignored -> { barrier.await(2,TimeUnit.SECONDS); return List.of(candidate); });
         var service=new ReferenceVectorServiceImpl(mapper,manager);
         try {
             assertThat(service.search(1,scope,"shared-vector","fingerprint",ReferencePolicy.defaults())).containsExactly(candidate);
-            verify(mapper).questions(1,scope,"shared-vector","fingerprint",0);
-            verify(mapper).vector(1,scope,"shared-vector","fingerprint",0.55);
+            verify(mapper).questions(1,scope,"shared-vector","fingerprint",0,4);
+            verify(mapper).vector(1,scope,"shared-vector","fingerprint",0.55,4);
         } finally { service.close(); }
     }
     @Test void search_emptyScope_doesNotQueryDatabase() {

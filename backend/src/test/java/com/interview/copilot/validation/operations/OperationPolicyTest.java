@@ -71,6 +71,19 @@ public class OperationPolicyTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"input_limit", "protocol_error", "queue_full"})
+    void validate_rerankTelemetry_acceptsBoundedStageCountsAndReasons(String reason) {
+        var value = event(UUID.randomUUID().toString(), Map.of());
+        var rerank = new OperationEvent(value.eventId(), value.operationId(), value.spanId(),
+                null, null, null, "retrieval.rerank", "backend", value.startedAt(), null, 4,
+                "degraded", reason, "platform", "rerank", "qwen3-rerank", null,
+                Map.of("candidateCount", 6, "selectedCount", 6, "resultCount", 2, "topN", 2,
+                        "policyVersion", 3, "platformVersion", 4));
+
+        assertThatCode(() -> OperationPolicy.event(rerank)).doesNotThrowAnyException();
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"record_changed", "record_deleted"})
     void validate_sessionConflictReason_acceptsOnlySafeCodes(String reason) {
         var value = event(UUID.randomUUID().toString(), Map.of());

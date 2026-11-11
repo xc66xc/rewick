@@ -40,17 +40,25 @@ export const referenceExcerptSchema = z.object({
     text: z.string().max(2000), paragraphStart: z.number().int().nonnegative().optional(), paragraphEnd: z.number().int().nonnegative().optional(),
     sectionPath: z.string().max(512).optional(), matchedChunkIds: z.array(z.string().max(128)).max(10).optional(),
     contextExpansion: z.enum(['parent', 'child', 'partial']).optional(),
-    ranking: z.object({ bm25Rank: z.number().int().min(1).max(5).nullable().optional(), vectorRank: z.number().int().min(1).max(5).nullable().optional(),
-      bm25Score: z.number().finite().nonnegative().nullable().optional(), vectorScore: z.number().finite().nullable().optional(), rrfScore: z.number().finite().nonnegative() }).optional(),
+    ranking: z.object({ bm25Rank: z.number().int().min(1).max(20).nullable().optional(), vectorRank: z.number().int().min(1).max(20).nullable().optional(),
+      bm25Score: z.number().finite().nonnegative().nullable().optional(), vectorScore: z.number().finite().nullable().optional(), rrfScore: z.number().finite().nonnegative(),
+      rerankRank: z.number().int().min(1).max(40).nullable().optional(), rerankScore: z.number().finite().nullable().optional() }).optional(),
   }).superRefine((value, context) => {
     if (value.generatedSummary && (value.source !== 'web' || value.url !== undefined || value.kind !== 'technical')) context.addIssue({ code: 'custom', message: '生成摘要只能作为联网技术参考，不能伪造网页来源。' })
     if (value.source === 'web' && ((!value.generatedSummary && !value.url) || value.kind !== 'technical')) context.addIssue({ code: 'custom', message: '网页资料必须包含来源 URL，且只能作为技术参考。' })
   })
-const recallBranchSchema = z.object({ status: z.enum(['ready', 'empty', 'degraded']), candidateCount: z.number().int().min(0).max(5), durationMs: z.number().finite().nonnegative() })
+const recallBranchSchema = z.object({ status: z.enum(['ready', 'empty', 'degraded']), candidateCount: z.number().int().min(0).max(20), durationMs: z.number().finite().nonnegative(), topK: z.number().int().min(1).max(20).nullable().optional() })
+const hybridSchema = z.object({
+  bm25: recallBranchSchema, vector: recallBranchSchema,
+  fusion: z.object({ method: z.literal('rrf'), rankConstant: z.number().int().positive(), resultCount: z.number().int().min(0).max(40),
+    candidateCount: z.number().int().min(0).max(40).nullable().optional(), selectedCount: z.number().int().min(0).max(40).nullable().optional(), topN: z.number().int().min(1).max(40).nullable().optional() }),
+  rerank: z.object({ status: z.enum(['disabled', 'ready', 'degraded', 'skipped']), model: z.string().max(200).nullable(), candidateCount: z.number().int().min(0).max(40),
+    resultCount: z.number().int().min(0).max(40), topN: z.number().int().min(1).max(20), durationMs: z.number().finite().nonnegative(), reason: z.string().max(80).nullable().optional() }).nullable().optional(),
+})
 export const retrievalContextSchema = z.object({
   status: z.enum(['disabled', 'ready', 'degraded', 'empty']), message: z.string().max(2000).optional(),
-  excerpts: z.array(referenceExcerptSchema).max(33),
-  hybrid: z.object({ bm25: recallBranchSchema, vector: recallBranchSchema, fusion: z.object({ method: z.literal('rrf'), rankConstant: z.number().int().positive(), resultCount: z.number().int().min(0).max(3) }) }).nullable().optional(),
+  excerpts: z.array(referenceExcerptSchema).max(61),
+  hybrid: hybridSchema.nullable().optional(),
   web: z.object({ status: z.enum(['ready', 'degraded', 'empty']), message: z.string().max(2000).optional() }).optional(),
 })
 export const platformSettingsSchema = z.object({

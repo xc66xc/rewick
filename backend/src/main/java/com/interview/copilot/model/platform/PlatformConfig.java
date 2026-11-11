@@ -22,7 +22,13 @@ public record PlatformConfig(
         @NotNull @Valid Asr asr,
         @Valid Embedding embedding,
         @Valid WebSearch webSearch,
-        @Size(max = 64) String screenshotModelId) {
+        @Size(max = 64) String screenshotModelId,
+        @Valid Rerank rerank) {
+    public PlatformConfig(long version, List<Provider> providers, List<Model> models,
+            String defaultModelId, Asr asr, Embedding embedding, WebSearch webSearch, String screenshotModelId) {
+        this(version, providers, models, defaultModelId, asr, embedding, webSearch, screenshotModelId, null);
+    }
+
     public PlatformConfig(long version, List<Provider> providers, List<Model> models,
             String defaultModelId, Asr asr, Embedding embedding, WebSearch webSearch) {
         this(version, providers, models, defaultModelId, asr, embedding, webSearch, "");
@@ -57,7 +63,7 @@ public record PlatformConfig(
     public record Provider(
             @NotBlank @Pattern(regexp = "[A-Za-z0-9_.-]{1,64}") String id,
             @NotBlank @Size(max = 120) String name,
-            @NotBlank @Pattern(regexp = "llm|asr|embedding|web-search") String kind,
+            @NotBlank @Pattern(regexp = "llm|asr|embedding|web-search|rerank") String kind,
             @NotBlank @Size(max = 2048) String url,
             boolean enabled,
             @JsonProperty(access = JsonProperty.Access.READ_ONLY) boolean hasApiKey,
@@ -104,6 +110,16 @@ public record PlatformConfig(
             @NotNull @Size(max = 64) String providerId,
             @NotNull @Size(max = 200) String model,
             @Min(1024) @Max(1024) int dimensions) {}
+
+    public record Rerank(
+            boolean enabled,
+            @NotNull @Size(max = 64) String providerId,
+            @NotNull @Size(max = 200) String model,
+            @Min(300) @Max(5000) int timeoutMs) {
+        public static Rerank disabled() {
+            return new Rerank(false, "", "", 1500);
+        }
+    }
 
     public record WebSearch(
             boolean enabled,

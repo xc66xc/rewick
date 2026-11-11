@@ -24,22 +24,23 @@ PostgreSQL 15.19 / pgvector 0.8.6。脚本手动按编号执行；后端不使�
 | `16_desktop_sessions.sql` | 单桌面登录、会话撤销原因与面试登录归属 |
 | `17_desktop_settings.sql` | 桌面高级设置授权与普通用户默认模型、温度和检索方式 |
 | `18_invitations.sql` | 用户邀请码、邀请奖励规则、注册关系与钱包奖励流水 |
+| `31_reference_recall_limits.sql` | 参考资料 BM25/向量/RRF/rerank 四个独立数量与关系约束 |
 | `30_session_record_limit.sql` | 管理端单次会话记录容量上限，默认20 MiB，允许1–50 MiB |
 | `19_client_downloads.sql` | 三个平台的最新安装包配置及临时上传元数据 |
 
 ## 初始化空数据库
 
-从 backend 目录执行，密码通过交互提示或本机凭据提供。2.0需要顺序执行到30，不能只初始化到19：
+从 backend 目录执行，密码通过交互提示或本机凭据提供。需要顺序执行到31，不能只初始化到19：
 
 ```sh
-psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 -f sql/01_schema.sql -f sql/02_pgvector.sql -f sql/03_admin_users.sql -f sql/04_platform_config.sql -f sql/05_email_auth.sql -f sql/06_display_name.sql -f sql/07_email_code_purpose.sql -f sql/08_server_local_time.sql -f sql/09_pg_references.sql -f sql/10_time_wallet.sql -f sql/11_payment_packages.sql -f sql/12_alipay_payments.sql -f sql/13_session_records.sql -f sql/14_server_background.sql -f sql/15_user_preferences.sql -f sql/16_desktop_sessions.sql -f sql/17_desktop_settings.sql -f sql/18_invitations.sql -f sql/19_client_downloads.sql -f sql/20_alipay_page_pay.sql -f sql/21_zpay_payments.sql -f sql/22_zpay_api_qr.sql -f sql/23_interview_type.sql -f sql/24_operations_statistics.sql -f sql/25_reference_hybrid.sql -f sql/26_hr_interview_type.sql -f sql/27_mock_interview.sql -f sql/28_reference_qa.sql -f sql/29_remove_remote_knowledge.sql -f sql/30_session_record_limit.sql
+psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 -f sql/01_schema.sql -f sql/02_pgvector.sql -f sql/03_admin_users.sql -f sql/04_platform_config.sql -f sql/05_email_auth.sql -f sql/06_display_name.sql -f sql/07_email_code_purpose.sql -f sql/08_server_local_time.sql -f sql/09_pg_references.sql -f sql/10_time_wallet.sql -f sql/11_payment_packages.sql -f sql/12_alipay_payments.sql -f sql/13_session_records.sql -f sql/14_server_background.sql -f sql/15_user_preferences.sql -f sql/16_desktop_sessions.sql -f sql/17_desktop_settings.sql -f sql/18_invitations.sql -f sql/19_client_downloads.sql -f sql/20_alipay_page_pay.sql -f sql/21_zpay_payments.sql -f sql/22_zpay_api_qr.sql -f sql/23_interview_type.sql -f sql/24_operations_statistics.sql -f sql/25_reference_hybrid.sql -f sql/26_hr_interview_type.sql -f sql/27_mock_interview.sql -f sql/28_reference_qa.sql -f sql/29_remove_remote_knowledge.sql -f sql/30_session_record_limit.sql -f sql/31_reference_recall_limits.sql
 ```
 
 使用 Compose 时，从仓库根目录执行：
 
 ```sh
 docker compose up -d --build --wait database
-docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql -f /opt/copilot/sql/06_display_name.sql -f /opt/copilot/sql/07_email_code_purpose.sql -f /opt/copilot/sql/08_server_local_time.sql -f /opt/copilot/sql/09_pg_references.sql -f /opt/copilot/sql/10_time_wallet.sql -f /opt/copilot/sql/11_payment_packages.sql -f /opt/copilot/sql/12_alipay_payments.sql -f /opt/copilot/sql/13_session_records.sql -f /opt/copilot/sql/14_server_background.sql -f /opt/copilot/sql/15_user_preferences.sql -f /opt/copilot/sql/16_desktop_sessions.sql -f /opt/copilot/sql/17_desktop_settings.sql -f /opt/copilot/sql/18_invitations.sql -f /opt/copilot/sql/19_client_downloads.sql -f /opt/copilot/sql/20_alipay_page_pay.sql -f /opt/copilot/sql/21_zpay_payments.sql -f /opt/copilot/sql/22_zpay_api_qr.sql -f /opt/copilot/sql/23_interview_type.sql -f /opt/copilot/sql/24_operations_statistics.sql -f /opt/copilot/sql/25_reference_hybrid.sql -f /opt/copilot/sql/26_hr_interview_type.sql -f /opt/copilot/sql/27_mock_interview.sql -f /opt/copilot/sql/28_reference_qa.sql -f /opt/copilot/sql/29_remove_remote_knowledge.sql -f /opt/copilot/sql/30_session_record_limit.sql
+docker compose exec -T database psql -X -U copilot -d interview_copilot -v ON_ERROR_STOP=1 -f /opt/copilot/sql/01_schema.sql -f /opt/copilot/sql/02_pgvector.sql -f /opt/copilot/sql/03_admin_users.sql -f /opt/copilot/sql/04_platform_config.sql -f /opt/copilot/sql/05_email_auth.sql -f /opt/copilot/sql/06_display_name.sql -f /opt/copilot/sql/07_email_code_purpose.sql -f /opt/copilot/sql/08_server_local_time.sql -f /opt/copilot/sql/09_pg_references.sql -f /opt/copilot/sql/10_time_wallet.sql -f /opt/copilot/sql/11_payment_packages.sql -f /opt/copilot/sql/12_alipay_payments.sql -f /opt/copilot/sql/13_session_records.sql -f /opt/copilot/sql/14_server_background.sql -f /opt/copilot/sql/15_user_preferences.sql -f /opt/copilot/sql/16_desktop_sessions.sql -f /opt/copilot/sql/17_desktop_settings.sql -f /opt/copilot/sql/18_invitations.sql -f /opt/copilot/sql/19_client_downloads.sql -f /opt/copilot/sql/20_alipay_page_pay.sql -f /opt/copilot/sql/21_zpay_payments.sql -f /opt/copilot/sql/22_zpay_api_qr.sql -f /opt/copilot/sql/23_interview_type.sql -f /opt/copilot/sql/24_operations_statistics.sql -f /opt/copilot/sql/25_reference_hybrid.sql -f /opt/copilot/sql/26_hr_interview_type.sql -f /opt/copilot/sql/27_mock_interview.sql -f /opt/copilot/sql/28_reference_qa.sql -f /opt/copilot/sql/29_remove_remote_knowledge.sql -f /opt/copilot/sql/30_session_record_limit.sql -f /opt/copilot/sql/31_reference_recall_limits.sql
 docker compose up -d --build backend admin
 ```
 
@@ -253,3 +254,17 @@ psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 -f sql/3
 ```
 
 新增字段保留时旧后端可回滚，新后端必须依赖该脚本已完成。管理端“模型与服务 → 桌面默认设置”统一设置会话容量，平台接口随桌面默认策略下发；调低配置只限制之后的保存，不阻止读取已有较大的会话。前后端安装/部署及代理请求体边界需配套更新，旧桌面仍受自身固定4 MiB限制。
+
+## 31：可配置资料召回与重排序
+
+新后端启动前手动执行 `31_reference_recall_limits.sql`。脚本只修改 `reference_policy` 单例行表，新增 BM25/向量/RRF/rerank 数量列，默认 `4/4/2/2`；不新增索引、不重建资料、不改写索引任务快照。约束始终要求 `rerank_top_n≤rrf_top_n≤bm25_top_k+vector_top_k`。锁等待最多5秒、语句最多30秒，失败后事务回滚；可重复执行。
+
+```sh
+psql -X -h 127.0.0.1 -U copilot -d interview_copilot -v ON_ERROR_STOP=1 -f sql/31_reference_recall_limits.sql
+```
+
+先同步升级后端、管理端及桌面，保持默认数量并关闭重排，确认桌面已支持扩大后的计数再调整。新查询冻结策略和平台配置；旧管理端省略数量时保留数据库现值，存量索引任务缺少新字段时按默认数量读取。关闭时最多输出 RRF 数量，开启后成功或失败都最多输出 rerank 数量，最终仍受4800字符正文预算限制。重排失败只在冻结的 RRF 池中回退，不扩大调用或检索范围。
+
+回滚前将数量恢复为 `4/4/2/2`，四个新列可保留。另须在部署前备份完整旧平台配置 payload 及对应加密 Key：写入新 rerank 配置后，旧后端不能解析新 JSON；需恢复该兼容备份，或受控移除顶层 `rerank` 和 `kind=rerank` provider 并完整保留其他配置与密钥，之后才回滚旧应用。单纯关闭重排不能保证旧后端可读。不要恢复整库覆盖升级后的资料或其他业务数据。
+
+性能预期：默认关闭时不增加外部调用或 SQL 查询次数；仅开启重排后增加一次最终 scope 复核；最大40个 RRF 候选只增加有限排序与传输开销。放大 LIMIT 不能按数量比例推导数据库延迟，向量距离和 BM25 评分通常仍在 LIMIT 前完成，应在隔离代表性数据上比较 `EXPLAIN (ANALYZE, BUFFERS)`。SQL31 已在独立 PostgreSQL 15.19 容器验证默认值、幂等执行和约束；尚无生产耗时或供应商实测。

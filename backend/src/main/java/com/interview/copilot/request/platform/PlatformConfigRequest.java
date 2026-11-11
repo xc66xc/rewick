@@ -21,7 +21,13 @@ public record PlatformConfigRequest(
         @NotNull @Valid Asr asr,
         @Valid Embedding embedding,
         @Valid WebSearch webSearch,
-        @Size(max = 64) String screenshotModelId) {
+        @Size(max = 64) String screenshotModelId,
+        @Valid com.interview.copilot.model.platform.PlatformConfig.Rerank rerank) {
+    public PlatformConfigRequest(long version, List<Provider> providers, List<Model> models,
+            String defaultModelId, Asr asr, Embedding embedding, WebSearch webSearch, String screenshotModelId) {
+        this(version, providers, models, defaultModelId, asr, embedding, webSearch, screenshotModelId, null);
+    }
+
     public PlatformConfigRequest(long version, List<Provider> providers, List<Model> models,
             String defaultModelId, Asr asr, Embedding embedding, WebSearch webSearch) {
         this(version, providers, models, defaultModelId, asr, embedding, webSearch, null);

@@ -20,6 +20,20 @@ it('shows both recall ranks and RRF without treating the score as correctness', 
   expect(screen.getByText(/缓存 → 缓存击穿/)).toBeTruthy()
   expect(screen.getByText('互斥锁保护热点数据。')).toBeTruthy()
 })
+it('distinguishes RRF candidates, pool size and rerank fallback in development diagnostics', async () => {
+  const retrieval: RetrievalContext = { status: 'ready', hybrid: {
+    bm25: { status: 'ready', candidateCount: 12, durationMs: 3, topK: 20 }, vector: { status: 'ready', candidateCount: 15, durationMs: 100, topK: 20 },
+    fusion: { method: 'rrf', rankConstant: 60, candidateCount: 24, selectedCount: 6, topN: 6, resultCount: 2 },
+    rerank: { status: 'degraded', model: 'qwen3-rerank', candidateCount: 6, resultCount: 2, topN: 2, durationMs: 1500, reason: 'timeout' },
+  }, excerpts: [{ source: 'platform', documentId: 'doc', revision: 1, name: '缓存.md', kind: 'technical', chunkId: 'parent', text: '缓存正文。',
+    ranking: { bm25Rank: 12, vectorRank: 15, rrfScore: .02, rerankRank: 40, rerankScore: .15 } }] }
+  render(<ReferenceSources retrieval={retrieval} />)
+  await userEvent.setup().click(screen.getByRole('button', { name: /本次检索资料/ }))
+  expect(screen.getByText(/BM25 12\/20 · 向量 15\/20/)).toBeTruthy()
+  expect(screen.getByText('RRF 去重候选：24 · 入池：6/6 · 最终装箱：2')).toBeTruthy()
+  expect(screen.getByText(/重排序：已回退 RRF · qwen3-rerank · 输入：6 · 保留数 TopN：2 · 选中：2（装箱前） · 1500 ms · 超时/)).toBeTruthy()
+  expect(screen.getByText(/重排序名次：40 · 重排序分数：0.15000/)).toBeTruthy()
+})
 it('keeps ready documents usable while displaying the rebuild state and parent count', () => {
   const document: ReferenceDocument = { id: 'doc', name: '岗位.docx', kind: 'technical', enabled: true, status: 'ready', contentHash: 'hash', revision: 1,
     createdAt: '', updatedAt: '', chunkCount: 16, contextCount: 7, sectionCount: 4, format: 'docx', headingMode: 'headings', splitterVersion: 1, indexStatus: 'indexing', indexError: '' }

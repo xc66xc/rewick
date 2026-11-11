@@ -11,7 +11,8 @@ public record StoredPlatformConfig(
         PlatformConfig.Asr asr,
         PlatformConfig.Embedding embedding,
         PlatformConfig.WebSearch webSearch,
-        String screenshotModelId) {
+        String screenshotModelId,
+        PlatformConfig.Rerank rerank) {
     public StoredPlatformConfig {
         providers = List.copyOf(providers);
         models = List.copyOf(models);

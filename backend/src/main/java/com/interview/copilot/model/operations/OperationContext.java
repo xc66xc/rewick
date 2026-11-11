@@ -32,12 +32,26 @@ public record OperationContext(long userId, String operationId, String spanId, S
     }
     public double elapsedMs() {return Math.max(0,(System.nanoTime()-startedNanos)/1_000_000.0);}
     public void finish(String stage,String outcome,Map<String,Object> metadata) {
-        if(ended.compareAndSet(false,true)) emit(stage,outcome,metadata);
+        finish(stage, outcome, null, metadata);
     }
-    public void point(String stage,Map<String,Object> metadata) {emit(stage,"success",metadata);}
-    private void emit(String stage,String outcome,Map<String,Object> metadata) {
+    /** Ends this span once while preserving the concrete safe failure classification. */
+    public void finish(String stage, String outcome, String reason, Map<String,Object> metadata) {
+        if (ended.compareAndSet(false, true)) emit(stage, outcome, reason, metadata);
+    }
+    public void point(String stage,Map<String,Object> metadata) {emit(stage,"success",null,metadata);}
+    private void emit(String stage,String outcome,String reason,Map<String,Object> metadata) {
         sink.accept(new OperationEvent(UUID.randomUUID().toString(),operationId,spanId,parentSpanId,requestId,sessionId,
                 stage,"backend",startedAt,null,Math.min(86400000,elapsedMs()),outcome,
-                switch(outcome) {case "timeout" -> "timeout";case "cancelled" -> "cancelled";case "rejected" -> "invalid_input";case "error" -> "provider_error";case "degraded" -> "unavailable";default -> serverOnly?"server_only":null;},"platform",providerType,model,null,metadata));
+                reason == null ? defaultReason(outcome) : reason,"platform",providerType,model,null,metadata));
+    }
+    private String defaultReason(String outcome) {
+        return switch (outcome) {
+            case "timeout" -> "timeout";
+            case "cancelled" -> "cancelled";
+            case "rejected" -> "invalid_input";
+            case "error" -> "provider_error";
+            case "degraded" -> "unavailable";
+            default -> serverOnly ? "server_only" : null;
+        };
     }
 }

@@ -134,16 +134,17 @@ export interface ReferenceExcerpt {
   sectionPath?: string
   matchedChunkIds?: string[]
   contextExpansion?: 'parent' | 'child' | 'partial'
-  ranking?: { bm25Rank?: number | null; vectorRank?: number | null; bm25Score?: number | null; vectorScore?: number | null; rrfScore: number }
+  ranking?: { bm25Rank?: number | null; vectorRank?: number | null; bm25Score?: number | null; vectorScore?: number | null; rrfScore: number; rerankRank?: number | null; rerankScore?: number | null }
 }
 export interface RetrievalContext {
   status: 'disabled' | 'ready' | 'degraded' | 'empty'
   message?: string
   excerpts: ReferenceExcerpt[]
   hybrid?: {
-    bm25: { status: 'ready' | 'empty' | 'degraded'; candidateCount: number; durationMs: number }
-    vector: { status: 'ready' | 'empty' | 'degraded'; candidateCount: number; durationMs: number }
-    fusion: { method: 'rrf'; rankConstant: number; resultCount: number }
+    bm25: { status: 'ready' | 'empty' | 'degraded'; candidateCount: number; durationMs: number; topK?: number | null }
+    vector: { status: 'ready' | 'empty' | 'degraded'; candidateCount: number; durationMs: number; topK?: number | null }
+    fusion: { method: 'rrf'; rankConstant: number; resultCount: number; candidateCount?: number | null; selectedCount?: number | null; topN?: number | null }
+    rerank?: { status: 'disabled' | 'ready' | 'degraded' | 'skipped'; model: string | null; candidateCount: number; resultCount: number; topN: number; durationMs: number; reason?: string | null } | null
   } | null
   web?: { status: 'ready' | 'degraded' | 'empty'; message?: string }
 }

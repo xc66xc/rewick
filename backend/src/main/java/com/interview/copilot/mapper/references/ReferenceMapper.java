@@ -45,7 +45,7 @@ public interface ReferenceMapper {
     @Select(value = "SELECT id FROM app_users WHERE id=#{user} FOR UPDATE")
     Long lockUser(@Param("user") long user);
 
-    @Select(value = "SELECT max_files,max_total_bytes,max_chunks,child_target,child_overlap,parent_target,bm25_k1,bm25_b,vector_min_score,rrf_constant,bm25_timeout_ms,max_term_rows,cache_enabled,cache_weight_bytes,version,hybrid_enabled,question_vector_min_score FROM reference_policy WHERE id=1")
+    @Select(value = "SELECT max_files,max_total_bytes,max_chunks,child_target,child_overlap,parent_target,bm25_k1,bm25_b,vector_min_score,rrf_constant,bm25_timeout_ms,max_term_rows,cache_enabled,cache_weight_bytes,version,hybrid_enabled,question_vector_min_score,bm25_top_k,vector_top_k,rrf_top_n,rerank_top_n FROM reference_policy WHERE id=1")
     ReferencePolicy policy();
 
     @Select(
@@ -181,7 +181,7 @@ public interface ReferenceMapper {
                             + " desired_revision=#{job.revision}")
     void failDocument(@Param("job") ReferenceModels.Job job, @Param("error") String error);
 
-    @Update("UPDATE reference_policy SET max_files=#{policy.maxFiles},max_total_bytes=#{policy.maxTotalBytes},max_chunks=#{policy.maxChunks},child_target=#{policy.childTarget},child_overlap=#{policy.childOverlap},parent_target=#{policy.parentTarget},bm25_k1=#{policy.bm25K1},bm25_b=#{policy.bm25B},vector_min_score=#{policy.vectorMinScore},rrf_constant=#{policy.rrfConstant},bm25_timeout_ms=#{policy.bm25TimeoutMs},max_term_rows=#{policy.maxTermRows},cache_enabled=#{policy.cacheEnabled},cache_weight_bytes=#{policy.cacheWeightBytes},hybrid_enabled=#{policy.hybridEnabled},question_vector_min_score=#{policy.questionVectorMinScore},version=version+1,updated_at=LOCALTIMESTAMP(6) WHERE id=1 AND version=#{policy.version}")
+    @Update("UPDATE reference_policy SET max_files=#{policy.maxFiles},max_total_bytes=#{policy.maxTotalBytes},max_chunks=#{policy.maxChunks},child_target=#{policy.childTarget},child_overlap=#{policy.childOverlap},parent_target=#{policy.parentTarget},bm25_k1=#{policy.bm25K1},bm25_b=#{policy.bm25B},vector_min_score=#{policy.vectorMinScore},rrf_constant=#{policy.rrfConstant},bm25_timeout_ms=#{policy.bm25TimeoutMs},max_term_rows=#{policy.maxTermRows},cache_enabled=#{policy.cacheEnabled},cache_weight_bytes=#{policy.cacheWeightBytes},hybrid_enabled=#{policy.hybridEnabled},question_vector_min_score=#{policy.questionVectorMinScore},bm25_top_k=#{policy.bm25TopK},vector_top_k=#{policy.vectorTopK},rrf_top_n=#{policy.rrfTopN},rerank_top_n=#{policy.rerankTopN},version=version+1,updated_at=LOCALTIMESTAMP(6) WHERE id=1 AND version=#{policy.version}")
     int updatePolicy(@Param("policy") ReferencePolicy policy);
 
 }

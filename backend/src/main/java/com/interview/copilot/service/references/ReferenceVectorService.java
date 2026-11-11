@@ -8,4 +8,6 @@ import java.util.List;
 public interface ReferenceVectorService {
     List<ReferenceCandidateEntity> search(long user, List<ReferenceScopeEntity> scope,
             String vector, String fingerprint, ReferencePolicy policy);
+    List<ReferenceCandidateEntity> search(long user, List<ReferenceScopeEntity> scope,
+            String vector, String fingerprint, com.interview.copilot.model.references.ReferenceQueryPlan plan);
 }

@@ -27,6 +27,13 @@ class ReferenceVectorFusionTest {
         assertThat(result).hasSize(2);
         assertThat(result.getFirst().qaId()).isEqualTo(200);
     }
+    @Test void fuse_configuredTopSix_keepsQuestionWeightAndLargerBranch() {
+        var questions = LongStream.rangeClosed(1,8).mapToObj(id -> hit(id,id,id,0.5)).toList();
+        var body = LongStream.rangeClosed(9,16).mapToObj(id -> hit(id,id,id,0.99)).toList();
+
+        assertThat(ReferenceVectorFusion.fuse(questions,body,60,6)).containsExactlyElementsOf(questions.subList(0,6));
+        assertThat(ReferenceVectorFusion.fuse(List.of(),body,60,6)).containsExactlyElementsOf(body.subList(0,6));
+    }
     private ReferenceCandidateEntity hit(long chunk, long context, long qa, double score) {
         return new ReferenceCandidateEntity("doc",1,chunk,context,(int)chunk,"answer",score,qa);
     }

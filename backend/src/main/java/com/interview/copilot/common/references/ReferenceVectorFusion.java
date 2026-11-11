@@ -1,7 +1,6 @@
 package com.interview.copilot.common.references;
 
 import com.interview.copilot.entity.references.ReferenceCandidateEntity;
-import com.interview.copilot.model.references.ReferenceRecallLimits;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -12,20 +11,24 @@ public final class ReferenceVectorFusion {
     private ReferenceVectorFusion() {}
     public static List<ReferenceCandidateEntity> fuse(List<ReferenceCandidateEntity> questions,
             List<ReferenceCandidateEntity> body, int constant) {
+        return fuse(questions, body, constant, 4);
+    }
+    public static List<ReferenceCandidateEntity> fuse(List<ReferenceCandidateEntity> questions,
+            List<ReferenceCandidateEntity> body, int constant, int topK) {
         Map<String, ReferenceCandidateEntity> representatives = new LinkedHashMap<>();
         Map<String, Double> scores = new LinkedHashMap<>();
-        add(questions, 2, constant, representatives, scores);
-        add(body, 1, constant, representatives, scores);
+        add(questions, 2, constant, topK, representatives, scores);
+        add(body, 1, constant, topK, representatives, scores);
         return representatives.entrySet().stream().sorted(Comparator
                 .<Map.Entry<String, ReferenceCandidateEntity>>comparingDouble(entry -> scores.get(entry.getKey())).reversed()
                 .thenComparing(entry -> entry.getValue().documentId()).thenComparingInt(entry -> entry.getValue().ordinal())
-                .thenComparingLong(entry -> entry.getValue().chunkId())).limit(ReferenceRecallLimits.BRANCH_TOP_K).map(Map.Entry::getValue).toList();
+                .thenComparingLong(entry -> entry.getValue().chunkId())).limit(topK).map(Map.Entry::getValue).toList();
     }
 
-    private static void add(List<ReferenceCandidateEntity> values, int weight, int constant,
+    private static void add(List<ReferenceCandidateEntity> values, int weight, int constant, int topK,
             Map<String, ReferenceCandidateEntity> representatives, Map<String, Double> scores) {
         var seen = new java.util.HashSet<String>();
-        for (int i = 0; i < Math.min(ReferenceRecallLimits.BRANCH_TOP_K, values.size()); i++) {
+        for (int i = 0; i < Math.min(topK, values.size()); i++) {
             var value = values.get(i);
             String key = value.documentId() + ":" + value.revision() + ":" + (value.qaId() > 0 ? "q" + value.qaId() : "c" + value.contextId());
             if (!seen.add(key)) continue;

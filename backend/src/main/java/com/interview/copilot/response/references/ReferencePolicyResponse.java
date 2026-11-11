@@ -21,4 +21,5 @@ public record ReferencePolicyResponse(
         boolean cacheEnabled,
         @Min(1048576) @Max(16777216) long cacheWeightBytes,
         @Min(0) long version, boolean hybridEnabled,
-        @DecimalMin("0") @DecimalMax("1") double questionVectorMinScore) {}
+        @DecimalMin("0") @DecimalMax("1") double questionVectorMinScore,
+        int bm25TopK, int vectorTopK, int rrfTopN, int rerankTopN) {}
