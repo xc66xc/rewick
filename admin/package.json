@@ -1,6 +1,6 @@
 {
   "name": "interview-copilot-admin",
-  "version": "2.6.0",
+  "version": "2.7.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:smoke": "node scripts/smoke.mjs",
     "test:static": "node scripts/smoke-static.mjs",
+    "test:reference-rerank": "node scripts/smoke-reference-rerank.mjs",
     "test:web-search": "node scripts/smoke-web-search.mjs",
     "test:operations": "node scripts/smoke-operations.mjs",
     "test:appearance": "node scripts/smoke-appearance.mjs",

@@ -24,7 +24,11 @@ public class ReferencePolicyServiceImpl implements ReferencePolicyService {
 
     @org.springframework.transaction.annotation.Transactional
     public void update(long actor, ReferencePolicyRequest policy) {
-        if (mapper.updatePolicy(com.interview.copilot.converter.references.ReferencePolicyConverter.fromRequest(policy)) != 1) {
+        var updated = com.interview.copilot.converter.references.ReferencePolicyConverter.fromRequest(policy, mapper.policy());
+        if (!com.interview.copilot.model.references.ReferenceRecallLimits.isValid(updated)) {
+            throw new com.interview.copilot.exception.ApiException(org.springframework.http.HttpStatus.BAD_REQUEST, "reference_policy_invalid", "召回数量必须满足 rerank≤RRF≤BM25+向量，且在允许范围内。");
+        }
+        if (mapper.updatePolicy(updated) != 1) {
             throw new com.interview.copilot.exception.ApiException(org.springframework.http.HttpStatus.CONFLICT, "reference_policy_conflict", "资料策略已被修改，请刷新后重试。");
         }
         audit.record(actor, "reference.policy.update", "version:" + (policy.version() + 1));

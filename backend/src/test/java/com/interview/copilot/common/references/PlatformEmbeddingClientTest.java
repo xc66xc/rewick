@@ -105,6 +105,22 @@ public class PlatformEmbeddingClientTest {
     }
 
     @Test
+    void embed_workDeadline_limitsHttpAndCancelsSubscription() {
+        var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
+        when(http.json(any(), any(), any())).thenReturn(Mono.<com.fasterxml.jackson.databind.JsonNode>never()
+                .doOnCancel(() -> cancelled.set(true)));
+        long deadline = System.nanoTime() + java.time.Duration.ofMillis(80).toNanos();
+
+        assertThatThrownBy(() -> client.embed(selection(), List.of("资料"), null, deadline))
+                .isInstanceOf(IllegalStateException.class);
+
+        var timeout = org.mockito.ArgumentCaptor.forClass(java.time.Duration.class);
+        verify(http).json(any(), any(), timeout.capture());
+        assertThat(timeout.getValue()).isLessThanOrEqualTo(java.time.Duration.ofMillis(80));
+        assertThat(cancelled).isTrue();
+    }
+
+    @Test
     void embed_emptyBatch_neverCallsSupplier() {
         assertThatThrownBy(() -> client.embed(selection(), List.of()))
                 .isInstanceOf(ApiException.class);

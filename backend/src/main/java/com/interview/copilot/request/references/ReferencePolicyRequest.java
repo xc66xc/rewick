@@ -21,7 +21,16 @@ public record ReferencePolicyRequest(
         boolean cacheEnabled,
         @Min(1048576) @Max(16777216) long cacheWeightBytes,
         @Min(0) long version, boolean hybridEnabled,
-        @DecimalMin("0") @DecimalMax("1") double questionVectorMinScore) {
+        @DecimalMin("0") @DecimalMax("1") double questionVectorMinScore,
+        @Min(1) @Max(20) Integer bm25TopK,
+        @Min(1) @Max(20) Integer vectorTopK,
+        @Min(1) @Max(40) Integer rrfTopN,
+        @Min(1) @Max(20) Integer rerankTopN) {
     @jakarta.validation.constraints.AssertTrue(message = "重叠必须小于子片段目标长度，父片段目标不能小于子片段。")
     public boolean isLengthsValid() { return childOverlap < childTarget && parentTarget >= childTarget; }
+    @jakarta.validation.constraints.AssertTrue(message = "rerank 数量不能超过 RRF 数量，RRF 数量不能超过两路召回数量之和。")
+    public boolean isRecallLimitsValid() {
+        if (bm25TopK == null || vectorTopK == null || rrfTopN == null || rerankTopN == null) return true;
+        return rerankTopN <= rrfTopN && rrfTopN <= bm25TopK + vectorTopK;
+    }
 }

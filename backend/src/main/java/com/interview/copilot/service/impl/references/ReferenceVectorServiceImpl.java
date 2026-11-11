@@ -5,6 +5,7 @@ import com.interview.copilot.dto.references.ReferencePolicy;
 import com.interview.copilot.entity.references.ReferenceCandidateEntity;
 import com.interview.copilot.entity.references.ReferenceScopeEntity;
 import com.interview.copilot.mapper.references.ReferenceHybridMapper;
+import com.interview.copilot.model.references.ReferenceQueryPlan;
 import com.interview.copilot.service.references.ReferenceVectorService;
 import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Service;
@@ -32,24 +33,32 @@ public class ReferenceVectorServiceImpl implements ReferenceVectorService {
     }
     public List<ReferenceCandidateEntity> search(long user, List<ReferenceScopeEntity> scope,
             String vector, String fingerprint, ReferencePolicy policy) {
+        return search(user, scope, vector, fingerprint, ReferenceQueryPlan.start(policy, null));
+    }
+    public List<ReferenceCandidateEntity> search(long user, List<ReferenceScopeEntity> scope,
+            String vector, String fingerprint, ReferenceQueryPlan plan) {
         if (scope.isEmpty()) return List.of();
+        var policy = plan.policy();
         Future<List<ReferenceCandidateEntity>> questions = null;
         Future<List<ReferenceCandidateEntity>> body = null;
         try {
-            questions = executor.submit(() -> query(() -> mapper.questions(user, scope, vector, fingerprint, policy.questionVectorMinScore())));
-            body = executor.submit(() -> query(() -> mapper.vector(user, scope, vector, fingerprint, policy.vectorMinScore())));
-            return ReferenceVectorFusion.fuse(await(questions), await(body), policy.rrfConstant());
+            questions = executor.submit(() -> query(() -> mapper.questions(user, scope, vector, fingerprint, policy.questionVectorMinScore(), policy.vectorTopK()), plan));
+            body = executor.submit(() -> query(() -> mapper.vector(user, scope, vector, fingerprint, policy.vectorMinScore(), policy.vectorTopK()), plan));
+            return ReferenceVectorFusion.fuse(await(questions, plan), await(body, plan), policy.rrfConstant(), policy.vectorTopK());
         } finally {
             if (questions != null) questions.cancel(true);
             if (body != null) body.cancel(true);
         }
     }
-    private List<ReferenceCandidateEntity> query(Supplier<List<ReferenceCandidateEntity>> action) {
+    private List<ReferenceCandidateEntity> query(Supplier<List<ReferenceCandidateEntity>> action, ReferenceQueryPlan plan) {
         if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
-        return transaction.execute(status -> { mapper.timeout("1000"); return action.get(); });
+        return transaction.execute(status -> {
+            mapper.timeout(Integer.toString(ReferenceQueryPlan.timeoutMillis(plan.workDeadlineNanos(), 1000)));
+            return action.get();
+        });
     }
-    private List<ReferenceCandidateEntity> await(Future<List<ReferenceCandidateEntity>> future) {
-        try { return future.get(2, TimeUnit.SECONDS); }
+    private List<ReferenceCandidateEntity> await(Future<List<ReferenceCandidateEntity>> future, ReferenceQueryPlan plan) {
+        try { return future.get(Math.min(TimeUnit.SECONDS.toNanos(2), ReferenceQueryPlan.remainingNanos(plan.workDeadlineNanos())), TimeUnit.NANOSECONDS); }
         catch (InterruptedException error) { Thread.currentThread().interrupt(); throw new java.util.concurrent.CancellationException(); }
         catch (TimeoutException error) { throw new IllegalStateException("问题或正文向量查询超时。", error); }
         catch (ExecutionException error) {

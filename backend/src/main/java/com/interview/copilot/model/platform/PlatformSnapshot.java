@@ -52,7 +52,8 @@ public final class PlatformSnapshot {
                         input.models(),
                         input.defaultModelId(),
                         input.asr(),
-                        input.embedding(), input.webSearch() == null ? PlatformConfig.WebSearch.disabled() : input.webSearch().withDefaultAnswer("none"), input.screenshotModelId());
+                        input.embedding(), input.webSearch() == null ? PlatformConfig.WebSearch.disabled() : input.webSearch().withDefaultAnswer("none"), input.screenshotModelId(),
+                        input.rerank() == null ? PlatformConfig.Rerank.disabled() : input.rerank());
         Map<String, PlatformConfig.Provider> indexed = new LinkedHashMap<>();
         redacted.forEach(provider -> indexed.put(provider.id(), provider));
         providers = Map.copyOf(indexed);
@@ -64,6 +65,15 @@ public final class PlatformSnapshot {
 
     public String key(String providerId) {
         return keys.getOrDefault(providerId, "");
+    }
+
+    public com.interview.copilot.model.rerank.RerankEndpoint rerank() {
+        var service = config.rerank();
+        var provider = providers.get(service.providerId());
+        boolean enabled = service.enabled() && provider != null && provider.enabled()
+                && "rerank".equals(provider.kind()) && !key(service.providerId()).isBlank();
+        return new com.interview.copilot.model.rerank.RerankEndpoint(enabled,
+                provider == null ? "" : provider.url(), key(service.providerId()), service.model(), service.timeoutMs());
     }
 
     public com.interview.copilot.model.search.WebSearchEndpoint webSearch() {

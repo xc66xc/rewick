@@ -175,6 +175,39 @@ public class PlatformProbeServiceTest {
                 new PlatformConfig.Asr(false, "", ""));
     }
 
+    @Test
+    void test_rerankDraft_usesNativeBatchWithPublicFixturesWithoutPublishing() {
+        respond("{\"output\":{\"results\":[{\"index\":1,\"relevance_score\":0.1},{\"index\":0,\"relevance_score\":0.9}]}}");
+        var provider = new PlatformConfig.Provider("rerank", "重排序", "rerank", "http://127.0.0.1:" + server.port()
+                + com.interview.copilot.util.rerank.BailianRerankProtocol.PATH, true, false, "fixture-rerank-key");
+        var draft = new PlatformConfig(0, List.of(provider), List.of(), "", new PlatformConfig.Asr(false, "", ""),
+                null, null, "", new PlatformConfig.Rerank(true, "rerank", "qwen3-rerank", 1500));
+
+        var result = probes.test(1, new PlatformProbeRequest(draft, "rerank", null));
+
+        assertThat(result.success()).isTrue();
+        assertThat(authorization).hasValue("Bearer fixture-rerank-key");
+        assertThat(json.parse(body.get()).path("input").path("documents").size()).isEqualTo(2);
+        assertThat(json.parse(body.get()).path("parameters").path("top_n").asInt()).isEqualTo(2);
+        assertThat(json.parse(body.get()).path("parameters").path("return_documents").asBoolean()).isFalse();
+        assertThat(fixture.row.get().published()).isFalse();
+        assertThat(result.message()).doesNotContain("fixture-rerank-key");
+    }
+
+    @Test
+    void test_rerankIncompleteResponse_returnsSafeProtocolMessage() {
+        respond("{\"output\":{\"results\":[{\"index\":0,\"relevance_score\":0.9,\"text\":\"private-upstream-body\"}]}}");
+        var provider = new PlatformConfig.Provider("rerank", "重排序", "rerank", "http://127.0.0.1:" + server.port()
+                + com.interview.copilot.util.rerank.BailianRerankProtocol.PATH, true, false, "fixture-rerank-key");
+        var draft = new PlatformConfig(0, List.of(provider), List.of(), "", new PlatformConfig.Asr(false, "", ""),
+                null, null, "", new PlatformConfig.Rerank(true, "rerank", "qwen3-rerank", 1500));
+
+        var result = probes.test(1, new PlatformProbeRequest(draft, "rerank", null));
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.message()).contains("唯一有效索引").doesNotContain("private-upstream-body", "fixture-rerank-key");
+    }
+
     private void respond(String responseBody) {
         server =
                 HttpServer.create()

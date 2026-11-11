@@ -9,4 +9,8 @@ import java.util.List;
 public interface ReferenceRecallService {
     List<ReferenceCandidateEntity> bm25(long user, List<ReferenceScopeEntity> scope, String query, ReferencePolicy policy);
     List<ReferenceCandidateEntity> vector(long user, List<ReferenceScopeEntity> scope, String query, ReferencePolicy policy, OperationContext context);
+    default List<ReferenceCandidateEntity> bm25(long user, List<ReferenceScopeEntity> scope, String query,
+            com.interview.copilot.model.references.ReferenceQueryPlan plan) { return bm25(user, scope, query, plan.policy()); }
+    default List<ReferenceCandidateEntity> vector(long user, List<ReferenceScopeEntity> scope, String query,
+            com.interview.copilot.model.references.ReferenceQueryPlan plan, OperationContext context) { return vector(user, scope, query, plan.policy(), context); }
 }

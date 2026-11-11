@@ -11,4 +11,6 @@ public interface ReferenceContextService {
     void invalidate(long user, String document);
     List<ReferenceExcerptResponse> expand(long user, List<ReferenceScopeEntity> scope,
             List<ReferenceRecall.Fused> fused, ReferencePolicy policy, OperationContext observation);
+    List<ReferenceExcerptResponse> expand(long user, List<ReferenceScopeEntity> scope,
+            List<ReferenceRecall.Fused> fused, com.interview.copilot.model.references.ReferenceQueryPlan plan, OperationContext observation);
 }

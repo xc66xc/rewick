@@ -49,7 +49,7 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
     public PlatformProbeResponse test(long actorId, PlatformProbeRequest input) {
         if (input == null
                 || input.capability() == null
-                || !Set.of("llm", "asr", "embedding", "web-search", "screenshot").contains(input.capability())) {
+                || !Set.of("llm", "asr", "embedding", "web-search", "screenshot", "rerank").contains(input.capability())) {
             throw PlatformConfigErrors.invalid("请选择需要测试的服务能力。");
         }
         PlatformSnapshot snapshot = configs.draft(input.config());
@@ -82,8 +82,22 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
             case "asr" -> asr.test(snapshot.asr());
             case "embedding" -> embedding(snapshot);
             case "web-search" -> webSearch(snapshot);
+            case "rerank" -> rerank(snapshot);
             default -> throw PlatformConfigErrors.invalid("服务能力无效。");
         }
+    }
+
+    private void rerank(PlatformSnapshot snapshot) {
+        var endpoint = snapshot.rerank();
+        if (!endpoint.enabled()) throw ProviderErrors.unavailable();
+        var transport = new com.interview.copilot.config.ProviderProperties.Endpoint();
+        transport.setUrl(endpoint.url());
+        transport.setApiKey(endpoint.apiKey());
+        var documents = List.of("资料检索可结合关键词召回与向量召回。", "天气预报提供温度和降水信息。");
+        var body = com.interview.copilot.util.rerank.BailianRerankProtocol.request(
+                endpoint.model(), "资料检索如何召回？", documents);
+        var response = http.json(transport, body, Duration.ofMillis(endpoint.timeoutMs())).block();
+        com.interview.copilot.util.rerank.BailianRerankProtocol.response(response, documents.size());
     }
 
     private void screenshot(PlatformSnapshot snapshot) {

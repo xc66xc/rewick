@@ -431,6 +431,7 @@ SELECT id, ('[' || id || ',0,0]')::vector FROM generate_series(1, 32) AS id
             withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "27_mock_interview.sql")), "/tmp/27_mock_interview.sql");
             withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "29_remove_remote_knowledge.sql")), "/tmp/29_remove_remote_knowledge.sql");
             withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "30_session_record_limit.sql")), "/tmp/30_session_record_limit.sql");
+            withCopyFileToContainer(MountableFile.forHostPath(Path.of("sql", "31_reference_recall_limits.sql")), "/tmp/31_reference_recall_limits.sql");
         }
 
         @Override
@@ -476,7 +477,7 @@ SELECT id, ('[' || id || ',0,0]')::vector FROM generate_series(1, 32) AS id
                                 "-f",
                                 "/tmp/16_desktop_sessions.sql",
                                 "-f",
-                                "/tmp/17_desktop_settings.sql", "-f", "/tmp/27_mock_interview.sql", "-f", "/tmp/29_remove_remote_knowledge.sql", "-f", "/tmp/30_session_record_limit.sql");
+                                "/tmp/17_desktop_settings.sql", "-f", "/tmp/27_mock_interview.sql", "-f", "/tmp/29_remove_remote_knowledge.sql", "-f", "/tmp/30_session_record_limit.sql", "-f", "/tmp/31_reference_recall_limits.sql");
                 if (result.getExitCode() != 0) {
                     throw new IllegalStateException(
                             "Database SQL initialization failed: " + result.getStderr());

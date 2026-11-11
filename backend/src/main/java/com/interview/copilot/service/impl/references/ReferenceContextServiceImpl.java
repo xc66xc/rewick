@@ -8,6 +8,7 @@ import com.interview.copilot.entity.references.ReferenceScopeEntity;
 import com.interview.copilot.entity.references.ReferenceContextEntity;
 import com.interview.copilot.mapper.references.ReferenceHybridMapper;
 import com.interview.copilot.model.references.ReferenceRecall;
+import com.interview.copilot.model.references.ReferenceQueryPlan;
 import com.interview.copilot.model.operations.OperationContext;
 import com.interview.copilot.response.references.ReferenceExcerptResponse;
 import com.interview.copilot.response.references.ReferenceRankingResponse;
@@ -48,7 +49,13 @@ public class ReferenceContextServiceImpl implements ReferenceContextService {
     }
     public List<ReferenceExcerptResponse> expand(long user, List<ReferenceScopeEntity> scope,
             List<ReferenceRecall.Fused> fused, ReferencePolicy policy, OperationContext observation) {
+        return expand(user, scope, fused, ReferenceQueryPlan.start(policy, null), observation);
+    }
+    public List<ReferenceExcerptResponse> expand(long user, List<ReferenceScopeEntity> scope,
+            List<ReferenceRecall.Fused> fused, ReferenceQueryPlan plan, OperationContext observation) {
+        ReferenceQueryPlan.checkCancellation();
         if (fused.isEmpty()) return List.of();
+        var policy = plan.policy();
         var span = observation == null ? null : observation.child("pg");
         Map<Key, ReferenceContextEntity> rows = new HashMap<>();
         try {
@@ -58,7 +65,7 @@ public class ReferenceContextServiceImpl implements ReferenceContextService {
             }
             var missing = fused.stream().filter(item -> !rows.containsKey(key(user, item, policy.version()))).map(ReferenceRecall.Fused::contextId).toList();
             if (!missing.isEmpty()) for (var row : transaction.execute(status -> {
-                mapper.timeout("1000");
+                mapper.timeout(Integer.toString(ReferenceQueryPlan.timeoutMillis(plan.deadlineNanos(), 1000)));
                 return mapper.contexts(user, scope, missing);
             })) {
                 var key = new Key(user, row.documentId(), row.revision(), row.contextId(), policy.version());
@@ -80,6 +87,7 @@ public class ReferenceContextServiceImpl implements ReferenceContextService {
         List<ReferenceExcerptResponse> result = new ArrayList<>();
         int remaining = 4800;
         for (var item : fused) {
+            ReferenceQueryPlan.checkCancellation();
             var document = scope.stream().filter(d -> d.documentId().equals(item.documentId()) && d.revision() == item.revision()).findFirst();
             if (document.isEmpty()) continue;
             var row = rows.get(key(user, item, policy.version()));
@@ -100,7 +108,7 @@ public class ReferenceContextServiceImpl implements ReferenceContextService {
             result.add(new ReferenceExcerptResponse("platform", item.documentId(), item.revision(), document.get().name(), document.get().kind(),
                     Long.toString(item.contextId()), text, row == null ? 0 : row.paragraphStart(), row == null ? 0 : row.paragraphEnd(),
                     row == null ? "" : row.sectionPath(), item.matches().stream().map(c -> Long.toString(c.chunkId())).distinct().toList(), expansion,
-                    new ReferenceRankingResponse(item.bm25Rank(), item.vectorRank(), item.bm25Score(), item.vectorScore(), item.rrfScore())));
+                    new ReferenceRankingResponse(item.bm25Rank(), item.vectorRank(), item.bm25Score(), item.vectorScore(), item.rrfScore(), item.rerankRank(), item.rerankScore())));
         }
         if (span != null) span.finish("retrieval.context_pack", "success", Map.of("fragmentCount", result.size()));
         return List.copyOf(result);

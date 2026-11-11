@@ -2,6 +2,7 @@ package com.interview.copilot.validation.platform;
 
 import com.interview.copilot.exception.platform.PlatformConfigErrors;
 import com.interview.copilot.model.platform.PlatformConfig;
+import com.interview.copilot.util.rerank.BailianRerankProtocol;
 
 import jakarta.validation.Validator;
 
@@ -45,6 +46,7 @@ public final class PlatformConfigValidator {
             }
             validateUrl(provider);
             if ("web-search".equals(provider.kind())) validateSearchUrl(provider);
+            if ("rerank".equals(provider.kind())) validateRerankUrl(provider);
             if (provider.apiKey() != null && provider.apiKey().matches("(?s).*[\\r\\n].*")) {
                 throw PlatformConfigErrors.invalid("API Key 格式无效。");
             }
@@ -79,6 +81,14 @@ public final class PlatformConfigValidator {
         if (!path.equals(uri.getRawPath()) || uri.getRawQuery() != null) {
             throw PlatformConfigErrors.invalid((deepseek ? "DeepSeek" : "Tavily")
                     + " 服务地址必须包含 " + path + " 路径，且不能包含查询参数。");
+        }
+    }
+
+    private void validateRerankUrl(PlatformConfig.Provider provider) {
+        URI uri = URI.create(provider.url());
+        if (!BailianRerankProtocol.PATH.equals(uri.getRawPath()) || uri.getRawQuery() != null) {
+            throw PlatformConfigErrors.invalid("百炼原生重排序地址必须包含 " + BailianRerankProtocol.PATH
+                    + " 路径，且不能包含查询参数；请填写完整接口地址。");
         }
     }
 
@@ -130,7 +140,11 @@ public final class PlatformConfigValidator {
                 config.asr().model(),
                 "asr",
                 providers);
-
+        var rerank = config.rerank();
+        if (!rerank.model().isBlank() && !BailianRerankProtocol.supports(rerank.model())) {
+            throw PlatformConfigErrors.invalid("重排序仅支持已登记容量的 qwen3-rerank 模型。");
+        }
+        validateService(rerank.enabled(), rerank.providerId(), rerank.model(), "rerank", providers);
     }
 
     private void validateService(

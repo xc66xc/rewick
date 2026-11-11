@@ -2,7 +2,6 @@ package com.interview.copilot.mapper.references;
 
 import com.interview.copilot.entity.references.ReferenceScopeEntity;
 import com.interview.copilot.entity.references.ReferenceCandidateEntity;
-import com.interview.copilot.model.references.ReferenceRecallLimits;
 import com.interview.copilot.entity.references.ReferenceContextEntity;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -17,6 +16,7 @@ public interface ReferenceHybridMapper {
     @Select("""
 <script>SELECT d.id::text AS document_id,d.revision,d.name,d.kind FROM reference_documents d WHERE d.app_users_id=#{user} AND d.is_enabled AND d.status='ready' AND d.splitter_version=2 AND d.id IN <foreach collection="ids" item="id" open="(" close=")" separator=",">CAST(#{id} AS uuid)</foreach> ORDER BY d.id</script>
             """)
+    @org.apache.ibatis.annotations.Options(timeout = 1)
     List<ReferenceScopeEntity> scope(@Param("user") long user, @Param("ids") List<String> ids);
     @Select("""
 <script>WITH candidates AS (
@@ -29,19 +29,21 @@ public interface ReferenceHybridMapper {
  WHERE d.app_users_id=#{user} AND d.is_enabled AND d.status='ready' AND d.splitter_version=2 AND
  <foreach collection="scope" item="item" separator=" OR " open="(" close=")">(d.id=CAST(#{item.documentId} AS uuid) AND d.revision=#{item.revision})</foreach>
  AND e.fingerprint=#{fingerprint} AND c.context_id IS NOT NULL AND 1-(e.embedding &lt;=&gt; CAST(#{vector} AS vector)) &gt;= #{minimum}
-) SELECT document_id,revision,chunk_id,context_id,ordinal,text,score,qa_id FROM candidates WHERE unit_rank=1 ORDER BY score DESC,document_id,ordinal,chunk_id LIMIT\s""" + ReferenceRecallLimits.BRANCH_TOP_K + "</script>")
-    List<ReferenceCandidateEntity> vector(@Param("user") long user, @Param("scope") List<ReferenceScopeEntity> scope, @Param("vector") String vector, @Param("fingerprint") String fingerprint, @Param("minimum") double minimum);
+) SELECT document_id,revision,chunk_id,context_id,ordinal,text,score,qa_id FROM candidates WHERE unit_rank=1 ORDER BY score DESC,document_id,ordinal,chunk_id LIMIT #{topK}</script>
+            """)
+    List<ReferenceCandidateEntity> vector(@Param("user") long user, @Param("scope") List<ReferenceScopeEntity> scope, @Param("vector") String vector, @Param("fingerprint") String fingerprint, @Param("minimum") double minimum, @Param("topK") int topK);
     @Select("""
-<script>SELECT d.id::text AS document_id,q.revision,c.id AS chunk_id,c.context_id,c.ordinal,c.text,
+<script><bind name="firstChunkLimit" value="1"/>SELECT d.id::text AS document_id,q.revision,c.id AS chunk_id,c.context_id,c.ordinal,c.text,
  1-(q.embedding &lt;=&gt; CAST(#{vector} AS vector)) AS score,q.section_id AS qa_id
  FROM reference_question_vectors q JOIN reference_documents d ON d.id=q.document_id AND d.app_users_id=q.app_users_id AND d.revision=q.revision
- JOIN reference_chunks c ON c.id=(SELECT id FROM reference_chunks WHERE app_users_id=q.app_users_id AND document_id=q.document_id AND revision=q.revision AND qa_section_id=q.section_id ORDER BY ordinal,id LIMIT 1)
+ JOIN reference_chunks c ON c.id=(SELECT id FROM reference_chunks WHERE app_users_id=q.app_users_id AND document_id=q.document_id AND revision=q.revision AND qa_section_id=q.section_id ORDER BY ordinal,id LIMIT #{firstChunkLimit})
  WHERE d.app_users_id=#{user} AND d.is_enabled AND d.status='ready' AND d.splitter_version=2 AND
  <foreach collection="scope" item="item" separator=" OR " open="(" close=")">(d.id=CAST(#{item.documentId} AS uuid) AND d.revision=#{item.revision})</foreach>
  AND q.fingerprint=#{fingerprint} AND 1-(q.embedding &lt;=&gt; CAST(#{vector} AS vector)) &gt;= #{minimum}
- ORDER BY q.embedding &lt;=&gt; CAST(#{vector} AS vector),d.id,c.ordinal,c.id LIMIT\s""" + ReferenceRecallLimits.BRANCH_TOP_K + "</script>")
+ ORDER BY q.embedding &lt;=&gt; CAST(#{vector} AS vector),d.id,c.ordinal,c.id LIMIT #{topK}</script>
+            """)
     List<ReferenceCandidateEntity> questions(@Param("user") long user, @Param("scope") List<ReferenceScopeEntity> scope,
-            @Param("vector") String vector, @Param("fingerprint") String fingerprint, @Param("minimum") double minimum);
+            @Param("vector") String vector, @Param("fingerprint") String fingerprint, @Param("minimum") double minimum, @Param("topK") int topK);
     @Select("""
 <script>
 WITH eligible AS MATERIALIZED (
@@ -65,14 +67,14 @@ WITH eligible AS MATERIALIZED (
  ORDER BY scored.score DESC,c.ordinal,c.id) AS unit_rank
  FROM scored JOIN reference_chunks c ON c.id=scored.chunk_id AND c.app_users_id=#{user}
 ), best AS (
- SELECT chunk_id,score FROM units WHERE score &gt; 0 AND unit_rank=1 ORDER BY score DESC,ordinal,chunk_id LIMIT\s""" + ReferenceRecallLimits.BRANCH_TOP_K + """
+ SELECT chunk_id,score FROM units WHERE score &gt; 0 AND unit_rank=1 ORDER BY score DESC,ordinal,chunk_id LIMIT #{topK}
 
 ) SELECT c.document_id::text,c.revision,c.id AS chunk_id,c.context_id,c.ordinal,c.text,best.score,COALESCE(c.qa_section_id,0) AS qa_id
  FROM best JOIN reference_chunks c ON c.id=best.chunk_id AND c.app_users_id=#{user}
  ORDER BY best.score DESC,c.ordinal,c.id
 </script>
             """)
-    List<ReferenceCandidateEntity> bm25(@Param("user") long user, @Param("scope") List<ReferenceScopeEntity> scope, @Param("terms") List<String> terms, @Param("k1") double k1, @Param("b") double b);
+    List<ReferenceCandidateEntity> bm25(@Param("user") long user, @Param("scope") List<ReferenceScopeEntity> scope, @Param("terms") List<String> terms, @Param("k1") double k1, @Param("b") double b, @Param("topK") int topK);
     @Select("""
 <script>WITH RECURSIVE ancestors AS (
  SELECT x.id AS context_id,s.parent_section_id AS ancestor,1 AS depth FROM reference_contexts x JOIN reference_sections s ON s.id=x.section_id AND s.app_users_id=x.app_users_id WHERE x.app_users_id=#{user} AND x.id IN <foreach collection="ids" item="id" open="(" close=")" separator=",">#{id}</foreach>

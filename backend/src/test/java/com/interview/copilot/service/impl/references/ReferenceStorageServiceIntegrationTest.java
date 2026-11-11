@@ -44,7 +44,26 @@ public class ReferenceStorageServiceIntegrationTest {
                         + " VALUES('alice','fixture'),('bob','fixture')");
         jdbc.execute(
                 "UPDATE reference_policy SET"
-                        + " max_files=20,max_total_bytes=104857600,max_chunks=10000");
+                        + " max_files=20,max_total_bytes=104857600,max_chunks=10000,bm25_top_k=4,vector_top_k=4,rrf_top_n=2,rerank_top_n=2");
+    }
+
+    @Test
+    void policy_configuredLimits_roundTripAndDatabaseRelationAreEnforced() throws Exception {
+        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        var original = persistence.mapper.policy();
+        com.fasterxml.jackson.databind.node.ObjectNode data = json.valueToTree(original);
+        data.put("bm25TopK", 20).put("vectorTopK", 20).put("rrfTopN", 40).put("rerankTopN", 20);
+        var updated = json.treeToValue(data, com.interview.copilot.dto.references.ReferencePolicy.class);
+
+        assertThat(persistence.mapper.updatePolicy(updated)).isEqualTo(1);
+        var actual = persistence.mapper.policy();
+
+        assertThat(actual.rrfTopN()).isEqualTo(40);
+        assertThat(actual.rerankTopN()).isEqualTo(20);
+        assertThat(actual.version()).isEqualTo(original.version() + 1);
+        assertThat(persistence.mapper.updatePolicy(updated)).isZero();
+        assertThatThrownBy(() -> jdbc.execute("UPDATE reference_policy SET rrf_top_n=1"))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     }
 
     @Test
@@ -175,8 +194,8 @@ public class ReferenceStorageServiceIntegrationTest {
         var parsed = parsed("# 缓存\nRedis cache consistency and Redis hot key protection");
         publish(job,parsed,List.of(java.util.Collections.nCopies(1024,0.1)),"a".repeat(64));
         var scope = persistence.hybrid.scope(1,List.of(id));
-        var lexical = persistence.hybrid.bm25(1,scope,new com.interview.copilot.common.references.ReferenceAnalyzer().query("Redis"),1.2,0.75);
-        var vector = persistence.hybrid.vector(1,scope,java.util.Collections.nCopies(1024,0.1).toString(),"a".repeat(64),0.55);
+        var lexical = persistence.hybrid.bm25(1,scope,new com.interview.copilot.common.references.ReferenceAnalyzer().query("Redis"),1.2,0.75,4);
+        var vector = persistence.hybrid.vector(1,scope,java.util.Collections.nCopies(1024,0.1).toString(),"a".repeat(64),0.55,4);
         assertThat(lexical).hasSize(1);
         assertThat(vector).hasSize(1);
         var fused = new com.interview.copilot.common.references.ReferenceFusion().fuse(lexical,vector,60);
@@ -195,7 +214,7 @@ public class ReferenceStorageServiceIntegrationTest {
         var data=parsed(text);
         publish(persistence.jobs.claim(),data,java.util.Collections.nCopies(data.chunks().size(),java.util.Collections.nCopies(1024,0.1)),"a".repeat(64));
         var scope=persistence.hybrid.scope(1,List.of(id));
-        var result=persistence.hybrid.bm25(1,scope,List.of("redis"),1.2,0.75);
+        var result=persistence.hybrid.bm25(1,scope,List.of("redis"),1.2,0.75,4);
         assertThat(result).hasSize(2);
         double n=jdbc.queryForObject("SELECT chunk_count FROM reference_lexical_stats WHERE document_id=?::uuid",Double.class,id);
         double total=jdbc.queryForObject("SELECT token_count FROM reference_lexical_stats WHERE document_id=?::uuid",Double.class,id);
@@ -218,15 +237,15 @@ public class ReferenceStorageServiceIntegrationTest {
         publish(persistence.jobs.claim(),data,vectors,"a".repeat(64));
         var scope=persistence.hybrid.scope(1,List.of(id));
         for(int i=0;i<60;i++) {
-            var lexical=persistence.hybrid.bm25(1,scope,List.of("q"+i),1.2,0.75);
-            var semantic=persistence.hybrid.vector(1,scope,vectors.get(i).toString(),"a".repeat(64),0.55);
+            var lexical=persistence.hybrid.bm25(1,scope,List.of("q"+i),1.2,0.75,4);
+            var semantic=persistence.hybrid.vector(1,scope,vectors.get(i).toString(),"a".repeat(64),0.55,4);
             assertThat(lexical).hasSize(1);
             assertThat(semantic).hasSize(1);
             var fused=new com.interview.copilot.common.references.ReferenceFusion().fuse(lexical,semantic,60);
             assertThat(fused).hasSize(1);
             assertThat(fused.getFirst().contextId()).isEqualTo(lexical.getFirst().contextId());
         }
-        assertThat(persistence.hybrid.bm25(1,scope,List.of("缓存"),1.2,0.75)).hasSize(4);
+        assertThat(persistence.hybrid.bm25(1,scope,List.of("缓存"),1.2,0.75,4)).hasSize(4);
 
     }
     @Test
@@ -278,7 +297,7 @@ public class ReferenceStorageServiceIntegrationTest {
         java.util.List<Double> timings=new java.util.ArrayList<>();
         for(int i=0;i<5;i++) {
             long start=System.nanoTime();
-            assertThat(persistence.hybrid.bm25(1,scope,query,1.2,0.75)).hasSize(4);
+            assertThat(persistence.hybrid.bm25(1,scope,query,1.2,0.75,4)).hasSize(4);
             timings.add((System.nanoTime()-start)/1_000_000.0);
         }
         var tx=new org.springframework.transaction.support.TransactionTemplate(new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()));
@@ -286,7 +305,7 @@ public class ReferenceStorageServiceIntegrationTest {
         long start=System.nanoTime();
         String protection;
         try {
-            tx.execute(status -> { persistence.hybrid.timeout("300");return persistence.hybrid.bm25(1,scope,query,1.2,0.75); });
+            tx.execute(status -> { persistence.hybrid.timeout("300");return persistence.hybrid.bm25(1,scope,query,1.2,0.75,4); });
             protection="completed within limit";
         } catch(org.springframework.dao.DataAccessException error) {
             assertThat(error.getMostSpecificCause().getMessage()).contains("statement timeout");
@@ -307,10 +326,10 @@ public class ReferenceStorageServiceIntegrationTest {
         assertThat(persistence.jobs.stageQuestions(job,questions,List.of(axis(0),axis(2)),"qa-fingerprint")).isTrue();
         persistence.jobs.publish(job,data,"qa-fingerprint");
         var scope=persistence.hybrid.scope(1,List.of(id));
-        var semantic=persistence.hybrid.questions(1,scope,axis(0).toString(),"qa-fingerprint",0.9);
+        var semantic=persistence.hybrid.questions(1,scope,axis(0).toString(),"qa-fingerprint",0.9,4);
         assertThat(semantic).hasSize(1);
-        assertThat(persistence.hybrid.vector(1,scope,axis(0).toString(),"qa-fingerprint",0.55)).isEmpty();
-        var lexical=persistence.hybrid.bm25(1,scope,new com.interview.copilot.common.references.ReferenceAnalyzer().query("技术债"),1.2,0.75);
+        assertThat(persistence.hybrid.vector(1,scope,axis(0).toString(),"qa-fingerprint",0.55,4)).isEmpty();
+        var lexical=persistence.hybrid.bm25(1,scope,new com.interview.copilot.common.references.ReferenceAnalyzer().query("技术债"),1.2,0.75,4);
         assertThat(lexical).hasSize(1);
         assertThat(lexical.getFirst().qaId()).isEqualTo(semantic.getFirst().qaId());
         assertThat(lexical.getFirst().contextId()).isNotEqualTo(semantic.getFirst().contextId());
@@ -319,8 +338,8 @@ public class ReferenceStorageServiceIntegrationTest {
         var answer=persistence.hybrid.contexts(1,scope,List.of(fused.getFirst().contextId())).getFirst();
         assertThat(answer.text()).contains("工作方式","技术挑战","技术债").doesNotContain("Redis");
         assertThat(answer.sectionPath()).endsWith("你还有什么其他问题吗？");
-        assertThat(persistence.hybrid.questions(2,scope,axis(0).toString(),"qa-fingerprint",0)).isEmpty();
-        assertThat(persistence.hybrid.questions(1,scope,axis(0).toString(),"other-model",0)).isEmpty();
+        assertThat(persistence.hybrid.questions(2,scope,axis(0).toString(),"qa-fingerprint",0,4)).isEmpty();
+        assertThat(persistence.hybrid.questions(1,scope,axis(0).toString(),"other-model",0,4)).isEmpty();
         repository.delete(1,id);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM reference_question_vectors",Integer.class)).isZero();
     }
@@ -337,15 +356,15 @@ public class ReferenceStorageServiceIntegrationTest {
         persistence.jobs.stageQuestions(job,data.sections(),List.of(axis(0)),"qa-fingerprint");
         persistence.jobs.publish(job,data,"qa-fingerprint");
         var scope=persistence.hybrid.scope(1,List.of(id));
-        assertThat(persistence.hybrid.vector(1,scope,axis(0).toString(),"qa-fingerprint",0.55)).hasSize(1);
-        var lexical=persistence.hybrid.bm25(1,scope,List.of("redis"),1.2,0.75);
+        assertThat(persistence.hybrid.vector(1,scope,axis(0).toString(),"qa-fingerprint",0.55,4)).hasSize(1);
+        var lexical=persistence.hybrid.bm25(1,scope,List.of("redis"),1.2,0.75,4);
         assertThat(lexical).hasSize(1);
         var answer=persistence.hybrid.contexts(1,scope,List.of(lexical.getFirst().contextId())).getFirst();
         assertThat(answer.split()).isTrue();
         assertThat(answer.text()).hasSizeLessThanOrEqualTo(1600);
     }
     @Test
-    void recall_sixMatchingQuestions_capsAllSqlRoutesAtFour() {
+    void recall_sixMatchingQuestions_capsAllSqlRoutesAtFour() throws Exception {
         String id=UUID.randomUUID().toString();
         repository.insert(1,id,"caps.md","h".repeat(64),100);
         var text=new StringBuilder("# 题库\n");
@@ -355,15 +374,44 @@ public class ReferenceStorageServiceIntegrationTest {
         var vector=java.util.Collections.nCopies(1024,0.1);
         publish(persistence.jobs.claim(),data,java.util.Collections.nCopies(data.chunks().size(),vector),"a".repeat(64));
         var scope=persistence.hybrid.scope(1,List.of(id));
-        var lexical=persistence.hybrid.bm25(1,scope,List.of("redis"),1.2,0.75);
-        var body=persistence.hybrid.vector(1,scope,vector.toString(),"a".repeat(64),0.55);
-        var questions=persistence.hybrid.questions(1,scope,vector.toString(),"a".repeat(64),0);
+        var lexical=persistence.hybrid.bm25(1,scope,List.of("redis"),1.2,0.75,4);
+        var body=persistence.hybrid.vector(1,scope,vector.toString(),"a".repeat(64),0.55,4);
+        var questions=persistence.hybrid.questions(1,scope,vector.toString(),"a".repeat(64),0,4);
         assertThat(lexical).hasSize(4);
         assertThat(body).hasSize(4);
         assertThat(questions).hasSize(4);
         var semantic=com.interview.copilot.common.references.ReferenceVectorFusion.fuse(questions,body,60);
         assertThat(semantic).hasSize(4);
-        assertThat(new com.interview.copilot.common.references.ReferenceFusion().fuse(lexical,semantic,60)).hasSize(2);
+        assertThat(new com.interview.copilot.common.references.ReferenceFusion().fuse(lexical,semantic,60)).hasSize(4);
+        assertThat(persistence.hybrid.bm25(1,scope,List.of("redis"),1.2,0.75,1)).hasSize(1);
+        assertThat(persistence.hybrid.vector(1,scope,vector.toString(),"a".repeat(64),0.55,6)).hasSize(6);
+        assertThat(persistence.hybrid.questions(1,scope,vector.toString(),"a".repeat(64),0,6)).hasSize(6);
+        var parameters = new java.util.HashMap<String, Object>();
+        parameters.putAll(java.util.Map.of("user", 1L, "scope", scope, "terms", List.of("redis"),
+                "k1", 1.2, "b", 0.75, "vector", vector.toString(), "fingerprint", "a".repeat(64), "minimum", 0.0));
+        writeRecallPlans(parameters);
+    }
+
+    private void writeRecallPlans(java.util.Map<String, Object> parameters) throws Exception {
+        var configuration = new com.baomidou.mybatisplus.core.MybatisConfiguration();
+        configuration.addMapper(com.interview.copilot.mapper.references.ReferenceHybridMapper.class);
+        var plans = new java.util.LinkedHashMap<String, Object>();
+        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        for (String route : List.of("bm25", "vector", "questions")) {
+            var statement = configuration.getMappedStatement("com.interview.copilot.mapper.references.ReferenceHybridMapper." + route);
+            for (int topK : List.of(4, 6)) {
+                parameters.put("topK", topK);
+                var bound = statement.getBoundSql(parameters);
+                String plan = jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<String>) connection -> {
+                    try (var query = connection.prepareStatement("EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON) " + bound.getSql())) {
+                        new org.apache.ibatis.scripting.defaults.DefaultParameterHandler(statement, parameters, bound).setParameters(query);
+                        try (var result = query.executeQuery()) { result.next(); return result.getString(1); }
+                    }
+                });
+                plans.put(route + "Top" + topK, json.readTree(plan));
+            }
+        }
+        json.writerWithDefaultPrettyPrinter().writeValue(java.nio.file.Path.of("target/reference-recall-plans.json").toFile(), plans);
     }
 
     private List<Double> axis(int index) {

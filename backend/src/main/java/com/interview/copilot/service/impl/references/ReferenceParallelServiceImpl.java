@@ -4,6 +4,7 @@ import com.interview.copilot.dto.references.ReferencePolicy;
 import com.interview.copilot.entity.references.ReferenceScopeEntity;
 import com.interview.copilot.entity.references.ReferenceCandidateEntity;
 import com.interview.copilot.model.references.ReferenceRecall;
+import com.interview.copilot.model.references.ReferenceQueryPlan;
 import com.interview.copilot.model.operations.OperationContext;
 import com.interview.copilot.service.references.ReferenceParallelService;
 import com.interview.copilot.service.references.ReferenceRecallService;
@@ -32,9 +33,22 @@ public class ReferenceParallelServiceImpl implements ReferenceParallelService {
     public ReferenceRecall.Pair recall(long user, List<ReferenceScopeEntity> scope, String query,
             ReferencePolicy policy, OperationContext context) {
         long start = System.nanoTime();
-        Future<ReferenceRecall.Branch> lexical = submit(user, "retrieval.bm25", () -> recall.bm25(user, scope, query, policy), context);
-        Future<ReferenceRecall.Branch> vector = submit(user, "retrieval.vector", () -> recall.vector(user, scope, query, policy, context), context);
-        try { return new ReferenceRecall.Pair(await(lexical, start), await(vector, start)); }
+        return execute(user, () -> recall.bm25(user, scope, query, policy),
+                () -> recall.vector(user, scope, query, policy, context), context, start,
+                start + TimeUnit.MILLISECONDS.toNanos(26500));
+    }
+    public ReferenceRecall.Pair recall(long user, List<ReferenceScopeEntity> scope, String query,
+            ReferenceQueryPlan plan, OperationContext context) {
+        long start = System.nanoTime();
+        return execute(user, () -> recall.bm25(user, scope, query, plan),
+                () -> recall.vector(user, scope, query, plan, context), context, start, plan.workDeadlineNanos());
+    }
+    private ReferenceRecall.Pair execute(long user, Supplier<List<ReferenceCandidateEntity>> lexicalAction,
+            Supplier<List<ReferenceCandidateEntity>> vectorAction, OperationContext context, long start, long deadline) {
+        ReferenceQueryPlan.checkCancellation();
+        Future<ReferenceRecall.Branch> lexical = submit(user, "retrieval.bm25", lexicalAction, context);
+        Future<ReferenceRecall.Branch> vector = submit(user, "retrieval.vector", vectorAction, context);
+        try { return new ReferenceRecall.Pair(await(lexical, start, deadline), await(vector, start, deadline)); }
         finally { if (lexical != null) lexical.cancel(true); if (vector != null) vector.cancel(true); }
     }
     private Future<ReferenceRecall.Branch> submit(long user, String stage,
@@ -47,13 +61,14 @@ public class ReferenceParallelServiceImpl implements ReferenceParallelService {
         var child = context == null ? null : context.child("pg");
         try {
             var values = action.get();
+            ReferenceQueryPlan.checkCancellation();
             String status = values.isEmpty() ? "empty" : "ready";
             if (child != null) child.finish(stage, values.isEmpty() ? "empty" : "success", Map.of("candidateCount", values.size()));
             return new ReferenceRecall.Branch(status, values, elapsed(start));
         } catch (RuntimeException error) {
-            if (error instanceof java.util.concurrent.CancellationException) {
+            if (error instanceof java.util.concurrent.CancellationException || Thread.currentThread().isInterrupted()) {
                 if (child != null) child.finish(stage, "cancelled", Map.of());
-                throw error;
+                throw new java.util.concurrent.CancellationException();
             }
             LOG.error("Reference recall failed user={} stage={}", user, stage, error);
             if (child != null) child.finish(stage, "degraded", Map.of());
@@ -62,9 +77,9 @@ public class ReferenceParallelServiceImpl implements ReferenceParallelService {
             return new ReferenceRecall.Branch("degraded", List.of(), elapsed(start));
         }
     }
-    private ReferenceRecall.Branch await(Future<ReferenceRecall.Branch> future, long start) {
+    private ReferenceRecall.Branch await(Future<ReferenceRecall.Branch> future, long start, long deadline) {
         if (future == null) return new ReferenceRecall.Branch("degraded", List.of(), elapsed(start));
-        try { return future.get(Math.max(1, 30000 - (long) elapsed(start)), TimeUnit.MILLISECONDS); }
+        try { return future.get(ReferenceQueryPlan.remainingNanos(deadline), TimeUnit.NANOSECONDS); }
         catch (InterruptedException error) { Thread.currentThread().interrupt(); throw new java.util.concurrent.CancellationException(); }
         catch (TimeoutException error) { future.cancel(true); LOG.error("Reference recall timed out", error); return new ReferenceRecall.Branch("degraded", List.of(), elapsed(start)); }
         catch (ExecutionException error) { if (error.getCause() instanceof RuntimeException runtime) throw runtime; throw new IllegalStateException("资料召回失败。", error); }

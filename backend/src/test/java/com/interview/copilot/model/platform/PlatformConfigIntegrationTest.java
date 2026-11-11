@@ -311,7 +311,7 @@ public class PlatformConfigIntegrationTest {
                                 "-f",
                                 "/tmp/copilot-sql/16_desktop_sessions.sql",
                                 "-f",
-                                "/tmp/copilot-sql/17_desktop_settings.sql", "-f", "/tmp/copilot-sql/27_mock_interview.sql", "-f", "/tmp/copilot-sql/29_remove_remote_knowledge.sql", "-f", "/tmp/copilot-sql/30_session_record_limit.sql");
+                                "/tmp/copilot-sql/17_desktop_settings.sql", "-f", "/tmp/copilot-sql/27_mock_interview.sql", "-f", "/tmp/copilot-sql/29_remove_remote_knowledge.sql", "-f", "/tmp/copilot-sql/30_session_record_limit.sql", "-f", "/tmp/copilot-sql/31_reference_recall_limits.sql");
                 if (result.getExitCode() != 0) {
                     throw new IllegalStateException(
                             "Test SQL initialization failed: " + result.getStderr());
