@@ -219,6 +219,37 @@ public class PlatformProbeServiceTest {
         assertThat(result.message()).contains("唯一有效索引").doesNotContain("private-upstream-body", "fixture-rerank-key");
     }
 
+    @Test
+    void test_questionRewriteDraft_usesDedicatedModelAndReturnsSafePreviewWithoutPublishing() {
+        respond(json.encode(Map.of("choices", List.of(Map.of("message", Map.of("content",
+                "{\"action\":\"rewritten\",\"question\":\"Redis 多实例任务如何避免重复执行？不讨论跨地域。\"}"), "finish_reason", "stop")))));
+        var base = config("llm");
+        var draft = new PlatformConfig(0, base.providers(), base.models(), base.defaultModelId(), base.asr(),
+                base.embedding(), base.webSearch(), "", null, new PlatformConfig.QuestionRewrite(false, "careful", 1500));
+
+        var result = probes.test(1, new PlatformProbeRequest(draft, "question-rewrite", null));
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.questionRewrite().model()).isEqualTo("upstream-careful");
+        assertThat(result.questionRewrite().question()).contains("Redis", "不讨论跨地域");
+        assertThat(json.parse(body.get()).path("max_tokens").asInt()).isEqualTo(512);
+        assertThat(fixture.row.get().published()).isFalse();
+    }
+
+    @Test
+    void test_questionRewriteInvalidOutput_returnsSpecificSafeErrorWithoutPublishing() {
+        respond(json.encode(Map.of("choices", List.of(Map.of("message", Map.of("content", "private-output"))))));
+        var base = config("llm");
+        var draft = new PlatformConfig(0, base.providers(), base.models(), base.defaultModelId(), base.asr(),
+                base.embedding(), base.webSearch(), "", null, new PlatformConfig.QuestionRewrite(false, "fast", 1500));
+
+        var result = probes.test(1, new PlatformProbeRequest(draft, "question-rewrite", null));
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.message()).contains("问题改写返回格式无效").doesNotContain("private-output");
+        assertThat(fixture.row.get().published()).isFalse();
+    }
+
     private void respond(String responseBody) {
         server =
                 HttpServer.create()

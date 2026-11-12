@@ -49,7 +49,7 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
     public PlatformProbeResponse test(long actorId, PlatformProbeRequest input) {
         if (input == null
                 || input.capability() == null
-                || !Set.of("llm", "asr", "embedding", "web-search", "screenshot", "rerank").contains(input.capability())) {
+                || !Set.of("llm", "asr", "embedding", "web-search", "screenshot", "rerank", "question-rewrite").contains(input.capability())) {
             throw PlatformConfigErrors.invalid("请选择需要测试的服务能力。");
         }
         PlatformSnapshot snapshot = configs.draft(input.config());
@@ -59,11 +59,18 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
         long started = System.nanoTime();
         boolean success = false;
         try {
+            if ("question-rewrite".equals(input.capability())) {
+                var sample = questionRewrite(snapshot);
+                success = true;
+                return new PlatformProbeResponse(true, "问题改写测试通过。", elapsed(started), sample);
+            }
             probe(snapshot, input);
             success = true;
             return new PlatformProbeResponse(true, "服务测试通过。", elapsed(started));
         } catch (RuntimeException error) {
-            var failure = com.interview.copilot.util.ai.ProviderFailureClassifier.classify(error);
+            var failure = error instanceof com.interview.copilot.exception.questions.QuestionRewriteOutputException
+                    ? new com.interview.copilot.exception.ai.ProviderFailure("invalid_output", "问题改写返回格式无效或遗漏关键条件，请更换模型或调整输出限制。")
+                    : com.interview.copilot.util.ai.ProviderFailureClassifier.classify(error);
             String message = failure.getMessage();
             return new PlatformProbeResponse(false, message, elapsed(started));
         } finally {
@@ -85,6 +92,20 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
             case "rerank" -> rerank(snapshot);
             default -> throw PlatformConfigErrors.invalid("服务能力无效。");
         }
+    }
+
+    private com.interview.copilot.response.platform.QuestionRewriteProbeResponse questionRewrite(PlatformSnapshot snapshot) {
+        var config = snapshot.view().questionRewrite();
+        if (config.modelId().isBlank()) throw PlatformConfigErrors.invalid("请选择问题改写模型后再测试。");
+        var endpoint = snapshot.llm(config.modelId()).config();
+        String question = "那个，Redis 多实例的任务啊，同一个任务点了两次，怎么避免重复执行？先不讨论跨地域。";
+        var input = new com.interview.copilot.request.questions.QuestionRewriteRequest(question, List.of());
+        var result = new com.interview.copilot.util.questions.QuestionRewriteClient(http, json)
+                .rewrite(endpoint, input, Duration.ofMillis(config.timeoutMs())).block();
+        if (result == null || "ambiguous".equals(result.action()))
+            throw new com.interview.copilot.exception.questions.QuestionRewriteOutputException();
+        return new com.interview.copilot.response.platform.QuestionRewriteProbeResponse(
+                question, result.action(), result.question(), endpoint.getModel());
     }
 
     private void rerank(PlatformSnapshot snapshot) {

@@ -10,4 +10,5 @@ public record PlatformResponse(
         PlatformServicesResponse services,
         boolean advancedSettingsEnabled,
         DesktopSettingsResponse desktopDefaults,
-        boolean webSearchAvailable, int webSearchTimeoutMs) {}
+        boolean webSearchAvailable, int webSearchTimeoutMs,
+        QuestionRewriteCapabilityResponse questionRewrite, long platformVersion) {}

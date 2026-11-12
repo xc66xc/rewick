@@ -1,5 +1,5 @@
 import { suggestThinkingProtocol } from '../thinking'
-import { defaultRerank, defaultRerankModel, defaultRerankUrl, defaultWebSearch, rerankEndpointPath, rerankSchema, type Capability, type Config, type SearchProtocol } from '../types'
+import { defaultQuestionRewrite, defaultRerank, defaultRerankModel, defaultRerankUrl, defaultWebSearch, rerankEndpointPath, rerankSchema, type Capability, type Config, type SearchProtocol } from '../types'
 export interface ServiceForm {
   id: string; providerId: string; kind: Capability; name: string; url: string; model: string
   topK: number; searchDepth: Config['webSearch']['searchDepth']; timeoutMs: number; includeAnswer: 'none' | 'basic' | 'advanced'
@@ -37,6 +37,14 @@ export function applyService(config: Config, form: ServiceForm, remove = false):
   const next = structuredClone(config)
   next.webSearch ??= { ...defaultWebSearch }
   next.rerank ??= { ...defaultRerank }
+  next.questionRewrite ??= { ...defaultQuestionRewrite }
+  const rewriteModel = next.models.find(model => model.id === next.questionRewrite.modelId)
+  const changesRewriteProvider = !!rewriteModel && form.kind !== 'llm' && form.providerId === rewriteModel.providerId
+  const removesRewriteModel = !!rewriteModel && remove && (form.id === rewriteModel.id || changesRewriteProvider)
+  const stopsRewriteModel = !!rewriteModel && next.questionRewrite.enabled && (!form.enabled && form.id === rewriteModel.id || changesRewriteProvider)
+  if (removesRewriteModel || stopsRewriteModel) {
+    throw new Error('此模型仍被问题改写引用。请先更改改写模型绑定或关闭问题改写；删除前还需清空模型选择。')
+  }
   const previous = next.providers.find(item => item.id === form.providerId)
   const url = form.url.trim()
   if (previous && (previous.url !== url || previous.kind !== form.kind || (form.kind === 'web-search' && (previous.searchProtocol ?? 'tavily') !== (form.searchProtocol ?? 'tavily'))) && !form.apiKey?.trim() && !remove) throw new Error('更换接口地址或搜索供应商后请重新填写 API Key。')

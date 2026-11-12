@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import reactor.core.publisher.Mono;
 
 /** Bounded SSE-to-completion adapter; reasoning deltas are deliberately never accumulated. */
@@ -21,6 +22,15 @@ public final class ProviderCompletions {
                 : http.json(endpoint, body, timeout);
     }
 
+    /** Optional raw observation for bounded auxiliary calls that must retain usage on invalid output. */
+    public static Mono<JsonNode> complete(ProviderHttpClient http, ProviderJson json,
+            ProviderProperties.Llm endpoint, Map<String, Object> body, Duration timeout,
+            Consumer<JsonNode> observer) {
+        return LlmThinkingPolicy.requiresStreaming(endpoint)
+                ? collect(http, json, endpoint, body, timeout, false, observer)
+                : http.json(endpoint, body, timeout).doOnNext(observer);
+    }
+
     public static Mono<JsonNode> probe(ProviderHttpClient http, ProviderJson json,
             ProviderProperties.Llm endpoint, Map<String, Object> body, Duration timeout) {
         return LlmThinkingPolicy.requiresStreaming(endpoint)
@@ -30,11 +40,17 @@ public final class ProviderCompletions {
 
     private static Mono<JsonNode> collect(ProviderHttpClient http, ProviderJson json,
             ProviderProperties.Llm endpoint, Map<String, Object> body, Duration timeout, boolean firstContent) {
+        return collect(http, json, endpoint, body, timeout, firstContent, ignored -> {});
+    }
+
+    private static Mono<JsonNode> collect(ProviderHttpClient http, ProviderJson json,
+            ProviderProperties.Llm endpoint, Map<String, Object> body, Duration timeout, boolean firstContent,
+            Consumer<JsonNode> observer) {
         return Mono.defer(() -> {
             Map<String, Object> streaming = new HashMap<>(body);
             streaming.put("stream", true);
             streaming.put("stream_options", Map.of("include_usage", true));
-            var state = new CompletionState(json, firstContent);
+            var state = new CompletionState(json, firstContent, observer);
             return http.stream(endpoint, streaming).takeUntil(event -> state.accept(event.data()))
                     .then(Mono.fromSupplier(state::result)).timeout(timeout)
                     .onErrorMap(ProviderFailureClassifier::classify);
@@ -44,20 +60,23 @@ public final class ProviderCompletions {
     private static final class CompletionState {
         private final ProviderJson json;
         private final boolean firstContent;
+        private final Consumer<JsonNode> observer;
         private final StringBuilder content = new StringBuilder();
         private Object usage;
         private String finish = "";
         private boolean done;
 
-        private CompletionState(ProviderJson json, boolean firstContent) {
+        private CompletionState(ProviderJson json, boolean firstContent, Consumer<JsonNode> observer) {
             this.json = json;
             this.firstContent = firstContent;
+            this.observer = observer;
         }
 
         private boolean accept(String data) {
             if (data == null || data.isBlank()) return false;
             if ("[DONE]".equals(data.trim())) { done = true; return true; }
             JsonNode value = json.parse(data);
+            observer.accept(value);
             if (value.has("error")) throw new ProviderFailure("stream_error", "供应商流式响应失败，请检查模型和服务配置。");
             // Existing sanitizer validates content and strips any reasoning or other provider fields.
             var sanitized = json.completion(value, "delta");

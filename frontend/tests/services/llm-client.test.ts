@@ -35,6 +35,31 @@ afterEach(async () => {
 })
 
 describe('LlmClient', () => {
+  it.each(['platform', 'custom'] as const)('preserves original input and records the actual auxiliary rewrite for %s answers', async source => {
+    const fetcher = vi.fn(async (_url: string | URL | Request, _options?: RequestInit) => Response.json({ choices: [{ message: { content: '缓存回答。' } }] }))
+    vi.stubGlobal('fetch', fetcher)
+    const events: AppEvent[] = []
+    client = new LlmClient(structuredClone(defaultSettings), 'fixture-key', event => events.push(event), source === 'platform')
+    const rewrite = { status: 'rewritten' as const, question: '如何设计缓存并确保缓存与数据库的一致性？', reason: null, model: 'rewrite-model', durationMs: 20, platformVersion: 3 }
+    await client.generate(request, undefined, rewrite)
+    const sent = JSON.parse(String(fetcher.mock.calls[0][1]?.body))
+    expect(JSON.parse(sent.messages[1].content)).toMatchObject({ question: request.question, rewrittenQuestion: rewrite.question })
+    expect(sent.messages[0].content).toContain('两者不一致时以原话为准')
+    expect(events.find(event => event.kind === 'answer-request')?.modelInput.messages).toEqual(sent.messages)
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['unchanged', 'skipped', 'degraded'] as const)('keeps final answer messages identical for %s rewrite outcomes', async status => {
+    const fetcher = vi.fn(async (_url: string | URL | Request, _options?: RequestInit) => Response.json({ choices: [{ message: { content: '回答。' } }] }))
+    vi.stubGlobal('fetch', fetcher)
+    client = new LlmClient(structuredClone(defaultSettings), 'fixture-key', () => undefined)
+    await client.generate(request)
+    await client.generate(request, undefined, { status, question: null, reason: 'ambiguous', model: 'rewrite-model', durationMs: 30, platformVersion: 3 })
+    const messages = fetcher.mock.calls.map(call => JSON.parse(String(call[1]?.body)).messages)
+    expect(messages[1]).toEqual(messages[0])
+    expect(JSON.parse(messages[1][1].content)).not.toHaveProperty('rewrittenQuestion')
+  })
+
   it('sends algorithm instructions and follow-ups without interview biography or retrieval', async () => {
     const fetcher = vi.fn(async (_url: string | URL | Request, _options?: RequestInit) => Response.json({ choices: [{ message: { content: '思路\n```java\nclass Solution {}\n```' } }] }))
     vi.stubGlobal('fetch', fetcher)

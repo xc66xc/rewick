@@ -7,6 +7,14 @@ interface Identity { accountId: string; baseUrl: string; token: string }
 interface Queued { event: TelemetryEvent; serialized: string; bytes: number; created: number; attempts: number }
 export interface OperationContext { operationId: string; spanId: string; parentSpanId?: string; requestId?: string; sessionId?: string; accountId: string; generation: number; started: number; startedAt: string; model?: string; serviceSource?: 'platform' | 'custom'; providerType: TelemetryEvent['providerType'] }
 let activeTelemetry: OperationsTelemetry | undefined
+function rewriteFailureReason(reason?: string | null): TelemetryEvent['reason'] {
+  switch (reason) {
+    case 'timeout': case 'input_limit': case 'provider_error': case 'network_error': case 'unavailable': return reason
+    case 'invalid_output': return 'protocol_error'
+    case 'busy': return 'queue_full'
+    default: return undefined
+  }
+}
 export function operationsTelemetry(): OperationsTelemetry | undefined { return activeTelemetry }
 const context = new AsyncLocalStorage<OperationContext>()
 export function operationHeaders(): Record<string, string> {
@@ -82,20 +90,25 @@ export class OperationsTelemetry {
       offsetMs: Math.max(0, started - operation.started), durationMs: Math.min(86400000, Math.max(0, now - started)), outcome, reason,
       providerType: operation.providerType, model: operation.model, serviceSource: operation.serviceSource, appVersion: this.appVersion, metadata })
   }
-  async measure<T>(operation: OperationContext | undefined, stage: TelemetryStage, action: () => Promise<T>, providerType?: OperationContext['providerType'], serviceSource?: OperationContext['serviceSource']): Promise<T> {
+  async measure<T>(operation: OperationContext | undefined, stage: TelemetryStage, action: () => Promise<T>, providerType?: OperationContext['providerType'], serviceSource?: OperationContext['serviceSource'], signal?: AbortSignal): Promise<T> {
     const child = operation && { ...operation, parentSpanId: operation.spanId, spanId: randomUUID(), providerType: providerType ?? operation.providerType, serviceSource: serviceSource ?? operation.serviceSource }
     // The desktop measures the platform request; only the backend knows the selected search supplier.
-    if (child && stage === 'retrieval.web') { child.providerType = 'system'; delete child.model }
+    if (child && (stage === 'retrieval.web' || stage === 'question.rewrite')) { child.providerType = 'system'; delete child.model }
     const started = performance.now()
     try {
       const value = await this.run(child, action)
-      const retrieval = value as { status?: string; excerpts?: { generatedSummary?: boolean }[] }
-      const outcome = retrieval?.status === 'degraded' ? 'degraded' : retrieval?.status === 'empty' ? 'empty' : retrieval?.status === 'disabled' ? 'skipped' : 'success'
-      this.record(child, stage, started, outcome, retrieval?.excerpts ? { fragmentCount: retrieval.excerpts.length, summaryEnabled: retrieval.excerpts.some(item => item.generatedSummary) } : undefined, child?.spanId)
+      const retrieval = value as { status?: string; model?: string | null; platformVersion?: number; reason?: string | null; excerpts?: { generatedSummary?: boolean }[] }
+      const outcome = stage === 'question.rewrite' && retrieval?.reason === 'timeout' ? 'timeout'
+        : retrieval?.status === 'degraded' ? 'degraded' : retrieval?.status === 'empty' ? 'empty'
+          : ['disabled', 'skipped', 'unchanged'].includes(retrieval?.status ?? '') ? 'skipped' : 'success'
+      if (child && stage === 'question.rewrite' && retrieval?.model) { child.model = retrieval.model; child.providerType = 'llm' }
+      const metadata = stage === 'question.rewrite' && retrieval?.platformVersion !== undefined ? { platformVersion: retrieval.platformVersion }
+        : retrieval?.excerpts ? { fragmentCount: retrieval.excerpts.length, summaryEnabled: retrieval.excerpts.some(item => item.generatedSummary) } : undefined
+      this.record(child, stage, started, outcome, metadata, child?.spanId, stage === 'question.rewrite' ? rewriteFailureReason(retrieval?.reason) : undefined)
       return value
     } catch (error) {
       const reason = error instanceof Error && 'reason' in error && (error.reason === 'record_changed' || error.reason === 'record_deleted') ? error.reason : undefined
-      this.record(child, stage, started, error instanceof Error && error.name === 'AbortError' ? 'cancelled' : 'error', undefined, child?.spanId, reason)
+      this.record(child, stage, started, signal?.aborted || error instanceof Error && error.name === 'AbortError' ? 'cancelled' : 'error', undefined, child?.spanId, reason)
       throw error
     }
   }

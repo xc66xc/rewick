@@ -55,11 +55,22 @@ export class PlatformClient {
   async webSearch(token: string, query: string, requestId: string, signal: AbortSignal): Promise<unknown> {
     return this.request('/api/v1/web-search', token, { query, requestId }, signal)
   }
+  async rewriteQuestion(token: string, question: string, context: string[], requestId: string, signal: AbortSignal): Promise<unknown> {
+    return this.request('/api/v1/questions/rewrite', token, { question, context }, signal, { 'X-Request-Id': requestId })
+  }
+  async cancelQuestionRewrite(token: string, requestId: string, signal: AbortSignal): Promise<void> {
+    // A late cancellation owns its original token. It must never revoke a newly signed-in account.
+    const response = await fetch(`${this.baseUrl}/api/v1/questions/rewrite/${encodeURIComponent(requestId)}`, {
+      method: 'DELETE', redirect: 'error', signal, headers: { Authorization: `Bearer ${token}` },
+    })
+    await response.body?.cancel().catch(() => undefined)
+    if (!response.ok && ![401, 403, 404].includes(response.status)) throw new PlatformRequestError('问题整理取消通知未成功。', response.status)
+  }
   async telemetrySettings(token: string): Promise<{ enabled: boolean }> {
     return z.object({ enabled: z.boolean() }).parse(await this.request('/api/v1/telemetry/settings', token))
   }
   async telemetryBatch(token: string, body: unknown, signal: AbortSignal): Promise<unknown> { return this.request('/api/v1/telemetry/operations', token, body, signal) }
-  private async request(path: string, token?: string, body?: unknown, signal?: AbortSignal): Promise<unknown> {
+  private async request(path: string, token?: string, body?: unknown, signal?: AbortSignal, headers?: Record<string, string>): Promise<unknown> {
     const controller = new AbortController()
     const abort = () => controller.abort(signal?.reason)
     signal?.addEventListener('abort', abort, { once: true })
@@ -68,7 +79,7 @@ export class PlatformClient {
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
         method: body === undefined ? 'GET' : 'POST', redirect: 'error', signal: controller.signal,
-        headers: { 'Content-Type': 'application/json', ...operationHeaders(), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: { 'Content-Type': 'application/json', ...operationHeaders(), ...headers, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         ...(body === undefined ? {} : { body: path === '/api/v1/telemetry/operations' && typeof body === 'string' ? body : JSON.stringify(body) }),
       })
       if (!response.ok) {

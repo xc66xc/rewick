@@ -24,6 +24,14 @@ beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'copilot-platf
 afterEach(async () => { vi.unstubAllGlobals(); vi.restoreAllMocks(); await rm(directory, { recursive: true, force: true }) })
 
 describe('platform credentials and sessions', () => {
+  it('persists the rewrite capability version without exposing server credentials and defaults older catalogs to disabled', async () => {
+    await store.saveSettings(enabledInput())
+    const catalog = { ...info, platformVersion: 12, questionRewrite: { enabled: true, timeoutMs: 1000 } }
+    await store.savePlatformSession('http://127.0.0.1:8080', 'fixture-token', expiresAt(), catalog)
+    expect((await store.getSettings()).platform).toMatchObject({ platformVersion: 12, questionRewrite: catalog.questionRewrite })
+    await store.savePlatformSession('http://127.0.0.1:8080', 'fixture-token', expiresAt(), info)
+    expect((await store.getSettings()).platform).toMatchObject({ platformVersion: 0, questionRewrite: { enabled: false, timeoutMs: 1500 } })
+  })
   it('encrypts remembered credentials and preserves them across settings saves and restarts', async () => {
     const credentials = { identifier: 'remember@example.test', password: 'remember-secret-password' }
     await store.saveSettings(enabledInput())

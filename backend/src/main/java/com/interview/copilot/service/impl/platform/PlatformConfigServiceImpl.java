@@ -85,7 +85,7 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
                 view.models(),
                 view.defaultModelId(),
                 view.asr(),
-                view.embedding(), view.webSearch(), view.screenshotModelId(), view.rerank());
+                view.embedding(), view.webSearch(), view.screenshotModelId(), view.rerank(), view.questionRewrite());
     }
 
     private DesktopSettingsEntity replacedAsrDefault(
@@ -133,7 +133,8 @@ public class PlatformConfigServiceImpl implements PlatformConfigService {
                 : input.webSearch().withDefaultAnswer(previous.webSearch().includeAnswer());
         return new PlatformConfig(input.version(), input.providers(), input.models(), input.defaultModelId(),
                 input.asr(), input.embedding(), search, input.screenshotModelId() == null ? previous.screenshotModelId() : input.screenshotModelId(),
-                input.rerank() == null ? previous.rerank() : input.rerank());
+                input.rerank() == null ? previous.rerank() : input.rerank(),
+                input.questionRewrite() == null ? previous.questionRewrite() : input.questionRewrite());
     }
 
     private boolean localEmbedding(PlatformConfig.Provider provider) {

@@ -134,6 +134,45 @@ function segment(text: string, overrides: Partial<TranscriptSegment> = {}): Tran
 }
 
 describe('submitting the current question', () => {
+  it('freezes only final rewrite context at submission and does not resubmit on live subtitle changes', async () => {
+    const { result, bridge, run, receive } = setup()
+    const settings = await bridge.getSettings()
+    settings.autoAnswer.enabled = false
+    settings.platform = { ...settings.platform, enabled: true, baseUrl: 'http://127.0.0.1:8080', authenticated: true, capabilities: { llm: true, asr: true }, models: { llm: 'model', asr: 'asr' }, questionRewrite: { enabled: true, timeoutMs: 1500 } }
+    await run(() => result.current.start())
+    await receive(segment('员工助手有多个服务实例。', { id: 'before', isFinal: true }))
+    await receive(segment('临时字幕', { id: 'partial' }))
+    await receive(segment('锁到期怎么办？', { id: 'current', isFinal: true }))
+    await run(() => result.current.answerSegment('current'))
+    const submitted = bridge.generateAnswer.mock.calls[0][0]
+    expect(submitted).toMatchObject({ question: '锁到期怎么办？', rewriteContext: ['员工助手有多个服务实例。'] })
+    await receive(segment('之后又收到一句话。', { id: 'after', isFinal: true }))
+    expect(submitted.rewriteContext).toEqual(['员工助手有多个服务实例。'])
+    expect(bridge.generateAnswer).toHaveBeenCalledTimes(1)
+  })
+
+  it('saves rewrite metadata on the same raw question and ignores stale progress after completion', async () => {
+    const { result, bridge, run, emit } = setup()
+    await run(() => result.current.setQuestion('那个锁过期了还没做完咋办？'))
+    await run(() => result.current.generate())
+    const id = bridge.generateAnswer.mock.calls[0][0].requestId
+    const rewrite = { status: 'rewritten' as const, question: 'Redis 锁到期但任务未完成时如何处理？', reason: null, model: 'rewrite-model', durationMs: 100, platformVersion: 3 }
+    await emit({ kind: 'answer-preparing', requestId: 'stale', stage: 'question-rewrite' })
+    expect(result.current.record.answers[0].preparationStage).toBeUndefined()
+    await emit({ kind: 'answer-preparing', requestId: id, stage: 'question-rewrite' })
+    expect(result.current.record.answers[0].preparationStage).toBe('question-rewrite')
+    await emit({ kind: 'answer-preparing', requestId: id, stage: 'retrieval', questionRewrite: rewrite })
+    await emit({ kind: 'answer-request', requestId: id, modelInput: { model: 'answer-model', messages: [{ role: 'user', content: 'actual sent question' }] } })
+    expect(result.current.record.answers[0].preparationStage).toBeUndefined()
+    await emit({ kind: 'answer-done', requestId: id, cancelled: false })
+    expect(result.current.record.answers).toHaveLength(1)
+    expect(result.current.record.answers[0]).toMatchObject({ question: '那个锁过期了还没做完咋办？', questionRewrite: rewrite, status: 'complete' })
+    await waitFor(() => expect(bridge.saveSession).toHaveBeenCalled())
+    expect(bridge.saveSession.mock.calls.at(-1)?.[0].answers[0].questionRewrite).toEqual(rewrite)
+    await emit({ kind: 'answer-preparing', requestId: id, stage: 'question-rewrite' })
+    expect(result.current.record.answers[0].preparationStage).toBeUndefined()
+  })
+
   it('still submits pure feedback when explicitly entered by the user', async () => {
     const { result, bridge, run } = setup()
     await run(() => result.current.setQuestion('嗯'))

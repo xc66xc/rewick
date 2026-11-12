@@ -11,6 +11,7 @@ import { useTranscriptEditing } from './useTranscriptEditing'
 import { isAnswerModelReady, isAsrReady, useAutoAnswer } from './useAutoAnswer'
 import { useQuestionPreview } from './useQuestionPreview'
 import type { TranscriptQuestionSelection } from './autoAnswerCoordinator'
+import { questionRewriteContext } from '../../../shared/question-rewrite'
 
 const screenshotQuestion = '正在识别屏幕中的算法题…'
 const questionLimitMessage = '当前问题最多 12,000 个字符，请先删减内容后再加入。'
@@ -245,9 +246,11 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
       }
       if (requestId.current !== id) return
       const transcript = algorithm ? '' : selected?.transcript ?? recordRef.current.segments.map(segment => segment.text).join('\n')
+      const rewriteContext = !algorithm && settingsRef.current.platform?.questionRewrite?.enabled
+        ? questionRewriteContext(recordRef.current.segments, prompt, sourceIds) : undefined
       await bridge.generateAnswer({ requestId: id, operationId,
         ...(algorithm ? { mode: 'algorithm', language, algorithmContext } : {}),
-        ...(isAutomatic && selected?.autoWaitMs !== undefined ? { autoWaitMs: selected.autoWaitMs } : {}), question: prompt, transcript: transcript.slice(-18000),
+        ...(isAutomatic && selected?.autoWaitMs !== undefined ? { autoWaitMs: selected.autoWaitMs } : {}), question: prompt, transcript: transcript.slice(-18000), ...(rewriteContext ? { rewriteContext } : {}),
         ...(settingsRef.current.interviewEnvironment ? { environmentId: settingsRef.current.interviewEnvironment.id } : {}) })
     } catch (reason) { handleEvent({ kind: 'answer-error', requestId: id, message: errorMessage(reason) }) }
     finally { if (screenshot) recognizing.current = false }
@@ -319,21 +322,26 @@ export function useSession(bridge: DesktopBridge | undefined, settings: Settings
       return
     }
     if (event.requestId !== requestId.current) return
+    if (event.kind === 'answer-preparing') {
+      updateRecord(current => ({ ...current, answers: current.answers.map(answer => answer.id === event.requestId
+        ? { ...answer, preparationStage: event.stage, ...(event.questionRewrite ? { questionRewrite: event.questionRewrite } : {}) } : answer) }))
+      return
+    }
     if (event.kind === 'answer-context') {
       updateRecord(current => ({ ...current, answers: current.answers.map(answer => answer.id === event.requestId
-        ? { ...answer, interviewTarget: event.interviewTarget, retrieval: event.retrieval, interviewEnvironment: event.interviewEnvironment } : answer) }))
+        ? { ...answer, interviewTarget: event.interviewTarget, retrieval: event.retrieval, interviewEnvironment: event.interviewEnvironment, ...(event.questionRewrite ? { questionRewrite: event.questionRewrite } : {}) } : answer) }))
       return
     }
     if (event.kind === 'answer-request') {
       updateRecord(current => ({ ...current, answers: current.answers.map(answer => answer.id === event.requestId
-        ? { ...answer, modelInput: event.modelInput } : answer) }))
+        ? { ...answer, preparationStage: undefined, modelInput: event.modelInput } : answer) }))
       return
     }
     updateRecord(current => ({ ...current, answers: current.answers.map(answer => {
       if (answer.id !== event.requestId) return answer
       if (event.kind === 'answer-delta') return { ...answer, text: answer.text + event.delta }
-      if (event.kind === 'answer-error') return { ...answer, status: 'error', error: event.message }
-      return { ...answer, status: event.cancelled ? 'cancelled' : 'complete' }
+      if (event.kind === 'answer-error') return { ...answer, preparationStage: undefined, status: 'error', error: event.message }
+      return { ...answer, preparationStage: undefined, status: event.cancelled ? 'cancelled' : 'complete' }
     }) }))
     if (event.kind !== 'answer-delta') {
       requestId.current = null

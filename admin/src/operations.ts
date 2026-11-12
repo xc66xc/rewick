@@ -1,6 +1,6 @@
 import { z } from 'zod'
 export const stageNames = {
-  'screenshot.recognize': '算法题截图识别', 'answer.auto_wait': '自动回答等待', 'answer.complete': '回答流程完成', 'answer.prepare': '回答准备', 'retrieval.rag': '知识库检索', 'retrieval.bm25': 'BM25 关键词召回', 'retrieval.vector': '向量召回', 'retrieval.fusion': 'RRF 排序融合', 'retrieval.rerank': '资料重排序', 'retrieval.parent_lookup': '父上下文回查', 'retrieval.context_pack': '资料预算装箱', 'retrieval.web': '联网检索', 'retrieval.join': '检索汇合', 'retrieval.embedding': '生成问题向量', 'retrieval.database': '向量数据库', 'llm.first_content': '首段正文', 'llm.complete': '模型回答完成', 'answer.first_render': '首段渲染', 'session.save': '本地保存', 'session.sync': '云端同步', 'asr.connect': '转写连接', 'asr.first_transcript': '首段字幕', 'asr.complete': '转写结束', 'asr.backlog': '转写积压', 'auto.feedback': '附和过滤'
+  'screenshot.recognize': '算法题截图识别', 'answer.auto_wait': '自动回答等待', 'answer.complete': '回答流程完成', 'answer.prepare': '回答准备', 'question.rewrite': '问题改写', 'retrieval.rag': '知识库检索', 'retrieval.bm25': 'BM25 关键词召回', 'retrieval.vector': '向量召回', 'retrieval.fusion': 'RRF 排序融合', 'retrieval.rerank': '资料重排序', 'retrieval.parent_lookup': '父上下文回查', 'retrieval.context_pack': '资料预算装箱', 'retrieval.web': '联网检索', 'retrieval.join': '检索汇合', 'retrieval.embedding': '生成问题向量', 'retrieval.database': '向量数据库', 'llm.first_content': '首段正文', 'llm.complete': '模型回答完成', 'answer.first_render': '首段渲染', 'session.save': '本地保存', 'session.sync': '云端同步', 'asr.connect': '转写连接', 'asr.first_transcript': '首段字幕', 'asr.complete': '转写结束', 'asr.backlog': '转写积压', 'auto.feedback': '附和过滤'
 } as const
 const stages = Object.keys(stageNames) as [keyof typeof stageNames, ...(keyof typeof stageNames)[]]
 const count = z.number().int().nonnegative()
@@ -18,7 +18,10 @@ export const eventSchema = z.object({ eventId: z.uuid(), operationId: z.uuid(), 
 export const providerTypeNames = { llm: '回答模型', rerank: '重排序模型', pg: '资料数据库', tavily: 'Tavily 搜索', deepseek: 'DeepSeek 搜索', asr: '语音识别', system: '系统' } as const
 export type OperationEvent = z.infer<typeof eventSchema>
 export const operationTypeNames = { answer: '回答生成', 'session-sync': '会话同步', asr: '语音转写', other: '其他操作' } as const
-export const reasonNames: Record<string, string> = { record_changed: '云端记录版本已变化', record_deleted: '云端记录已删除', busy: '重排序并发已满', input_limit: '重排序输入超限', protocol_error: '重排序响应协议无效' }
+export const reasonNames: Record<string, string> = { record_changed: '云端记录版本已变化', record_deleted: '云端记录已删除', busy: '服务并发已满', input_limit: '输入超限', protocol_error: '响应协议无效', disabled: '功能已关闭', ambiguous: '问意不明确，沿用原话', unchanged: '无需改写，沿用原话', timeout: '服务超时', invalid_output: '响应内容无效', provider_error: '供应商调用失败' }
+export function operationProviderName(event: Pick<OperationEvent, 'stage' | 'providerType'>): string {
+  return event.stage === 'question.rewrite' && event.providerType === 'llm' ? '问题改写模型' : providerTypeNames[event.providerType]
+}
 export const traceSchema = z.object({ operationType: z.enum(['answer', 'session-sync', 'asr', 'other']).nullish().transform(value => value ?? 'other'), operationId: z.uuid(), userId: z.string(), sessionId: optionalText(128), model: optionalText(200), appVersion: optionalText(32), startedAt: z.string(), outcome: z.enum(Object.keys(outcomeNames) as [keyof typeof outcomeNames, ...(keyof typeof outcomeNames)[]]), eventCount: count, clientReported: z.boolean() })
 export const tracesSchema = z.object({ items: z.array(traceSchema), total: count, page: z.number().int().positive(), size: z.number().int().positive() })
 export type Trace = z.infer<typeof traceSchema>

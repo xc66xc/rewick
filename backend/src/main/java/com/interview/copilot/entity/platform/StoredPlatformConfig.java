@@ -12,7 +12,8 @@ public record StoredPlatformConfig(
         PlatformConfig.Embedding embedding,
         PlatformConfig.WebSearch webSearch,
         String screenshotModelId,
-        PlatformConfig.Rerank rerank) {
+        PlatformConfig.Rerank rerank,
+        PlatformConfig.QuestionRewrite questionRewrite) {
     public StoredPlatformConfig {
         providers = List.copyOf(providers);
         models = List.copyOf(models);

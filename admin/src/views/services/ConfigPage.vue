@@ -12,12 +12,14 @@ import UnifiedServiceCard from '../../components/services-rewick/UnifiedServiceC
 import ServiceFeedback from '../../components/services-rewick/ServiceFeedback.vue'
 import ReferencePolicy from '../../components/services-rewick/ReferencePolicy.vue'
 import ScreenshotModelPolicy from '../../components/services-rewick/ScreenshotModelPolicy.vue'
+import QuestionRewritePolicy from '../../components/services-rewick/QuestionRewritePolicy.vue'
 import DesktopSettingsPolicy from '../../components/services-rewick/DesktopSettingsPolicy.vue'
 import { confirm } from '../../composables/confirm'
 const props=withDefaults(defineProps<{api:ApiClient;active?:boolean}>(),{active:true})
 const config=ref<Config|null>(null),items=ref<ServiceForm[]>([]),category=ref('all'),showAdd=ref(false),showPolicy=ref(false),showDesktop=ref(false),busy=ref(false),error=ref(''),notice=ref('')
+const reloadRevision=ref(0)
 let loadController:AbortController|undefined,operation:AbortController|undefined
-async function load(){loadController?.abort();const c=new AbortController();loadController=c;try{const value=await props.api.request('/admin/config',configSchema,{signal:c.signal});if(!c.signal.aborted){config.value=value;items.value=serviceForms(value);error.value=''}}catch(reason){if(!c.signal.aborted)error.value=message(reason)}}
+async function load(){loadController?.abort();const c=new AbortController();loadController=c;try{const value=await props.api.request('/admin/config',configSchema,{signal:c.signal});if(!c.signal.aborted){config.value=value;items.value=serviceForms(value);reloadRevision.value+=1;error.value=''}}catch(reason){if(!c.signal.aborted)error.value=message(reason)}}
 async function reload(){if(await confirm({title:'重新加载配置',message:'重新加载会丢弃未保存内容，是否继续？',confirmText:'重新加载'}))await load()}
 function add(kind:Capability){const id=createServiceId();category.value='all';showAdd.value=false;items.value.push({id,providerId:id,kind,searchProtocol:'tavily',name:'',model:kind==='rerank'?defaultRerankModel:'',url:kind==='web-search'?'https://api.tavily.com/search':kind==='rerank'?defaultRerankUrl:'',topK:5,searchDepth:'advanced',timeoutMs:kind==='rerank'?1500:8000,includeAnswer:'none',maxOutputTokens:2048,thinkingMode:'default',thinkingProtocol:'none',dimensions:1024,enabled:kind!=='rerank'})}
 async function save(item:ServiceForm,test=false,remove=false):Promise<boolean>{
@@ -30,4 +32,20 @@ const visible=computed(()=>items.value.filter(item=>category.value==='all'||item
 onBeforeUnmount(()=>{loadController?.abort();operation?.abort()})
 void load()
 </script>
-<template><div class="page stack"><PageHeader title="模型与服务" desc="配置回答模型、语音转写、向量、重排序与联网搜索服务"><Button variant="primary" icon="plus" :disabled="busy" :aria-expanded="showAdd" @click="showAdd=!showAdd">添加服务</Button></PageHeader><Panel v-if="showAdd" title="添加服务"><div class="page-actions"><Button v-for="kind in (['llm','asr','embedding','rerank','web-search'] as const)" :key="kind" :disabled="busy" @click="add(kind)">添加{{capabilityNames[kind]}}</Button></div></Panel><Segmented v-model="category" :options="categories" aria-label="服务分类"/><ServiceFeedback :error="error" :notice="notice"/><p v-if="!config&&!error" role="status">正在加载…</p><Button v-if="!config&&error" @click="load">重新加载</Button><div v-if="config" class="form-grid"><div v-for="item in items" :key="item.id" :hidden="category!=='all'&&category!==item.kind"><UnifiedServiceCard :value="item" :busy="busy" :saved="config.providers.some(p=>p.id===item.providerId)" :active="active&&(category==='all'||category===item.kind)" :on-save="save" @remove="remove(item)"/></div></div><p v-if="config&&!visible.length">此分类尚无模型或服务，请添加。</p><ScreenshotModelPolicy v-if="config" :api="api" :config="config" :disabled="busy" @saved="value=>{config=value;items=serviceForms(value)}"/><Panel title="平台相关设置" class="reveal"><div class="page-actions"><Button :aria-expanded="showPolicy" @click="showPolicy=!showPolicy">资料检索策略</Button><Button :aria-expanded="showDesktop" @click="showDesktop=!showDesktop">桌面默认设置</Button><Button :disabled="busy" @click="reload">重新加载配置</Button></div></Panel><ReferencePolicy v-if="showPolicy" :api="api"/><DesktopSettingsPolicy v-if="showDesktop&&config" :api="api" :config="config"/></div></template>
+<template>
+  <div class="page stack">
+    <PageHeader title="模型与服务" desc="配置回答模型、语音转写、向量、重排序与联网搜索服务"><Button variant="primary" icon="plus" :disabled="busy" :aria-expanded="showAdd" @click="showAdd=!showAdd">添加服务</Button></PageHeader>
+    <Panel v-if="showAdd" title="添加服务"><div class="page-actions"><Button v-for="kind in (['llm','asr','embedding','rerank','web-search'] as const)" :key="kind" :disabled="busy" @click="add(kind)">添加{{capabilityNames[kind]}}</Button></div></Panel>
+    <Segmented v-model="category" :options="categories" aria-label="服务分类" />
+    <ServiceFeedback :error="error" :notice="notice" />
+    <p v-if="!config&&!error" role="status">正在加载…</p>
+    <Button v-if="!config&&error" @click="load">重新加载</Button>
+    <div v-if="config" class="form-grid"><div v-for="item in items" :key="item.id" :hidden="category!=='all'&&category!==item.kind"><UnifiedServiceCard :value="item" :busy="busy" :saved="config.providers.some(p=>p.id===item.providerId)" :active="active&&(category==='all'||category===item.kind)" :on-save="save" @remove="remove(item)" /></div></div>
+    <p v-if="config&&!visible.length">此分类尚无模型或服务，请添加。</p>
+    <QuestionRewritePolicy v-if="config" :key="reloadRevision" :api="api" :config="config" :disabled="busy" :active="active" @busy="busy=$event" @saved="value=>{config=value;items=serviceForms(value)}" />
+    <ScreenshotModelPolicy v-if="config" :api="api" :config="config" :disabled="busy" @saved="value=>{config=value;items=serviceForms(value)}" />
+    <Panel title="平台相关设置" class="reveal"><div class="page-actions"><Button :aria-expanded="showPolicy" @click="showPolicy=!showPolicy">资料检索策略</Button><Button :aria-expanded="showDesktop" @click="showDesktop=!showDesktop">桌面默认设置</Button><Button :disabled="busy" @click="reload">重新加载配置</Button></div></Panel>
+    <ReferencePolicy v-if="showPolicy" :api="api" />
+    <DesktopSettingsPolicy v-if="showDesktop&&config" :api="api" :config="config" />
+  </div>
+</template>

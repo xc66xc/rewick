@@ -22,7 +22,8 @@ public record PlatformConfigResponse(
         @Valid Embedding embedding,
         @Valid WebSearch webSearch,
         @Size(max = 64) String screenshotModelId,
-        @Valid com.interview.copilot.model.platform.PlatformConfig.Rerank rerank) {
+        @Valid com.interview.copilot.model.platform.PlatformConfig.Rerank rerank,
+        @Valid com.interview.copilot.model.platform.PlatformConfig.QuestionRewrite questionRewrite) {
     @Override
     public String toString() {
         return "PlatformConfigResponse[redacted]";

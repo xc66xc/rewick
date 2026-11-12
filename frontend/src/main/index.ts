@@ -48,12 +48,11 @@ import { LlmClient } from './services/llm-client'
 import { DisplayCaptureService } from './services/display-capture'
 import { ReferenceService } from './services/reference-service'
 import { extractDocument } from './services/document-extractor'
-import { WebSearchClient } from './services/web-search-client'
-import { retrieveAnswerContext } from './services/answer-retrieval'
+import { cancelAnswerGeneration, finishAnswerGeneration, generateAnswer, type AnswerWork } from './services/answer-generation'
 import { webSourceUrlSchema } from '../shared/web-search'
 import { SessionFault } from './services/session-fault'
-import { answerRequestSchema, parseInput, referencePatchSchema, settingsInputSchema, sessionRecordSchema } from './services/validation'
-import type { AppEvent, Settings, SettingsInput, SessionRecord, RetrievalContext } from '../shared/types'
+import { parseInput, referencePatchSchema, settingsInputSchema, sessionRecordSchema } from './services/validation'
+import type { AppEvent, Settings, SettingsInput, SessionRecord } from '../shared/types'
 import { resolveInterviewSettings } from '../shared/interview-settings'
 import { enforcePackagedStartup } from './services/startup-security'
 import { initializeNetworkTransport } from './services/network-transport'
@@ -110,14 +109,10 @@ const recordingReviewSetup = new RecordingReviewSetup({ isPackaged: app.isPackag
 const reviewJobs = new Map<string, AbortController>()
 let recordingCleanup: Promise<void> = Promise.resolve()
 let asr: AsrClient | null = null
-let llm: LlmClient | null = null
+const answerWork: AnswerWork = { epoch: 0, pendingId: null, activeId: null, controller: null, llm: null }
 let startingAsr = false
 let asrEpoch = 0
-let answerEpoch = 0
 let answerDispatchEpoch = 0
-let pendingAnswerId: string | null = null
-let retrievalController: AbortController | null = null
-let activeAnswerId: string | null = null
 let activeAsrId: string | null = null
 let changingEnvironment = false
 const interviewMutations = new SerialQueue()
@@ -184,7 +179,6 @@ const settings = new Proxy(authSettings, {
 const platformMutations = new SerialQueue()
 const platformWork = new PlatformWork()
 let releasePlatformAsr: (() => void) | undefined
-let releasePlatformAnswer: (() => void) | undefined
 function mutatePlatform<T>(operation: () => Promise<T>): Promise<T> {
   const finish = platformWork.beginChange()
   return platformMutations.run(operation).finally(finish)
@@ -226,7 +220,7 @@ const emit = (event: AppEvent): void => {
     if (event.status === 'connecting' || event.status === 'listening' || event.status === 'stopping') activeAsrId = event.sessionId
     else if (activeAsrId === event.sessionId) { activeAsrId = null; releasePlatformAsr?.(); releasePlatformAsr = undefined }
   }
-  if ((event.kind === 'answer-done' || event.kind === 'answer-error') && event.requestId === activeAnswerId) { activeAnswerId = null; releasePlatformAnswer?.(); releasePlatformAnswer = undefined }
+  finishAnswerGeneration(answerWork, event)
   if (window && !window.isDestroyed()) window.webContents.send('copilot:event', event)
 }
 function scopedStore<K extends 'history' | 'interviews' | 'references'>(kind: K): ReturnType<AccountWorkspaces['current']>[K] {
@@ -258,7 +252,7 @@ async function effectiveSettings() {
 }
 function assertInterviewIdle() {
   if (interviewTimer.active) throw new Error('请先结束面试，再修改本次面试内容。')
-  if (startingAsr || activeAsrId || pendingAnswerId || activeAnswerId) throw new Error('请先停止转写和回答，再切换或修改当前面试环境。')
+  if (startingAsr || activeAsrId || answerWork.pendingId || answerWork.activeId) throw new Error('请先停止转写和回答，再切换或修改当前面试环境。')
 }
 function mutateInterviews<T>(operation: () => Promise<T>): Promise<T> {
   return interviewMutations.run(async () => {
@@ -273,14 +267,7 @@ function mutateInterviews<T>(operation: () => Promise<T>): Promise<T> {
 }
 
 function cancelAnswerWork(): void {
-  releasePlatformAnswer?.(); releasePlatformAnswer = undefined
-  answerEpoch++
-  retrievalController?.abort()
-  retrievalController = null
-  llm?.cancel()
-  activeAnswerId = null
-  if (pendingAnswerId) emit({ kind: 'answer-done', requestId: pendingAnswerId, cancelled: true })
-  pendingAnswerId = null
+  cancelAnswerGeneration(answerWork, emit)
 }
 
 const serviceTests = new Set<AbortController>()
@@ -472,11 +459,11 @@ function registerHandlers(): void {
     const { requestId } = parseInput(z.object({ requestId: z.string().uuid() }).strict(), input)
     interviewTimer.assertActive()
     cancelAnswerWork()
-    const epoch = answerEpoch, revision = platformWork.revision
+    const epoch = answerWork.epoch, revision = platformWork.revision
     const language = screenshotShortcuts.get().language
     const controller = new AbortController()
-    retrievalController = controller
-    pendingAnswerId = requestId
+    answerWork.controller = controller
+    answerWork.pendingId = requestId
     const release = platformWork.track(revision, () => controller.abort(new Error('平台连接已更改，截图识别已取消。')))
     const timeout = setTimeout(() => controller.abort(new Error('截图识别超时，请检查网络或平台视觉模型后重试。')), 60_000)
     try {
@@ -490,14 +477,14 @@ function registerHandlers(): void {
       }, controller.signal)
       const result = await new PlatformClient(connection.baseUrl, 45_000).recognizeScreenshot(connection.token, image, controller.signal)
       controller.signal.throwIfAborted()
-      if (epoch !== answerEpoch) throw new Error('截图识别已取消。')
+      if (epoch !== answerWork.epoch) throw new Error('截图识别已取消。')
       interviewTimer.assertActive()
       return { question: result.question, language }
     } finally {
       clearTimeout(timeout)
       release()
-      if (retrievalController === controller) retrievalController = null
-      if (epoch === answerEpoch) pendingAnswerId = null
+      if (answerWork.controller === controller) answerWork.controller = null
+      if (epoch === answerWork.epoch) answerWork.pendingId = null
     }
   })
   handle('settings:get', async () => { await accounts.active?.preferences.load(true); return effectiveSettings() })
@@ -682,57 +669,13 @@ function registerHandlers(): void {
     if (interviewTimer.active) asr?.sendAudio(sessionId, audio)
   })
   handle('asr:stop', () => { asrEpoch++; startingAsr = false; return asr?.stop() })
-  handle('answer:generate', async input => {
-    interviewTimer.assertActive()
-    if (changingEnvironment) throw new Error('正在保存面试环境，请稍后生成回答。')
-    const request = parseInput(answerRequestSchema, input)
-    const observation = telemetry.operation({ operationId: request.operationId ?? telemetryUUID(), requestId: request.requestId, sessionId: interviewTimer.sessionId })
-    const preparing = performance.now()
-    if (observation && request.autoWaitMs !== undefined) telemetry.record(observation, 'answer.auto_wait', observation.started - request.autoWaitMs, 'success', { triggerCount: 1 })
-    cancelAnswerWork()
-    const epoch = answerEpoch
-    const platformRevision = platformWork.revision
-    pendingAnswerId = request.requestId
-    const controller = new AbortController()
-    retrievalController = controller
-    let preparationFinished = false
-    const observedCancel = () => { if (!preparationFinished) telemetry.record(observation, 'answer.complete', observation?.started ?? preparing, 'cancelled', undefined, observation?.spanId) }
-    controller.signal.addEventListener('abort', observedCancel, { once: true })
-    try {
-      const snapshot = await settings.getConnectionSnapshot()
-      const config = interviewTimer.background ? { ...snapshot.settings, ...interviewTimer.background } : await interviews.resolve(snapshot.settings)
-      if (request.environmentId && request.environmentId !== config.interviewEnvironment?.id) throw new Error('面试环境已切换，请重新生成回答。')
-      const secrets = snapshot.secrets
-      if (epoch !== answerEpoch) return
-      if (needsPlatform(config, secrets, 'llm') || config.webSearch?.enabled) {
-        releasePlatformAnswer = platformWork.track(platformRevision, () => { if (epoch === answerEpoch) cancelAnswerWork() })
-      }
-      const connection = await serviceConnection({ settings: config, secrets }, 'llm', controller.signal)
-      if (epoch !== answerEpoch || controller.signal.aborted) return
-      const resolved = connection.settings
-      if (observation) { observation.model = resolved.llm.model; observation.serviceSource = connection.platform ? 'platform' : 'custom'; observation.providerType = 'llm' }
-      telemetry.record(observation, 'answer.prepare', preparing, 'success')
-      const retrieval: RetrievalContext = request.mode === 'algorithm' ? { status: 'disabled', excerpts: [] } : await telemetry.measure(observation, 'retrieval.join', () => retrieveAnswerContext(
-        signal => telemetry.measure(observation, 'retrieval.rag', () => references.retrieve(request.question, request.transcript, resolved, signal), 'pg', 'platform'),
-        resolved.webSearch?.enabled ? signal => telemetry.measure(observation, 'retrieval.web', () => new WebSearchClient(resolved, secrets.platformAccessToken).retrieve(request.question, signal), 'system', 'platform') : undefined,
-        controller.signal), 'system')
-      if (epoch !== answerEpoch || controller.signal.aborted) return
-      emit({ kind: 'answer-context', requestId: request.requestId, interviewTarget: config.interviewTarget, retrieval, interviewEnvironment: config.interviewEnvironment })
-      interviewTimer.assertActive()
-      pendingAnswerId = null
-      activeAnswerId = request.requestId
-      preparationFinished = true
-      llm = new LlmClient(connection.settings, connection.apiKey, emit, connection.platform, telemetry, observation && { ...observation, parentSpanId: observation.spanId, spanId: telemetryUUID() })
-      // The service emits its own request-scoped error; do not send a duplicate event here.
-      void llm.generate(request, retrieval).catch(() => undefined)
-    } catch (error) {
-      if (epoch !== answerEpoch || controller.signal.aborted) return
-      telemetry.record(observation, 'answer.complete', observation?.started ?? preparing, 'error', undefined, observation?.spanId)
-      pendingAnswerId = null
-      releasePlatformAnswer?.(); releasePlatformAnswer = undefined
-      throw error
-    } finally { controller.signal.removeEventListener('abort', observedCancel); if (retrievalController === controller) retrievalController = null }
-  })
+  handle('answer:generate', input => generateAnswer(input, answerWork, {
+    assertActive: () => interviewTimer.assertActive(), isChangingEnvironment: () => changingEnvironment,
+    sessionId: () => interviewTimer.sessionId, background: () => interviewTimer.background,
+    getSnapshot: () => settings.getConnectionSnapshot(), resolve: value => interviews.resolve(value),
+    connect: (snapshot, signal) => serviceConnection(snapshot, 'llm', signal),
+    platformWork, references, telemetry, emit,
+  }))
   handle('answer:cancel', () => cancelAnswerWork())
   handle('window:pin', input => desktopWindows?.setPinned(z.boolean().parse(input)) ?? false)
   handle('window:scrim', input => desktopWindows?.setScrim(z.boolean().parse(input)) ?? false)
