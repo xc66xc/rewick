@@ -97,8 +97,8 @@ describe('bounded isolated operations telemetry', () => {
     service.record(service.operation({ operationId: randomUUID() }), 'answer.prepare', performance.now(), 'success')
     const ids: string[] = []
     vi.stubGlobal('fetch', vi.fn(async (_url, options) => { ids.push(JSON.parse(options.body).events[0].eventId); throw new TypeError('offline') }))
-    const clock = vi.spyOn(Date, 'now')
     const now = Date.now()
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
     await service.flush(); await service.flush()
     expect(ids).toHaveLength(1)
     clock.mockReturnValue(now + 10001); await service.flush()
