@@ -182,6 +182,48 @@ public class AsrProxyTest {
     }
 
     @Test
+    void session_terminalWaitsForCaptionSendBeforeClosing() throws Exception {
+        CountDownLatch captionSending = new CountDownLatch(1);
+        CountDownLatch releaseCaption = new CountDownLatch(1);
+        CountDownLatch usageFinalized = new CountDownLatch(1);
+        CountDownLatch closed = new CountDownLatch(1);
+        AtomicBoolean open = new AtomicBoolean(true);
+        when(session.isOpen()).thenAnswer(call -> open.get());
+        doAnswer(call -> {
+            String payload = ((TextMessage) call.getArgument(0)).getPayload();
+            events.add(payload);
+            if (payload.contains("caption")) {
+                captionSending.countDown();
+                if (!releaseCaption.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("Caption gate timed out");
+            }
+            return null;
+        }).when(session).sendMessage(any());
+        doAnswer(call -> { usageFinalized.countDown(); return null; }).when(lease).fail();
+        doAnswer(call -> { open.set(false); closed.countDown(); return null; }).when(session).close(any(CloseStatus.class));
+        try (var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            java.util.concurrent.Future<?> terminal = null;
+            try {
+                proxy.handleTextMessage(session, new TextMessage(run(16000)));
+                assertThat(next()).contains("task-started");
+                assertThat(next()).contains("caption");
+                assertThat(captionSending.await(3, TimeUnit.SECONDS)).isTrue();
+                terminal = executor.submit(() -> proxy.handleBinaryMessage(session,
+                        new BinaryMessage(ByteBuffer.wrap(new byte[3]))));
+                assertThat(usageFinalized.await(3, TimeUnit.SECONDS)).isTrue();
+                assertThat(closed.await(200, TimeUnit.MILLISECONDS)).isFalse();
+                releaseCaption.countDown();
+                terminal.get(3, TimeUnit.SECONDS);
+                assertThat(next()).contains("task-failed");
+                assertThat(closed.await(3, TimeUnit.SECONDS)).isTrue();
+            } finally {
+                releaseCaption.countDown();
+                if (terminal != null) terminal.get(3, TimeUnit.SECONDS);
+            }
+        }
+        verify(lease).fail();
+    }
+
+    @Test
     void session_configurationChangesDuringReservation_preservesCapturedRouteAndCredentials()
             throws Exception {
         when(usage.startForSession(anyLong(), anyString(), anyString(), anyLong()))
