@@ -43,6 +43,9 @@ public class PlatformCatalogServiceImpl implements PlatformCatalogService {
                 new PlatformServicesResponse(
                         snapshot.availableAsrServices()),
                 desktop.advanced(user.id()),
-                desktop.get(), snapshot.webSearch().enabled(), snapshot.webSearch().timeoutMs());
+                desktop.get(), snapshot.webSearch().enabled(), snapshot.webSearch().timeoutMs(),
+                new com.interview.copilot.response.platform.QuestionRewriteCapabilityResponse(
+                        snapshot.view().questionRewrite().enabled(), snapshot.view().questionRewrite().timeoutMs()),
+                snapshot.view().version());
     }
 }

@@ -21,3 +21,14 @@ it.each([false, true])('shows the model input entry in development, compact=%s',
   expect(screen.getAllByText(/本次发送内容/).length).toBeGreaterThan(0)
   if (!compact) expect(screen.getByText('本次检索资料')).toBeDefined()
 })
+it.each([false, true])('shows the preparation status without replacing the current question, compact=%s', compact => {
+  render(<AnswerCard answer={{ ...answer, text: '', status: 'streaming', preparationStage: 'question-rewrite' }} index={1} compact={compact} />)
+  expect(screen.getByText('正在整理问题')).toBeDefined()
+  expect(screen.getByRole('heading', { name: answer.question })).toBeDefined()
+})
+it.each([false, true])('shows rewrite diagnostics only in development, DEV=%s', development => {
+  vi.stubEnv('DEV', development)
+  render(<AnswerCard answer={{ ...answer, questionRewrite: { status: 'rewritten', question: '请介绍本人经历。', reason: null, model: 'rewrite-model', durationMs: 30, platformVersion: 2 } }} index={1} />)
+  expect(Boolean(screen.queryByText('问题整理 · 已整理'))).toBe(development)
+  expect(screen.getByRole('heading', { name: answer.question })).toBeDefined()
+})

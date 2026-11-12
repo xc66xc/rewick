@@ -31,7 +31,10 @@ export const defaultRerankUrl = `https://dashscope.aliyuncs.com${rerankEndpointP
 export const defaultRerankModel = 'qwen3.7-text-rerank'
 export const defaultRerank = { enabled: false, providerId: '', model: '', timeoutMs: 1500 }
 export const rerankSchema = z.object({ enabled: z.boolean(), providerId: z.string(), model: z.string(), timeoutMs: z.number().int().min(300).max(5000) })
-export const configSchema = z.object({ version: z.number(), providers: z.array(providerSchema), models: z.array(modelSchema), defaultModelId: z.string(), screenshotModelId: z.string().default(''), asr: z.object({ enabled: z.boolean(), providerId: z.string(), model: z.string() }), embedding: z.object({ enabled: z.boolean(), providerId: z.string(), model: z.string(), dimensions: z.literal(1024) }), rerank: rerankSchema.default(defaultRerank), webSearch: webSearchSchema.default(defaultWebSearch) })
+export const defaultQuestionRewrite = { enabled: false, modelId: '', timeoutMs: 1500 }
+export const questionRewriteSchema = z.object({ enabled: z.boolean(), modelId: z.string().max(64), timeoutMs: z.number().int().min(500).max(3000) })
+export type QuestionRewritePolicy = z.infer<typeof questionRewriteSchema>
+export const configSchema = z.object({ version: z.number(), providers: z.array(providerSchema), models: z.array(modelSchema), defaultModelId: z.string(), screenshotModelId: z.string().default(''), asr: z.object({ enabled: z.boolean(), providerId: z.string(), model: z.string() }), embedding: z.object({ enabled: z.boolean(), providerId: z.string(), model: z.string(), dimensions: z.literal(1024) }), rerank: rerankSchema.default(defaultRerank), questionRewrite: questionRewriteSchema.default(defaultQuestionRewrite), webSearch: webSearchSchema.default(defaultWebSearch) })
 export interface Config extends Omit<z.infer<typeof configSchema>, 'providers'> { providers: Provider[] }
 export const testSchema = z.object({ success: z.boolean(), message: z.string(), latencyMs: z.number() })
 export const emailConfigSchema = z.object({ version: z.number().int().nonnegative(), enabled: z.boolean(), host: z.string().max(253), port: z.number().int().min(1).max(65535), username: z.string().max(254), hasPassword: z.boolean(), from: z.string().max(254), startTls: z.boolean(), ssl: z.boolean() })

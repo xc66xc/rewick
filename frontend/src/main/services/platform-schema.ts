@@ -1,8 +1,11 @@
 import { defaultSessionRecordMaxMiB, sessionRecordMaxMiBSchema } from '../../shared/session-record-limits'
 import { z } from 'zod'
+import { defaultQuestionRewritePolicy, questionRewritePolicySchema } from '../../shared/question-rewrite'
 const publicUser = z.object({ id: z.string().min(1).max(128), displayName: z.string().min(1).max(254), email: z.string().max(254).nullable().optional() })
 const serviceList = z.array(z.object({ id: z.string().min(1).max(200), name: z.string().min(1).max(200) })).max(100)
 export const platformInfoSchema = z.object({
+  platformVersion: z.number().int().nonnegative().default(0),
+  questionRewrite: questionRewritePolicySchema.default(defaultQuestionRewritePolicy),
   advancedSettingsEnabled: z.boolean().default(false),
   webSearchAvailable: z.boolean().default(false),
   webSearchTimeoutMs: z.number().int().min(1000).max(30000).default(8000),

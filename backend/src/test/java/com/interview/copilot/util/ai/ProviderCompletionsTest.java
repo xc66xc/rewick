@@ -76,6 +76,17 @@ class ProviderCompletionsTest {
         verify(http, never()).stream(any(), anyMap());
     }
 
+    @Test
+    void complete_observerReceivesReportedUsageBeforeTruncatedStreamRejection() {
+        var observed = new java.util.concurrent.atomic.AtomicReference<com.fasterxml.jackson.databind.JsonNode>();
+        when(http.stream(any(), anyMap())).thenReturn(Flux.just(event(delta("未完成")), event(
+                "{\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":8,\"total_tokens\":20}}"), event("[DONE]")));
+        assertThatThrownBy(() -> ProviderCompletions.complete(http, json, endpoint(), body,
+                Duration.ofSeconds(1), value -> { if (value.has("usage")) observed.set(value.path("usage")); }).block())
+                .isInstanceOf(ProviderFailure.class).hasMessageContaining("Token");
+        assertThat(observed.get().path("total_tokens").asInt()).isEqualTo(20);
+    }
+
     private ProviderProperties.Llm endpoint() {
         var endpoint = new ProviderProperties.Llm(); endpoint.setUrl("http://localhost/chat/completions");
         endpoint.setModel("m"); endpoint.setThinkingMode("enabled"); endpoint.setThinkingProtocol("bailian"); return endpoint;

@@ -21,6 +21,31 @@ async function enable(connection = async () => identity) {
   return telemetry
 }
 describe('bounded isolated operations telemetry', () => {
+  it('records the actual rewrite model and safe status without text or a false answer completion', async () => {
+    const service = await enable()
+    const operation = service.operation({ operationId: randomUUID(), requestId: 'answer-one', model: 'answer-model', providerType: 'llm', serviceSource: 'custom' })
+    await service.measure(operation, 'question.rewrite', async () => ({ status: 'rewritten', question: 'sensitive rewritten text', reason: null, model: 'actual-rewrite-model', platformVersion: 7 }), 'system', 'platform')
+    await service.measure(operation, 'question.rewrite', async () => ({ status: 'degraded', question: null, reason: 'timeout', model: null, platformVersion: 8 }), 'system', 'platform')
+    await service.flush()
+    const events = batches.flatMap(batch => batch.events).map(event => telemetryEventSchema.parse(event))
+    expect(events).toHaveLength(2)
+    expect(events[0]).toMatchObject({ stage: 'question.rewrite', outcome: 'success', serviceSource: 'platform', providerType: 'llm', model: 'actual-rewrite-model', metadata: { platformVersion: 7 } })
+    expect(events[1]).toMatchObject({ stage: 'question.rewrite', outcome: 'timeout', reason: 'timeout', providerType: 'system' })
+    expect(events[1].model).toBeUndefined()
+    expect(JSON.stringify(events)).not.toContain('sensitive rewritten text')
+    expect(operation?.model).toBe('answer-model')
+  })
+
+  it('records owner cancellation as cancellation even when its reason is a normal Error', async () => {
+    const service = await enable()
+    const operation = service.operation({ operationId: randomUUID(), requestId: 'answer-one' })
+    const controller = new AbortController()
+    const error = new Error('账户已切换')
+    await expect(service.measure(operation, 'question.rewrite', async () => { controller.abort(error); throw error }, 'system', 'platform', controller.signal)).rejects.toBe(error)
+    await service.flush()
+    expect(batches[0].events[0]).toMatchObject({ stage: 'question.rewrite', outcome: 'cancelled' })
+  })
+
   it.each([
     ['ready', 'success'], ['empty', 'empty'], ['degraded', 'degraded'], ['disabled', 'skipped'],
   ] as const)('records %s web retrieval as a platform request without inventing a supplier or inheriting the answer model', async (status, outcome) => {
@@ -72,8 +97,8 @@ describe('bounded isolated operations telemetry', () => {
     service.record(service.operation({ operationId: randomUUID() }), 'answer.prepare', performance.now(), 'success')
     const ids: string[] = []
     vi.stubGlobal('fetch', vi.fn(async (_url, options) => { ids.push(JSON.parse(options.body).events[0].eventId); throw new TypeError('offline') }))
-    const clock = vi.spyOn(Date, 'now')
     const now = Date.now()
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
     await service.flush(); await service.flush()
     expect(ids).toHaveLength(1)
     clock.mockReturnValue(now + 10001); await service.flush()

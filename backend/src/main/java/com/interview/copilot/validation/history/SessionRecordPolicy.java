@@ -86,6 +86,7 @@ public final class SessionRecordPolicy {
         if (node.has("mode") && (!node.path("mode").isTextual() || !"algorithm".equals(node.path("mode").asText()))) throw invalid();
         if (node.has("language") && (!node.path("language").isTextual()
                 || !Set.of("Java", "Python", "C++", "TypeScript").contains(node.path("language").asText()))) throw invalid();
+        questionRewrite(node.path("questionRewrite"));
         text(node, "id", 128);
         if (!node.path("question").isTextual()
                 || node.path("question").asText().length() > 20000
@@ -95,6 +96,26 @@ public final class SessionRecordPolicy {
                 .contains(node.path("status").asText())) throw invalid();
         time(node.path("createdAt").asText());
         environment(node.path("interviewEnvironment"));
+    }
+
+    private static void questionRewrite(JsonNode node) {
+        if (node.isMissingNode() || node.isNull()) return;
+        if (!node.isObject() || !Set.of("rewritten", "unchanged", "skipped", "degraded").contains(node.path("status").asText())) throw invalid();
+        node.fieldNames().forEachRemaining(name -> {
+            if (!Set.of("status", "question", "reason", "model", "durationMs", "platformVersion").contains(name)) throw invalid();
+        });
+        if (!node.path("durationMs").isNumber() || !Double.isFinite(node.path("durationMs").asDouble())
+                || node.path("durationMs").asDouble() < 0 || node.path("durationMs").asDouble() > 60000
+                || !node.path("platformVersion").isIntegralNumber() || !node.path("platformVersion").canConvertToLong()
+                || node.path("platformVersion").asLong() < 0) throw invalid();
+        if ("rewritten".equals(node.path("status").asText())) {
+            text(node, "question", 6000);
+            if (com.interview.copilot.validation.questions.QuestionRewritePolicy.characters(node.path("question").asText()) > 3000) throw invalid();
+        } else if (!node.path("question").isNull()) throw invalid();
+        if (!node.path("model").isNull() && (!node.path("model").isTextual()
+                || node.path("model").asText().isBlank() || node.path("model").asText().length() > 200)) throw invalid();
+        if (!node.path("reason").isNull() && !Set.of("disabled", "unchanged", "ambiguous", "input_limit", "timeout",
+                "busy", "invalid_output", "provider_error", "network_error", "unavailable").contains(node.path("reason").asText())) throw invalid();
     }
 
     private static void environment(JsonNode node) {

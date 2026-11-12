@@ -3,6 +3,7 @@ import { productionPlatformUrl } from '../../shared/platform-transport'
 import { z } from 'zod'
 import { webSourceUrlSchema } from '../../shared/web-search'
 import { environmentSnapshotSchema } from './interview-validation'
+import { questionRewriteContextSchema, questionRewriteResultSchema } from '../../shared/question-rewrite'
 
 export function isLoopback(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '[::1]' || /^127(?:\.\d{1,3}){3}$/.test(hostname)
@@ -90,6 +91,7 @@ export const answerRequestSchema = z.object({
   requestId: z.string().min(1).max(128),
   question: z.string().trim().min(1, '请先输入问题或等待字幕。').max(20_000),
   transcript: z.string().max(100_000),
+  rewriteContext: questionRewriteContextSchema.optional(),
   environmentId: z.string().min(1).max(128).optional(),
 })
 export const modelInputSnapshotSchema = z.object({
@@ -116,6 +118,7 @@ export const sessionRecordSchema = z.object({
     error: z.string().max(2000).optional(),
     interviewTarget: interviewTargetSchema.optional(), retrieval: retrievalContextSchema.optional(),
     modelInput: modelInputSnapshotSchema.optional(),
+    questionRewrite: questionRewriteResultSchema.optional(),
     interviewEnvironment: environmentSnapshotSchema.optional(),
   })).max(500),
 })

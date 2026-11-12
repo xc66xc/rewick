@@ -30,7 +30,7 @@ public class AdminPlatformConfigServiceImpl implements AdminPlatformConfigServic
                                 input.models(),
                                 input.defaultModelId(),
                                 input.asr(),
-                                input.embedding(), input.webSearch(), input.screenshotModelId() == null ? service.get().screenshotModelId() : input.screenshotModelId(), input.rerank())));
+                                input.embedding(), input.webSearch(), input.screenshotModelId() == null ? service.get().screenshotModelId() : input.screenshotModelId(), input.rerank(), input.questionRewrite())));
     }
 
     private PlatformConfigResponse response(PlatformConfig value) {
@@ -40,6 +40,6 @@ public class AdminPlatformConfigServiceImpl implements AdminPlatformConfigServic
                 value.models(),
                 value.defaultModelId(),
                 value.asr(),
-                value.embedding(), value.webSearch(), value.screenshotModelId(), value.rerank());
+                value.embedding(), value.webSearch(), value.screenshotModelId(), value.rerank(), value.questionRewrite());
     }
 }

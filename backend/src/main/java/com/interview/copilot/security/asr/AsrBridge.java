@@ -8,8 +8,6 @@ import com.interview.copilot.security.auth.UserPrincipal;
 import com.interview.copilot.util.asr.AsrProtocol;
 import com.interview.copilot.model.asr.LiveTranslateSession;
 
-import org.springframework.web.socket.CloseStatus;
-import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 
@@ -38,6 +36,7 @@ public final class AsrBridge {
     private final Runnable release;
     private final AtomicBoolean ended = new AtomicBoolean();
     private final AsrSendQueue sendQueue;
+    private final AsrDownstreamSender downstreamSender;
     private final String upstreamId = UUID.randomUUID().toString();
     private LiveTranslateSession realtime;
     private volatile String clientId = "platform";
@@ -58,6 +57,7 @@ public final class AsrBridge {
     public AsrBridge(
             WebSocketSession downstream, UserPrincipal user, AsrProxy resources, Runnable release) {
         this.downstream = new ConcurrentWebSocketSessionDecorator(downstream, 5000, 128000);
+        downstreamSender = new AsrDownstreamSender(this.downstream, ended::get);
         this.user = user;
         this.resources = resources;
         this.release = release;
@@ -265,7 +265,7 @@ public final class AsrBridge {
             }
             if(observation!=null && !frame.path("payload").path("output").path("sentence").path("text").asText("").isBlank()
                     && firstTranscript.compareAndSet(false,true)) observation.point("asr.first_transcript",Map.of());
-            downstream.sendMessage(new TextMessage(message));
+            downstreamSender.send(message);
         } catch (IOException | RuntimeException exception) {
             failure("upstream_event_or_downstream_send_error", exception);
         }
@@ -306,11 +306,7 @@ public final class AsrBridge {
         stopUpstream();
         String terminalMessage = finalizeUsage(outcome, message);
         release.run();
-        try {
-            sendTerminal(terminalMessage);
-        } finally {
-            closeDownstream();
-        }
+        downstreamSender.terminal(terminalMessage);
     }
 
     private void stopUpstream() {
@@ -336,31 +332,6 @@ public final class AsrBridge {
             org.slf4j.LoggerFactory.getLogger(AsrBridge.class)
                     .error("ASR usage finalization failed for user {}", user.id());
             return resources.json().encode(AsrProtocol.failure(clientId));
-        }
-    }
-
-    private void sendTerminal(String message) {
-        if (message == null || !downstream.isOpen()) {
-            return;
-        }
-        try {
-            downstream.sendMessage(new TextMessage(message));
-        } catch (IOException | IllegalStateException exception) {
-            org.slf4j.LoggerFactory.getLogger(AsrBridge.class)
-                    .debug("ASR terminal transport unavailable for user {}", user.id());
-        }
-    }
-
-    private void closeDownstream() {
-        try {
-            if (downstream.isOpen()) {
-                downstream.close(CloseStatus.NORMAL);
-            }
-        } catch (IOException exception) {
-            // The transport is already unavailable; aborting upstream above is the cleanup
-            // guarantee.
-            org.slf4j.LoggerFactory.getLogger(AsrBridge.class)
-                    .debug("ASR transport already closed for user {}", user.id());
         }
     }
 

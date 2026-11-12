@@ -53,7 +53,8 @@ public final class PlatformSnapshot {
                         input.defaultModelId(),
                         input.asr(),
                         input.embedding(), input.webSearch() == null ? PlatformConfig.WebSearch.disabled() : input.webSearch().withDefaultAnswer("none"), input.screenshotModelId(),
-                        input.rerank() == null ? PlatformConfig.Rerank.disabled() : input.rerank());
+                        input.rerank() == null ? PlatformConfig.Rerank.disabled() : input.rerank(),
+                        input.questionRewrite() == null ? PlatformConfig.QuestionRewrite.disabled() : input.questionRewrite());
         Map<String, PlatformConfig.Provider> indexed = new LinkedHashMap<>();
         redacted.forEach(provider -> indexed.put(provider.id(), provider));
         providers = Map.copyOf(indexed);

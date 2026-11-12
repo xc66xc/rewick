@@ -3,6 +3,7 @@ import type { MockBridge } from './mock-interview'
 import type { SourceShortcutSettings } from './source-shortcut'
 import type { JobExperienceLevel } from './job-experience-level'
 import type { EnvironmentStamp, EnvironmentStampInput } from './environment-stamp'
+import type { QuestionRewritePolicy, QuestionRewriteResult } from './question-rewrite'
 export interface SessionExportOptions { includeAiAnswers: boolean; includeTranscript: boolean; includeInterviewInfo: boolean }
 import type { InterviewType } from './interview-type'
 import type { PackageCatalog, PaymentOrder, CreatePaymentOrder } from './payment'
@@ -16,6 +17,8 @@ export interface CustomServiceProfile extends Omit<CustomServiceInput, 'id' | 'a
 export interface PlatformServices { asr: { id: string; name: string }[] }
 export interface DesktopDefaults { version: number; llmModelId: string; temperature: number; asrServiceId: string; sessionRecordMaxMiB: number }
 export interface PlatformInfo {
+  platformVersion?: number
+  questionRewrite?: QuestionRewritePolicy
   advancedSettingsEnabled?: boolean
   webSearchAvailable?: boolean
   webSearchTimeoutMs?: number
@@ -27,6 +30,8 @@ export interface PlatformInfo {
   limits: { maxAsrSessionSeconds: number }
 }
 export interface PlatformSettings {
+  platformVersion?: number
+  questionRewrite?: QuestionRewritePolicy
   advancedSettingsEnabled?: boolean
   webSearchAvailable?: boolean
   webSearchTimeoutMs?: number
@@ -161,6 +166,8 @@ export interface ModelInputSnapshot {
   messages: { role: 'system' | 'user'; content: string }[]
 }
 export interface Answer {
+  preparationStage?: 'question-rewrite' | 'retrieval'
+  questionRewrite?: QuestionRewriteResult
   algorithmRootId?: string
   mode?: 'algorithm'
   language?: ScreenshotLanguage
@@ -187,7 +194,7 @@ export interface SessionRecord {
   answers: Answer[]
   interviewEnvironment?: InterviewEnvironmentSnapshot
 }
-export interface AnswerRequest { mode?: 'algorithm'; language?: ScreenshotLanguage; algorithmContext?: string; requestId: string; question: string; transcript: string; environmentId?: string; operationId?: string; autoWaitMs?: number }
+export interface AnswerRequest { mode?: 'algorithm'; language?: ScreenshotLanguage; algorithmContext?: string; requestId: string; question: string; transcript: string; rewriteContext?: string[]; environmentId?: string; operationId?: string; autoWaitMs?: number }
 export type AsrStatus = 'connecting' | 'listening' | 'stopping' | 'idle' | 'error'
 export interface WalletState {
   background?: Pick<Settings, 'context' | 'interviewTarget' | 'interviewEnvironment'> | null
@@ -210,7 +217,8 @@ export type AppEvent =
   | { kind: 'documents-error'; message: string }
   | { kind: 'interviews-changed' }
   | { kind: 'settings-changed' }
-  | { kind: 'answer-context'; requestId: string; interviewTarget: InterviewTarget; retrieval: RetrievalContext; interviewEnvironment?: InterviewEnvironmentSnapshot }
+  | { kind: 'answer-preparing'; requestId: string; stage: 'question-rewrite' | 'retrieval'; questionRewrite?: QuestionRewriteResult }
+  | { kind: 'answer-context'; requestId: string; interviewTarget: InterviewTarget; retrieval: RetrievalContext; interviewEnvironment?: InterviewEnvironmentSnapshot; questionRewrite?: QuestionRewriteResult }
   | { kind: 'answer-request'; requestId: string; modelInput: ModelInputSnapshot }
   | { kind: 'answer-delta'; requestId: string; delta: string }
   | { kind: 'answer-done'; requestId: string; cancelled: boolean }

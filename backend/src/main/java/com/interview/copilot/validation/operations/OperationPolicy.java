@@ -10,7 +10,7 @@ import java.util.Set;
 import java.util.UUID;
 
 public final class OperationPolicy {
-    public static final Set<String> STAGES = Set.of("screenshot.recognize", "answer.auto_wait", "answer.complete", "answer.prepare", "retrieval.rag",
+    public static final Set<String> STAGES = Set.of("question.rewrite", "screenshot.recognize", "answer.auto_wait", "answer.complete", "answer.prepare", "retrieval.rag",
             "retrieval.bm25", "retrieval.vector", "retrieval.fusion", "retrieval.rerank", "retrieval.parent_lookup", "retrieval.context_pack", "retrieval.web", "retrieval.join", "retrieval.embedding", "retrieval.database", "llm.first_content",
             "llm.complete", "answer.first_render", "session.save", "session.sync", "asr.connect",
             "asr.first_transcript", "asr.complete", "asr.backlog", "auto.feedback");
@@ -25,7 +25,7 @@ public final class OperationPolicy {
     private static final Set<String> REASONS = Set.of("provider_error", "network_error", "timeout", "cancelled",
             "unauthorized", "unavailable", "rate_limit", "session_inactive", "invalid_input", "storage_error",
             "queue_full", "empty", "feedback", "server_only", "record_changed", "record_deleted", "unknown",
-            "input_limit", "protocol_error");
+            "input_limit", "protocol_error", "disabled", "ambiguous", "busy", "invalid_output", "unchanged");
     private OperationPolicy() {}
     public static String uuid(String value) {
         if (value == null) return null;

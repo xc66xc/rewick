@@ -22,7 +22,14 @@ public record PlatformConfigRequest(
         @Valid Embedding embedding,
         @Valid WebSearch webSearch,
         @Size(max = 64) String screenshotModelId,
-        @Valid com.interview.copilot.model.platform.PlatformConfig.Rerank rerank) {
+        @Valid com.interview.copilot.model.platform.PlatformConfig.Rerank rerank,
+        @Valid com.interview.copilot.model.platform.PlatformConfig.QuestionRewrite questionRewrite) {
+    public PlatformConfigRequest(long version, List<Provider> providers, List<Model> models,
+            String defaultModelId, Asr asr, Embedding embedding, WebSearch webSearch, String screenshotModelId,
+            com.interview.copilot.model.platform.PlatformConfig.Rerank rerank) {
+        this(version, providers, models, defaultModelId, asr, embedding, webSearch, screenshotModelId, rerank, null);
+    }
+
     public PlatformConfigRequest(long version, List<Provider> providers, List<Model> models,
             String defaultModelId, Asr asr, Embedding embedding, WebSearch webSearch, String screenshotModelId) {
         this(version, providers, models, defaultModelId, asr, embedding, webSearch, screenshotModelId, null);

@@ -111,11 +111,23 @@ public final class PlatformConfigValidator {
         if (!config.screenshotModelId().isEmpty() && !available.contains(config.screenshotModelId())) {
             throw PlatformConfigErrors.invalid("截图识别模型必须选择已启用的模型。");
         }
+        validateQuestionRewrite(config.questionRewrite(), identifiers, available);
         if (config.defaultModelId().isEmpty() && available.isEmpty()) {
             return;
         }
         if (!available.contains(config.defaultModelId())) {
             throw PlatformConfigErrors.invalid("请选择已启用的默认回答模型。");
+        }
+    }
+
+    private void validateQuestionRewrite(PlatformConfig.QuestionRewrite rewrite,
+            Set<String> identifiers, Set<String> available) {
+        if (rewrite == null) return;
+        if (rewrite.enabled() && !available.contains(rewrite.modelId())) {
+            throw PlatformConfigErrors.invalid("开启问题改写前，请选择已启用的问题改写模型。");
+        }
+        if (!rewrite.modelId().isEmpty() && !identifiers.contains(rewrite.modelId())) {
+            throw PlatformConfigErrors.invalid("问题改写引用的模型已被删除，请先更改绑定或清空选择。");
         }
     }
 

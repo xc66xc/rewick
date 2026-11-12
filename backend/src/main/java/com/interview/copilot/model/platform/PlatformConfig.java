@@ -23,7 +23,12 @@ public record PlatformConfig(
         @Valid Embedding embedding,
         @Valid WebSearch webSearch,
         @Size(max = 64) String screenshotModelId,
-        @Valid Rerank rerank) {
+        @Valid Rerank rerank,
+        @Valid QuestionRewrite questionRewrite) {
+    public PlatformConfig(long version, List<Provider> providers, List<Model> models,
+            String defaultModelId, Asr asr, Embedding embedding, WebSearch webSearch, String screenshotModelId, Rerank rerank) {
+        this(version, providers, models, defaultModelId, asr, embedding, webSearch, screenshotModelId, rerank, null);
+    }
     public PlatformConfig(long version, List<Provider> providers, List<Model> models,
             String defaultModelId, Asr asr, Embedding embedding, WebSearch webSearch, String screenshotModelId) {
         this(version, providers, models, defaultModelId, asr, embedding, webSearch, screenshotModelId, null);
@@ -110,6 +115,15 @@ public record PlatformConfig(
             @NotNull @Size(max = 64) String providerId,
             @NotNull @Size(max = 200) String model,
             @Min(1024) @Max(1024) int dimensions) {}
+
+    public record QuestionRewrite(
+            boolean enabled,
+            @NotNull @Size(max = 64) String modelId,
+            @Min(500) @Max(3000) int timeoutMs) {
+        public static QuestionRewrite disabled() {
+            return new QuestionRewrite(false, "", 1500);
+        }
+    }
 
     public record Rerank(
             boolean enabled,
