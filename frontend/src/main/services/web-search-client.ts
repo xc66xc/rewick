@@ -19,15 +19,15 @@ const responseSchema = z.object({
 })
 
 export class WebSearchClient {
-  constructor(private readonly settings: Settings, private readonly token: string) {}
+  constructor(private readonly settings: Settings, private readonly token: string, private readonly terminalPermissions = false) {}
 
   async retrieve(query: string, signal: AbortSignal): Promise<RetrievalContext> {
     signal.throwIfAborted()
     if (!this.settings.webSearch?.enabled) return { status: 'disabled', excerpts: [] }
     const platform = this.settings.platform
-    if (!platform?.authenticated || !this.token) throw new Error('请先登录平台账号。')
+    if (!platform?.authenticated || !this.token) { if (this.terminalPermissions) throw new SessionFault('session_expired'); throw new Error('请先登录平台账号。') }
     try {
-      if (!platform.advancedSettingsEnabled) throw new Error('当前账号没有联网搜索权限，请刷新设置。')
+      if (!platform.advancedSettingsEnabled) { if (this.terminalPermissions) throw new PlatformRequestError('当前账号没有联网搜索权限，请刷新设置。', 403); throw new Error('当前账号没有联网搜索权限，请刷新设置。') }
       if (!platform.webSearchAvailable) throw new Error('平台尚未开放联网搜索，请联系管理员配置联网搜索服务。')
       const timeoutMs = (platform.webSearchTimeoutMs ?? 8000) + 1500
       const response = responseSchema.parse(await new PlatformClient(platform.baseUrl, timeoutMs)
@@ -37,6 +37,7 @@ export class WebSearchClient {
     } catch (error) {
       signal.throwIfAborted()
       if (error instanceof SessionFault) throw error
+      if (error instanceof PlatformRequestError && this.terminalPermissions && [402, 403, 409].includes(error.status ?? 0)) throw error
       if (error instanceof PlatformRequestError && [402, 409].includes(error.status ?? 0)) {
         throw new Error('面试会话已结束或请求失效，请刷新面试状态。')
       }

@@ -52,7 +52,8 @@ export class ServerHistory {
     const snapshot = await this.auth()
     if (!snapshot.settings.platform?.authenticated) throw new Error('请先登录。')
     assertPlatformTransport(snapshot.settings.platform.baseUrl)
-    const response = await fetch(`${snapshot.settings.platform.baseUrl}/api/v1/session-records${path}`, {
+    const resultPath = body === undefined ? `${path}${path.includes('?') ? '&' : '?'}resultFormat=questions-v1` : path
+    const response = await fetch(`${snapshot.settings.platform.baseUrl}/api/v1/session-records${resultPath}`, {
       method: body === undefined ? 'GET' : 'POST', redirect: 'error', signal: AbortSignal.timeout(timeoutMs),
       headers: { Authorization: `Bearer ${snapshot.secrets.platformAccessToken}`, 'Content-Type': 'application/json' },
       ...(body === undefined ? {} : { body: JSON.stringify(body) })

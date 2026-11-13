@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.interview.copilot.entity.history.SessionRecordEntity;
+import com.interview.copilot.converter.history.SessionRecordProjection;
 import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.mapper.history.SessionRecordMapper;
 import com.interview.copilot.mapper.platform.DesktopSettingsMapper;
@@ -37,15 +38,26 @@ public class SessionRecordServiceImpl implements SessionRecordService {
     }
 
     public RecordPageResponse page(long user, long cursor) {
+        return page(user, cursor, null);
+    }
+
+    public RecordPageResponse page(long user, long cursor, String resultFormat) {
+        SessionRecordProjection.validateFormat(resultFormat);
         var rows = records.page(user, cursor);
         var visible = rows.stream().limit(20).toList();
         return new RecordPageResponse(
-                visible.stream().map(row -> parse(row.content())).toList(),
+                visible.stream().map(row -> SessionRecordProjection.project(parse(row.content()), resultFormat)).toList(),
                 rows.size() > 20 ? visible.getLast().id() : null);
     }
 
     public RecordResponse read(long user, String id) {
-        return response(require(user, id));
+        return read(user, id, null);
+    }
+
+    public RecordResponse read(long user, String id, String resultFormat) {
+        SessionRecordProjection.validateFormat(resultFormat);
+        var row = require(user, id);
+        return new RecordResponse(row.version(), SessionRecordProjection.project(parse(row.content()), resultFormat));
     }
 
     @Transactional

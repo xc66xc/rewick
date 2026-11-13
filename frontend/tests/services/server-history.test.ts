@@ -11,6 +11,25 @@ const auth = async () => ({ settings: { ...defaultSettings, platform: { ...defau
 const record = { id: 'one', createdAt: '2026-09-12T10:00:00Z', title: '秘密面试内容', segments: [], answers: [] }
 beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'server-history-')) })
 afterEach(async () => { vi.unstubAllGlobals(); await rm(directory, { recursive: true, force: true }) })
+it('declares questions-v1 for history GETs while retaining both legacy and extracted snapshots', async () => {
+  const question = '什么是 SSE？'
+  const extracted = { resultFormat: 'questions-v1' as const, status: 'rewritten' as const, questions: [{ id: 'q1' as const, question, sourceTexts: [question] }], reason: null, model: 'extract-model', durationMs: 15, platformVersion: 4 }
+  const value = { ...record, answers: [{ id: 'a', question, text: '回答', createdAt: record.createdAt, status: 'complete', questionRewrite: extracted }] }
+  const paths: URL[] = []
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+    const parsed = new URL(url)
+    paths.push(parsed)
+    expect(init.method).toBe('GET')
+    expect(parsed.searchParams.get('resultFormat')).toBe('questions-v1')
+    return Response.json(parsed.pathname.endsWith('/one') ? { version: 1, record: value } : { records: [], nextCursor: null })
+  }))
+  const history = new ServerHistory(directory, crypto, auth)
+  expect((await history.detail('one')).answers[0].questionRewrite).toEqual(extracted)
+  await history.page(123)
+  expect(paths[1].searchParams.get('cursor')).toBe('123')
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ version: 1, record: { ...value, answers: [{ ...value.answers[0], questionRewrite: { status: 'rewritten', question, reason: null, model: 'old-model', durationMs: 10, platformVersion: 2 } }] } })))
+  expect((await history.detail('one')).answers[0].questionRewrite).toMatchObject({ question, model: 'old-model' })
+})
 it('retries the same mutation after restart without persisting plaintext', async () => {
   const calls: Record<string, unknown>[] = []
   vi.stubGlobal('fetch', vi.fn(async (_: string, init: RequestInit) => { calls.push(JSON.parse(String(init.body))); throw new Error('offline') }))

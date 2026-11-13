@@ -123,6 +123,8 @@ export interface ReferenceDocument {
   chunkCount: number
 }
 export interface ReferenceExcerpt {
+  excerptId?: string
+  questionIds?: string[]
   source?: 'platform' | 'web'
   generatedSummary?: boolean
   url?: string
@@ -152,6 +154,18 @@ export interface RetrievalContext {
     rerank?: { status: 'disabled' | 'ready' | 'degraded' | 'skipped'; model: string | null; candidateCount: number; resultCount: number; topN: number; durationMs: number; reason?: string | null } | null
   } | null
   web?: { status: 'ready' | 'degraded' | 'empty'; message?: string }
+  queries?: QueryRetrieval[]
+  policyVersion?: number
+  platformVersion?: number
+}
+export interface QueryRetrieval {
+  questionId: string
+  status: RetrievalContext['status']
+  message?: string
+  hybrid?: RetrievalContext['hybrid']
+  excerptIds: string[]
+  referenceStatus?: RetrievalContext['status']
+  web?: RetrievalContext['web']
 }
 export interface TranscriptSegment {
   id: string

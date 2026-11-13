@@ -58,4 +58,15 @@ public class ReferenceRecallServiceImpl implements ReferenceRecallService {
         ReferenceQueryPlan.checkCancellation();
         return vectors.search(user, scope, vector.toString(), selection.fingerprint(), plan);
     }
+    public com.interview.copilot.model.references.ReferenceQueryVectors queryVectors(List<String> queries,
+            ReferenceQueryPlan plan, OperationContext context) {
+        var selection = embedding.selection(plan.snapshot());
+        var values = embedding.embed(selection, queries, context == null ? null : context.child("llm"), plan.workDeadlineNanos());
+        return new com.interview.copilot.model.references.ReferenceQueryVectors(selection.fingerprint(), values);
+    }
+    public List<ReferenceCandidateEntity> vector(long user, List<ReferenceScopeEntity> scope, List<Double> vector,
+            String fingerprint, ReferenceQueryPlan plan) {
+        ReferenceQueryPlan.checkCancellation();
+        return vectors.search(user, scope, vector.toString(), fingerprint, plan);
+    }
 }

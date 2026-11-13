@@ -250,6 +250,26 @@ public class PlatformProbeServiceTest {
         assertThat(fixture.row.get().published()).isFalse();
     }
 
+    @Test
+    void test_questionExtractionDraft_returnsStructuredPreviewWithoutPublishing() {
+        var questions = List.of(Map.of("question", "除了 ReAct，还有哪些常见的 Agent 模式？", "sourceTexts", List.of("除了 ReAct，还有哪些常见的 Agent 模式？")),
+                Map.of("question", "什么是 SSE？", "sourceTexts", List.of("什么是 SSE？")),
+                Map.of("question", "MCP 除 SSE 之外，还支持哪些传输方式？", "sourceTexts", List.of("MCP 除 SSE 之外，还支持哪些传输方式？")));
+        respond(json.encode(Map.of("choices", List.of(Map.of("message", Map.of("content", json.encode(Map.of("action", "extracted", "questions", questions))), "finish_reason", "stop")))));
+        var base = config("llm");
+        var draft = new PlatformConfig(0, base.providers(), base.models(), base.defaultModelId(), base.asr(),
+                base.embedding(), base.webSearch(), "", null, new PlatformConfig.QuestionRewrite(false, "careful", 1500));
+
+        var result = probes.test(1, new PlatformProbeRequest(draft, "question-rewrite", null, "questions-v1"));
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.questionRewrite().questions()).hasSize(3);
+        assertThat(result.message()).isEqualTo("问题提取测试通过。");
+        assertThat(result.questionRewrite().wire()).containsEntry("resultFormat", "questions-v1").doesNotContainKey("question");
+        assertThat(result.questionRewrite().questions()).extracting(q -> q.question()).allSatisfy(q -> assertThat(q).doesNotContain("Reactor"));
+        assertThat(fixture.row.get().published()).isFalse();
+    }
+
     private void respond(String responseBody) {
         server =
                 HttpServer.create()

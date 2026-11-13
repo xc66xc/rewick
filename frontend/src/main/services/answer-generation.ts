@@ -10,6 +10,9 @@ import { QuestionRewriteClient, questionRewriteEnabled } from './question-rewrit
 import { retrieveAnswerContext } from './answer-retrieval'
 import { WebSearchClient } from './web-search-client'
 import { LlmClient } from './llm-client'
+import { isQuestionExtraction } from '../../shared/question-rewrite'
+import { ReferenceBatchClient } from './reference-batch-client'
+import { retrieveQuestions } from './multi-question-retrieval'
 
 type Snapshot = { settings: Settings; secrets: ServiceSecrets }
 type AnswerConnection = { settings: Settings; apiKey: string; platform?: true }
@@ -94,8 +97,18 @@ export async function generateAnswer(input: unknown, work: AnswerWork, dependenc
       if (!current()) return
       emit({ kind: 'answer-preparing', requestId: request.requestId, stage: 'retrieval', questionRewrite })
     }
-    const effectiveQuestion = questionRewrite?.status === 'rewritten' ? questionRewrite.question ?? request.question : request.question
-    const retrieval: RetrievalContext = request.mode === 'algorithm' ? { status: 'disabled', excerpts: [] } : await telemetry.measure(observation, 'retrieval.join', () => retrieveAnswerContext(
+    const effectiveQuestion = !isQuestionExtraction(questionRewrite) && questionRewrite?.status === 'rewritten' ? questionRewrite.question ?? request.question : request.question
+    const extracted = isQuestionExtraction(questionRewrite) && questionRewrite.status === 'rewritten' ? questionRewrite.questions : undefined
+    const frozenSettings = extracted ? structuredClone(resolved) : resolved
+    const origin = { baseUrl: frozenSettings.platform?.baseUrl ?? '', token: secrets.platformAccessToken }
+    const retrieval: RetrievalContext = request.mode === 'algorithm' ? { status: 'disabled', excerpts: [] } : extracted
+      ? await telemetry.measure(observation, 'retrieval.join', () => retrieveQuestions({ questions: extracted, signal: controller.signal,
+        timeoutMs: Math.max(30_000, (frozenSettings.platform?.webSearchTimeoutMs ?? 8000) + 1500),
+        references: signal => telemetry.measure(observation, 'retrieval.rag', () => new ReferenceBatchClient(frozenSettings, origin).retrieve(extracted, signal), 'pg', 'platform', signal, { questionCount: extracted.length }),
+        ...(frozenSettings.webSearch?.enabled ? { web: (question: typeof extracted[number], signal: AbortSignal) => telemetry.measure(observation, 'retrieval.web',
+          () => new WebSearchClient(frozenSettings, origin.token, true).retrieve(question.question, signal), 'system', 'platform', signal, { questionCount: extracted.length, questionIndex: extracted.indexOf(question) + 1 }) } : {}),
+      }), 'system', undefined, controller.signal)
+      : await telemetry.measure(observation, 'retrieval.join', () => retrieveAnswerContext(
       signal => telemetry.measure(observation, 'retrieval.rag', () => dependencies.references.retrieve(effectiveQuestion, request.transcript, resolved, signal), 'pg', 'platform'),
       resolved.webSearch?.enabled ? signal => telemetry.measure(observation, 'retrieval.web', () => new WebSearchClient(resolved, secrets.platformAccessToken).retrieve(effectiveQuestion, signal), 'system', 'platform') : undefined,
       controller.signal), 'system')
@@ -105,7 +118,7 @@ export async function generateAnswer(input: unknown, work: AnswerWork, dependenc
     work.pendingId = null
     work.activeId = request.requestId
     preparationFinished = true
-    work.llm = new LlmClient(connection.settings, connection.apiKey, emit, connection.platform, telemetry, observation && { ...observation, parentSpanId: observation.spanId, spanId: randomUUID() })
+    work.llm = new LlmClient(frozenSettings, connection.apiKey, emit, connection.platform, telemetry, observation && { ...observation, parentSpanId: observation.spanId, spanId: randomUUID() })
     // LlmClient emits its own request-scoped error; avoid sending another error for the same answer.
     void work.llm.generate(request, retrieval, questionRewrite).catch(() => undefined)
   } catch (error) {

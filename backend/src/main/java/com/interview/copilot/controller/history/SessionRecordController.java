@@ -29,14 +29,16 @@ public class SessionRecordController {
     @GetMapping
     public RecordPageResponse page(
             @AuthenticationPrincipal UserPrincipal user,
-            @RequestParam(defaultValue = "9223372036854775807") long cursor) {
-        return records.page(user.id(), cursor);
+            @RequestParam(defaultValue = "9223372036854775807") long cursor,
+            @RequestParam(required = false) String resultFormat) {
+        return records.page(user.id(), cursor, resultFormat);
     }
 
     @GetMapping("/{id}")
     public RecordResponse read(
-            @AuthenticationPrincipal UserPrincipal user, @PathVariable String id) {
-        return records.read(user.id(), id);
+            @AuthenticationPrincipal UserPrincipal user, @PathVariable String id,
+            @RequestParam(required = false) String resultFormat) {
+        return records.read(user.id(), id, resultFormat);
     }
 
     @PostMapping("/{id}")

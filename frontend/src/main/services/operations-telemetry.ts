@@ -90,25 +90,27 @@ export class OperationsTelemetry {
       offsetMs: Math.max(0, started - operation.started), durationMs: Math.min(86400000, Math.max(0, now - started)), outcome, reason,
       providerType: operation.providerType, model: operation.model, serviceSource: operation.serviceSource, appVersion: this.appVersion, metadata })
   }
-  async measure<T>(operation: OperationContext | undefined, stage: TelemetryStage, action: () => Promise<T>, providerType?: OperationContext['providerType'], serviceSource?: OperationContext['serviceSource'], signal?: AbortSignal): Promise<T> {
+  async measure<T>(operation: OperationContext | undefined, stage: TelemetryStage, action: () => Promise<T>, providerType?: OperationContext['providerType'], serviceSource?: OperationContext['serviceSource'], signal?: AbortSignal, extraMetadata?: TelemetryMetadata): Promise<T> {
     const child = operation && { ...operation, parentSpanId: operation.spanId, spanId: randomUUID(), providerType: providerType ?? operation.providerType, serviceSource: serviceSource ?? operation.serviceSource }
     // The desktop measures the platform request; only the backend knows the selected search supplier.
     if (child && (stage === 'retrieval.web' || stage === 'question.rewrite')) { child.providerType = 'system'; delete child.model }
     const started = performance.now()
     try {
       const value = await this.run(child, action)
-      const retrieval = value as { status?: string; model?: string | null; platformVersion?: number; reason?: string | null; excerpts?: { generatedSummary?: boolean }[] }
+      const retrieval = value as { status?: string; model?: string | null; platformVersion?: number; reason?: string | null; questions?: unknown[]; excerpts?: { generatedSummary?: boolean }[] }
       const outcome = stage === 'question.rewrite' && retrieval?.reason === 'timeout' ? 'timeout'
         : retrieval?.status === 'degraded' ? 'degraded' : retrieval?.status === 'empty' ? 'empty'
           : ['disabled', 'skipped', 'unchanged'].includes(retrieval?.status ?? '') ? 'skipped' : 'success'
       if (child && stage === 'question.rewrite' && retrieval?.model) { child.model = retrieval.model; child.providerType = 'llm' }
       const metadata = stage === 'question.rewrite' && retrieval?.platformVersion !== undefined ? { platformVersion: retrieval.platformVersion }
         : retrieval?.excerpts ? { fragmentCount: retrieval.excerpts.length, summaryEnabled: retrieval.excerpts.some(item => item.generatedSummary) } : undefined
-      this.record(child, stage, started, outcome, metadata, child?.spanId, stage === 'question.rewrite' ? rewriteFailureReason(retrieval?.reason) : undefined)
+      const questionCount = stage === 'question.rewrite' && retrieval?.questions ? { questionCount: retrieval.questions.length } : undefined
+      this.record(child, stage, started, outcome, metadata || extraMetadata || questionCount ? { ...extraMetadata, ...metadata, ...questionCount } : undefined, child?.spanId, stage === 'question.rewrite' ? rewriteFailureReason(retrieval?.reason) : undefined)
       return value
     } catch (error) {
       const reason = error instanceof Error && 'reason' in error && (error.reason === 'record_changed' || error.reason === 'record_deleted') ? error.reason : undefined
-      this.record(child, stage, started, signal?.aborted || error instanceof Error && error.name === 'AbortError' ? 'cancelled' : 'error', undefined, child?.spanId, reason)
+      const timedOut = signal?.aborted && signal.reason instanceof Error && signal.reason.name === 'TimeoutError'
+      this.record(child, stage, started, timedOut ? 'timeout' : signal?.aborted || error instanceof Error && error.name === 'AbortError' ? 'cancelled' : 'error', extraMetadata, child?.spanId, timedOut ? 'timeout' : reason)
       throw error
     }
   }

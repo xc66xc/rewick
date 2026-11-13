@@ -76,6 +76,32 @@ class QuestionRewriteServiceTest {
     }
 
     @Test
+    void rewrite_questionsFormatDisabled_returnsEmptyListAndPreservesLegacyShape() {
+        when(runtime.snapshot()).thenReturn(snapshot(false));
+        var result = service.rewrite(7, 70, requestId, new QuestionRewriteRequest("问题", List.of(), "questions-v1"), context()).block();
+
+        assertThat(result.wire()).containsEntry("resultFormat", "questions-v1").containsEntry("questions", List.of()).doesNotContainKey("question");
+        assertThat(result.reason()).isEqualTo("disabled");
+        var legacy = execute("问题");
+        assertThat(legacy.wire()).containsKey("question").doesNotContainKeys("resultFormat", "questions");
+        verifyNoInteractions(client);
+    }
+
+    @Test
+    void rewrite_extractionSuccess_emitsOneUsageLeaseAndQuestionCountWithoutRawSources() {
+        var questions = List.of(new com.interview.copilot.dto.questions.ExtractedQuestion("q1", "什么是 SSE？", List.of("什么是 SSE？"), List.of()));
+        when(client.rewrite(any(), any(), any())).thenReturn(Mono.just(new QuestionRewriteResult("extracted", null, Map.of("outputTokens", 70L), questions)));
+        var result = service.rewrite(7, 70, requestId, new QuestionRewriteRequest("什么是 SSE？", List.of(), "questions-v1"), context()).block();
+
+        assertThat(result.status()).isEqualTo("rewritten");
+        assertThat(result.questions()).isEqualTo(questions);
+        assertThat(result.wire()).doesNotContainKey("question");
+        assertThat(events).singleElement().satisfies(event -> assertThat(event.metadata()).containsEntry("questionCount", 1)
+                .doesNotContainKeys("questions", "sourceTexts"));
+        verify(usage).finish(7, requestId, "llm", "complete");
+    }
+
+    @Test
     void rewrite_success_recordsSelectedModelAndOwnStageWithTokenUsage() {
         when(client.rewrite(any(), any(), any())).thenReturn(Mono.just(new QuestionRewriteResult("rewritten", "整理后的完整问题？", Map.of("inputTokens", 18L))));
         var result = execute("那个，完整问题");
@@ -136,13 +162,14 @@ class QuestionRewriteServiceTest {
         verify(usage, never()).finish(7, requestId, "llm", "complete");
     }
 
-    @Test
-    void rewrite_explicitCancellation_cancelsUpstreamAndDoesNotReturnFallback() throws Exception {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"single", "questions-v1"})
+    void rewrite_explicitCancellation_cancelsUpstreamAndDoesNotReturnFallback(String format) throws Exception {
         var subscribed = new CountDownLatch(1);
         var stopped = new CountDownLatch(1);
         when(client.rewrite(any(), any(), any())).thenReturn(Mono.<QuestionRewriteResult>never()
                 .doOnSubscribe(value -> subscribed.countDown()).doOnCancel(stopped::countDown));
-        var future = service.rewrite(7, 70, requestId, new QuestionRewriteRequest("问题", List.of()), context()).toFuture();
+        var future = service.rewrite(7, 70, requestId, new QuestionRewriteRequest("问题", List.of(), format), context()).toFuture();
         assertThat(subscribed.await(3, TimeUnit.SECONDS)).isTrue();
         cancellations.cancel(7, requestId);
         assertThatThrownBy(future::join).isInstanceOf(java.util.concurrent.CancellationException.class);

@@ -3,7 +3,7 @@ import { productionPlatformUrl } from '../../shared/platform-transport'
 import { z } from 'zod'
 import { webSourceUrlSchema } from '../../shared/web-search'
 import { environmentSnapshotSchema } from './interview-validation'
-import { questionRewriteContextSchema, questionRewriteResultSchema } from '../../shared/question-rewrite'
+import { isQuestionExtraction, questionIdSchema, questionRewriteContextSchema, questionRewriteResultSchema } from '../../shared/question-rewrite'
 
 export function isLoopback(hostname: string): boolean {
   return hostname === 'localhost' || hostname === '[::1]' || /^127(?:\.\d{1,3}){3}$/.test(hostname)
@@ -33,6 +33,7 @@ export const interviewTargetSchema = z.object({
 })
 export const referencePatchSchema = z.object({ enabled: z.boolean().optional(), kind: z.enum(['technical', 'personal']).optional() }).strict()
 export const referenceExcerptSchema = z.object({
+    excerptId: z.string().min(1).max(200).optional(), questionIds: z.array(questionIdSchema).min(1).max(5).optional(),
     source: z.enum(['platform', 'web']).optional(),
     generatedSummary: z.boolean().optional(),
     url: webSourceUrlSchema.optional(), title: z.string().max(255).optional(), score: z.number().finite().optional(),
@@ -49,19 +50,58 @@ export const referenceExcerptSchema = z.object({
     if (value.source === 'web' && ((!value.generatedSummary && !value.url) || value.kind !== 'technical')) context.addIssue({ code: 'custom', message: '网页资料必须包含来源 URL，且只能作为技术参考。' })
   })
 const recallBranchSchema = z.object({ status: z.enum(['ready', 'empty', 'degraded']), candidateCount: z.number().int().min(0).max(20), durationMs: z.number().finite().nonnegative(), topK: z.number().int().min(1).max(20).nullable().optional() })
-const hybridSchema = z.object({
+export const hybridSchema = z.object({
   bm25: recallBranchSchema, vector: recallBranchSchema,
   fusion: z.object({ method: z.literal('rrf'), rankConstant: z.number().int().positive(), resultCount: z.number().int().min(0).max(40),
     candidateCount: z.number().int().min(0).max(40).nullable().optional(), selectedCount: z.number().int().min(0).max(40).nullable().optional(), topN: z.number().int().min(1).max(40).nullable().optional() }),
   rerank: z.object({ status: z.enum(['disabled', 'ready', 'degraded', 'skipped']), model: z.string().max(200).nullable(), candidateCount: z.number().int().min(0).max(40),
     resultCount: z.number().int().min(0).max(40), topN: z.number().int().min(1).max(20), durationMs: z.number().finite().nonnegative(), reason: z.string().max(80).nullable().optional() }).nullable().optional(),
 })
-export const retrievalContextSchema = z.object({
+const webRetrievalSchema = z.object({ status: z.enum(['ready', 'degraded', 'empty']), message: z.string().max(2000).optional() })
+export const queryRetrievalSchema = z.object({
+  questionId: questionIdSchema, status: z.enum(['disabled', 'ready', 'degraded', 'empty']), message: z.string().max(2000).optional(),
+  hybrid: hybridSchema.nullable().optional(), excerptIds: z.array(z.string().min(1).max(200)).max(61),
+  referenceStatus: z.enum(['disabled', 'ready', 'degraded', 'empty']).optional(), web: webRetrievalSchema.optional(),
+})
+const retrievalContextObjectSchema = z.object({
   status: z.enum(['disabled', 'ready', 'degraded', 'empty']), message: z.string().max(2000).optional(),
   excerpts: z.array(referenceExcerptSchema).max(61),
   hybrid: hybridSchema.nullable().optional(),
-  web: z.object({ status: z.enum(['ready', 'degraded', 'empty']), message: z.string().max(2000).optional() }).optional(),
+  web: webRetrievalSchema.optional(), queries: z.array(queryRetrievalSchema).min(1).max(5).optional(),
+  policyVersion: z.number().int().nonnegative().optional(), platformVersion: z.number().int().nonnegative().optional(),
 })
+export const retrievalContextSchema = retrievalContextObjectSchema.superRefine((value, context) => {
+  if (!value.queries) return
+  const queries = value.queries
+  const ids = new Set(queries.map(query => query.questionId))
+  const excerpts = new Map(value.excerpts.map(excerpt => [excerpt.excerptId, excerpt]))
+  const summaries = value.excerpts.filter(excerpt => excerpt.generatedSummary)
+  if (ids.size !== queries.length || excerpts.size !== value.excerpts.length || value.hybrid !== undefined
+    || value.excerpts.filter(excerpt => excerpt.source === 'web').reduce((sum, excerpt) => sum + excerpt.text.length, 0) > 8000
+    || value.excerpts.filter(excerpt => excerpt.source !== 'web').reduce((sum, excerpt) => sum + excerpt.text.length, 0) > 4800
+    || summaries.length > queries.length
+    || queries.some(query => summaries.filter(excerpt => excerpt.questionIds?.includes(query.questionId)).length > 1)
+    || value.excerpts.some(excerpt => !excerpt.excerptId || !excerpt.questionIds?.length
+      || new Set(excerpt.questionIds).size !== excerpt.questionIds.length
+      || excerpt.questionIds.some(id => !ids.has(id) || !queries.some(query => query.questionId === id && query.excerptIds.includes(excerpt.excerptId ?? ''))))
+    || queries.some(query => new Set(query.excerptIds).size !== query.excerptIds.length || query.excerptIds.some(id => !excerpts.get(id)?.questionIds?.includes(query.questionId)))) {
+    context.addIssue({ code: 'custom', message: '分题证据归属或材料预算无效。' })
+  }
+})
+export const batchReferenceResponseSchema = retrievalContextObjectSchema.extend({ queries: z.array(queryRetrievalSchema).min(1).max(5) }).strict()
+  .superRefine((value, context) => {
+    const ids = new Set(value.queries.map(query => query.questionId))
+    const excerpts = new Map(value.excerpts.map(excerpt => [excerpt.excerptId, excerpt]))
+    if (ids.size !== value.queries.length || excerpts.size !== value.excerpts.length
+      || value.hybrid !== undefined || value.web !== undefined
+      || value.excerpts.reduce((sum, excerpt) => sum + excerpt.text.length, 0) > 4800
+      || value.excerpts.some(excerpt => !excerpt.excerptId || excerpt.source === 'web' || !excerpt.questionIds?.length
+        || new Set(excerpt.questionIds).size !== excerpt.questionIds.length
+        || excerpt.questionIds.some(id => !ids.has(id) || !value.queries.some(query => query.questionId === id && query.excerptIds.includes(excerpt.excerptId ?? ''))))
+      || value.queries.some(query => new Set(query.excerptIds).size !== query.excerptIds.length || query.excerptIds.some(id => !excerpts.get(id)?.questionIds?.includes(query.questionId)))) {
+      context.addIssue({ code: 'custom', message: '分题资料响应存在无效证据归属或超过预算。' })
+    }
+  })
 export const platformSettingsSchema = z.object({
   enabled: z.boolean(),
   baseUrl: endpoint('http').refine(value => !new URL(value).search, '平台地址不能包含查询参数。').transform(value => value.replace(/\/$/, '')),
@@ -120,6 +160,13 @@ export const sessionRecordSchema = z.object({
     modelInput: modelInputSnapshotSchema.optional(),
     questionRewrite: questionRewriteResultSchema.optional(),
     interviewEnvironment: environmentSnapshotSchema.optional(),
+  }).superRefine((answer, context) => {
+    const extracted = isQuestionExtraction(answer.questionRewrite) && answer.questionRewrite.status === 'rewritten' ? answer.questionRewrite.questions : undefined
+    const queries = answer.retrieval?.queries
+    if (extracted?.some(question => question.sourceTexts.some(text => !answer.question.includes(text)))
+      || queries && (!extracted || queries.length !== extracted.length || queries.some((query, index) => query.questionId !== extracted[index]?.id))) {
+      context.addIssue({ code: 'custom', message: '提取问题必须来源于本轮原话，且与分题证据一一对应。' })
+    }
   })).max(500),
 })
 

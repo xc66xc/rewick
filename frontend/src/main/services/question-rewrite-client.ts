@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { questionRewriteResultSchema, rewriteTextLength, type QuestionRewriteReason, type QuestionRewriteResult } from '../../shared/question-rewrite'
+import { isQuestionExtraction, questionExtractionResultSchema, singleQuestionRewriteResultSchema, rewriteTextLength, type QuestionRewriteReason, type QuestionRewriteResult } from '../../shared/question-rewrite'
 import type { AnswerRequest, Settings } from '../../shared/types'
 import { PlatformClient, PlatformRequestError } from './platform-client'
 import { SessionFault } from './session-fault'
@@ -16,9 +16,11 @@ export class QuestionRewriteClient {
     signal.throwIfAborted()
     if (!questionRewriteEnabled(this.settings, request)) return
     const platform = this.settings.platform
+    const extraction = platform?.questionRewrite?.resultFormats?.includes('questions-v1') === true
+      && platform.questionRewrite.batchReferencesAvailable === true
     const platformVersion = platform?.platformVersion ?? 0
     const fallback = (status: 'skipped' | 'degraded', reason: QuestionRewriteReason, durationMs = 0): QuestionRewriteResult => ({
-      status, question: null, reason, model: null, durationMs, platformVersion,
+      status, ...(extraction ? { resultFormat: 'questions-v1' as const, questions: [] } : { question: null }), reason, model: null, durationMs, platformVersion,
     })
     if (rewriteTextLength(request.question) > 3000) return fallback('skipped', 'input_limit')
     if (!platform?.authenticated || !this.token) throw new Error('平台登录已失效，请重新登录。')
@@ -48,12 +50,17 @@ export class QuestionRewriteClient {
       controller.signal.throwIfAborted()
       submitted = true
       const result = await Promise.race([
-        new PlatformClient(origin.baseUrl, timeoutMs).rewriteQuestion(origin.token, request.question, request.rewriteContext ?? [], requestId, controller.signal),
+        new PlatformClient(origin.baseUrl, timeoutMs).rewriteQuestion(origin.token, request.question, request.rewriteContext ?? [], requestId, controller.signal, extraction ? 'questions-v1' : undefined),
         cancelled,
       ])
       signal.throwIfAborted()
       controller.signal.throwIfAborted()
-      return questionRewriteResultSchema.parse(result)
+      const parsed = extraction ? questionExtractionResultSchema.parse(result) : singleQuestionRewriteResultSchema.parse(result)
+      if (isQuestionExtraction(parsed) && parsed.questions.some(question => question.sourceTexts.some(text => !request.question.includes(text))
+        || question.contextSourceTexts?.some(text => !request.rewriteContext?.some(context => context.includes(text))))) {
+        return fallback('degraded', 'invalid_output', Math.max(0, performance.now() - started))
+      }
+      return parsed
     } catch (error) {
       signal.throwIfAborted()
       if (error instanceof SessionFault || error instanceof PlatformRequestError && [401, 402, 403, 409].includes(error.status ?? 0)) throw error

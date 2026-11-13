@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type { Answer } from '../src/shared/types'
 import AnswerCard from '../src/renderer/src/components/AnswerCard'
 
@@ -30,5 +31,21 @@ it.each([false, true])('shows rewrite diagnostics only in development, DEV=%s', 
   vi.stubEnv('DEV', development)
   render(<AnswerCard answer={{ ...answer, questionRewrite: { status: 'rewritten', question: '请介绍本人经历。', reason: null, model: 'rewrite-model', durationMs: 30, platformVersion: 2 } }} index={1} />)
   expect(Boolean(screen.queryByText('问题整理 · 已整理'))).toBe(development)
+  expect(screen.getByRole('heading', { name: answer.question })).toBeDefined()
+})
+it.each([false, true])('shows extracted questions, raw provenance and actual sent coverage only in development, DEV=%s', async development => {
+  vi.stubEnv('DEV', development)
+  const user = userEvent.setup()
+  render(<AnswerCard answer={{ ...answer, questionRewrite: { resultFormat: 'questions-v1', status: 'rewritten', questions: [{ id: 'q1', question: '请介绍自己的项目经历。', sourceTexts: ['介绍一下自己'], contextSourceTexts: ['本轮讨论项目'] }], reason: null, model: 'extract-model', durationMs: 40, platformVersion: 4 },
+    retrieval: { status: 'degraded', excerpts: [], queries: [{ questionId: 'q1', status: 'degraded', excerptIds: [], message: '本轮检索预算已用尽。' }] } }} index={1} />)
+  const summary = screen.queryByRole('button', { name: '问题提取 · 已整理 · 1 题' })
+  expect(Boolean(summary)).toBe(development)
+  if (summary) {
+    await user.click(summary)
+    expect(screen.getByRole('heading', { name: 'q1 · 请介绍自己的项目经历。' })).toBeDefined()
+    expect(screen.getByText('原话来源：介绍一下自己')).toBeDefined()
+    expect(screen.getByText('指代上下文：本轮讨论项目')).toBeDefined()
+    expect(screen.getByText(/实际送入 0 份证据/)).toBeDefined()
+  }
   expect(screen.getByRole('heading', { name: answer.question })).toBeDefined()
 })
