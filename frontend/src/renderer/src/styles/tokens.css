@@ -52,6 +52,8 @@
   --color-accent-text: #2454ff;
   --color-accent-subtle: #eaf2ff;
   --color-accent-line: #cedcf5;
+  --color-compact-generated-fill: #ded9f5;
+  --color-compact-question-link: #8580bd;
 
   /* ── 颜色:副色 ── */
   --color-violet: #8337ff;
@@ -284,10 +286,16 @@ html.compact-transparent #root { background: transparent; }
 .compact-surface {
   --compact-question-fill: rgb(188 213 255 / calc(var(--compact-opacity, 0.2) * 0.85));
   --compact-reply-fill: rgb(255 255 255 / var(--compact-opacity, 0.2));
+  --compact-generated-fill: color-mix(in srgb, var(--color-compact-generated-fill) calc(var(--compact-opacity, 0.2) * 100%), transparent);
 }
 .compact-answer { padding: 18px 16px 10px; }
 .compact-answer__question { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; margin-bottom: 18px; }
 .compact-answer__question-bubble { max-width: 88%; margin: 0; padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: var(--compact-question-fill); font-size: var(--compact-font-size, 19px); line-height: 1.6; font-weight: 500; text-align: left; }
+.compact-answer__question-pair { display: flex; flex-direction: column; align-items: flex-end; width: 100%; min-width: 0; }
+.compact-answer__generated { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: 88%; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.compact-answer__generated-bubble { max-width: 100%; padding: 6px 12px; border-radius: 12px 12px 4px 12px; background: var(--compact-generated-fill); color: var(--color-text-heading); font-size: clamp(10px, calc(var(--compact-font-size, 19px) * 0.78), 20px); line-height: 1.5; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; }
+.compact-answer__question-connector { flex-shrink: 0; width: 14px; height: 12px; margin-right: 14px; color: var(--color-compact-question-link); }
+.compact-answer__question-bubble--linked { border-top-right-radius: 6px; }
 .compact-answer__label { margin: 0 0 6px 2px; font-size: 12px; color: var(--color-text-secondary); }
 .compact-answer__reply { display: flex; flex-direction: column; width: 94%; min-width: 0; padding: 14px 16px 8px; border-radius: 16px 16px 16px 4px; background: var(--compact-reply-fill); }
 .compact-answer__status { order: 2; margin: 4px 0 0; }

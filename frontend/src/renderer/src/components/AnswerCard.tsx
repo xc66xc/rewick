@@ -1,10 +1,11 @@
 import { cn } from '../lib/cn'
 import { Collapse } from './ui/collapsible'
 import { useState } from 'react'
-import { Check, Copy, Sparkle } from '@phosphor-icons/react'
+import { ArrowDown, Check, Copy, Sparkle } from '@phosphor-icons/react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Answer } from '../../../shared/types'
+import { isQuestionExtraction } from '../../../shared/question-rewrite'
 import { Badge } from './ui/badge'
 import { IconButton } from './ui/button'
 import ReferenceSources from './ReferenceSources'
@@ -19,13 +20,24 @@ export default function AnswerCard({ answer, index, compact = false }: AnswerCar
   const [copyError, setCopyError] = useState(false)
   const generationStatus = answer.preparationStage === 'question-rewrite' ? '正在整理问题'
     : answer.preparationStage === 'retrieval' ? '正在检索资料' : '正在生成'
+  const rewrite = compact ? answer.questionRewrite : undefined
+  const generatedQuestions = rewrite?.status === 'rewritten'
+    ? isQuestionExtraction(rewrite) ? rewrite.questions : rewrite.question ? [{ id: 'q1', question: rewrite.question }] : []
+    : []
   async function handleCopy() {
     try { await navigator.clipboard.writeText(answer.text); setCopied(true); setCopyError(false) }
     catch { setCopyError(true) }
   }
+  const originalQuestion = <h3 className={cn('font-semibold whitespace-pre-wrap [overflow-wrap:anywhere]', compact ? 'compact-answer__question-bubble' : 'text-sm leading-[1.75]', generatedQuestions.length > 0 && 'compact-answer__question-bubble--linked')}>{answer.question}</h3>
   const question = <header className={cn(compact ? 'compact-answer__question mt-4' : 'mb-5 flex items-start gap-3')}>
       {compact ? <p className="text-xs font-medium text-text-secondary">当前问题</p> : <Badge className="border-transparent bg-success-subtle font-mono text-[10px] text-success">Q{String(index).padStart(2, '0')}</Badge>}
-      <h3 className={cn('font-semibold whitespace-pre-wrap [overflow-wrap:anywhere]', compact ? 'compact-answer__question-bubble' : 'text-sm leading-[1.75]')}>{answer.question}</h3>
+      {generatedQuestions.length > 0 ? <div className="compact-answer__question-pair">
+        <ol className="compact-answer__generated" aria-label="整理后的问题" aria-live="polite">
+          {generatedQuestions.map(value => <li className="compact-answer__generated-bubble" key={value.id}>{value.question}</li>)}
+        </ol>
+        <ArrowDown className="compact-answer__question-connector" aria-hidden="true" />
+        {originalQuestion}
+      </div> : originalQuestion}
     </header>
   return <article data-answer-id={answer.id} className={cn(compact ? 'compact-answer' : 'border-b border-border p-5 animate-fade-in wide:px-8 wide:py-6')} aria-label={`回答 ${index}`}>
     {!compact && question}
