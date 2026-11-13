@@ -89,10 +89,10 @@ function webResponse(query: string, text = `查询 ${query} 的网页片段`, su
 }
 
 describe('production multi-question answer orchestration', () => {
-  it.each(['invalid_source', 'unchanged'] as const)('uses the existing raw single-query flow without retry when extraction is %s', async failure => {
+  it.each(['malformed', 'unchanged'] as const)('uses the existing raw single-query flow without retry when extraction is %s', async failure => {
     const questions = extractedQuestions(3)
     const f = fixture({ questions, respond: call => call.url.endsWith('/questions/rewrite') ? Response.json({ ...rewriteResult, question: undefined, resultFormat: 'questions-v1',
-      ...(failure === 'unchanged' ? { status: 'unchanged', questions: [], reason: 'ambiguous' } : { questions: questions.map(question => ({ ...question, sourceTexts: ['fabricated source'] })) }) }) : undefined })
+      ...(failure === 'unchanged' ? { status: 'unchanged', questions: [], reason: 'ambiguous' } : { questions: [{ ...questions[0], id: 'invalid-id' }] }) }) : undefined })
     await f.start(); await f.waitComplete()
     expect(f.matching('/questions/rewrite')).toHaveLength(1)
     expect(f.matching('/references/search/batch')).toHaveLength(0)
@@ -101,6 +101,19 @@ describe('production multi-question answer orchestration', () => {
     expect(f.matching('/chat/completions')).toHaveLength(1)
     expect(JSON.parse(f.finalPayload().messages[1].content)).not.toHaveProperty('questions')
   })
+  it('uses model-provided nonliteral source wording in the batch and final answer without semantic rejection', async () => {
+    const questions = extractedQuestions(3).map(question => ({ ...question, sourceTexts: ['模型整理的来源', '模型整理的来源'] }))
+    const f = fixture({ questions })
+
+    await f.start('model-wording'); await f.waitComplete('model-wording')
+
+    expect(f.matching('/questions/rewrite')).toHaveLength(1)
+    expect(f.matching('/references/search')).toHaveLength(0)
+    expect(JSON.parse(String(f.matching('/references/search/batch')[0].init.body)).queries).toEqual(questions.map(question => ({ questionId: question.id, query: question.question })))
+    expect(JSON.parse(f.finalPayload().messages[1].content).questions).toEqual(questions)
+    expect(f.matching('/chat/completions')).toHaveLength(1)
+  })
+
   it.each([1, 3, 5])('negotiates one extraction and one reference batch for N=%s while making one complete final answer', async count => {
     const questions = extractedQuestions(count)
     const raw = `开场背景 Reactor 与流式链路。${questions.map(question => question.question).join(' ')}`
@@ -161,7 +174,9 @@ describe('production multi-question answer orchestration', () => {
     expect(summaries.every(row => !row.url && row.source === 'web')).toBe(true)
     const snapshot = { id: 'history', title: '记录', createdAt: '2026-11-13T10:00:00Z', segments: [], answers: [{ id: 'multi', question: questions.map(question => question.question).join(' '), text: '回答', createdAt: '2026-11-13T10:00:00Z', status: 'complete', retrieval: context.retrieval, questionRewrite: context.questionRewrite }] }
     expect(sessionRecordSchema.safeParse(snapshot).success).toBe(true)
-    expect(sessionRecordSchema.safeParse({ ...snapshot, answers: [{ ...snapshot.answers[0], question: 'different current question' }] }).success).toBe(false)
+    expect(sessionRecordSchema.safeParse({ ...snapshot, answers: [{ ...snapshot.answers[0], question: 'edited original question' }] }).success).toBe(true)
+    const mismatched = { ...context.retrieval, queries: context.retrieval.queries?.map((query, index) => index === 0 ? { ...query, questionId: 'q2' } : query) }
+    expect(sessionRecordSchema.safeParse({ ...snapshot, answers: [{ ...snapshot.answers[0], retrieval: mismatched }] }).success).toBe(false)
   })
 
   it('isolates one failed web query while preserving the other questions and making only one answer', async () => {

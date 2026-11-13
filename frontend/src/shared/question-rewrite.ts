@@ -26,11 +26,11 @@ export const singleQuestionRewriteResultSchema = z.object({
   }
 })
 export const questionIdSchema = z.enum(['q1', 'q2', 'q3', 'q4', 'q5'])
-const sources = z.array(z.string().trim().min(1).max(6000)).max(10).refine(values => new Set(values).size === values.length)
+const sources = z.array(z.string().trim().min(1).max(6000)).max(10)
 export const extractedQuestionSchema = z.object({
   id: questionIdSchema,
   question: z.string().trim().min(1).max(1200).refine(value => rewriteTextLength(value) <= 600),
-  sourceTexts: z.array(z.string().trim().min(1).max(6000)).min(1).max(10).refine(values => new Set(values).size === values.length), contextSourceTexts: sources.optional(),
+  sourceTexts: sources.min(1), contextSourceTexts: sources.optional(),
 }).strict()
 export type ExtractedQuestion = z.infer<typeof extractedQuestionSchema>
 export const questionExtractionResultSchema = z.object({
@@ -39,7 +39,6 @@ export const questionExtractionResultSchema = z.object({
   const questions = value.questions
   if ((value.status === 'rewritten') !== (questions.length > 0)
     || questions.some((question, index) => question.id !== `q${index + 1}`)
-    || new Set(questions.map(question => question.question)).size !== questions.length
     || questions.reduce((sum, question) => sum + rewriteTextLength(question.question), 0) > 1500
     || questions.flatMap(question => question.sourceTexts).reduce((sum, text) => sum + rewriteTextLength(text), 0) > 3000
     || questions.flatMap(question => question.contextSourceTexts ?? []).reduce((sum, text) => sum + rewriteTextLength(text), 0) > 1500) {

@@ -13,7 +13,7 @@ beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'server-histor
 afterEach(async () => { vi.unstubAllGlobals(); await rm(directory, { recursive: true, force: true }) })
 it('declares questions-v1 for history GETs while retaining both legacy and extracted snapshots', async () => {
   const question = '什么是 SSE？'
-  const extracted = { resultFormat: 'questions-v1' as const, status: 'rewritten' as const, questions: [{ id: 'q1' as const, question, sourceTexts: [question] }], reason: null, model: 'extract-model', durationMs: 15, platformVersion: 4 }
+  const extracted = { resultFormat: 'questions-v1' as const, status: 'rewritten' as const, questions: [{ id: 'q1' as const, question, sourceTexts: ['模型整理的来源', '模型整理的来源'] }], reason: null, model: 'extract-model', durationMs: 15, platformVersion: 4 }
   const value = { ...record, answers: [{ id: 'a', question, text: '回答', createdAt: record.createdAt, status: 'complete', questionRewrite: extracted }] }
   const paths: URL[] = []
   vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {

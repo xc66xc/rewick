@@ -163,9 +163,8 @@ export const sessionRecordSchema = z.object({
   }).superRefine((answer, context) => {
     const extracted = isQuestionExtraction(answer.questionRewrite) && answer.questionRewrite.status === 'rewritten' ? answer.questionRewrite.questions : undefined
     const queries = answer.retrieval?.queries
-    if (extracted?.some(question => question.sourceTexts.some(text => !answer.question.includes(text)))
-      || queries && (!extracted || queries.length !== extracted.length || queries.some((query, index) => query.questionId !== extracted[index]?.id))) {
-      context.addIssue({ code: 'custom', message: '提取问题必须来源于本轮原话，且与分题证据一一对应。' })
+    if (queries && (!extracted || queries.length !== extracted.length || queries.some((query, index) => query.questionId !== extracted[index]?.id))) {
+      context.addIssue({ code: 'custom', message: '提取问题与分题证据必须一一对应。' })
     }
   })).max(500),
 })

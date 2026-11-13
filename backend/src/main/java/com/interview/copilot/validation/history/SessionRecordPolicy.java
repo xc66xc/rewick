@@ -86,7 +86,7 @@ public final class SessionRecordPolicy {
         if (node.has("mode") && (!node.path("mode").isTextual() || !"algorithm".equals(node.path("mode").asText()))) throw invalid();
         if (node.has("language") && (!node.path("language").isTextual()
                 || !Set.of("Java", "Python", "C++", "TypeScript").contains(node.path("language").asText()))) throw invalid();
-        questionRewrite(node.path("questionRewrite"), node.path("question").asText());
+        questionRewrite(node.path("questionRewrite"));
         BatchRetrievalHistoryPolicy.validate(node.path("retrieval"), node.path("questionRewrite"));
         text(node, "id", 128);
         if (!node.path("question").isTextual()
@@ -99,7 +99,7 @@ public final class SessionRecordPolicy {
         environment(node.path("interviewEnvironment"));
     }
 
-    private static void questionRewrite(JsonNode node, String original) {
+    private static void questionRewrite(JsonNode node) {
         if (node.isMissingNode() || node.isNull()) return;
         if (!node.isObject() || !Set.of("rewritten", "unchanged", "skipped", "degraded").contains(node.path("status").asText())) throw invalid();
         node.fieldNames().forEachRemaining(name -> {
@@ -110,7 +110,7 @@ public final class SessionRecordPolicy {
                 || !node.path("platformVersion").isIntegralNumber() || !node.path("platformVersion").canConvertToLong()
                 || node.path("platformVersion").asLong() < 0) throw invalid();
         if (node.has("resultFormat")) {
-            QuestionExtractionHistoryPolicy.validate(node, original);
+            QuestionExtractionHistoryPolicy.validate(node);
         } else if ("rewritten".equals(node.path("status").asText())) {
             text(node, "question", 6000);
             if (com.interview.copilot.validation.questions.QuestionRewritePolicy.characters(node.path("question").asText()) > 3000) throw invalid();
