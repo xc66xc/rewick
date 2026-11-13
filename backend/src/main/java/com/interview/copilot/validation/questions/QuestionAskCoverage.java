@@ -2,23 +2,35 @@ package com.interview.copilot.validation.questions;
 
 import com.interview.copilot.dto.questions.ExtractedQuestion;
 import com.interview.copilot.exception.questions.QuestionRewriteOutputException;
+import com.interview.copilot.exception.questions.QuestionRewriteValidationRule;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
-/** Bounded literal ask coverage; ambiguous syntax is rejected rather than claimed equivalent. */
+/** Exact source anchors and objective constraints complement model semantics, not word-for-word coverage. */
 final class QuestionAskCoverage {
     private static final Pattern ASK = Pattern.compile("[？?]|什么|怎么|如何|哪些|哪种|为什么|为何|为啥|请解释|介绍一下|说一下|讲一下|举个例子|是否|能不能");
     private static final Pattern BACKGROUND = Pattern.compile("^(?:我看到|我看|我注意到|看到|听到|前面|你(?:们)?(?:项目|系统|刚才|之前|前面|用|使用|基于)|刚才|之前|这里先|这里提到)");
     private static final Pattern PARALLEL = Pattern.compile("(?:[，,]\\s*(?:以及|另外(?:一个)?|此外|还有(?:一个)?|再问(?:一下|一个)?|然后|同时|接着)\\s*|以及)");
-    private static final Pattern FILLER = Pattern.compile("就是说|那个|嗯|呃|啊|呢|呀|吧|什么是|是什么|什么|怎么|如何|哪些|哪种|是否|请解释|介绍一下|说一下|讲一下");
 
     private QuestionAskCoverage() {}
 
     static void validate(String original, List<ExtractedQuestion> questions) {
-        for (String unit : asks(original)) {
-            if (questions.stream().noneMatch(question -> supports(unit, question))) throw unsafe();
+        Map<String, String> meanings = new LinkedHashMap<>();
+        asks(original).forEach(unit -> meanings.putIfAbsent(identity(unit), unit));
+        List<String> units = List.copyOf(meanings.values());
+        var anchors = anchors(units, questions);
+        for (String unit : units) {
+            var candidates = questions.stream().filter(question -> question.sourceTexts().stream()
+                    .anyMatch(anchors.get(unit)::contains)).toList();
+            if (candidates.isEmpty()) throw unsafe(QuestionRewriteValidationRule.QUESTION_ANCHOR);
+            if (candidates.stream().noneMatch(question -> preservesConstraints(unit, question)))
+                throw unsafe(QuestionRewriteValidationRule.CONSTRAINT);
         }
     }
 
@@ -50,7 +62,7 @@ final class QuestionAskCoverage {
             if (!isAsk(left) || !isAsk(right)) continue;
             result.add(left);
             start = matcher.end();
-            if (result.size() >= 5) throw unsafe();
+            if (result.size() >= 5) throw unsafe(QuestionRewriteValidationRule.EXTRACTION_STRUCTURE);
         }
         result.add(value.substring(start));
         return result;
@@ -72,7 +84,7 @@ final class QuestionAskCoverage {
         return value;
     }
 
-    private static boolean supports(String original, ExtractedQuestion question) {
+    private static boolean preservesConstraints(String original, ExtractedQuestion question) {
         String raw = QuestionRewritePolicy.normalize(original);
         String output = QuestionRewritePolicy.normalize(question.question());
         if (!QuestionRewritePolicy.protectedTokens(output).containsAll(QuestionRewritePolicy.protectedTokens(raw))) return false;
@@ -82,34 +94,36 @@ final class QuestionAskCoverage {
         } catch (QuestionRewriteOutputException error) {
             return false;
         }
-        String required = literal(original);
-        if (required.isBlank()) return false;
-        boolean[] covered = new boolean[required.length()];
-        for (String source : question.sourceTexts()) cover(required, literal(source), covered);
-        for (boolean value : covered) if (!value) return false;
         return true;
     }
 
-    private static void cover(String required, String source, boolean[] covered) {
-        if (source.isBlank()) return;
-        if (source.contains(required)) {
-            Arrays.fill(covered, true);
-            return;
+    private static Map<String, Set<String>> anchors(List<String> units, List<ExtractedQuestion> questions) {
+        Map<String, Set<String>> result = new HashMap<>();
+        units.forEach(unit -> result.put(unit, new HashSet<>()));
+        var sources = questions.stream().flatMap(question -> question.sourceTexts().stream()).distinct().toList();
+        for (String source : sources) {
+            var matching = units.stream().filter(unit -> matches(unit, source)).toList();
+            for (String unit : matching) {
+                if (matching.size() == 1 || source.contains(unit.trim())) result.get(unit).add(source);
+            }
         }
-        for (int index = required.indexOf(source); index >= 0; index = required.indexOf(source, index + 1))
-            Arrays.fill(covered, index, index + source.length(), true);
+        return result;
     }
 
-    private static String literal(String value) {
-        String normalized = QuestionRewritePolicy.normalize(value).replaceAll("[\\p{P}\\s]", "");
-        return FILLER.matcher(normalized).replaceAll("");
+    private static boolean matches(String unit, String source) {
+        return unit.contains(source) || source.contains(unit.trim());
+    }
+
+    private static String identity(String value) {
+        return QuestionRewritePolicy.normalize(value).replaceAll("\\s+", "")
+                .replaceAll("[。！？!?；;，,]+$", "");
     }
 
     private static boolean isAsk(String value) {
         return ASK.matcher(value).find();
     }
 
-    private static QuestionRewriteOutputException unsafe() {
-        return new QuestionRewriteOutputException();
+    private static QuestionRewriteOutputException unsafe(QuestionRewriteValidationRule rule) {
+        return new QuestionRewriteOutputException(rule);
     }
 }

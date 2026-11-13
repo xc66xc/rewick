@@ -2,8 +2,14 @@ package com.interview.copilot.validation.history;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.interview.copilot.common.questions.SpokenExtractionFixture;
 import com.interview.copilot.exception.ApiException;
+import com.interview.copilot.request.questions.QuestionRewriteRequest;
+import com.interview.copilot.validation.questions.QuestionExtractionPolicy;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import java.util.List;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,6 +38,27 @@ class SessionRecordQuestionRewriteTest {
         var session = extracted();
         assertThatCode(() -> SessionRecordPolicy.validateStructure("session", session)).doesNotThrowAnyException();
         assertThat(session.path("answers").path(0).path("question").asText()).isEqualTo("什么是 SSE？");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2})
+    void validateStructure_spokenExtractionWithNecessarySources_allowsRepeatedSync(int variant) throws Exception {
+        var session = session();
+        var answer = (ObjectNode) session.path("answers").path(0);
+        answer.put("question", SpokenExtractionFixture.ORIGINAL);
+        var questions = QuestionExtractionPolicy.output(json.valueToTree(SpokenExtractionFixture.output(variant)),
+                new QuestionRewriteRequest(SpokenExtractionFixture.ORIGINAL, List.of(), "questions-v1"));
+        var rewrite = answer.putObject("questionRewrite").put("resultFormat", "questions-v1").put("status", "rewritten")
+                .put("model", "synthetic").put("durationMs", 700).put("platformVersion", 41);
+        rewrite.putNull("reason");
+        rewrite.set("questions", json.valueToTree(questions));
+        var snapshot = rewrite.deepCopy();
+
+        assertThatCode(() -> SessionRecordPolicy.validateStructure("session", session)).doesNotThrowAnyException();
+        answer.put("text", "补充后的回答");
+        assertThatCode(() -> SessionRecordPolicy.validateStructure("session", session)).doesNotThrowAnyException();
+        assertThat(answer.path("questionRewrite")).isEqualTo(snapshot);
+        assertThat(answer.path("question").asText()).isEqualTo(SpokenExtractionFixture.ORIGINAL);
     }
 
     @Test

@@ -5,6 +5,7 @@ import com.interview.copilot.common.usage.UsageLease;
 import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.exception.ai.ProviderFailure;
 import com.interview.copilot.exception.questions.QuestionRewriteFailure;
+import com.interview.copilot.exception.questions.QuestionRewriteOutputException;
 import com.interview.copilot.model.operations.OperationContext;
 import com.interview.copilot.model.platform.PlatformSnapshot;
 import com.interview.copilot.model.questions.QuestionRewriteResult;
@@ -147,8 +148,9 @@ public final class QuestionRewriteServiceImpl implements QuestionRewriteService 
             metadata.put("platformVersion", version);
             context.finish("question.rewrite", "degraded", reason, metadata);
         }
-        LOG.warn("Question rewrite degraded request={} reason={} exception={}",
-                context == null ? "unobserved" : context.requestId(), reason, error.getClass().getSimpleName());
+        String validationRule = error instanceof QuestionRewriteOutputException invalid ? invalid.rule().code() : "none";
+        LOG.warn("Question rewrite degraded request={} reason={} validationRule={} exception={}",
+                context == null ? "unobserved" : context.requestId(), reason, validationRule, error.getClass().getSimpleName());
         return terminal("degraded", reason, model, started, version, context);
     }
 
