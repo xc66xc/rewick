@@ -1,12 +1,15 @@
 package com.interview.copilot.validation.questions;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.interview.copilot.common.questions.SpokenExtractionFixture;
 import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.exception.questions.QuestionRewriteOutputException;
+import com.interview.copilot.exception.questions.QuestionRewriteValidationRule;
 import com.interview.copilot.request.questions.QuestionRewriteRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import java.util.List;
 import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,6 +18,62 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class QuestionExtractionPolicyTest {
     private final ObjectMapper json = new ObjectMapper();
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2})
+    void output_spokenLongQuestion_acceptsCompleteAndNecessaryVerbatimSources(int variant) {
+        var result = extract(input(SpokenExtractionFixture.ORIGINAL), SpokenExtractionFixture.questions(variant));
+
+        assertThat(result).extracting(question -> question.question()).containsExactly(
+                "除了ReAct，还有哪些常见的Agent模式？", "什么是SSE？", "MCP除了SSE，还支持哪些传输方式？");
+    }
+
+    @Test
+    void output_genericSourceRepeatedAcrossDistinctChineseAsks_rejectsAmbiguousAnchors() {
+        var input = input("缓存怎么处理？队列怎么处理？");
+        var first = Map.of("question", "缓存怎么处理？", "sourceTexts", List.of("怎么处理？"));
+        var second = Map.of("question", "队列怎么处理？", "sourceTexts", List.of("怎么处理？"));
+
+        assertThatThrownBy(() -> extract(input, List.of(first, second)))
+                .isInstanceOf(QuestionRewriteOutputException.class).satisfies(error ->
+                        assertThat(((QuestionRewriteOutputException) error).rule()).isEqualTo(QuestionRewriteValidationRule.QUESTION_ANCHOR));
+    }
+
+    @Test
+    void output_repeatedIdenticalAsk_acceptsOneDeduplicatedQuestion() {
+        assertThat(extract(input("什么是SSE？什么是SSE？"), List.of(item("什么是SSE？")))).hasSize(1);
+    }
+
+    @Test
+    void output_distinctCodeIdentifiers_mustNotBeCollapsedAsPunctuationVariants() {
+        assertThatThrownBy(() -> extract(input("foo.bar是什么？foobar是什么？"), List.of(item("foo.bar是什么？"))))
+                .isInstanceOf(QuestionRewriteOutputException.class);
+    }
+
+    @Test
+    void output_comparisonWithFullSource_preservesOneRelatedQuestionAcrossAskUnits() {
+        String original = "什么是SSE，以及MCP与SSE有什么区别？";
+
+        assertThat(extract(input(original), List.of(item(original)))).hasSize(1);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"structure,EXTRACTION_STRUCTURE", "source,SOURCE", "constraint,CONSTRAINT", "anchor,QUESTION_ANCHOR"})
+    void output_invalidResult_exposesOnlyFixedInternalRule(String scenario, QuestionRewriteValidationRule rule) {
+        var input = input("Redis超时30毫秒怎么处理？");
+        var values = switch (scenario) {
+            case "structure" -> List.<Map<String, Object>>of();
+            case "source" -> List.of(Map.<String, Object>of("question", "Redis超时30毫秒怎么处理？", "sourceTexts", List.of("不属于当前原话的内容")));
+            case "constraint" -> List.of(Map.<String, Object>of("question", "Redis超时31毫秒怎么处理？", "sourceTexts", List.of(input.question())));
+            default -> List.of(Map.<String, Object>of("question", "怎么处理？", "sourceTexts", List.of("怎么处理？")));
+        };
+        if (scenario.equals("anchor")) input = input("缓存怎么处理？队列怎么处理？");
+        var request = input;
+
+        assertThatThrownBy(() -> extract(request, values)).isInstanceOf(QuestionRewriteOutputException.class)
+                .hasMessage("Question rewrite returned invalid or unsafe output").satisfies(error ->
+                        assertThat(((QuestionRewriteOutputException) error).rule()).isEqualTo(rule));
+    }
 
     @Test
     void output_independentAsks_removesUnrelatedBackgroundAndAssignsOrderedIds() {

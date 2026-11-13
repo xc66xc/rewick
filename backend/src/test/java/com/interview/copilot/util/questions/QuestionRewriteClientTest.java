@@ -1,8 +1,11 @@
 package com.interview.copilot.util.questions;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.interview.copilot.common.questions.SpokenExtractionFixture;
 import com.interview.copilot.config.ProviderProperties;
 import com.interview.copilot.exception.questions.QuestionRewriteOutputException;
+import com.interview.copilot.exception.questions.QuestionRewriteValidationRule;
+import com.interview.copilot.exception.ai.ProviderFailure;
 import com.interview.copilot.request.questions.QuestionRewriteRequest;
 import com.interview.copilot.util.ai.ProviderHttpClient;
 import com.interview.copilot.util.ai.ProviderJson;
@@ -10,6 +13,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import reactor.core.publisher.Mono;
 import reactor.netty.DisposableServer;
 import reactor.netty.http.server.HttpServer;
@@ -19,6 +23,9 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
 
 class QuestionRewriteClientTest {
     private final ProviderJson json = new ProviderJson(new ObjectMapper());
@@ -89,6 +96,69 @@ class QuestionRewriteClientTest {
         assertThat(result.questions()).extracting(q -> q.id()).containsExactly("q1", "q2");
         assertThat(json.parse(body.get()).path("max_tokens").asInt()).isEqualTo(1536);
         assertThat(json.parse(body.get()).path("messages").path(0).path("content").asText()).contains("全部独立问题");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2})
+    void rewrite_spokenQuestionViaHttpSubstitute_acceptsNecessarySourcesInOneCall(int variant) {
+        respond(json.encode(SpokenExtractionFixture.output(variant)), "stop");
+        var endpoint = endpoint();
+        endpoint.setMaxOutputTokens(4000);
+        var result = client().rewrite(endpoint, new QuestionRewriteRequest(SpokenExtractionFixture.ORIGINAL,
+                List.of(), "questions-v1"), Duration.ofSeconds(3)).block();
+
+        assertThat(result.questions()).extracting(question -> question.id()).containsExactly("q1", "q2", "q3");
+        assertThat(result.usage()).containsEntry("totalTokens", 30L);
+        assertThat(json.parse(body.get()).path("max_tokens").asInt()).isEqualTo(1536);
+    }
+
+    @ParameterizedTest
+    @EnumSource(QuestionRewriteValidationRule.class)
+    void rewrite_invalidOutputWithKnownUsage_preservesFixedRuleWithoutRawText(QuestionRewriteValidationRule rule) {
+        String content = diagnosticContent(rule);
+        respond(content, rule == QuestionRewriteValidationRule.TRUNCATED ? "length" : "stop");
+        String question = rule == QuestionRewriteValidationRule.QUESTION_ANCHOR
+                ? "缓存怎么处理？队列怎么处理？" : "什么是SSE？";
+
+        assertThatThrownBy(() -> client().rewrite(endpoint(), new QuestionRewriteRequest(question,
+                List.of(), "questions-v1"), Duration.ofSeconds(3)).block())
+                .isInstanceOf(QuestionRewriteOutputException.class)
+                .hasMessage("Question rewrite returned invalid or unsafe output").satisfies(error -> {
+                    var failure = (QuestionRewriteOutputException) error;
+                    assertThat(failure.rule()).isEqualTo(rule);
+                    assertThat(failure.usage()).containsEntry("totalTokens", 30L);
+                });
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"cancelled", "interrupted"})
+    void rewrite_wrappedTerminalFailure_neverConvertsCancellationIntoInvalidOutput(String scenario) {
+        var http = mock(ProviderHttpClient.class);
+        var endpoint = new ProviderProperties.Llm();
+        endpoint.setModel("synthetic-model");
+        endpoint.setThinkingProtocol("none");
+        var failure = new ProviderFailure("invalid_json", "Fixed provider failure");
+        failure.initCause(scenario.equals("cancelled") ? new java.util.concurrent.CancellationException() : new InterruptedException());
+        when(http.json(any(), any(), any())).thenReturn(Mono.error(failure));
+        var client = new QuestionRewriteClient(http, json);
+
+        assertThatThrownBy(() -> client.rewrite(endpoint, input(), Duration.ofSeconds(3)).block()).isSameAs(failure);
+    }
+
+    private String diagnosticContent(QuestionRewriteValidationRule rule) {
+        return switch (rule) {
+            case RESPONSE_FORMAT -> "";
+            case JSON -> "private-invalid-json";
+            case TRUNCATED -> "{\"action\":\"unchanged\"}";
+            case EXTRACTION_STRUCTURE -> "{\"action\":\"extracted\",\"questions\":[]}";
+            case SOURCE -> json.encode(Map.of("action", "extracted", "questions", List.of(
+                    Map.of("question", "什么是SSE？", "sourceTexts", List.of("不属于原话的私有文本")))));
+            case CONSTRAINT -> json.encode(Map.of("action", "extracted", "questions", List.of(
+                    Map.of("question", "什么是Redis？", "sourceTexts", List.of("什么是SSE？")))));
+            case QUESTION_ANCHOR -> json.encode(Map.of("action", "extracted", "questions", List.of(
+                    Map.of("question", "缓存怎么处理？", "sourceTexts", List.of("怎么处理？")),
+                    Map.of("question", "队列怎么处理？", "sourceTexts", List.of("怎么处理？")))));
+        };
     }
 
     @Test

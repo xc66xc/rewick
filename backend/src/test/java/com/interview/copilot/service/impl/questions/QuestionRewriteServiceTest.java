@@ -5,6 +5,8 @@ import com.interview.copilot.common.usage.UsageLease;
 import com.interview.copilot.config.ProviderProperties;
 import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.exception.ai.ProviderFailure;
+import com.interview.copilot.exception.questions.QuestionRewriteOutputException;
+import com.interview.copilot.exception.questions.QuestionRewriteValidationRule;
 import com.interview.copilot.model.operations.OperationContext;
 import com.interview.copilot.model.operations.OperationEvent;
 import com.interview.copilot.model.platform.PlatformConfig;
@@ -19,6 +21,10 @@ import com.interview.copilot.util.questions.QuestionRewriteClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.slf4j.LoggerFactory;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import reactor.core.publisher.Mono;
 import java.time.Duration;
 import java.util.List;
@@ -138,6 +144,31 @@ class QuestionRewriteServiceTest {
             assertThat(event.metadata()).containsEntry("inputTokens", 20L)
                     .containsEntry("outputTokens", 10L).containsEntry("totalTokens", 30L);
         });
+    }
+
+    @Test
+    void rewrite_invalidOutput_logsFixedRuleWithoutUserTextOrChangingPublicContract() {
+        var logger = (Logger) LoggerFactory.getLogger(QuestionRewriteServiceImpl.class);
+        var logs = new ListAppender<ILoggingEvent>();
+        logs.start();
+        logger.addAppender(logs);
+        when(client.rewrite(any(), any(), any())).thenReturn(Mono.error(new QuestionRewriteOutputException(
+                QuestionRewriteValidationRule.QUESTION_ANCHOR, Map.of("outputTokens", 30L))));
+        try {
+            var result = execute("私有的原话内容不应出现在诊断日志中");
+
+            assertThat(result.status()).isEqualTo("degraded");
+            assertThat(result.reason()).isEqualTo("invalid_output");
+            assertThat(result.wire()).doesNotContainKeys("validationRule", "rule", "sourceTexts");
+            assertThat(events).singleElement().satisfies(event -> assertThat(event.metadata())
+                    .containsEntry("outputTokens", 30L).doesNotContainKeys("validationRule", "rule", "sourceTexts"));
+            assertThat(logs.list).filteredOn(event -> event.getFormattedMessage().contains(requestId)).singleElement()
+                    .satisfies(event -> assertThat(event.getFormattedMessage()).contains("validationRule=question_anchor")
+                            .doesNotContain("私有的原话内容", "模型原始JSON"));
+        } finally {
+            logger.detachAppender(logs);
+            logs.stop();
+        }
     }
 
     @Test

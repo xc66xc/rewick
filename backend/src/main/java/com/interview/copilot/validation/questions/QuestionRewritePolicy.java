@@ -3,6 +3,7 @@ package com.interview.copilot.validation.questions;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.interview.copilot.exception.ApiException;
 import com.interview.copilot.exception.questions.QuestionRewriteOutputException;
+import com.interview.copilot.exception.questions.QuestionRewriteValidationRule;
 import com.interview.copilot.request.questions.QuestionRewriteRequest;
 import org.springframework.http.HttpStatus;
 import java.util.HashSet;
@@ -64,12 +65,15 @@ public final class QuestionRewritePolicy {
                 || characters(question.asText()) > MAX_QUESTION_CHARACTERS) throw new QuestionRewriteOutputException();
         String original = normalize(input.question());
         String rewritten = normalize(question.asText());
-        if (!protectedTokens(rewritten).containsAll(protectedTokens(original))) throw new QuestionRewriteOutputException();
+        if (!protectedTokens(rewritten).containsAll(protectedTokens(original)))
+            throw new QuestionRewriteOutputException(QuestionRewriteValidationRule.CONSTRAINT);
         for (String constraint : CONSTRAINTS) {
-            if (original.contains(constraint) && !rewritten.contains(constraint)) throw new QuestionRewriteOutputException();
+            if (original.contains(constraint) && !rewritten.contains(constraint))
+                throw new QuestionRewriteOutputException(QuestionRewriteValidationRule.CONSTRAINT);
         }
         var available = protectedTokens(normalize(input.question() + String.join("\n", input.context())));
-        if (!available.containsAll(protectedTokens(rewritten))) throw new QuestionRewriteOutputException();
+        if (!available.containsAll(protectedTokens(rewritten)))
+            throw new QuestionRewriteOutputException(QuestionRewriteValidationRule.CONSTRAINT);
     }
 
     static Set<String> protectedTokens(String text) {
@@ -85,7 +89,8 @@ public final class QuestionRewritePolicy {
 
     static void sourceConstraints(String original, String question) {
         for (String constraint : CONSTRAINTS) {
-            if (original.contains(constraint) && !question.contains(constraint)) throw new QuestionRewriteOutputException();
+            if (original.contains(constraint) && !question.contains(constraint))
+                throw new QuestionRewriteOutputException(QuestionRewriteValidationRule.CONSTRAINT);
         }
     }
 

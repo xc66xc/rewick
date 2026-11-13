@@ -10,6 +10,7 @@ import com.interview.copilot.exception.ai.ProviderFailure;
 import com.interview.copilot.exception.questions.QuestionRewriteFailure;
 import com.interview.copilot.config.ProviderProperties;
 import com.interview.copilot.exception.questions.QuestionRewriteOutputException;
+import com.interview.copilot.exception.questions.QuestionRewriteValidationRule;
 import com.interview.copilot.model.questions.QuestionRewriteResult;
 import com.interview.copilot.request.questions.QuestionRewriteRequest;
 import com.interview.copilot.util.ai.ProviderCompletions;
@@ -85,11 +86,14 @@ public final class QuestionRewriteClient {
 
     private QuestionRewriteResult result(JsonNode response, QuestionRewriteRequest input) {
         if (response == null || !response.path("choices").isArray() || response.path("choices").size() != 1)
-            throw new QuestionRewriteOutputException();
+            throw new QuestionRewriteOutputException(QuestionRewriteValidationRule.RESPONSE_FORMAT);
         String finish = response.path("choices").path(0).path("finish_reason").asText("");
-        if (!finish.isEmpty() && !"stop".equals(finish)) throw new QuestionRewriteOutputException();
+        if (!finish.isEmpty() && !"stop".equals(finish))
+            throw new QuestionRewriteOutputException("length".equals(finish)
+                    ? QuestionRewriteValidationRule.TRUNCATED : QuestionRewriteValidationRule.RESPONSE_FORMAT);
         String content = response.path("choices").path(0).path("message").path("content").asText("");
-        if (content.isBlank() || content.getBytes(StandardCharsets.UTF_8).length > (input.isQuestionsFormat() ? 49152 : 16384)) throw new QuestionRewriteOutputException();
+        if (content.isBlank() || content.getBytes(StandardCharsets.UTF_8).length > (input.isQuestionsFormat() ? 49152 : 16384))
+            throw new QuestionRewriteOutputException(QuestionRewriteValidationRule.RESPONSE_FORMAT);
         JsonNode value = parse(content);
         if (input.isQuestionsFormat()) {
             var questions = QuestionExtractionPolicy.output(value, input);
@@ -106,19 +110,32 @@ public final class QuestionRewriteClient {
         try {
             return STRICT_JSON.readTree(content);
         } catch (JsonProcessingException error) {
-            throw new QuestionRewriteOutputException();
+            throw new QuestionRewriteOutputException(QuestionRewriteValidationRule.JSON);
         }
     }
 
     private Throwable withUsage(Throwable error, Map<String, Object> usage) {
-        if (error instanceof QuestionRewriteOutputException) return new QuestionRewriteOutputException(usage);
-        if (usage.isEmpty() || isCancellation(error)) return error;
+        if (isCancellation(error)) return error;
+        if (error instanceof QuestionRewriteOutputException failure)
+            return new QuestionRewriteOutputException(failure.rule(), usage);
+        if (error instanceof ProviderFailure failure) {
+            var rule = providerValidationRule(failure.reason());
+            if (rule != null) return new QuestionRewriteOutputException(rule, usage);
+        }
+        if (usage.isEmpty()) return error;
         String reason = "provider_error";
         if (error instanceof java.util.concurrent.TimeoutException
                 || error instanceof ProviderFailure failure && "timeout".equals(failure.reason())) reason = "timeout";
-        if (error instanceof ProviderFailure failure && List.of("truncated", "missing_content", "output_limit",
-                "incomplete_stream", "invalid_json", "response_too_large").contains(failure.reason())) reason = "invalid_output";
         return new QuestionRewriteFailure(reason, usage);
+    }
+
+    private QuestionRewriteValidationRule providerValidationRule(String reason) {
+        return switch (reason) {
+            case "truncated", "incomplete_stream", "output_limit" -> QuestionRewriteValidationRule.TRUNCATED;
+            case "invalid_json" -> QuestionRewriteValidationRule.JSON;
+            case "missing_content", "response_too_large" -> QuestionRewriteValidationRule.RESPONSE_FORMAT;
+            default -> null;
+        };
     }
 
     private boolean isCancellation(Throwable error) {

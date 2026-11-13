@@ -3,6 +3,7 @@ package com.interview.copilot.validation.questions;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.interview.copilot.dto.questions.ExtractedQuestion;
 import com.interview.copilot.exception.questions.QuestionRewriteOutputException;
+import com.interview.copilot.exception.questions.QuestionRewriteValidationRule;
 import com.interview.copilot.request.questions.QuestionRewriteRequest;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -55,36 +56,49 @@ public final class QuestionExtractionPolicy {
         var allowed = new HashSet<>(required);
         allowed.addAll(QuestionRewritePolicy.protectedTokens(normalize(String.join("\n", context))));
         if (!QuestionRewritePolicy.protectedTokens(rewritten).containsAll(required)
-                || !allowed.containsAll(QuestionRewritePolicy.protectedTokens(rewritten))) throw unsafe();
+                || !allowed.containsAll(QuestionRewritePolicy.protectedTokens(rewritten)))
+            throw unsafe(QuestionRewriteValidationRule.CONSTRAINT);
         QuestionRewritePolicy.sourceConstraints(current, rewritten);
         relationships(current, rewritten);
     }
 
     static void relationships(String current, String rewritten) {
-        if (current.matches("(?s).*(?:除了?|排除).*") && !rewritten.matches("(?s).*(?:除了?|排除).*")) throw unsafe();
-        if (current.contains("区别") && !rewritten.contains("区别") && !rewritten.contains("差异")) throw unsafe();
-        if (current.contains("为什么") && !rewritten.contains("为什么") && !rewritten.contains("原因")) throw unsafe();
+        if (current.matches("(?s).*(?:除了?|排除).*") && !rewritten.matches("(?s).*(?:除了?|排除).*"))
+            throw unsafe(QuestionRewriteValidationRule.CONSTRAINT);
+        if (current.contains("区别") && !rewritten.contains("区别") && !rewritten.contains("差异"))
+            throw unsafe(QuestionRewriteValidationRule.CONSTRAINT);
+        if (current.contains("为什么") && !rewritten.contains("为什么") && !rewritten.contains("原因"))
+            throw unsafe(QuestionRewriteValidationRule.CONSTRAINT);
     }
 
     private static List<String> sources(JsonNode nodes, List<String> available, int maximum, boolean required) {
         if (!required && nodes.isMissingNode()) return List.of();
-        if (!nodes.isArray() || nodes.size() > 10 || required && nodes.isEmpty()) throw unsafe();
+        if (!nodes.isArray() || nodes.size() > 10 || required && nodes.isEmpty())
+            throw unsafe(QuestionRewriteValidationRule.SOURCE);
         List<String> values = new ArrayList<>();
         for (JsonNode node : nodes) {
-            String value = text(node, maximum);
-            if (value.replaceAll("[\\p{P}\\s]", "").isBlank()) throw unsafe();
-            if (available.stream().noneMatch(raw -> raw.contains(value)) || values.contains(value)) throw unsafe();
+            String value = sourceText(node, maximum);
+            if (value.replaceAll("[\\p{P}\\s]", "").isBlank()) throw unsafe(QuestionRewriteValidationRule.SOURCE);
+            if (available.stream().noneMatch(raw -> raw.contains(value)) || values.contains(value))
+                throw unsafe(QuestionRewriteValidationRule.SOURCE);
             values.add(value);
         }
-        if (total(values) > maximum) throw unsafe();
+        if (total(values) > maximum) throw unsafe(QuestionRewriteValidationRule.SOURCE);
         return List.copyOf(values);
+    }
+
+    private static String sourceText(JsonNode node, int maximum) {
+        if (!node.isTextual() || node.asText().isBlank()
+                || QuestionRewritePolicy.characters(node.asText()) > maximum)
+            throw unsafe(QuestionRewriteValidationRule.SOURCE);
+        return node.asText().trim();
     }
 
     private static void order(String original, List<ExtractedQuestion> questions) {
         int previous = -1;
         for (var question : questions) {
             int position = question.sourceTexts().stream().mapToInt(original::indexOf).max().orElse(-1);
-            if (position < previous) throw unsafe();
+            if (position < previous) throw unsafe(QuestionRewriteValidationRule.QUESTION_ANCHOR);
             previous = position;
         }
     }
@@ -109,5 +123,9 @@ public final class QuestionExtractionPolicy {
 
     private static QuestionRewriteOutputException unsafe() {
         return new QuestionRewriteOutputException();
+    }
+
+    private static QuestionRewriteOutputException unsafe(QuestionRewriteValidationRule rule) {
+        return new QuestionRewriteOutputException(rule);
     }
 }
