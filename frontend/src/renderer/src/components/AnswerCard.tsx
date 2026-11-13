@@ -32,8 +32,8 @@ export default function AnswerCard({ answer, index, compact = false }: AnswerCar
   const question = <header className={cn(compact ? 'compact-answer__question mt-4' : 'mb-5 flex items-start gap-3')}>
       {compact ? <p className="text-xs font-medium text-text-secondary">当前问题</p> : <Badge className="border-transparent bg-success-subtle font-mono text-[10px] text-success">Q{String(index).padStart(2, '0')}</Badge>}
       {generatedQuestions.length > 0 ? <div className="compact-answer__question-pair">
-        <ol className="compact-answer__generated" aria-label="整理后的问题" aria-live="polite">
-          {generatedQuestions.map(value => <li className="compact-answer__generated-bubble" key={value.id}>{value.question}</li>)}
+        <ol className="compact-answer__generated compact-answer__generated-bubble" aria-label="整理后的问题" aria-live="polite">
+          {generatedQuestions.map(value => <li key={value.id}>{value.question}</li>)}
         </ol>
         <ArrowDown className="compact-answer__question-connector" aria-hidden="true" />
         {originalQuestion}

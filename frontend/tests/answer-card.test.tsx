@@ -62,12 +62,16 @@ it.each([false, true])('shows extracted questions, raw provenance and actual sen
   }
   expect(screen.getByRole('heading', { name: answer.question })).toBeDefined()
 })
-it.each(successfulRewriteCases)('shows $name between the shared compact label and the original question in production', ({ result, questions }) => {
+it.each(successfulRewriteCases)('shows $name in one compact bubble between the shared label and the original question in production', ({ result, questions }) => {
   vi.stubEnv('DEV', false)
   render(<AnswerCard answer={{ ...answer, questionRewrite: result }} index={1} compact />)
 
   const original = screen.getByRole('heading', { name: answer.question })
   const header = original.closest('header')!
+  const generated = within(header).getByRole('list', { name: '整理后的问题' })
+  expect(generated.classList.contains('compact-answer__generated-bubble')).toBe(true)
+  expect(header.getElementsByClassName('compact-answer__generated-bubble')).toHaveLength(1)
+  expect(within(generated).getAllByRole('listitem').map(item => item.textContent)).toEqual(questions)
   expect(within(header).getAllByText('当前问题')).toHaveLength(1)
   for (const question of questions) expect(within(header).getAllByText(question)).toHaveLength(1)
   expect(header.textContent).toBe(['当前问题', ...questions, answer.question].join(''))
@@ -79,11 +83,15 @@ it.each(successfulRewriteCases)('shows $name between the shared compact label an
   expect(screen.queryByText(/原话来源：|指代上下文：/)).toBeNull()
   expect(screen.queryByText(/rewrite-model|extract-model/)).toBeNull()
 })
-it.each(successfulRewriteCases)('shows $name in the same compact header in development', ({ result, questions }) => {
+it.each(successfulRewriteCases)('shows $name in one compact bubble in development', ({ result, questions }) => {
   vi.stubEnv('DEV', true)
   render(<AnswerCard answer={{ ...answer, questionRewrite: result }} index={1} compact />)
 
   const header = screen.getByRole('heading', { name: answer.question }).closest('header')!
+  const generated = within(header).getByRole('list', { name: '整理后的问题' })
+  expect(generated.classList.contains('compact-answer__generated-bubble')).toBe(true)
+  expect(header.getElementsByClassName('compact-answer__generated-bubble')).toHaveLength(1)
+  expect(within(generated).getAllByRole('listitem').map(item => item.textContent)).toEqual(questions)
   for (const question of questions) expect(within(header).getAllByText(question)).toHaveLength(1)
   expect(header.textContent).toBe(['当前问题', ...questions, answer.question].join(''))
   expect(screen.getByRole('button', { name: /问题整理|问题提取/ })).toBeDefined()
@@ -124,7 +132,7 @@ it('keeps a successful scalar rewrite even when it repeats the original question
   expect(within(header).getAllByText(answer.question)).toHaveLength(2)
   expect(header.textContent).toBe(`当前问题${answer.question}${answer.question}`)
 })
-it('shows every model question in order without filtering duplicate or original text', () => {
+it('shows every model question in one bubble in order without filtering duplicate or original text', () => {
   vi.stubEnv('DEV', false)
   render(<AnswerCard answer={{ ...answer, questionRewrite: {
     ...extractedRewrite,
@@ -136,6 +144,10 @@ it('shows every model question in order without filtering duplicate or original 
   } }} index={1} compact />)
 
   const header = screen.getByRole('heading', { name: answer.question }).closest('header')!
+  const generated = within(header).getByRole('list', { name: '整理后的问题' })
+  expect(generated.classList.contains('compact-answer__generated-bubble')).toBe(true)
+  expect(header.getElementsByClassName('compact-answer__generated-bubble')).toHaveLength(1)
+  expect(within(generated).getAllByRole('listitem').map(item => item.textContent)).toEqual([answer.question, '保留模型措辞', answer.question])
   expect(within(header).getAllByText(answer.question)).toHaveLength(3)
   expect(within(header).getByText('保留模型措辞')).toBeDefined()
   expect(header.textContent).toBe(`当前问题${answer.question}保留模型措辞${answer.question}${answer.question}`)
