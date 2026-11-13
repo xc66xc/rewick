@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { isQuestionExtraction, questionExtractionResultSchema, singleQuestionRewriteResultSchema, rewriteTextLength, type QuestionRewriteReason, type QuestionRewriteResult } from '../../shared/question-rewrite'
+import { questionExtractionResultSchema, singleQuestionRewriteResultSchema, rewriteTextLength, type QuestionRewriteReason, type QuestionRewriteResult } from '../../shared/question-rewrite'
 import type { AnswerRequest, Settings } from '../../shared/types'
 import { PlatformClient, PlatformRequestError } from './platform-client'
 import { SessionFault } from './session-fault'
@@ -55,12 +55,7 @@ export class QuestionRewriteClient {
       ])
       signal.throwIfAborted()
       controller.signal.throwIfAborted()
-      const parsed = extraction ? questionExtractionResultSchema.parse(result) : singleQuestionRewriteResultSchema.parse(result)
-      if (isQuestionExtraction(parsed) && parsed.questions.some(question => question.sourceTexts.some(text => !request.question.includes(text))
-        || question.contextSourceTexts?.some(text => !request.rewriteContext?.some(context => context.includes(text))))) {
-        return fallback('degraded', 'invalid_output', Math.max(0, performance.now() - started))
-      }
-      return parsed
+      return extraction ? questionExtractionResultSchema.parse(result) : singleQuestionRewriteResultSchema.parse(result)
     } catch (error) {
       signal.throwIfAborted()
       if (error instanceof SessionFault || error instanceof PlatformRequestError && [401, 402, 403, 409].includes(error.status ?? 0)) throw error

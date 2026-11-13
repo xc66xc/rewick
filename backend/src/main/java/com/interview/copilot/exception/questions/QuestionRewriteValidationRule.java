@@ -5,10 +5,7 @@ public enum QuestionRewriteValidationRule {
     RESPONSE_FORMAT("response_format"),
     TRUNCATED("truncated"),
     JSON("json"),
-    EXTRACTION_STRUCTURE("extraction_structure"),
-    SOURCE("source"),
-    CONSTRAINT("constraint"),
-    QUESTION_ANCHOR("question_anchor");
+    EXTRACTION_STRUCTURE("extraction_structure");
 
     private final String code;
 

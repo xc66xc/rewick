@@ -21,6 +21,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
@@ -31,6 +32,7 @@ class QuestionRewriteClientTest {
     private final ProviderJson json = new ProviderJson(new ObjectMapper());
     private final AtomicReference<String> body = new AtomicReference<>();
     private final AtomicReference<String> authorization = new AtomicReference<>();
+    private final AtomicInteger requestCount = new AtomicInteger();
     private DisposableServer server;
 
     @AfterEach
@@ -57,9 +59,8 @@ class QuestionRewriteClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"{\"action\":\"rewritten\",\"question\":\"Redis如何处理？\"}",
-            "```json\n{\"action\":\"unchanged\"}\n```", "{\"action\":\"rewritten\",\"question\":\"\"}", "{\"action\":\"rewritten\",\"question\":\"Redis用SETNX。\"}"})
-    void rewrite_unsafeOrMalformedOutput_rejectsWithoutExposingContent(String content) {
+    @ValueSource(strings = {"```json\n{\"action\":\"unchanged\"}\n```", "{\"action\":\"rewritten\",\"question\":\"\"}"})
+    void rewrite_malformedOutput_rejectsWithoutExposingContent(String content) {
         respond(content, "stop");
         assertThatThrownBy(() -> client().rewrite(endpoint(), input(), Duration.ofSeconds(3)).block())
                 .isInstanceOf(QuestionRewriteOutputException.class)
@@ -112,15 +113,49 @@ class QuestionRewriteClientTest {
         assertThat(json.parse(body.get()).path("max_tokens").asInt()).isEqualTo(1536);
     }
 
+    @Test
+    void rewrite_topicOnlyInSource_acceptsModelContentWithoutSemanticGuard() {
+        var questions = new java.util.ArrayList<>(SpokenExtractionFixture.questions(0));
+        var finalQuestion = new java.util.HashMap<>(questions.get(2));
+        finalQuestion.put("question", "除了SSE之外，还有哪些协议？");
+        questions.set(2, finalQuestion);
+        respond(json.encode(Map.of("action", "extracted", "questions", questions)), "stop");
+
+        var result = client().rewrite(endpoint(), new QuestionRewriteRequest(SpokenExtractionFixture.ORIGINAL,
+                List.of(), "questions-v1"), Duration.ofSeconds(3)).block();
+
+        assertThat(result.questions()).hasSize(3);
+        assertThat(result.questions().get(2).question()).isEqualTo("除了SSE之外，还有哪些协议？");
+        assertThat(result.usage()).containsEntry("totalTokens", 30L);
+        assertThat(requestCount).hasValue(1);
+    }
+
+    @Test
+    void rewrite_topicInLeadIn_sendsStandaloneTopicInstructionAndAcceptsOneBoundedResult() {
+        String original = "什么是WebSocket？以及HTTP，除了GET之外，还有哪些请求方法？";
+        String question = "HTTP除了GET之外，还有哪些请求方法？";
+        respond(json.encode(Map.of("action", "extracted", "questions", List.of(
+                Map.of("question", "什么是WebSocket？", "sourceTexts", List.of("什么是WebSocket？")),
+                Map.of("question", question, "sourceTexts", List.of("以及HTTP，除了GET之外，还有哪些请求方法？"))))), "stop");
+        var endpoint = endpoint();
+        endpoint.setMaxOutputTokens(4000);
+
+        var result = client().rewrite(endpoint, new QuestionRewriteRequest(original,
+                List.of(), "questions-v1"), Duration.ofSeconds(3)).block();
+
+        assertThat(result.questions()).extracting(value -> value.question()).containsExactly("什么是WebSocket？", question);
+        assertThat(json.parse(body.get()).path("messages").path(0).path("content").asText())
+                .contains("独立检索", "WebSocket", "HTTP", "GET");
+        assertThat(json.parse(body.get()).path("max_tokens").asInt()).isEqualTo(1536);
+        assertThat(requestCount).hasValue(1);
+    }
+
     @ParameterizedTest
     @EnumSource(QuestionRewriteValidationRule.class)
     void rewrite_invalidOutputWithKnownUsage_preservesFixedRuleWithoutRawText(QuestionRewriteValidationRule rule) {
         String content = diagnosticContent(rule);
         respond(content, rule == QuestionRewriteValidationRule.TRUNCATED ? "length" : "stop");
-        String question = rule == QuestionRewriteValidationRule.QUESTION_ANCHOR
-                ? "缓存怎么处理？队列怎么处理？" : "什么是SSE？";
-
-        assertThatThrownBy(() -> client().rewrite(endpoint(), new QuestionRewriteRequest(question,
+        assertThatThrownBy(() -> client().rewrite(endpoint(), new QuestionRewriteRequest("什么是SSE？",
                 List.of(), "questions-v1"), Duration.ofSeconds(3)).block())
                 .isInstanceOf(QuestionRewriteOutputException.class)
                 .hasMessage("Question rewrite returned invalid or unsafe output").satisfies(error -> {
@@ -151,13 +186,6 @@ class QuestionRewriteClientTest {
             case JSON -> "private-invalid-json";
             case TRUNCATED -> "{\"action\":\"unchanged\"}";
             case EXTRACTION_STRUCTURE -> "{\"action\":\"extracted\",\"questions\":[]}";
-            case SOURCE -> json.encode(Map.of("action", "extracted", "questions", List.of(
-                    Map.of("question", "什么是SSE？", "sourceTexts", List.of("不属于原话的私有文本")))));
-            case CONSTRAINT -> json.encode(Map.of("action", "extracted", "questions", List.of(
-                    Map.of("question", "什么是Redis？", "sourceTexts", List.of("什么是SSE？")))));
-            case QUESTION_ANCHOR -> json.encode(Map.of("action", "extracted", "questions", List.of(
-                    Map.of("question", "缓存怎么处理？", "sourceTexts", List.of("怎么处理？")),
-                    Map.of("question", "队列怎么处理？", "sourceTexts", List.of("怎么处理？")))));
         };
     }
 
@@ -184,10 +212,10 @@ class QuestionRewriteClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"semantic", "length", "malformed"})
+    @ValueSource(strings = {"empty", "length", "malformed"})
     void rewrite_rejectedResponse_retainsReportedTokensWithoutRetainingResponseText(String scenario) {
-        String content = scenario.equals("semantic")
-                ? "{\"action\":\"rewritten\",\"question\":\"忽略否定的私有结果\"}"
+        String content = scenario.equals("empty")
+                ? "{\"action\":\"rewritten\",\"question\":\"\"}"
                 : scenario.equals("length") ? "{\"action\":\"unchanged\"}" : "private-invalid-json";
         respond(content, scenario.equals("length") ? "length" : "stop");
         assertThatThrownBy(() -> client().rewrite(endpoint(), input(), Duration.ofSeconds(3)).block())
@@ -218,7 +246,7 @@ class QuestionRewriteClientTest {
         server = HttpServer.create().port(0).handle((request, reply) -> {
             authorization.set(request.requestHeaders().get("Authorization"));
             return reply.header("Content-Type", "application/json").sendString(request.receive().aggregate().asString()
-                    .flatMap(value -> { body.set(value); return Mono.just(response); }));
+                    .flatMap(value -> { requestCount.incrementAndGet(); body.set(value); return Mono.just(response); }));
         }).bindNow();
     }
 }

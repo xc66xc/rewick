@@ -153,7 +153,7 @@ class QuestionRewriteServiceTest {
         logs.start();
         logger.addAppender(logs);
         when(client.rewrite(any(), any(), any())).thenReturn(Mono.error(new QuestionRewriteOutputException(
-                QuestionRewriteValidationRule.QUESTION_ANCHOR, Map.of("outputTokens", 30L))));
+                QuestionRewriteValidationRule.EXTRACTION_STRUCTURE, Map.of("outputTokens", 30L))));
         try {
             var result = execute("私有的原话内容不应出现在诊断日志中");
 
@@ -163,7 +163,7 @@ class QuestionRewriteServiceTest {
             assertThat(events).singleElement().satisfies(event -> assertThat(event.metadata())
                     .containsEntry("outputTokens", 30L).doesNotContainKeys("validationRule", "rule", "sourceTexts"));
             assertThat(logs.list).filteredOn(event -> event.getFormattedMessage().contains(requestId)).singleElement()
-                    .satisfies(event -> assertThat(event.getFormattedMessage()).contains("validationRule=question_anchor")
+                    .satisfies(event -> assertThat(event.getFormattedMessage()).contains("validationRule=extraction_structure")
                             .doesNotContain("私有的原话内容", "模型原始JSON"));
         } finally {
             logger.detachAppender(logs);

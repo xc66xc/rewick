@@ -26,36 +26,32 @@ class QuestionRewritePolicyTest {
                 .isInstanceOf(ApiException.class);
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"Redis 锁 30秒 超时，多实例如何处理？不讨论跨地域。", "Redis 锁 30毫秒 超时，如何处理？不讨论跨地域。", "Redis 锁 30秒 超时，多实例如何处理？"})
-    void output_changedNumberUnitOrExclusion_rejectsResult(String question) throws Exception {
-        var input = new QuestionRewriteRequest("Redis 锁 30毫秒 超时，多实例怎么办，不讨论跨地域。", List.of());
-        String unsafe = question.replace("多实例", "集群");
-        if (question.equals("Redis 锁 30毫秒 超时，如何处理？不讨论跨地域。")) unsafe += " 使用 SETNX？";
-        var node = json.createObjectNode().put("action", "rewritten").put("question", unsafe);
-
-        assertThatThrownBy(() -> QuestionRewritePolicy.output(node, input)).isInstanceOf(QuestionRewriteOutputException.class);
+    @Test
+    void request_unknownResultFormat_rejects() {
+        assertThatThrownBy(() -> QuestionRewritePolicy.request(new QuestionRewriteRequest("问题", List.of(), "unsupported")))
+                .isInstanceOf(ApiException.class);
     }
 
     @Test
-    void output_preservesNumbersIdentifiersAndNegation_acceptsConservativeCleanup() {
-        var input = new QuestionRewriteRequest("那个 Redis 30毫秒过期，task_id 重复了怎么办，不讨论跨地域。", List.of());
-        var node = json.createObjectNode().put("action", "rewritten").put("question", "Redis 30毫秒过期，task_id 重复时如何处理？不讨论跨地域。");
+    void output_modelWording_doesNotApplySemanticConstraints() {
+        var node = json.createObjectNode().put("action", "rewritten").put("question", "Redis 用 SETNX 如何处理？");
 
-        assertThatCode(() -> QuestionRewritePolicy.output(node, input)).doesNotThrowAnyException();
+        assertThatCode(() -> QuestionRewritePolicy.output(node)).doesNotThrowAnyException();
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"不用", "没有", "无需", "不支持", "不等于", "不一定", "不会", "无法", "不可能", "不是", "别展开"})
-    void output_negationRemoved_rejectsMeaningFlip(String negation) {
-        var input = new QuestionRewriteRequest("为什么" + negation + " Redis？", List.of());
-        var node = json.createObjectNode().put("action", "rewritten").put("question", "为什么使用 Redis？");
-        assertThatThrownBy(() -> QuestionRewritePolicy.output(node, input)).isInstanceOf(QuestionRewriteOutputException.class);
+    @ValueSource(strings = {"[]", "{}", "{\"action\":3}", "{\"action\":\"answer\",\"question\":\"提示\"}",
+            "{\"action\":\"rewritten\",\"question\":\"\"}", "{\"action\":\"rewritten\",\"question\":4}",
+            "{\"action\":\"rewritten\",\"question\":\"问题\",\"answer\":\"内容\"}"})
+    void output_invalidStructure_rejects(String content) throws Exception {
+        assertThatThrownBy(() -> QuestionRewritePolicy.output(json.readTree(content)))
+                .isInstanceOf(QuestionRewriteOutputException.class);
     }
 
     @Test
-    void output_newFieldOrInvalidAction_rejects() throws Exception {
-        assertThatThrownBy(() -> QuestionRewritePolicy.output(json.readTree("{\"action\":\"answer\",\"question\":\"提示\"}"),
-                new QuestionRewriteRequest("问题", List.of()))).isInstanceOf(QuestionRewriteOutputException.class);
+    void output_overLength_rejects() {
+        var node = json.createObjectNode().put("action", "rewritten").put("question", "问".repeat(3001));
+
+        assertThatThrownBy(() -> QuestionRewritePolicy.output(node)).isInstanceOf(QuestionRewriteOutputException.class);
     }
 }

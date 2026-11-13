@@ -34,15 +34,36 @@ describe('question rewrite preparation', () => {
     expect(JSON.parse(String(fetcher.mock.calls[1][1].body)).resultFormat).toBe('questions-v1')
   })
 
-  it.each(['current', 'context'] as const)('rejects extraction with a fabricated %s source without a retry', async kind => {
+  it.each(['current', 'context'] as const)('accepts model-provided %s source wording without literal matching or retry', async kind => {
     const config = settings()
     if (!config.platform?.questionRewrite) throw new Error('Missing policy')
     Object.assign(config.platform.questionRewrite, { resultFormats: ['single', 'questions-v1'], batchReferencesAvailable: true })
     const fetcher = vi.fn(async () => Response.json({ ...result, question: undefined, resultFormat: 'questions-v1', questions: [{ id: 'q1', question: 'Redis 锁过期如何处理？',
       sourceTexts: kind === 'current' ? ['原话中没有这一问'] : [request.question], ...(kind === 'context' ? { contextSourceTexts: ['历史中没有的指代'] } : {}) }] }))
     vi.stubGlobal('fetch', fetcher)
-    expect(await new QuestionRewriteClient(config, 'token').rewrite(request, new AbortController().signal)).toMatchObject({ resultFormat: 'questions-v1', status: 'degraded', reason: 'invalid_output', questions: [] })
+    expect(await new QuestionRewriteClient(config, 'token').rewrite(request, new AbortController().signal)).toMatchObject({ resultFormat: 'questions-v1', status: 'rewritten', questions: [{ id: 'q1', question: 'Redis 锁过期如何处理？' }] })
     expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves repeated model questions and sources in the response and history snapshot', async () => {
+    const config = settings()
+    if (!config.platform?.questionRewrite) throw new Error('Missing policy')
+    Object.assign(config.platform.questionRewrite, { resultFormats: ['single', 'questions-v1'], batchReferencesAvailable: true })
+    const questions = ['q1', 'q2'].map(id => ({ id, question: '模型整理的问题？', sourceTexts: ['模型整理的来源', '模型整理的来源'], contextSourceTexts: ['模型整理的上下文', '模型整理的上下文'] }))
+    const response = { ...result, question: undefined, resultFormat: 'questions-v1', questions }
+    const fetcher = vi.fn(async () => Response.json(response))
+    vi.stubGlobal('fetch', fetcher)
+
+    const rewritten = await new QuestionRewriteClient(config, 'token').rewrite(request, new AbortController().signal)
+    const record = { id: 'record', title: '会话', createdAt: '2026-11-12T10:00:00Z', segments: [], answers: [
+      { id: 'answer', question: request.question, text: '回答', status: 'complete', createdAt: '2026-11-12T10:00:00Z', questionRewrite: rewritten },
+    ] }
+
+    expect(rewritten).toMatchObject({ status: 'rewritten', questions })
+    expect(sessionRecordSchema.parse(record).answers[0].questionRewrite).toEqual(rewritten)
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(questionRewriteResultSchema.safeParse({ ...response, questions: [{ ...questions[0], id: 'q2' }] }).success).toBe(false)
+    expect(questionRewriteResultSchema.safeParse({ ...response, questions: [{ ...questions[0], question: '题'.repeat(601) }] }).success).toBe(false)
   })
 
   it.each(['platform', 'custom'] as const)('uses one platform-owned rewrite with %s answering and keeps the original request immutable', async source => {

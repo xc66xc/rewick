@@ -4,12 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.interview.copilot.common.questions.SpokenExtractionFixture;
 import com.interview.copilot.exception.ApiException;
-import com.interview.copilot.request.questions.QuestionRewriteRequest;
 import com.interview.copilot.validation.questions.QuestionExtractionPolicy;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import java.util.List;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,8 +44,7 @@ class SessionRecordQuestionRewriteTest {
         var session = session();
         var answer = (ObjectNode) session.path("answers").path(0);
         answer.put("question", SpokenExtractionFixture.ORIGINAL);
-        var questions = QuestionExtractionPolicy.output(json.valueToTree(SpokenExtractionFixture.output(variant)),
-                new QuestionRewriteRequest(SpokenExtractionFixture.ORIGINAL, List.of(), "questions-v1"));
+        var questions = QuestionExtractionPolicy.output(json.valueToTree(SpokenExtractionFixture.output(variant)));
         var rewrite = answer.putObject("questionRewrite").put("resultFormat", "questions-v1").put("status", "rewritten")
                 .put("model", "synthetic").put("durationMs", 700).put("platformVersion", 41);
         rewrite.putNull("reason");
@@ -70,10 +67,19 @@ class SessionRecordQuestionRewriteTest {
     }
 
     @Test
-    void validateStructure_historicalQuestionAsCurrentSource_rejects() throws Exception {
+    void validateStructure_modelSourceWording_acceptsWithoutMatchingEditableOriginal() throws Exception {
         var session = extracted();
         var question = (ObjectNode) session.path("answers").path(0).path("questionRewrite").path("questions").path(0);
         question.putArray("sourceTexts").add("历史上问过 Redis？");
+        assertThatCode(() -> SessionRecordPolicy.validateStructure("session", session)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void validateStructure_extractionIdOutOfSequence_rejects() throws Exception {
+        var session = extracted();
+        var question = (ObjectNode) session.path("answers").path(0).path("questionRewrite").path("questions").path(0);
+        question.put("id", "q2");
+
         assertThatThrownBy(() -> SessionRecordPolicy.validateStructure("session", session)).isInstanceOf(ApiException.class);
     }
 
