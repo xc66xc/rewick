@@ -21,6 +21,18 @@ async function enable(connection = async () => identity) {
   return telemetry
 }
 describe('bounded isolated operations telemetry', () => {
+  it('records only bounded question counts and one-based indexes for extraction and child retrieval', async () => {
+    const service = await enable()
+    const operation = service.operation({ operationId: randomUUID(), requestId: 'multi-answer' })
+    await service.measure(operation, 'question.rewrite', async () => ({ status: 'rewritten', questions: [{ question: 'sensitive ask', sourceTexts: ['sensitive source'] }], platformVersion: 9 }), 'system', 'platform')
+    await service.measure(operation, 'retrieval.web', async () => ({ status: 'ready', excerpts: [] }), 'system', 'platform', undefined, { questionCount: 3, questionIndex: 1 })
+    await service.flush()
+    const events = batches.flatMap(batch => batch.events).map(event => telemetryEventSchema.parse(event))
+    expect(events[0]).toMatchObject({ metadata: { questionCount: 1, platformVersion: 9 } })
+    expect(events[1]).toMatchObject({ metadata: { questionCount: 3, questionIndex: 1 } })
+    expect(JSON.stringify(events)).not.toContain('sensitive')
+    expect(telemetryEventSchema.safeParse({ ...events[1], metadata: { questionCount: 6, questionIndex: 0 } }).success).toBe(false)
+  })
   it('records the actual rewrite model and safe status without text or a false answer completion', async () => {
     const service = await enable()
     const operation = service.operation({ operationId: randomUUID(), requestId: 'answer-one', model: 'answer-model', providerType: 'llm', serviceSource: 'custom' })

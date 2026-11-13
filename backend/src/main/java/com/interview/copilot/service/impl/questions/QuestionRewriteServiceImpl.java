@@ -27,6 +27,7 @@ import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeoutException;
 
@@ -54,6 +55,7 @@ public final class QuestionRewriteServiceImpl implements QuestionRewriteService 
         QuestionRewritePolicy.request(input);
         String identifier = QuestionRewritePolicy.requestId(requestId);
         return Mono.defer(() -> prepare(user, token, identifier, input, context))
+                .map(value -> format(value, input))
                 .subscribeOn(Schedulers.boundedElastic())
                 .doOnError(error -> finishError(context, error))
                 .doFinally(signal -> {
@@ -109,14 +111,23 @@ public final class QuestionRewriteServiceImpl implements QuestionRewriteService 
     private QuestionRewriteResponse success(QuestionRewriteResult result, UsageLease lease, String model,
             long version, long started, OperationContext context) {
         lease.complete();
-        String status = "rewritten".equals(result.action()) ? "rewritten" : "unchanged";
+        String status = Set.of("rewritten", "extracted").contains(result.action()) ? "rewritten" : "unchanged";
         String reason = "rewritten".equals(status) ? null : result.action();
         if (context != null) {
             var metadata = new java.util.HashMap<>(result.usage());
             metadata.put("platformVersion", version);
+            if (!result.questions().isEmpty()) metadata.put("questionCount", result.questions().size());
             context.finish("question.rewrite", "success", reason, metadata);
         }
-        return response(status, result.question(), reason, model, started, version);
+        var value = response(status, result.question(), reason, model, started, version);
+        return result.questions().isEmpty() ? value : new QuestionRewriteResponse(status, null, reason, model,
+                value.durationMs(), version, "questions-v1", result.questions());
+    }
+
+    private QuestionRewriteResponse format(QuestionRewriteResponse value, QuestionRewriteRequest input) {
+        if (!input.isQuestionsFormat() || "questions-v1".equals(value.resultFormat())) return value;
+        return new QuestionRewriteResponse(value.status(), null, value.reason(), value.model(), value.durationMs(),
+                value.platformVersion(), "questions-v1", java.util.List.of());
     }
 
     private Mono<QuestionRewriteResponse> failure(Throwable error, UsageLease lease, String model,

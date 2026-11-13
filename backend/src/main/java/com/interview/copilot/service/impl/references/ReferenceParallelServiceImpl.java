@@ -22,6 +22,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
+import java.util.function.BiConsumer;
 
 @Service
 public class ReferenceParallelServiceImpl implements ReferenceParallelService {
@@ -43,20 +44,38 @@ public class ReferenceParallelServiceImpl implements ReferenceParallelService {
         return execute(user, () -> recall.bm25(user, scope, query, plan),
                 () -> recall.vector(user, scope, query, plan, context), context, start, plan.workDeadlineNanos());
     }
+    public ReferenceRecall.Pair recallWithVector(long user, List<ReferenceScopeEntity> scope, String query,
+            ReferenceQueryPlan plan, OperationContext context, Supplier<List<ReferenceCandidateEntity>> vector) {
+        long start = System.nanoTime();
+        return execute(user, () -> recall.bm25(user, scope, query, plan), vector, context, start, plan.workDeadlineNanos(), true, null);
+    }
+    public ReferenceRecall.Pair recallWithVector(long user, List<ReferenceScopeEntity> scope, String query,
+            ReferenceQueryPlan plan, OperationContext context, Supplier<List<ReferenceCandidateEntity>> vector,
+            BiConsumer<String, ReferenceRecall.Branch> completed) {
+        return execute(user, () -> recall.bm25(user, scope, query, plan), vector, context, System.nanoTime(),
+                plan.workDeadlineNanos(), true, completed);
+    }
     private ReferenceRecall.Pair execute(long user, Supplier<List<ReferenceCandidateEntity>> lexicalAction,
             Supplier<List<ReferenceCandidateEntity>> vectorAction, OperationContext context, long start, long deadline) {
+        return execute(user, lexicalAction, vectorAction, context, start, deadline, false, null);
+    }
+    private ReferenceRecall.Pair execute(long user, Supplier<List<ReferenceCandidateEntity>> lexicalAction,
+            Supplier<List<ReferenceCandidateEntity>> vectorAction, OperationContext context, long start, long deadline,
+            boolean batch, BiConsumer<String, ReferenceRecall.Branch> completed) {
         ReferenceQueryPlan.checkCancellation();
-        Future<ReferenceRecall.Branch> lexical = submit(user, "retrieval.bm25", lexicalAction, context);
-        Future<ReferenceRecall.Branch> vector = submit(user, "retrieval.vector", vectorAction, context);
+        Future<ReferenceRecall.Branch> lexical = submit(user, "retrieval.bm25", lexicalAction, context, batch, completed);
+        Future<ReferenceRecall.Branch> vector = submit(user, "retrieval.vector", vectorAction, context, batch, completed);
         try { return new ReferenceRecall.Pair(await(lexical, start, deadline), await(vector, start, deadline)); }
         finally { if (lexical != null) lexical.cancel(true); if (vector != null) vector.cancel(true); }
     }
     private Future<ReferenceRecall.Branch> submit(long user, String stage,
-            Supplier<List<ReferenceCandidateEntity>> action, OperationContext context) {
-        try { return executor.submit(() -> branch(user, stage, action, context)); }
+            Supplier<List<ReferenceCandidateEntity>> action, OperationContext context, boolean batch,
+            BiConsumer<String, ReferenceRecall.Branch> completed) {
+        try { return executor.submit(() -> branch(user, stage, action, context, batch, completed)); }
         catch (RejectedExecutionException error) { LOG.error("Reference recall rejected user={} stage={}", user, stage, error); return null; }
     }
-    private ReferenceRecall.Branch branch(long user, String stage, Supplier<List<ReferenceCandidateEntity>> action, OperationContext context) {
+    private ReferenceRecall.Branch branch(long user, String stage, Supplier<List<ReferenceCandidateEntity>> action,
+            OperationContext context, boolean batch, BiConsumer<String, ReferenceRecall.Branch> completed) {
         long start = System.nanoTime();
         var child = context == null ? null : context.child("pg");
         try {
@@ -64,7 +83,7 @@ public class ReferenceParallelServiceImpl implements ReferenceParallelService {
             ReferenceQueryPlan.checkCancellation();
             String status = values.isEmpty() ? "empty" : "ready";
             if (child != null) child.finish(stage, values.isEmpty() ? "empty" : "success", Map.of("candidateCount", values.size()));
-            return new ReferenceRecall.Branch(status, values, elapsed(start));
+            return observed(stage, new ReferenceRecall.Branch(status, values, elapsed(start)), completed);
         } catch (RuntimeException error) {
             if (error instanceof java.util.concurrent.CancellationException || Thread.currentThread().isInterrupted()) {
                 if (child != null) child.finish(stage, "cancelled", Map.of());
@@ -73,9 +92,15 @@ public class ReferenceParallelServiceImpl implements ReferenceParallelService {
             LOG.error("Reference recall failed user={} stage={}", user, stage, error);
             if (child != null) child.finish(stage, "degraded", Map.of());
             if (error instanceof com.interview.copilot.exception.ApiException api
-                    && (api.status().value() == 401 || api.status().value() == 403 || api.status().value() == 429)) throw error;
-            return new ReferenceRecall.Branch("degraded", List.of(), elapsed(start));
+                    && (batch ? List.of(401, 402, 403, 409).contains(api.status().value())
+                    : List.of(401, 403, 429).contains(api.status().value()))) throw error;
+            return observed(stage, new ReferenceRecall.Branch("degraded", List.of(), elapsed(start)), completed);
         }
+    }
+    private ReferenceRecall.Branch observed(String stage, ReferenceRecall.Branch branch,
+            BiConsumer<String, ReferenceRecall.Branch> completed) {
+        if (completed != null) completed.accept(stage, branch);
+        return branch;
     }
     private ReferenceRecall.Branch await(Future<ReferenceRecall.Branch> future, long start, long deadline) {
         if (future == null) return new ReferenceRecall.Branch("degraded", List.of(), elapsed(start));

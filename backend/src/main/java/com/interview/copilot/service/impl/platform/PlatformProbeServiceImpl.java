@@ -53,6 +53,8 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
             throw PlatformConfigErrors.invalid("请选择需要测试的服务能力。");
         }
         PlatformSnapshot snapshot = configs.draft(input.config());
+        if (input.resultFormat() != null && !Set.of("single", "questions-v1").contains(input.resultFormat()))
+            throw PlatformConfigErrors.invalid("问题提取结果格式无效。");
         if (!capacity.tryAcquire()) {
             throw ProviderErrors.busy();
         }
@@ -60,16 +62,19 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
         boolean success = false;
         try {
             if ("question-rewrite".equals(input.capability())) {
-                var sample = questionRewrite(snapshot);
+                var sample = questionRewrite(snapshot, input.resultFormat());
                 success = true;
-                return new PlatformProbeResponse(true, "问题改写测试通过。", elapsed(started), sample);
+                return new PlatformProbeResponse(true, "questions-v1".equals(input.resultFormat())
+                        ? "问题提取测试通过。" : "问题改写测试通过。", elapsed(started), sample);
             }
             probe(snapshot, input);
             success = true;
             return new PlatformProbeResponse(true, "服务测试通过。", elapsed(started));
         } catch (RuntimeException error) {
             var failure = error instanceof com.interview.copilot.exception.questions.QuestionRewriteOutputException
-                    ? new com.interview.copilot.exception.ai.ProviderFailure("invalid_output", "问题改写返回格式无效或遗漏关键条件，请更换模型或调整输出限制。")
+                    ? new com.interview.copilot.exception.ai.ProviderFailure("invalid_output", "questions-v1".equals(input.resultFormat())
+                            ? "问题提取返回格式无效或遗漏问点，请更换模型或调整输出限制。"
+                            : "问题改写返回格式无效或遗漏关键条件，请更换模型或调整输出限制。")
                     : com.interview.copilot.util.ai.ProviderFailureClassifier.classify(error);
             String message = failure.getMessage();
             return new PlatformProbeResponse(false, message, elapsed(started));
@@ -94,18 +99,22 @@ public class PlatformProbeServiceImpl implements PlatformProbeService {
         }
     }
 
-    private com.interview.copilot.response.platform.QuestionRewriteProbeResponse questionRewrite(PlatformSnapshot snapshot) {
+    private com.interview.copilot.response.platform.QuestionRewriteProbeResponse questionRewrite(PlatformSnapshot snapshot, String format) {
         var config = snapshot.view().questionRewrite();
-        if (config.modelId().isBlank()) throw PlatformConfigErrors.invalid("请选择问题改写模型后再测试。");
+        if (config.modelId().isBlank()) throw PlatformConfigErrors.invalid("questions-v1".equals(format)
+                ? "请选择问题提取模型后再测试。" : "请选择问题改写模型后再测试。");
         var endpoint = snapshot.llm(config.modelId()).config();
-        String question = "那个，Redis 多实例的任务啊，同一个任务点了两次，怎么避免重复执行？先不讨论跨地域。";
-        var input = new com.interview.copilot.request.questions.QuestionRewriteRequest(question, List.of());
+        String question = "questions-v1".equals(format)
+                ? "这里先提到 Reactor 构建的背景。除了 ReAct，还有哪些常见的 Agent 模式？什么是 SSE？MCP 除 SSE 之外，还支持哪些传输方式？"
+                : "那个，Redis 多实例的任务啊，同一个任务点了两次，怎么避免重复执行？先不讨论跨地域。";
+        var input = new com.interview.copilot.request.questions.QuestionRewriteRequest(question, List.of(), format);
         var result = new com.interview.copilot.util.questions.QuestionRewriteClient(http, json)
                 .rewrite(endpoint, input, Duration.ofMillis(config.timeoutMs())).block();
         if (result == null || "ambiguous".equals(result.action()))
             throw new com.interview.copilot.exception.questions.QuestionRewriteOutputException();
-        return new com.interview.copilot.response.platform.QuestionRewriteProbeResponse(
-                question, result.action(), result.question(), endpoint.getModel());
+        return new com.interview.copilot.response.platform.QuestionRewriteProbeResponse(question,
+                "extracted".equals(result.action()) ? "rewritten" : result.action(), result.question(), endpoint.getModel(),
+                "questions-v1".equals(format) ? format : null, result.questions());
     }
 
     private void rerank(PlatformSnapshot snapshot) {

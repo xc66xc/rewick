@@ -31,6 +31,7 @@ public final class QuestionRewritePolicy {
         if (input.context().size() > 6 || input.context().stream().anyMatch(value -> value == null
                 || value.isBlank() || characters(value) > 1500)) throw invalid();
         if (input.context().stream().mapToInt(QuestionRewritePolicy::characters).sum() > 1500) throw invalid();
+        if (input.resultFormat() != null && !Set.of("single", "questions-v1").contains(input.resultFormat())) throw invalid();
     }
 
     public static String requestId(String value) {
@@ -71,15 +72,25 @@ public final class QuestionRewritePolicy {
         if (!available.containsAll(protectedTokens(rewritten))) throw new QuestionRewriteOutputException();
     }
 
-    private static Set<String> protectedTokens(String text) {
+    static Set<String> protectedTokens(String text) {
         Set<String> values = new HashSet<>();
         var matcher = PROTECTED.matcher(text);
         while (matcher.find()) values.add(matcher.group().replaceAll("\\s+", ""));
         return values;
     }
 
-    private static String normalize(String value) {
+    static String normalize(String value) {
         return value.toLowerCase(Locale.ROOT);
+    }
+
+    static void sourceConstraints(String original, String question) {
+        for (String constraint : CONSTRAINTS) {
+            if (original.contains(constraint) && !question.contains(constraint)) throw new QuestionRewriteOutputException();
+        }
+    }
+
+    static boolean hasConstraints(String value) {
+        return CONSTRAINTS.stream().anyMatch(value::contains);
     }
 
     private static ApiException invalid() {

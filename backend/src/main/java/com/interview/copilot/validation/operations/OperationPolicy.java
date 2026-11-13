@@ -21,7 +21,7 @@ public final class OperationPolicy {
             "outcome", "reason", "serviceSource", "providerType", "model", "appVersion", "metadata");
     private static final Set<String> METADATA = Set.of("candidateCount", "cacheHits", "fragmentCount", "inputTokens", "outputTokens",
             "totalTokens", "bufferedBytes", "maxGapMs", "summaryEnabled", "audioBytes", "filteredCount", "triggerCount",
-            "topK", "topN", "selectedCount", "resultCount", "policyVersion", "platformVersion", "rrfTopN", "rerankTopN");
+            "topK", "topN", "selectedCount", "resultCount", "policyVersion", "platformVersion", "rrfTopN", "rerankTopN", "questionCount", "questionIndex");
     private static final Set<String> REASONS = Set.of("provider_error", "network_error", "timeout", "cancelled",
             "unauthorized", "unavailable", "rate_limit", "session_inactive", "invalid_input", "storage_error",
             "queue_full", "empty", "feedback", "server_only", "record_changed", "record_deleted", "unknown",
@@ -65,6 +65,9 @@ public final class OperationPolicy {
         if (event.metadata() == null) return;
         event.metadata().forEach((key, value) -> {
             if (!METADATA.contains(key)) throw invalid();
+            if (Set.of("questionCount", "questionIndex").contains(key)
+                    && (!(value instanceof Number number) || number.doubleValue() > 5
+                    || "questionIndex".equals(key) && number.doubleValue() < 1)) throw invalid();
             if ("summaryEnabled".equals(key)) { if (!(value instanceof Boolean)) throw invalid(); }
             else if (!(value instanceof Number number) || !Double.isFinite(number.doubleValue())
                     || number.doubleValue() < 0 || number.doubleValue() > 1e12

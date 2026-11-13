@@ -15,6 +15,36 @@ function settings(enabled = true): Settings {
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 
 describe('question rewrite preparation', () => {
+  it('negotiates questions-v1 only when both extraction and reference batching are advertised', async () => {
+    const config = settings()
+    if (!config.platform?.questionRewrite) throw new Error('Missing policy')
+    config.platform.questionRewrite.resultFormats = ['single', 'questions-v1']
+    const fetcher = vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body))
+      return Response.json(body.resultFormat === 'questions-v1'
+        ? { ...result, question: undefined, resultFormat: 'questions-v1', questions: [{ id: 'q1', question: 'Redis 锁过期时任务未完成应如何处理？', sourceTexts: [request.question] }] }
+        : result)
+    })
+    vi.stubGlobal('fetch', fetcher)
+    await new QuestionRewriteClient(config, 'token').rewrite(request, new AbortController().signal)
+    expect(JSON.parse(String(fetcher.mock.calls[0][1].body))).not.toHaveProperty('resultFormat')
+    config.platform.questionRewrite.batchReferencesAvailable = true
+    const rewritten = await new QuestionRewriteClient(config, 'token').rewrite(request, new AbortController().signal)
+    expect(rewritten).toMatchObject({ resultFormat: 'questions-v1', status: 'rewritten', questions: [{ id: 'q1', sourceTexts: [request.question] }] })
+    expect(JSON.parse(String(fetcher.mock.calls[1][1].body)).resultFormat).toBe('questions-v1')
+  })
+
+  it.each(['current', 'context'] as const)('rejects extraction with a fabricated %s source without a retry', async kind => {
+    const config = settings()
+    if (!config.platform?.questionRewrite) throw new Error('Missing policy')
+    Object.assign(config.platform.questionRewrite, { resultFormats: ['single', 'questions-v1'], batchReferencesAvailable: true })
+    const fetcher = vi.fn(async () => Response.json({ ...result, question: undefined, resultFormat: 'questions-v1', questions: [{ id: 'q1', question: 'Redis 锁过期如何处理？',
+      sourceTexts: kind === 'current' ? ['原话中没有这一问'] : [request.question], ...(kind === 'context' ? { contextSourceTexts: ['历史中没有的指代'] } : {}) }] }))
+    vi.stubGlobal('fetch', fetcher)
+    expect(await new QuestionRewriteClient(config, 'token').rewrite(request, new AbortController().signal)).toMatchObject({ resultFormat: 'questions-v1', status: 'degraded', reason: 'invalid_output', questions: [] })
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
   it.each(['platform', 'custom'] as const)('uses one platform-owned rewrite with %s answering and keeps the original request immutable', async source => {
     const fetcher = vi.fn(async (_url: string, _init: RequestInit) => Response.json(result))
     vi.stubGlobal('fetch', fetcher)

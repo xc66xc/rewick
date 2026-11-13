@@ -36,11 +36,17 @@ export default function ReferenceSources({ retrieval }: ReferenceSourcesProps) {
     <p className="my-3 leading-[1.8] text-text-secondary">以下片段提供给了本次回答模型，不代表逐句引用或事实核验。复制回答时不会包含这些资料。</p>
 
     {retrieval.hybrid && <ReferenceRetrievalDiagnostics hybrid={retrieval.hybrid} />}
+    {retrieval.queries && <div className="my-3 space-y-3">{retrieval.queries.map(query => <section key={query.questionId} className="border-t border-border pt-3">
+      <p className="font-medium">{query.questionId} · {query.status} · 实际送入 {query.excerptIds.length} 份证据</p>
+      {query.message && <p>{query.message}</p>}
+      {query.hybrid && <ReferenceRetrievalDiagnostics hybrid={query.hybrid} />}
+    </section>)}</div>}
     {retrieval.message && <p className="mt-4 flex items-start gap-2 leading-[1.8] [&_svg]:mt-[3px] [&_svg]:shrink-0">{retrieval.message}</p>}
     {degraded && !retrieval.message && <p className="mt-4">{web ? '部分资料检索暂不可用，本次回答使用已取得的内容。' : '部分检索暂不可用，本次使用已取得的资料。'}</p>}
-    <ol className="m-0 flex list-none flex-col gap-3 p-0">{retrieval.excerpts.map(excerpt => <li key={`${excerpt.source ?? 'local'}:${excerpt.documentId}:${excerpt.revision}:${excerpt.chunkId}`} className="rounded-chip border border-border bg-subtle p-3">
+    <ol className="m-0 flex list-none flex-col gap-3 p-0">{retrieval.excerpts.map(excerpt => <li key={excerpt.excerptId ?? `${excerpt.source ?? 'local'}:${excerpt.documentId}:${excerpt.revision}:${excerpt.chunkId}`} className="rounded-chip border border-border bg-subtle p-3">
       <header className="mb-2 flex flex-wrap items-center gap-2"><FileText size={15} aria-hidden="true" className="shrink-0" /><strong className="text-xs font-medium [overflow-wrap:anywhere]">{excerpt.title || excerpt.name}</strong><span className="text-[10px] text-text-muted">{excerpt.generatedSummary ? '生成摘要 · 非网页原文' : excerpt.source === 'web' ? '网页片段' : excerptLocation(excerpt)}{excerpt.source !== 'web' && ` · 版本 ${excerpt.revision}`}</span></header>
       <span className="text-[10px] text-success">{excerpt.source === 'web' ? '联网搜索 · 技术参考' : excerpt.kind === 'personal' ? '我的项目经历' : '技术参考'}</span>
+      {excerpt.questionIds?.length ? <p className={formNoteClass}>问题归属：{excerpt.questionIds.join('、')}</p> : null}
       {excerpt.source === 'web' && !excerpt.generatedSummary && excerpt.url && webSourceUrlSchema.safeParse(excerpt.url).success && <LinkButton className="block max-w-full break-all text-left" onClick={() => void openSource(excerpt.url ?? '')} aria-label={`打开网页来源：${excerpt.title || excerpt.name}`}>{excerpt.url}</LinkButton>}
       {excerpt.ranking && <p className={formNoteClass}>BM25 名次：{excerpt.ranking.bm25Rank ?? '未命中'} · 向量名次：{excerpt.ranking.vectorRank ?? '未命中'} · RRF：{excerpt.ranking.rrfScore.toFixed(5)}{excerpt.ranking.rerankRank != null && ` · 重排序名次：${excerpt.ranking.rerankRank}`}{excerpt.ranking.rerankScore != null && ` · 重排序分数：${excerpt.ranking.rerankScore.toFixed(5)}`}{excerpt.contextExpansion === 'child' && ' · 父上下文扩展降级'}</p>}
       <p className="mt-2 mb-0 leading-[1.85] whitespace-pre-wrap text-text-secondary [overflow-wrap:anywhere]">{excerpt.text}</p>

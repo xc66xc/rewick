@@ -73,6 +73,22 @@ class ReferenceParallelServiceTest {
             assertThat(result.vector().status()).isEqualTo("degraded");
         } finally { service.close(); }
     }
+
+    @Test void recallWithVector_childBusy_degradesButSessionInvalidationTerminates() {
+        var recall = org.mockito.Mockito.mock(ReferenceRecallService.class);
+        var service = new ReferenceParallelServiceImpl(recall);
+        var plan = com.interview.copilot.model.references.ReferenceQueryPlan.start(ReferencePolicy.defaults(), null);
+        try {
+            var result = service.recallWithVector(1, List.of(), "query", plan, null, () -> {
+                throw new com.interview.copilot.exception.ApiException(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS, "busy", "synthetic");
+            });
+
+            assertThat(result.vector().status()).isEqualTo("degraded");
+            assertThatThrownBy(() -> service.recallWithVector(1, List.of(), "query", plan, null, () -> {
+                throw new com.interview.copilot.exception.ApiException(org.springframework.http.HttpStatus.CONFLICT, "INTERVIEW_NOT_ACTIVE", "synthetic");
+            })).isInstanceOf(com.interview.copilot.exception.ApiException.class);
+        } finally { service.close(); }
+    }
     private void await(CountDownLatch latch) {
         try { latch.await(3,TimeUnit.SECONDS); }
         catch (InterruptedException error) { Thread.currentThread().interrupt(); throw new java.util.concurrent.CancellationException(); }

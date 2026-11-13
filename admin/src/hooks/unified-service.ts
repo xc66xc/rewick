@@ -43,7 +43,7 @@ export function applyService(config: Config, form: ServiceForm, remove = false):
   const removesRewriteModel = !!rewriteModel && remove && (form.id === rewriteModel.id || changesRewriteProvider)
   const stopsRewriteModel = !!rewriteModel && next.questionRewrite.enabled && (!form.enabled && form.id === rewriteModel.id || changesRewriteProvider)
   if (removesRewriteModel || stopsRewriteModel) {
-    throw new Error('此模型仍被问题改写引用。请先更改改写模型绑定或关闭问题改写；删除前还需清空模型选择。')
+    throw new Error('此模型仍被问题提取与整理引用。请先更改提取模型绑定或关闭问题提取与整理；删除前还需清空模型选择。')
   }
   const previous = next.providers.find(item => item.id === form.providerId)
   const url = form.url.trim()

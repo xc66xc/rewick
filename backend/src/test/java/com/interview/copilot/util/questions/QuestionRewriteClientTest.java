@@ -74,6 +74,31 @@ class QuestionRewriteClientTest {
         assertThat(result.question()).isNull();
     }
 
+    @Test
+    void rewrite_questionsFormat_extractsOnceWithBoundedOutputAndNoScalarQuestion() {
+        respond(json.encode(Map.of("action", "extracted", "questions", List.of(
+                Map.of("question", "什么是 SSE？", "sourceTexts", List.of("什么是 SSE？")),
+                Map.of("question", "MCP 有哪些方式？", "sourceTexts", List.of("MCP 有哪些方式？"))))), "stop");
+        var endpoint = endpoint();
+        endpoint.setMaxOutputTokens(4000);
+        var result = client().rewrite(endpoint, new QuestionRewriteRequest("前面提到 Reactor。什么是 SSE？MCP 有哪些方式？",
+                List.of(), "questions-v1"), Duration.ofSeconds(3)).block();
+
+        assertThat(result.action()).isEqualTo("extracted");
+        assertThat(result.question()).isNull();
+        assertThat(result.questions()).extracting(q -> q.id()).containsExactly("q1", "q2");
+        assertThat(json.parse(body.get()).path("max_tokens").asInt()).isEqualTo(1536);
+        assertThat(json.parse(body.get()).path("messages").path(0).path("content").asText()).contains("全部独立问题");
+    }
+
+    @Test
+    void rewrite_questionsTruncated_retainsUsageAndRejectsWholeList() {
+        respond("{\"action\":\"extracted\",\"questions\":[]}", "length");
+        assertThatThrownBy(() -> client().rewrite(endpoint(), new QuestionRewriteRequest("什么是 SSE？", List.of(), "questions-v1"),
+                Duration.ofSeconds(3)).block()).isInstanceOf(QuestionRewriteOutputException.class)
+                .satisfies(error -> assertThat(((QuestionRewriteOutputException) error).usage()).containsEntry("totalTokens", 30L));
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"{\"action\":\"unchanged\"} trailing explanation",
             "{\"action\":\"unchanged\"}{\"action\":\"ambiguous\"}",

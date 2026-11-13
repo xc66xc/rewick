@@ -19,6 +19,15 @@ public class OperationPolicyTest {
     @Test void validate_event_retainsOnlyBoundedMetadata() {
         OperationPolicy.event(event(UUID.randomUUID().toString(),Map.of("totalTokens",5,"bufferedBytes",100,"summaryEnabled",true)));
     }
+    @Test
+    void validate_extractionCountAndOneBasedIndex_acceptsOnlyBoundedNumbers() {
+        assertThatCode(() -> OperationPolicy.event(event(UUID.randomUUID().toString(), Map.of("questionCount", 5, "questionIndex", 1))))
+                .doesNotThrowAnyException();
+        assertThatThrownBy(() -> OperationPolicy.event(event(UUID.randomUUID().toString(), Map.of("questionIndex", 0))))
+                .isInstanceOf(com.interview.copilot.exception.ApiException.class);
+        assertThatThrownBy(() -> OperationPolicy.event(event(UUID.randomUUID().toString(), Map.of("questionCount", 6))))
+                .isInstanceOf(com.interview.copilot.exception.ApiException.class);
+    }
     @ParameterizedTest
     @ValueSource(strings={"fragmentCount","inputTokens","outputTokens","totalTokens","audioBytes","bufferedBytes","filteredCount","triggerCount"})
     void validate_countMetadata_rejectsFractions(String key) {

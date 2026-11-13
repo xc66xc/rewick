@@ -55,6 +55,16 @@ public class ReferenceContextServiceImpl implements ReferenceContextService {
             List<ReferenceRecall.Fused> fused, ReferenceQueryPlan plan, OperationContext observation) {
         ReferenceQueryPlan.checkCancellation();
         if (fused.isEmpty()) return List.of();
+        return pack(user, scope, fused, load(user, scope, fused, plan, observation), plan.policy(), observation);
+    }
+    public List<ReferenceContextEntity> parents(long user, List<ReferenceScopeEntity> scope,
+            List<ReferenceRecall.Fused> fused, ReferenceQueryPlan plan, OperationContext observation) {
+        if (fused.isEmpty() || scope.isEmpty()) return List.of();
+        return List.copyOf(load(user, scope, fused, plan, observation).values());
+    }
+    private Map<Key, ReferenceContextEntity> load(long user, List<ReferenceScopeEntity> scope,
+            List<ReferenceRecall.Fused> fused, ReferenceQueryPlan plan, OperationContext observation) {
+        ReferenceQueryPlan.checkCancellation();
         var policy = plan.policy();
         var span = observation == null ? null : observation.child("pg");
         Map<Key, ReferenceContextEntity> rows = new HashMap<>();
@@ -79,7 +89,7 @@ public class ReferenceContextServiceImpl implements ReferenceContextService {
             LOG.error("Parent context lookup failed user={}", user, error);
             if (span != null) span.finish("retrieval.parent_lookup", "degraded", Map.of());
         }
-        return pack(user, scope, fused, rows, policy, observation);
+        return rows;
     }
     private List<ReferenceExcerptResponse> pack(long user, List<ReferenceScopeEntity> scope, List<ReferenceRecall.Fused> fused,
             Map<Key, ReferenceContextEntity> rows, ReferencePolicy policy, OperationContext observation) {

@@ -66,6 +66,37 @@ class SessionRecordsIntegrationTest extends PaymentHttpFixture {
         return Map.of("id", id, "title", "技术面试", "createdAt", "2026-09-12T10:00:00Z",
                 "segments", List.of(Map.of("id", "segment", "text", "你好", "startMs", 0, "isFinal", true)), "answers", List.of());
     }
+
+    @Test
+    void detail_extractionFormatNegotiation_preservesStoredOriginalAndActualSources() {
+        var content = new java.util.HashMap<String, Object>(record("extracted"));
+        var extraction = new java.util.HashMap<String, Object>();
+        extraction.put("resultFormat", "questions-v1");
+        extraction.put("status", "rewritten");
+        extraction.put("questions", List.of(Map.of("id", "q1", "question", "什么是 SSE？", "sourceTexts", List.of("什么是 SSE？"))));
+        extraction.put("reason", null);
+        extraction.put("model", "synthetic-model");
+        extraction.put("durationMs", 700);
+        extraction.put("platformVersion", 8);
+        var retrieval = Map.of("status", "ready", "excerpts", List.of(Map.of("excerptId", "e1", "questionIds", List.of("q1"),
+                "source", "platform", "text", "真实的 SSE 参考片段", "documentId", "synthetic-document", "chunkId", "synthetic-context")),
+                "queries", List.of(Map.of("questionId", "q1", "status", "ready", "excerptIds", List.of("e1"))));
+        content.put("answers", List.of(Map.of("id", "answer", "question", "什么是 SSE？", "text", "完整回答", "status", "complete",
+                "createdAt", "2026-11-13T10:00:00+08:00", "questionRewrite", extraction, "retrieval", retrieval,
+                "modelInput", Map.of("messages", List.of(Map.of("role", "user", "content", "实际模型输入"))))));
+        var body = Map.of("version", 0, "mutationId", UUID.randomUUID().toString(), "record", content);
+        assertThat(call(HttpMethod.POST, "/session-records/extracted", aliceToken, body).getStatusCode().value()).isEqualTo(200);
+
+        var legacy = call(HttpMethod.GET, "/session-records/extracted", aliceToken, null).getBody().path("record").path("answers").path(0);
+        var modern = call(HttpMethod.GET, "/session-records/extracted?resultFormat=questions-v1", aliceToken, null).getBody().path("record").path("answers").path(0);
+
+        assertThat(legacy.has("questionRewrite")).isFalse();
+        assertThat(legacy.path("retrieval").has("queries")).isFalse();
+        assertThat(legacy.path("retrieval").path("excerpts").path(0).path("text").asText()).isEqualTo("真实的 SSE 参考片段");
+        assertThat(legacy.path("modelInput")).isEqualTo(modern.path("modelInput"));
+        assertThat(modern.path("questionRewrite").path("questions").path(0).path("id").asText()).isEqualTo("q1");
+        assertThat(call(HttpMethod.GET, "/session-records/extracted?resultFormat=questions-v1", bobToken, null).getStatusCode().value()).isEqualTo(404);
+    }
     @Test
     void save_retriesVersionsAndDeletion_preventDuplicatesAndResurrection() {
         var body = Map.of("version", 0, "mutationId", UUID.randomUUID().toString(), "record", record("one"));

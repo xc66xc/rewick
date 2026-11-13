@@ -13,4 +13,9 @@ public interface ReferenceContextService {
             List<ReferenceRecall.Fused> fused, ReferencePolicy policy, OperationContext observation);
     List<ReferenceExcerptResponse> expand(long user, List<ReferenceScopeEntity> scope,
             List<ReferenceRecall.Fused> fused, com.interview.copilot.model.references.ReferenceQueryPlan plan, OperationContext observation);
+    default List<com.interview.copilot.entity.references.ReferenceContextEntity> parents(long user,
+            List<ReferenceScopeEntity> scope, List<ReferenceRecall.Fused> fused,
+            com.interview.copilot.model.references.ReferenceQueryPlan plan, OperationContext observation) {
+        throw new UnsupportedOperationException("Batch parent contexts are unavailable");
+    }
 }

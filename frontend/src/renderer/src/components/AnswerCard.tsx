@@ -41,7 +41,7 @@ export default function AnswerCard({ answer, index, compact = false }: AnswerCar
     {copyError && <p className={inlineErrorClass}>无法访问剪贴板，请选择文字复制。</p>}
     </div>
     {compact && question}
-    {import.meta.env.DEV && answer.questionRewrite && <QuestionRewriteDetails original={answer.question} result={answer.questionRewrite} />}
+    {import.meta.env.DEV && answer.questionRewrite && <QuestionRewriteDetails original={answer.question} result={answer.questionRewrite} retrieval={answer.retrieval} />}
     {import.meta.env.DEV && compact && <Collapse summary="本次发送内容" className="compact-answer__details mt-2 border-0 px-0 py-1"><ModelInputDetails modelInput={answer.modelInput} pending={answer.status === 'streaming'} /></Collapse>}
     {import.meta.env.DEV && answer.retrieval && <ReferenceSources retrieval={answer.retrieval} />}
   </article>

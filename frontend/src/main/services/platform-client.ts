@@ -55,12 +55,21 @@ export class PlatformClient {
   async webSearch(token: string, query: string, requestId: string, signal: AbortSignal): Promise<unknown> {
     return this.request('/api/v1/web-search', token, { query, requestId }, signal)
   }
-  async rewriteQuestion(token: string, question: string, context: string[], requestId: string, signal: AbortSignal): Promise<unknown> {
-    return this.request('/api/v1/questions/rewrite', token, { question, context }, signal, { 'X-Request-Id': requestId })
+  async rewriteQuestion(token: string, question: string, context: string[], requestId: string, signal: AbortSignal, resultFormat?: 'questions-v1'): Promise<unknown> {
+    return this.request('/api/v1/questions/rewrite', token, { question, context, ...(resultFormat ? { resultFormat } : {}) }, signal, { 'X-Request-Id': requestId })
+  }
+  async referenceBatch(token: string, queries: { questionId: string; query: string }[], referenceIds: string[], requestId: string, signal: AbortSignal): Promise<unknown> {
+    return this.request('/api/v1/references/search/batch', token, { queries, referenceIds }, signal, { 'X-Request-Id': requestId })
+  }
+  async cancelReferenceBatch(token: string, requestId: string, signal: AbortSignal): Promise<void> {
+    return this.cancelRequest(`/api/v1/references/search/batch/${encodeURIComponent(requestId)}`, token, signal)
   }
   async cancelQuestionRewrite(token: string, requestId: string, signal: AbortSignal): Promise<void> {
+    return this.cancelRequest(`/api/v1/questions/rewrite/${encodeURIComponent(requestId)}`, token, signal)
+  }
+  private async cancelRequest(path: string, token: string, signal: AbortSignal): Promise<void> {
     // A late cancellation owns its original token. It must never revoke a newly signed-in account.
-    const response = await fetch(`${this.baseUrl}/api/v1/questions/rewrite/${encodeURIComponent(requestId)}`, {
+    const response = await fetch(`${this.baseUrl}${path}`, {
       method: 'DELETE', redirect: 'error', signal, headers: { Authorization: `Bearer ${token}` },
     })
     await response.body?.cancel().catch(() => undefined)
@@ -138,7 +147,7 @@ export class PlatformClient {
           const chunk = await reader.read()
           if (chunk.done) break
           size += chunk.value.byteLength
-          if (size > (path.includes('/interview-sessions/') ? 1_048_576 : path === '/api/v1/web-search' ? 262_144 : MAX_BYTES)) throw new PlatformRequestError('平台响应超过容量限制。')
+          if (size > (path.includes('/interview-sessions/') ? 1_048_576 : ['/api/v1/web-search', '/api/v1/references/search/batch'].includes(path) ? 262_144 : MAX_BYTES)) throw new PlatformRequestError('平台响应超过容量限制。')
           chunks.push(chunk.value)
         }
       } finally { await reader.cancel().catch(() => undefined); reader.releaseLock() }

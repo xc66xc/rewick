@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AnswerRequest, AppEvent, Settings } from '../../src/shared/types'
 import { defaultSettings } from '../../src/shared/defaults'
-import { questionRewriteResultSchema } from '../../src/shared/question-rewrite'
+import { questionRewriteResultSchema, type ExtractedQuestion } from '../../src/shared/question-rewrite'
 import { generateAnswer, cancelAnswerGeneration, finishAnswerGeneration, type AnswerGenerationDependencies, type AnswerWork } from '../../src/main/services/answer-generation'
 import { ReferenceService } from '../../src/main/services/reference-service'
 import { OperationsTelemetry } from '../../src/main/services/operations-telemetry'
@@ -18,7 +18,7 @@ const excerpt = { source: 'platform' as const, documentId: 'document-one', chunk
 const pendingWork = new Set<AnswerWork>()
 const telemetryServices = new Set<OperationsTelemetry>()
 
-function fixture(options: { enabled?: boolean; source?: 'platform' | 'custom'; web?: boolean; respond?: ResponseOverride } = {}) {
+function fixture(options: { enabled?: boolean; source?: 'platform' | 'custom'; web?: boolean; questions?: ExtractedQuestion[]; respond?: ResponseOverride } = {}) {
   const source = options.source ?? 'custom'
   const settings: Settings = {
     ...structuredClone(defaultSettings),
@@ -27,7 +27,7 @@ function fixture(options: { enabled?: boolean; source?: 'platform' | 'custom'; w
     serviceSelections: { llm: { source, id: source === 'custom' ? 'custom' : 'platform-answer' } },
     platform: { enabled: true, baseUrl: 'https://platform.example.test', authenticated: true, expiresAt: new Date(Date.now() + 3600000).toISOString(), advancedSettingsEnabled: true,
       models: { llm: 'platform-answer', asr: 'asr', available: [{ id: 'platform-answer', name: '平台回答模型' }] }, capabilities: { llm: true, asr: true },
-      questionRewrite: { enabled: options.enabled ?? true, timeoutMs: 1500 }, platformVersion: 7, webSearchAvailable: true },
+      questionRewrite: { enabled: options.enabled ?? true, timeoutMs: 1500, ...(options.questions ? { resultFormats: ['single', 'questions-v1'], batchReferencesAvailable: true } : {}) }, platformVersion: 7, webSearchAvailable: true },
     retrieval: { enabled: true }, webSearch: { enabled: options.web ?? true },
     interviewEnvironment: { id: 'env', name: '环境', resumeId: null, resumeName: '', targetId: null, targetName: '', referenceIds: ['document-one'] },
   }
@@ -55,7 +55,9 @@ function fixture(options: { enabled?: boolean; source?: 'platform' | 'custom'; w
     const response = options.respond?.(call)
     if (response !== undefined) return response
     if (init.method === 'DELETE') return new Response(null, { status: 204 })
-    if (url.endsWith('/questions/rewrite')) return Response.json(rewriteResult)
+    if (url.endsWith('/questions/rewrite')) return Response.json(options.questions ? { ...rewriteResult, question: undefined, resultFormat: 'questions-v1', questions: options.questions } : rewriteResult)
+    if (url.endsWith('/references/search/batch')) return Response.json({ status: 'ready', excerpts: options.questions?.map(question => ({ ...excerpt, excerptId: `ref-${question.id}`, questionIds: [question.id], text: `${question.id}的资料正文` })) ?? [],
+      queries: options.questions?.map(question => ({ questionId: question.id, status: 'ready', excerptIds: [`ref-${question.id}`] })) ?? [], policyVersion: 9, platformVersion: 8 })
     if (url.endsWith('/references/search')) return Response.json({ status: 'ready', excerpts: [excerpt] })
     if (url.endsWith('/web-search')) return Response.json({ status: 'ready', excerpts: [{ ...excerpt, source: 'web', documentId: 'web-one', chunkId: 'web-chunk', name: '网页', url: 'https://source.example.test/page' }] })
     if (url.endsWith('/chat/completions')) return Response.json({ choices: [{ message: { content: '最终口语回答。' } }] })
@@ -75,6 +77,159 @@ afterEach(() => {
   for (const telemetry of telemetryServices) telemetry.dispose()
   pendingWork.clear(); telemetryServices.clear()
   vi.unstubAllGlobals(); vi.useRealTimers()
+})
+
+function extractedQuestions(count: number): ExtractedQuestion[] {
+  const names = ['除了 ReAct，还有哪些常见 Agent 模式？', '什么是 SSE？', 'MCP 除 SSE 外支持哪些传输方式？', '任务重复执行如何避免？', 'Redis 锁过期怎么办？']
+  return names.slice(0, count).map((question, index) => ({ id: `q${index + 1}` as ExtractedQuestion['id'], question, sourceTexts: [question] }))
+}
+function webResponse(query: string, text = `查询 ${query} 的网页片段`, summary = false): Response {
+  return Response.json({ status: 'ready', excerpts: [{ ...excerpt, source: 'web', name: summary ? 'Tavily 自动摘要' : '实际网页', documentId: 'web-one', chunkId: 'web-one', text,
+    ...(summary ? { generatedSummary: true } : { url: 'https://source.example.test/page#section' }) }] })
+}
+
+describe('production multi-question answer orchestration', () => {
+  it.each(['invalid_source', 'unchanged'] as const)('uses the existing raw single-query flow without retry when extraction is %s', async failure => {
+    const questions = extractedQuestions(3)
+    const f = fixture({ questions, respond: call => call.url.endsWith('/questions/rewrite') ? Response.json({ ...rewriteResult, question: undefined, resultFormat: 'questions-v1',
+      ...(failure === 'unchanged' ? { status: 'unchanged', questions: [], reason: 'ambiguous' } : { questions: questions.map(question => ({ ...question, sourceTexts: ['fabricated source'] })) }) }) : undefined })
+    await f.start(); await f.waitComplete()
+    expect(f.matching('/questions/rewrite')).toHaveLength(1)
+    expect(f.matching('/references/search/batch')).toHaveLength(0)
+    expect(JSON.parse(String(f.matching('/references/search')[0].init.body)).query).toBe(original)
+    expect(JSON.parse(String(f.matching('/web-search')[0].init.body)).query).toBe(original)
+    expect(f.matching('/chat/completions')).toHaveLength(1)
+    expect(JSON.parse(f.finalPayload().messages[1].content)).not.toHaveProperty('questions')
+  })
+  it.each([1, 3, 5])('negotiates one extraction and one reference batch for N=%s while making one complete final answer', async count => {
+    const questions = extractedQuestions(count)
+    const raw = `开场背景 Reactor 与流式链路。${questions.map(question => question.question).join(' ')}`
+    const f = fixture({ questions, respond: call => call.url.endsWith('/web-search') ? webResponse(JSON.parse(String(call.init.body)).query) : undefined })
+    await f.start('multi', { question: raw })
+    await f.waitComplete('multi')
+    expect(f.matching('/questions/rewrite')).toHaveLength(1)
+    expect(JSON.parse(String(f.matching('/questions/rewrite')[0].init.body)).resultFormat).toBe('questions-v1')
+    expect(f.matching('/references/search')).toHaveLength(0)
+    expect(f.matching('/references/search/batch')).toHaveLength(1)
+    expect(JSON.parse(String(f.matching('/references/search/batch')[0].init.body)).queries).toEqual(questions.map(question => ({ questionId: question.id, query: question.question })))
+    expect(f.matching('/web-search')).toHaveLength(count)
+    expect(f.matching('/chat/completions')).toHaveLength(1)
+    const input = JSON.parse(f.finalPayload().messages[1].content)
+    expect(input.question).toBe(raw)
+    expect(input.questions).toEqual(questions)
+    expect(input).not.toHaveProperty('rewrittenQuestion')
+    expect(input.questionRetrieval).toHaveLength(count)
+    expect(input.questionRetrieval.every((query: { excerptIds: string[] }) => query.excerptIds.length >= 2)).toBe(true)
+    expect(input.referenceContext.filter((row: { source: string }) => row.source === 'web')).toHaveLength(count)
+    expect(f.events.find(event => event.kind === 'answer-context')).not.toHaveProperty('retrieval.hybrid')
+  })
+
+  it('limits web concurrency to two, keeps same-URL distinct content and merges only true duplicate evidence', async () => {
+    const questions = extractedQuestions(5)
+    const releases: (() => void)[] = []
+    let active = 0, maximum = 0
+    const f = fixture({ questions, respond: call => {
+      if (!call.url.endsWith('/web-search')) return
+      const query = JSON.parse(String(call.init.body)).query as string
+      active++; maximum = Math.max(maximum, active)
+      return new Promise<Response>(resolve => { releases.push(() => { active--; resolve(webResponse(query, query === questions[1].question ? '完全重复的网页事实' : query === questions[3].question ? '完全重复的网页事实' : `不同的事实：${query}`)) }) })
+    } })
+    const pending = f.start('multi', { question: questions.map(question => question.question).join(' ') })
+    await vi.waitFor(() => expect(releases).toHaveLength(2))
+    expect(f.matching('/chat/completions')).toHaveLength(0)
+    for (let index = 0; index < 5; index++) {
+      await vi.waitFor(() => expect(releases[index]).toBeDefined())
+      releases[index]()
+    }
+    await pending; await f.waitComplete('multi')
+    expect(maximum).toBe(2)
+    const input = JSON.parse(f.finalPayload().messages[1].content)
+    const web = input.referenceContext.filter((row: { source: string }) => row.source === 'web')
+    expect(web).toHaveLength(4)
+    expect(web.find((row: { text: string }) => row.text === '完全重复的网页事实').questionIds).toEqual(['q2', 'q4'])
+  })
+
+  it('keeps multiple URL-less generated summaries separate and preserves per-question evidence', async () => {
+    const questions = extractedQuestions(3)
+    const f = fixture({ questions, respond: call => call.url.endsWith('/web-search') ? webResponse(JSON.parse(String(call.init.body)).query, '相同摘要正文', true) : undefined })
+    await f.start('multi', { question: questions.map(question => question.question).join(' ') }); await f.waitComplete('multi')
+    const context = f.events.find(event => event.kind === 'answer-context')
+    if (context?.kind !== 'answer-context') throw new Error('Missing context')
+    const summaries = context.retrieval.excerpts.filter(row => row.generatedSummary)
+    expect(summaries).toHaveLength(3)
+    expect(new Set(summaries.map(row => row.excerptId)).size).toBe(3)
+    expect(summaries.every(row => !row.url && row.source === 'web')).toBe(true)
+    const snapshot = { id: 'history', title: '记录', createdAt: '2026-11-13T10:00:00Z', segments: [], answers: [{ id: 'multi', question: questions.map(question => question.question).join(' '), text: '回答', createdAt: '2026-11-13T10:00:00Z', status: 'complete', retrieval: context.retrieval, questionRewrite: context.questionRewrite }] }
+    expect(sessionRecordSchema.safeParse(snapshot).success).toBe(true)
+    expect(sessionRecordSchema.safeParse({ ...snapshot, answers: [{ ...snapshot.answers[0], question: 'different current question' }] }).success).toBe(false)
+  })
+
+  it('isolates one failed web query while preserving the other questions and making only one answer', async () => {
+    const questions = extractedQuestions(3)
+    const f = fixture({ questions, respond: call => call.url.endsWith('/web-search') && JSON.parse(String(call.init.body)).query === questions[1].question ? Response.json({}, { status: 502 }) : undefined })
+    await f.start('multi', { question: questions.map(question => question.question).join(' ') }); await f.waitComplete('multi')
+    expect(f.matching('/web-search')).toHaveLength(3)
+    expect(f.matching('/chat/completions')).toHaveLength(1)
+    const input = JSON.parse(f.finalPayload().messages[1].content)
+    expect(input.questionRetrieval[1]).toMatchObject({ questionId: 'q2', status: 'degraded', web: { status: 'degraded' } })
+    expect(input.questionRetrieval[0].status).toBe('ready')
+    expect(input.questionRetrieval[2].status).toBe('ready')
+  })
+
+  it('shares one retrieval deadline including queued web work and ignores all late evidence', async () => {
+    vi.useFakeTimers()
+    const questions = extractedQuestions(5)
+    const releases: ((value: Response) => void)[] = []
+    const f = fixture({ questions, respond: call => call.url.endsWith('/web-search') || call.url.endsWith('/references/search/batch') ? new Promise<Response>(resolve => { releases.push(resolve) }) : undefined })
+    const pending = f.start('multi', { question: questions.map(question => question.question).join(' ') })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(f.matching('/web-search')).toHaveLength(2)
+    await vi.advanceTimersByTimeAsync(30_000)
+    await pending; await f.waitComplete('multi')
+    expect(f.matching('/chat/completions')).toHaveLength(1)
+    expect(f.matching('/web-search')).toHaveLength(2)
+    expect(JSON.parse(f.finalPayload().messages[1].content).referenceContext).toEqual([])
+    for (const release of releases) release(Response.json({ status: 'empty', excerpts: [] }))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(f.matching('/web-search')).toHaveLength(2)
+    expect(f.matching('/chat/completions')).toHaveLength(1)
+    expect(f.calls.filter(call => call.init.method === 'DELETE' && call.url.includes('/references/search/batch/'))).toHaveLength(1)
+  })
+
+  it.each(['cancel', 'platform_change'] as const)('cancels queued and in-flight multi-question work on %s without a final answer', async action => {
+    const questions = extractedQuestions(5)
+    const f = fixture({ questions, respond: call => call.url.endsWith('/web-search') || call.url.endsWith('/references/search/batch') ? new Promise<Response>(() => undefined) : undefined })
+    const pending = f.start('multi', { question: questions.map(question => question.question).join(' ') })
+    await vi.waitFor(() => expect(f.matching('/web-search')).toHaveLength(2))
+    if (action === 'cancel') f.cancel(); else f.platformWork.beginChange()()
+    await pending
+    expect(f.matching('/web-search')).toHaveLength(2)
+    expect(f.matching('/chat/completions')).toHaveLength(0)
+    expect(f.events.some(event => event.kind === 'answer-done' && event.cancelled)).toBe(true)
+  })
+
+  it.each([401, 402, 403, 409])('treats web HTTP %s as terminal for the whole multi-question answer', async status => {
+    const questions = extractedQuestions(3)
+    const f = fixture({ questions, respond: call => call.url.endsWith('/web-search') ? Response.json({ code: 'session_expired' }, { status }) : undefined })
+    await expect(f.start('multi', { question: questions.map(question => question.question).join(' ') })).rejects.toBeInstanceOf(Error)
+    expect(f.matching('/chat/completions')).toHaveLength(0)
+  })
+
+  it('keeps queued web work and the final model on the frozen account origin and configuration', async () => {
+    const questions = extractedQuestions(3)
+    const releases: (() => void)[] = []
+    const f = fixture({ questions, respond: call => call.url.endsWith('/web-search') && releases.length < 2 ? new Promise<Response>(resolve => { releases.push(() => resolve(webResponse('frozen-query'))) }) : undefined })
+    const pending = f.start('multi', { question: questions.map(question => question.question).join(' ') })
+    await vi.waitFor(() => expect(releases).toHaveLength(2))
+    // Simulate mutation of a shared catalog object without a platform invalidation event.
+    if (f.settings.platform) f.settings.platform.baseUrl = 'https://different-account.example.test'
+    f.settings.context.text = 'later unrelated background'
+    for (const release of releases) release()
+    await pending; await f.waitComplete('multi')
+    expect(f.matching('/web-search')).toHaveLength(3)
+    expect(f.matching('/web-search').every(call => call.url.startsWith('https://platform.example.test/') && new Headers(call.init.headers).get('Authorization') === 'Bearer original-platform-token')).toBe(true)
+    expect(JSON.parse(f.finalPayload().messages[1].content).personalContext).not.toBe('later unrelated background')
+  })
 })
 
 describe('production answer:generate orchestration', () => {
